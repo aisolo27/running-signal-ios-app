@@ -29,7 +29,7 @@ Allow local run labels and notes while scaffolding duplicate detection.
 - Confirm UI shows Manual pill.
 
 ## Known Risks
-- Dedupe is conservative until future import sources exist.
+- Dedupe is conservative across HealthKit sources and mirrored workout records.
 
 ## Completion Notes
 - Completed. Manual labels/notes, inferred/manual display, conservative duplicate detection, duplicate exclusion from analytics, and tests are implemented. A note-save path was exercised in Simulator.

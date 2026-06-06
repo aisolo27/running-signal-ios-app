@@ -39,6 +39,10 @@ public final class RunningAnalysisStore {
             workouts = SampleData.workouts
             healthContext = SampleData.healthContext
             PersistenceService.upsert(workouts, context: modelContext)
+        } else if needsSampleEvidenceBackfill(persisted) {
+            workouts = SampleData.workouts
+            healthContext = SampleData.healthContext
+            PersistenceService.upsert(workouts, context: modelContext)
         } else {
             workouts = DuplicateDetector.markDuplicates(persisted)
         }
@@ -169,6 +173,10 @@ public final class RunningAnalysisStore {
         )
     }
 
+    public var healthKitAuditMarkdown: String {
+        HealthKitAudit.markdown(workouts: workouts)
+    }
+
     private func mergeManualFields(incoming: [CanonicalWorkout], current: [CanonicalWorkout]) -> [CanonicalWorkout] {
         let currentByID = Dictionary(uniqueKeysWithValues: current.map { ($0.id, $0) })
         return incoming.map { workout in
@@ -196,6 +204,11 @@ public final class RunningAnalysisStore {
 
     private func evidencePendingCount(in workouts: [CanonicalWorkout]) -> Int {
         workouts.filter { !$0.isDuplicate && !$0.seriesAvailable }.count
+    }
+
+    private func needsSampleEvidenceBackfill(_ workouts: [CanonicalWorkout]) -> Bool {
+        workouts.allSatisfy { $0.sourceName == "Sample Apple Watch" }
+            && workouts.contains { $0.seriesAvailable && $0.seriesSampleCount == 0 }
     }
 
     private func persistCurrent() {

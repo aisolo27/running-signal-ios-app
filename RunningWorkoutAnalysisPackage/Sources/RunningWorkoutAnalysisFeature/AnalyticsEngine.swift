@@ -267,6 +267,10 @@ public enum AnalyticsEngine {
         - Type: \(latest?.effectiveRunType.label ?? "Missing")
         - Distance: \(RunFormatters.distance(latest?.distanceMeters))
         - Pace: \(RunFormatters.pace(latest?.paceSecondsPerKm))
+        - Active calories: \(RunFormatters.calories(latest?.activeEnergyKilocalories))
+        - Elevation gain: \(RunFormatters.number(latest?.elevationGainMeters, suffix: " m"))
+        - Evidence samples: \(latest.map { "\($0.seriesSampleCount)" } ?? "Missing")
+        - Interval events: \(latest.map { "\($0.intervalCount)" } ?? "Missing")
 
         ## Training Load
         - Last 7 days: \(String(format: "%.1f km", snapshot.weeklyVolumeKm))

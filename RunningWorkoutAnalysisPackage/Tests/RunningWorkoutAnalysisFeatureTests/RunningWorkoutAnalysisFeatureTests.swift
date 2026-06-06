@@ -421,6 +421,57 @@ import Testing
     #expect(markdown.contains("Route points are unavailable for this workout."))
 }
 
+@Test func healthKitAuditReportsPerWorkoutFieldsAndCaveats() {
+    let start = Date(timeIntervalSince1970: 1_000)
+    var workout = testWorkout(
+        id: "audit-workout",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    workout.averageHeartRate = 154
+    workout.activeEnergyKilocalories = 360
+    workout.routePointCount = 240
+    workout.heartRateSampleCount = 300
+    workout.runningSpeedSampleCount = 280
+    workout.distanceSampleCount = 20
+    workout.activeEnergySampleCount = 1
+    workout.runningPowerSampleCount = 0
+    workout.cadenceSampleCount = 150
+    workout.stepCountSampleCount = 25
+    workout.strideLengthSampleCount = 75
+    workout.verticalOscillationSampleCount = 75
+    workout.groundContactTimeSampleCount = 75
+    workout.intervalCount = 4
+    workout.intervalLabelsSummary = "Warmup, Work, Cooldown"
+
+    let rows = HealthKitAudit.rows(for: [workout])
+    let markdown = HealthKitAudit.markdown(workouts: [workout], generatedAt: start)
+
+    #expect(rows.count == 1)
+    #expect(rows[0].fields.first { $0.label == "Heart rate samples" }?.value == "300")
+    #expect(rows[0].fields.first { $0.label == "Speed/distance samples" }?.detail == "Speed 280, distance 20.")
+    #expect(rows[0].fields.first { $0.label == "Events/intervals" }?.detail == "Warmup, Work, Cooldown")
+    #expect(rows[0].caveats.contains("Running power is optional and was not found as a sample series."))
+    #expect(markdown.contains("# HealthKit Audit"))
+    #expect(markdown.contains("- Route points: 240"))
+    #expect(markdown.contains("- Speed/distance samples: 300"))
+}
+
+@Test func healthKitAuditSkipsDuplicateWorkouts() {
+    let start = Date(timeIntervalSince1970: 1_000)
+    var duplicate = testWorkout(
+        id: "duplicate-audit-workout",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    duplicate.isDuplicate = true
+
+    #expect(HealthKitAudit.rows(for: [duplicate]).isEmpty)
+    #expect(HealthKitAudit.markdown(workouts: [duplicate], generatedAt: start).contains("No non-duplicate workouts are available for audit."))
+}
+
 private func fixedCalendar() -> Calendar {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(secondsFromGMT: 0)!

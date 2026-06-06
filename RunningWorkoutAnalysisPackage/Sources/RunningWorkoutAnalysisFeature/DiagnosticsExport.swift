@@ -37,6 +37,15 @@ public enum DiagnosticsExport {
         - Updated: \(syncState.lastUpdatedCount)
         - Deleted detected: \(syncState.lastDeletedCount)
         - Evidence pending: \(syncState.lastEvidencePendingCount)
+        - Route points loaded: \(workouts.filter { !$0.isDuplicate }.map(\.routePointCount).reduce(0, +))
+        - Series samples loaded: \(workouts.filter { !$0.isDuplicate }.map(\.seriesSampleCount).reduce(0, +))
+        - Interval events loaded: \(workouts.filter { !$0.isDuplicate }.map(\.intervalCount).reduce(0, +))
+
+        ## HealthKit Audit
+        - Audited workouts: \(HealthKitAudit.rows(for: workouts).count)
+        - Heart-rate sample rows: \(workouts.filter { !$0.isDuplicate && $0.heartRateSampleCount > 0 }.count)
+        - Speed/distance sample rows: \(workouts.filter { !$0.isDuplicate && ($0.runningSpeedSampleCount > 0 || $0.distanceSampleCount > 0) }.count)
+        - Running dynamics rows: \(workouts.filter { !$0.isDuplicate && ($0.strideLengthSampleCount > 0 || $0.verticalOscillationSampleCount > 0 || $0.groundContactTimeSampleCount > 0) }.count)
 
         ## Coverage
         - Heart rate: \(RunFormatters.percent(snapshot.dataQuality.heartRateCoverage))

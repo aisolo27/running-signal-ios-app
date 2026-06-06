@@ -106,6 +106,38 @@ public struct WorkoutEvidence: Codable, Equatable, Sendable {
     public func hasSeries(_ metric: WorkoutEvidenceMetric) -> Bool {
         (series[metric]?.sampleCount ?? 0) > 0
     }
+
+    public func sampleCount(_ metric: WorkoutEvidenceMetric) -> Int {
+        series[metric]?.sampleCount ?? 0
+    }
+
+    public var seriesSampleCount: Int {
+        series.values.map(\.sampleCount).reduce(0, +)
+    }
+
+    public var elevationGainMeters: Double? {
+        let altitudes = route.compactMap(\.altitudeMeters)
+        guard altitudes.count >= 2 else { return nil }
+
+        let gain = zip(altitudes, altitudes.dropFirst())
+            .map { current, next in max(0, next - current) }
+            .reduce(0, +)
+
+        return gain > 0 ? gain : nil
+    }
+
+    public func average(_ metric: WorkoutEvidenceMetric) -> Double? {
+        series[metric]?.average
+    }
+
+    public func maximum(_ metric: WorkoutEvidenceMetric) -> Double? {
+        series[metric]?.maximum
+    }
+
+    public func sum(_ metric: WorkoutEvidenceMetric) -> Double? {
+        guard let points = series[metric]?.points, !points.isEmpty else { return nil }
+        return points.map(\.value).reduce(0, +)
+    }
 }
 
 public struct WorkoutEvidenceCoverage: Equatable, Sendable {

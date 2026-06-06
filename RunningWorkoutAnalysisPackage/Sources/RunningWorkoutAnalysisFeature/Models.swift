@@ -132,6 +132,8 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
     public var environment: RunEnvironment
     public var distanceMeters: Double?
     public var durationSeconds: TimeInterval
+    public var activeEnergyKilocalories: Double?
+    public var elevationGainMeters: Double?
     public var averageHeartRate: Double?
     public var maxHeartRate: Double?
     public var averageCadence: Double?
@@ -141,6 +143,20 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
     public var groundContactMilliseconds: Double?
     public var routeAvailable: Bool
     public var seriesAvailable: Bool
+    public var routePointCount: Int = 0
+    public var seriesSampleCount: Int = 0
+    public var heartRateSampleCount: Int = 0
+    public var runningSpeedSampleCount: Int = 0
+    public var distanceSampleCount: Int = 0
+    public var activeEnergySampleCount: Int = 0
+    public var runningPowerSampleCount: Int = 0
+    public var cadenceSampleCount: Int = 0
+    public var stepCountSampleCount: Int = 0
+    public var strideLengthSampleCount: Int = 0
+    public var verticalOscillationSampleCount: Int = 0
+    public var groundContactTimeSampleCount: Int = 0
+    public var intervalCount: Int = 0
+    public var intervalLabelsSummary: String?
     public var inferredRunType: RunType
     public var manualRunType: RunType?
     public var notes: String
@@ -156,6 +172,8 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
         environment: RunEnvironment,
         distanceMeters: Double?,
         durationSeconds: TimeInterval,
+        activeEnergyKilocalories: Double? = nil,
+        elevationGainMeters: Double? = nil,
         averageHeartRate: Double? = nil,
         maxHeartRate: Double? = nil,
         averageCadence: Double? = nil,
@@ -165,6 +183,20 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
         groundContactMilliseconds: Double? = nil,
         routeAvailable: Bool = false,
         seriesAvailable: Bool = false,
+        routePointCount: Int = 0,
+        seriesSampleCount: Int = 0,
+        heartRateSampleCount: Int = 0,
+        runningSpeedSampleCount: Int = 0,
+        distanceSampleCount: Int = 0,
+        activeEnergySampleCount: Int = 0,
+        runningPowerSampleCount: Int = 0,
+        cadenceSampleCount: Int = 0,
+        stepCountSampleCount: Int = 0,
+        strideLengthSampleCount: Int = 0,
+        verticalOscillationSampleCount: Int = 0,
+        groundContactTimeSampleCount: Int = 0,
+        intervalCount: Int = 0,
+        intervalLabelsSummary: String? = nil,
         inferredRunType: RunType = .unknown,
         manualRunType: RunType? = nil,
         notes: String = "",
@@ -179,6 +211,8 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
         self.environment = environment
         self.distanceMeters = distanceMeters
         self.durationSeconds = durationSeconds
+        self.activeEnergyKilocalories = activeEnergyKilocalories
+        self.elevationGainMeters = elevationGainMeters
         self.averageHeartRate = averageHeartRate
         self.maxHeartRate = maxHeartRate
         self.averageCadence = averageCadence
@@ -188,6 +222,20 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
         self.groundContactMilliseconds = groundContactMilliseconds
         self.routeAvailable = routeAvailable
         self.seriesAvailable = seriesAvailable
+        self.routePointCount = routePointCount
+        self.seriesSampleCount = seriesSampleCount
+        self.heartRateSampleCount = heartRateSampleCount
+        self.runningSpeedSampleCount = runningSpeedSampleCount
+        self.distanceSampleCount = distanceSampleCount
+        self.activeEnergySampleCount = activeEnergySampleCount
+        self.runningPowerSampleCount = runningPowerSampleCount
+        self.cadenceSampleCount = cadenceSampleCount
+        self.stepCountSampleCount = stepCountSampleCount
+        self.strideLengthSampleCount = strideLengthSampleCount
+        self.verticalOscillationSampleCount = verticalOscillationSampleCount
+        self.groundContactTimeSampleCount = groundContactTimeSampleCount
+        self.intervalCount = intervalCount
+        self.intervalLabelsSummary = intervalLabelsSummary
         self.inferredRunType = inferredRunType
         self.manualRunType = manualRunType
         self.notes = notes
@@ -219,6 +267,8 @@ public final class PersistedWorkout {
     public var environmentRaw: String
     public var distanceMeters: Double?
     public var durationSeconds: Double
+    public var activeEnergyKilocalories: Double?
+    public var elevationGainMeters: Double?
     public var averageHeartRate: Double?
     public var maxHeartRate: Double?
     public var averageCadence: Double?
@@ -228,6 +278,20 @@ public final class PersistedWorkout {
     public var groundContactMilliseconds: Double?
     public var routeAvailable: Bool
     public var seriesAvailable: Bool
+    public var routePointCount: Int = 0
+    public var seriesSampleCount: Int = 0
+    public var heartRateSampleCount: Int = 0
+    public var runningSpeedSampleCount: Int = 0
+    public var distanceSampleCount: Int = 0
+    public var activeEnergySampleCount: Int = 0
+    public var runningPowerSampleCount: Int = 0
+    public var cadenceSampleCount: Int = 0
+    public var stepCountSampleCount: Int = 0
+    public var strideLengthSampleCount: Int = 0
+    public var verticalOscillationSampleCount: Int = 0
+    public var groundContactTimeSampleCount: Int = 0
+    public var intervalCount: Int = 0
+    public var intervalLabelsSummary: String?
     public var inferredRunTypeRaw: String
     public var manualRunTypeRaw: String?
     public var notes: String
@@ -244,6 +308,8 @@ public final class PersistedWorkout {
         environmentRaw = workout.environment.rawValue
         distanceMeters = workout.distanceMeters
         durationSeconds = workout.durationSeconds
+        activeEnergyKilocalories = workout.activeEnergyKilocalories
+        elevationGainMeters = workout.elevationGainMeters
         averageHeartRate = workout.averageHeartRate
         maxHeartRate = workout.maxHeartRate
         averageCadence = workout.averageCadence
@@ -253,6 +319,20 @@ public final class PersistedWorkout {
         groundContactMilliseconds = workout.groundContactMilliseconds
         routeAvailable = workout.routeAvailable
         seriesAvailable = workout.seriesAvailable
+        routePointCount = workout.routePointCount
+        seriesSampleCount = workout.seriesSampleCount
+        heartRateSampleCount = workout.heartRateSampleCount
+        runningSpeedSampleCount = workout.runningSpeedSampleCount
+        distanceSampleCount = workout.distanceSampleCount
+        activeEnergySampleCount = workout.activeEnergySampleCount
+        runningPowerSampleCount = workout.runningPowerSampleCount
+        cadenceSampleCount = workout.cadenceSampleCount
+        stepCountSampleCount = workout.stepCountSampleCount
+        strideLengthSampleCount = workout.strideLengthSampleCount
+        verticalOscillationSampleCount = workout.verticalOscillationSampleCount
+        groundContactTimeSampleCount = workout.groundContactTimeSampleCount
+        intervalCount = workout.intervalCount
+        intervalLabelsSummary = workout.intervalLabelsSummary
         inferredRunTypeRaw = workout.inferredRunType.rawValue
         manualRunTypeRaw = workout.manualRunType?.rawValue
         notes = workout.notes
@@ -269,6 +349,8 @@ public final class PersistedWorkout {
         environmentRaw = workout.environment.rawValue
         distanceMeters = workout.distanceMeters
         durationSeconds = workout.durationSeconds
+        activeEnergyKilocalories = workout.activeEnergyKilocalories
+        elevationGainMeters = workout.elevationGainMeters
         averageHeartRate = workout.averageHeartRate
         maxHeartRate = workout.maxHeartRate
         averageCadence = workout.averageCadence
@@ -278,6 +360,20 @@ public final class PersistedWorkout {
         groundContactMilliseconds = workout.groundContactMilliseconds
         routeAvailable = workout.routeAvailable
         seriesAvailable = workout.seriesAvailable
+        routePointCount = workout.routePointCount
+        seriesSampleCount = workout.seriesSampleCount
+        heartRateSampleCount = workout.heartRateSampleCount
+        runningSpeedSampleCount = workout.runningSpeedSampleCount
+        distanceSampleCount = workout.distanceSampleCount
+        activeEnergySampleCount = workout.activeEnergySampleCount
+        runningPowerSampleCount = workout.runningPowerSampleCount
+        cadenceSampleCount = workout.cadenceSampleCount
+        stepCountSampleCount = workout.stepCountSampleCount
+        strideLengthSampleCount = workout.strideLengthSampleCount
+        verticalOscillationSampleCount = workout.verticalOscillationSampleCount
+        groundContactTimeSampleCount = workout.groundContactTimeSampleCount
+        intervalCount = workout.intervalCount
+        intervalLabelsSummary = workout.intervalLabelsSummary
         inferredRunTypeRaw = workout.inferredRunType.rawValue
         if !preservingManualFields {
             manualRunTypeRaw = workout.manualRunType?.rawValue
@@ -298,6 +394,8 @@ public final class PersistedWorkout {
             environment: RunEnvironment(rawValue: environmentRaw) ?? .unknown,
             distanceMeters: distanceMeters,
             durationSeconds: durationSeconds,
+            activeEnergyKilocalories: activeEnergyKilocalories,
+            elevationGainMeters: elevationGainMeters,
             averageHeartRate: averageHeartRate,
             maxHeartRate: maxHeartRate,
             averageCadence: averageCadence,
@@ -307,6 +405,20 @@ public final class PersistedWorkout {
             groundContactMilliseconds: groundContactMilliseconds,
             routeAvailable: routeAvailable,
             seriesAvailable: seriesAvailable,
+            routePointCount: routePointCount,
+            seriesSampleCount: seriesSampleCount,
+            heartRateSampleCount: heartRateSampleCount,
+            runningSpeedSampleCount: runningSpeedSampleCount,
+            distanceSampleCount: distanceSampleCount,
+            activeEnergySampleCount: activeEnergySampleCount,
+            runningPowerSampleCount: runningPowerSampleCount,
+            cadenceSampleCount: cadenceSampleCount,
+            stepCountSampleCount: stepCountSampleCount,
+            strideLengthSampleCount: strideLengthSampleCount,
+            verticalOscillationSampleCount: verticalOscillationSampleCount,
+            groundContactTimeSampleCount: groundContactTimeSampleCount,
+            intervalCount: intervalCount,
+            intervalLabelsSummary: intervalLabelsSummary,
             inferredRunType: RunType(rawValue: inferredRunTypeRaw) ?? .unknown,
             manualRunType: manualRunTypeRaw.flatMap(RunType.init(rawValue:)),
             notes: notes,

@@ -28,8 +28,9 @@ Use this as a selective lookup, not required full-context reading. Read the inde
 - Symptom: route API compile errors around `HKDataTypeIdentifier`. Cause: wrong route type API for this toolchain. Fix: use `HKSeriesType.workoutRoute()`.
 - Rule: HealthKit v1 is read-only. Do not write workouts or mutate HealthKit data.
 - Rule: Simulator cannot prove real HealthKit permissions or real workout availability. Use sample fallback in Simulator and record physical-iPhone verification separately.
-- Rule: FIT-parity run-type analysis needs per-workout HealthKit sample/series queries, not only workout summary statistics; gate threshold, interval, drift, and target-vs-actual claims on detailed series coverage.
+- Rule: Fitness-style run analysis needs per-workout HealthKit sample/series queries, not only workout summary statistics; gate threshold, interval, drift, and target-vs-actual claims on detailed series coverage.
 - Rule: `HKWorkoutRouteQuery` callbacks may arrive on concurrent queues; collect route points behind a thread-safe helper instead of mutating a captured array directly.
+- Rule: Fitness-style detail comes from a mix of `HKWorkout.statistics(for:)`, associated quantity samples, workout routes, and workout events. Total calories and custom workout labels may not be exposed as clean public HealthKit fields; extract them only when HealthKit returns evidence and keep UI wording cautious.
 
 ## SwiftData And Persistence
 

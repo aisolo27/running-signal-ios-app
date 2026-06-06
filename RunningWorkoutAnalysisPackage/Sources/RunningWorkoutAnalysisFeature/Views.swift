@@ -241,7 +241,9 @@ struct DataView: View {
                     MetricItem(title: "Workouts", value: "\(store.snapshot.dataQuality.workoutCount)", detail: "All local records"),
                     MetricItem(title: "Included", value: "\(store.snapshot.dataQuality.includedWorkoutCount)", detail: "Used in analysis"),
                     MetricItem(title: "Duplicates", value: "\(store.snapshot.dataQuality.duplicateCount)", detail: "Excluded candidates"),
-                    MetricItem(title: "Confidence", value: store.snapshot.dataQuality.confidence.label, detail: "Current data gate")
+                    MetricItem(title: "Confidence", value: store.snapshot.dataQuality.confidence.label, detail: "Current data gate"),
+                    MetricItem(title: "Route points", value: "\(store.includedWorkouts.map(\.routePointCount).reduce(0, +))", detail: "Workout routes"),
+                    MetricItem(title: "Samples", value: "\(store.includedWorkouts.map(\.seriesSampleCount).reduce(0, +))", detail: "Workout evidence")
                 ])
 
                 ParityReadinessPanel(store: store)
@@ -257,6 +259,19 @@ struct DataView: View {
                 CoverageRow(label: "Mechanics", value: store.snapshot.dataQuality.mechanicsCoverage)
                 CoverageRow(label: "Route", value: store.snapshot.dataQuality.routeCoverage)
                 CoverageRow(label: "Series", value: store.snapshot.dataQuality.seriesCoverage)
+
+                NoticeCard(
+                    title: "HealthKit detail source",
+                    message: "Full loads and syncs now read associated HealthKit samples for route, heart rate, speed, distance, active energy, power, cadence, stride length, vertical oscillation, ground contact time, and workout interval events where available."
+                )
+
+                NavigationLink {
+                    HealthKitAuditView(store: store)
+                } label: {
+                    Label("Open HealthKit audit", systemImage: "list.clipboard")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
 
                 SectionHeader("Health Context")
                 MetricGrid(items: HealthContextMetrics.dataItems(for: store.healthContext))
@@ -285,6 +300,12 @@ struct DataView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
+
+                ShareLink(item: store.healthKitAuditMarkdown) {
+                    Label("Share HealthKit audit", systemImage: "square.and.arrow.up.on.square")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
             }
             .padding()
         }
@@ -296,6 +317,148 @@ struct DataView: View {
         ) { result in
             guard case let .success(urls) = result, let url = urls.first else { return }
             store.importReviewedRunTypes(from: url)
+        }
+    }
+}
+
+struct HealthKitAuditView: View {
+    var store: RunningAnalysisStore
+
+    private var rows: [HealthKitAuditRow] {
+        HealthKitAudit.rows(for: store.workouts)
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HeaderBlock(title: "HealthKit Audit", subtitle: "Per-run evidence found on device.")
+
+                if rows.isEmpty {
+                    EmptyStateView(title: "No workouts to audit", message: "Load HealthKit runs or keep sample data available before reviewing field coverage.")
+                } else {
+                    MetricGrid(items: [
+                        MetricItem(title: "Runs", value: "\(rows.count)", detail: "Non-duplicate"),
+                        MetricItem(title: "Route", value: "\(rows.filter { $0.workout.routePointCount > 0 }.count)", detail: "Point series"),
+                        MetricItem(title: "HR samples", value: "\(rows.filter { $0.workout.heartRateSampleCount > 0 }.count)", detail: "Per-run"),
+                        MetricItem(title: "Dynamics", value: "\(rows.filter { hasRunningDynamics($0.workout) }.count)", detail: "Form fields")
+                    ])
+
+                    NoticeCard(
+                        title: "Read-only audit",
+                        message: "This screen reports what HealthKit returned for each workout. Missing optional fields are caveats, not app errors."
+                    )
+
+                    ForEach(rows) { row in
+                        HealthKitAuditCard(row: row)
+                    }
+                }
+            }
+            .padding()
+        }
+        .navigationTitle("HealthKit Audit")
+    }
+
+    private func hasRunningDynamics(_ workout: CanonicalWorkout) -> Bool {
+        workout.strideLengthSampleCount > 0
+            || workout.verticalOscillationSampleCount > 0
+            || workout.groundContactTimeSampleCount > 0
+    }
+}
+
+struct HealthKitAuditCard: View {
+    let row: HealthKitAuditRow
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(row.workout.effectiveRunType.label)
+                        .font(.headline)
+                    Text("\(RunFormatters.shortDate.string(from: row.workout.startDate)) · \(RunFormatters.distance(row.workout.distanceMeters)) · \(RunFormatters.duration(row.workout.durationSeconds))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                ConfidencePill(text: auditStatus.label, confidence: auditStatus)
+            }
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                ForEach(row.fields) { field in
+                    HealthKitAuditFieldTile(field: field)
+                }
+            }
+
+            if !row.caveats.isEmpty {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Caveats")
+                        .font(.caption.bold())
+                    ForEach(row.caveats.prefix(3), id: \.self) { caveat in
+                        Text(caveat)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var auditStatus: ConfidenceLevel {
+        let foundCount = row.fields.filter { $0.confidence != .unavailable }.count
+        if foundCount >= 9 { return .strong }
+        if foundCount >= 6 { return .moderate }
+        if foundCount > 0 { return .limited }
+        return .unavailable
+    }
+}
+
+struct HealthKitAuditFieldTile: View {
+    let field: HealthKitAuditField
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                Image(systemName: symbol)
+                    .foregroundStyle(color)
+                    .frame(width: 16)
+                Text(field.label)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            Text(field.value)
+                .font(.subheadline.monospacedDigit().bold())
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            Text(field.detail)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
+        .padding(10)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var symbol: String {
+        switch field.confidence {
+        case .strong, .moderate: "checkmark.circle"
+        case .limited: "exclamationmark.triangle"
+        case .unavailable: "minus.circle"
+        }
+    }
+
+    private var color: Color {
+        switch field.confidence {
+        case .strong: .green
+        case .moderate: .blue
+        case .limited: .orange
+        case .unavailable: .secondary
         }
     }
 }
@@ -603,12 +766,21 @@ struct WorkoutDetailView: View {
                         MetricItem(title: "Heart rate", value: RunFormatters.number(workout.averageHeartRate, suffix: " bpm"), detail: "Average"),
                         MetricItem(title: "Cadence", value: RunFormatters.number(workout.averageCadence, suffix: " spm"), detail: "Average"),
                         MetricItem(title: "Power", value: RunFormatters.number(workout.averagePower, suffix: " W"), detail: "Average"),
-                        MetricItem(title: "Ground contact", value: RunFormatters.number(workout.groundContactMilliseconds, suffix: " ms"), detail: "Mechanics gate")
+                        MetricItem(title: "Ground contact", value: RunFormatters.number(workout.groundContactMilliseconds, suffix: " ms"), detail: "Mechanics gate"),
+                        MetricItem(title: "Active calories", value: RunFormatters.calories(workout.activeEnergyKilocalories), detail: "Workout scoped"),
+                        MetricItem(title: "Elevation gain", value: RunFormatters.number(workout.elevationGainMeters, suffix: " m"), detail: "Route altitude")
+                    ])
+
+                    MetricGrid(items: [
+                        MetricItem(title: "Route points", value: "\(workout.routePointCount)", detail: workout.routeAvailable ? "Extracted" : "Missing"),
+                        MetricItem(title: "Samples", value: "\(workout.seriesSampleCount)", detail: workout.seriesAvailable ? "Extracted" : "Missing"),
+                        MetricItem(title: "Intervals", value: "\(workout.intervalCount)", detail: workout.intervalLabelsSummary ?? "Events only"),
+                        MetricItem(title: "Stride length", value: RunFormatters.number(workout.strideLengthMeters, suffix: " m", decimals: 2), detail: "Average")
                     ])
 
                     NoticeCard(
-                        title: workout.seriesAvailable ? "Series available" : "Series not loaded",
-                        message: workout.seriesAvailable ? "Detailed split and route work belongs behind this detail surface." : "This run can still be summarized, but detailed execution confidence stays limited."
+                        title: workout.seriesAvailable ? "HealthKit details extracted" : "Series not loaded",
+                        message: workout.seriesAvailable ? "This workout has associated HealthKit samples for deeper execution review. Charting and split tables can build on this evidence." : "This run can still be summarized, but detailed execution confidence stays limited."
                     )
                 } else {
                     EmptyStateView(title: "Workout missing", message: "The selected workout is no longer in local state.")
@@ -647,7 +819,9 @@ struct WorkoutSummaryCard: View {
                 MetricItem(title: "Distance", value: RunFormatters.distance(workout.distanceMeters), detail: workout.environment.label),
                 MetricItem(title: "Duration", value: RunFormatters.duration(workout.durationSeconds), detail: workout.sourceName),
                 MetricItem(title: "Pace", value: RunFormatters.pace(workout.paceSecondsPerKm), detail: "Canonical sec/km"),
-                MetricItem(title: "Route", value: workout.routeAvailable ? "Available" : "Missing", detail: workout.seriesAvailable ? "Series candidate" : "Summary only")
+                MetricItem(title: "Route", value: workout.routeAvailable ? "Available" : "Missing", detail: workout.seriesAvailable ? "\(workout.seriesSampleCount) samples" : "Summary only"),
+                MetricItem(title: "Active cal", value: RunFormatters.calories(workout.activeEnergyKilocalories), detail: "Workout scoped"),
+                MetricItem(title: "Elevation", value: RunFormatters.number(workout.elevationGainMeters, suffix: " m"), detail: "Gain")
             ])
 
             if workout.isDuplicate {
