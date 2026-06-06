@@ -449,13 +449,30 @@ import Testing
     let markdown = HealthKitAudit.markdown(workouts: [workout], generatedAt: start)
 
     #expect(rows.count == 1)
-    #expect(rows[0].fields.first { $0.label == "Heart rate samples" }?.value == "300")
+    #expect(rows[0].fields.first { $0.label == "Heart rate" }?.value == "300")
     #expect(rows[0].fields.first { $0.label == "Speed/distance samples" }?.detail == "Speed 280, distance 20.")
     #expect(rows[0].fields.first { $0.label == "Events/intervals" }?.detail == "Warmup, Work, Cooldown")
-    #expect(rows[0].caveats.contains("Running power is optional and was not found as a sample series."))
+    #expect(rows[0].caveats.contains("Running power may exist as a summary, but the detailed power series was not found."))
     #expect(markdown.contains("# HealthKit Audit"))
     #expect(markdown.contains("- Route points: 240"))
     #expect(markdown.contains("- Speed/distance samples: 300"))
+}
+
+@Test func healthKitAuditExplainsEventsWithoutLabels() {
+    let start = Date(timeIntervalSince1970: 1_000)
+    var workout = testWorkout(
+        id: "event-no-label-workout",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    workout.intervalCount = 3
+
+    let row = HealthKitAudit.rows(for: [workout])[0]
+
+    #expect(row.fields.first { $0.label == "Events/intervals" }?.value == "3")
+    #expect(row.fields.first { $0.label == "Events/intervals" }?.detail == "Workout events were found, but HealthKit did not expose labels.")
+    #expect(row.caveats.contains("Workout events were found, but HealthKit did not expose Warmup, Work, Cooldown, or similar labels."))
 }
 
 @Test func healthKitAuditSkipsDuplicateWorkouts() {

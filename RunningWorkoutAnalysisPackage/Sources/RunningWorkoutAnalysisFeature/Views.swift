@@ -338,15 +338,29 @@ struct HealthKitAuditView: View {
                 } else {
                     MetricGrid(items: [
                         MetricItem(title: "Runs", value: "\(rows.count)", detail: "Non-duplicate"),
-                        MetricItem(title: "Route", value: "\(rows.filter { $0.workout.routePointCount > 0 }.count)", detail: "Point series"),
-                        MetricItem(title: "HR samples", value: "\(rows.filter { $0.workout.heartRateSampleCount > 0 }.count)", detail: "Per-run"),
-                        MetricItem(title: "Dynamics", value: "\(rows.filter { hasRunningDynamics($0.workout) }.count)", detail: "Form fields")
+                        MetricItem(title: "Routes", value: "\(rows.filter { $0.workout.routeAvailable }.count)", detail: "Objects or points"),
+                        MetricItem(title: "HR data", value: "\(rows.filter { hasHeartRateData($0.workout) }.count)", detail: "Summary or series"),
+                        MetricItem(title: "Dynamics", value: "\(rows.filter { hasRunningDynamics($0.workout) }.count)", detail: "Summary or series")
                     ])
 
                     NoticeCard(
                         title: "Read-only audit",
                         message: "This screen reports what HealthKit returned for each workout. Missing optional fields are caveats, not app errors."
                     )
+
+                    Button {
+                        Task { await store.enrichNextHealthKitAuditBatch() }
+                    } label: {
+                        if store.isEnrichingAudit {
+                            Label("Enriching audit", systemImage: "hourglass")
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Label("Enrich next 20 runs", systemImage: "arrow.down.doc")
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(store.isEnrichingAudit || store.isLoading)
 
                     ForEach(rows) { row in
                         HealthKitAuditCard(row: row)
@@ -362,6 +376,15 @@ struct HealthKitAuditView: View {
         workout.strideLengthSampleCount > 0
             || workout.verticalOscillationSampleCount > 0
             || workout.groundContactTimeSampleCount > 0
+            || workout.strideLengthMeters != nil
+            || workout.verticalOscillationCentimeters != nil
+            || workout.groundContactMilliseconds != nil
+    }
+
+    private func hasHeartRateData(_ workout: CanonicalWorkout) -> Bool {
+        workout.heartRateSampleCount > 0
+            || workout.averageHeartRate != nil
+            || workout.maxHeartRate != nil
     }
 }
 

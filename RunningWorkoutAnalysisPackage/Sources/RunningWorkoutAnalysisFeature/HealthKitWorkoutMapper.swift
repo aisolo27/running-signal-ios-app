@@ -2,11 +2,15 @@ import Foundation
 @preconcurrency import HealthKit
 
 enum HealthKitWorkoutMapper {
-    static func normalize(_ workouts: [HKWorkout], store: HKHealthStore) async -> [CanonicalWorkout] {
+    static func normalize(_ workouts: [HKWorkout], store: HKHealthStore, detailedEvidenceLimit: Int = 20) async -> [CanonicalWorkout] {
         var normalized: [CanonicalWorkout] = []
         let evidenceService = WorkoutEvidenceService(store: store)
+        let detailWorkoutIDs = Set(workouts.prefix(detailedEvidenceLimit).map(\.uuid))
         for workout in workouts {
-            let evidence = await evidenceService.loadEvidence(for: workout)
+            let shouldLoadDetail = detailWorkoutIDs.contains(workout.uuid)
+            let evidence = shouldLoadDetail
+                ? await evidenceService.loadEvidence(for: workout)
+                : WorkoutEvidence(workoutID: workout.uuid.uuidString)
             let routeAvailable = if !evidence.route.isEmpty {
                 true
             } else {
@@ -19,9 +23,13 @@ enum HealthKitWorkoutMapper {
                 startDate: workout.startDate,
                 endDate: workout.endDate,
                 environment: inferEnvironment(workout: workout, routeAvailable: routeAvailable),
-                distanceMeters: quantity(workout, .distanceWalkingRunning, unit: .meter()) ?? evidence.sum(.distance),
+                distanceMeters: workout.totalDistance?.doubleValue(for: .meter())
+                    ?? quantity(workout, .distanceWalkingRunning, unit: .meter())
+                    ?? evidence.sum(.distance),
                 durationSeconds: workout.duration,
-                activeEnergyKilocalories: quantity(workout, .activeEnergyBurned, unit: .kilocalorie()) ?? evidence.sum(.activeEnergy),
+                activeEnergyKilocalories: workout.totalEnergyBurned?.doubleValue(for: .kilocalorie())
+                    ?? quantity(workout, .activeEnergyBurned, unit: .kilocalorie())
+                    ?? evidence.sum(.activeEnergy),
                 elevationGainMeters: evidence.elevationGainMeters,
                 averageHeartRate: quantity(workout, .heartRate, unit: HKUnit.count().unitDivided(by: .minute()), option: .discreteAverage) ?? evidence.average(.heartRate),
                 maxHeartRate: quantity(workout, .heartRate, unit: HKUnit.count().unitDivided(by: .minute()), option: .discreteMax) ?? evidence.maximum(.heartRate),

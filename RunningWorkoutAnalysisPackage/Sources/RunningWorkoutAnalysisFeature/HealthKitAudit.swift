@@ -55,7 +55,7 @@ public enum HealthKitAudit {
             summaryField(workout),
             routeField(workout),
             sampleField(
-                label: "Heart rate samples",
+                label: "Heart rate",
                 count: workout.heartRateSampleCount,
                 summaryAvailable: workout.averageHeartRate != nil || workout.maxHeartRate != nil,
                 summaryDetail: "avg \(RunFormatters.number(workout.averageHeartRate, suffix: " bpm")), max \(RunFormatters.number(workout.maxHeartRate, suffix: " bpm"))"
@@ -119,9 +119,9 @@ public enum HealthKitAudit {
         }
 
         return HealthKitAuditField(
-            label: "Route points",
-            value: workout.routeAvailable ? "Route sample" : "Missing",
-            detail: workout.routeAvailable ? "Route object was detected, but no location points were loaded." : "No associated route locations were found.",
+            label: "Route",
+            value: workout.routeAvailable ? "Route object" : "Missing",
+            detail: workout.routeAvailable ? "HealthKit exposed a route object, but point locations were not returned." : "No associated route object or locations were found.",
             confidence: workout.routeAvailable ? .limited : .unavailable
         )
     }
@@ -138,9 +138,9 @@ public enum HealthKitAudit {
         }
 
         return HealthKitAuditField(
-            label: "Speed/distance samples",
+            label: "Speed/distance",
             value: workout.distanceMeters == nil ? "Missing" : "Summary only",
-            detail: workout.distanceMeters == nil ? "No workout distance or associated speed/distance samples were found." : "Workout distance exists, but associated speed/distance samples were not found.",
+            detail: workout.distanceMeters == nil ? "No workout distance or speed/distance samples were found." : "Workout distance exists; detailed speed/distance samples were not found.",
             confidence: workout.distanceMeters == nil ? .unavailable : .limited
         )
     }
@@ -168,9 +168,19 @@ public enum HealthKitAudit {
         HealthKitAuditField(
             label: "Events/intervals",
             value: workout.intervalCount > 0 ? "\(workout.intervalCount)" : "Missing",
-            detail: workout.intervalLabelsSummary ?? "No lap or segment event labels were found.",
+            detail: intervalsDetail(workout),
             confidence: workout.intervalCount > 0 ? .limited : .unavailable
         )
+    }
+
+    private static func intervalsDetail(_ workout: CanonicalWorkout) -> String {
+        if let intervalLabelsSummary = workout.intervalLabelsSummary {
+            return intervalLabelsSummary
+        }
+        if workout.intervalCount > 0 {
+            return "Workout events were found, but HealthKit did not expose labels."
+        }
+        return "No lap or segment events were found."
     }
 
     private static func sampleField(
@@ -199,24 +209,28 @@ public enum HealthKitAudit {
     private static func caveats(for workout: CanonicalWorkout) -> [String] {
         var caveats: [String] = []
         if workout.heartRateSampleCount == 0 {
-            caveats.append("Heart-rate series is missing or summary-only, so drift and zone claims stay limited.")
+            caveats.append("Heart-rate summary may exist, but the detailed time series is missing, so drift and zone claims stay limited.")
         }
         if workout.runningSpeedSampleCount == 0 && workout.distanceSampleCount == 0 {
-            caveats.append("Speed/distance samples are missing, so split-shape and pacing-shape claims stay limited.")
+            caveats.append("Detailed speed/distance samples are missing, so split-shape and pacing-shape claims stay limited.")
         }
-        if workout.routePointCount == 0 {
-            caveats.append("Route points are missing, so map, elevation, and GPS-quality checks stay limited.")
+        if workout.routePointCount == 0 && workout.routeAvailable {
+            caveats.append("A route object exists, but point locations were not returned, so map, elevation, and GPS-quality checks stay limited.")
+        } else if workout.routePointCount == 0 {
+            caveats.append("Route data is missing, so map, elevation, and GPS-quality checks stay limited.")
         }
         if workout.runningPowerSampleCount == 0 {
-            caveats.append("Running power is optional and was not found as a sample series.")
+            caveats.append("Running power may exist as a summary, but the detailed power series was not found.")
         }
         if workout.strideLengthSampleCount == 0
             && workout.verticalOscillationSampleCount == 0
             && workout.groundContactTimeSampleCount == 0 {
-            caveats.append("Running dynamics are missing, so form insights stay hidden.")
+            caveats.append("Running dynamics may exist as summaries, but detailed form series were not found.")
         }
-        if workout.intervalCount == 0 {
-            caveats.append("Workout lap or segment events were not found; interval labels may require real-device records or WorkoutKit metadata later.")
+        if workout.intervalCount > 0 && workout.intervalLabelsSummary == nil {
+            caveats.append("Workout events were found, but HealthKit did not expose Warmup, Work, Cooldown, or similar labels.")
+        } else if workout.intervalCount == 0 {
+            caveats.append("Workout lap or segment events were not found; interval labels may require WorkoutKit metadata later.")
         }
         return caveats
     }

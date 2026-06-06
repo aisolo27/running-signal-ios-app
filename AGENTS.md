@@ -2,6 +2,8 @@
 
 - Native iPhone SwiftUI app. Open and build `RunningWorkoutAnalysis.xcworkspace`; primary implementation lives in `RunningWorkoutAnalysisPackage/Sources/RunningWorkoutAnalysisFeature/`, while the app target stays a thin shell.
 - Before any Xcode build/run/test, call XcodeBuildMCP `session_show_defaults`; use the `RunningWorkoutAnalysis` scheme with an iPhone simulator such as `iPhone 17`. Avoid macOS build/run tools for this project.
+- For simulator build/run/UI/log debugging, use the `build-ios-apps:ios-debugger-agent` skill. Use `build-ios-apps:ios-simulator-browser` only when the user asks to watch/interact through the browser, capture browser-visible proof, or iterate on SwiftUI previews.
+- Treat "push/run/install live to my iPhone" as a physical-device install/verification request, not git push/deploy. First run package tests plus a Simulator smoke check, then use device workflow if available or give exact Xcode run steps; clearly report whether proof came from Simulator or the physical iPhone.
 - Package tests may run with `swift test --package-path RunningWorkoutAnalysisPackage`; keep `Package.swift` compatible with iOS 26 and macOS 14 so local package tests do not fail on SwiftUI/SwiftData availability.
 - HealthKit v1 is read-only and Simulator-safe: keep sample data fallback, do not mutate HealthKit, and treat real workout/permission verification as a physical-iPhone step.
 - Product data source is HealthKit-only. Do not add FIT file import, FIT backup, HealthFit export, or file-based workout ingestion unless the user explicitly reverses this direction.

@@ -31,6 +31,14 @@ public enum PersistenceService {
         try? context.save()
     }
 
+    public static func deleteWorkouts(ids: Set<String>, context: ModelContext) {
+        guard !ids.isEmpty else { return }
+        for record in fetchPersisted(context: context) where ids.contains(record.id) {
+            context.delete(record)
+        }
+        try? context.save()
+    }
+
     public static func updateManualFields(id: String, runType: RunType?, notes: String, context: ModelContext) {
         guard let record = fetchPersisted(context: context).first(where: { $0.id == id }) else { return }
         record.manualRunTypeRaw = runType?.rawValue

@@ -67,8 +67,28 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
 
         let predicate = HKQuery.predicateForObjects(from: workout)
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+        let associated = await quantitySamples(type: type, predicate: predicate, sort: sort, unit: unit)
+        if !associated.isEmpty {
+            return WorkoutMetricSeries(metric: metric, unit: unitLabel, points: associated)
+        }
 
-        return await withCheckedContinuation { continuation in
+        let datePredicate = HKQuery.predicateForSamples(
+            withStart: workout.startDate.addingTimeInterval(-2),
+            end: workout.endDate.addingTimeInterval(2)
+        )
+        let sourcePredicate = HKQuery.predicateForObjects(from: workout.sourceRevision.source)
+        let fallbackPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [datePredicate, sourcePredicate])
+        let fallback = await quantitySamples(type: type, predicate: fallbackPredicate, sort: sort, unit: unit)
+        return WorkoutMetricSeries(metric: metric, unit: unitLabel, points: fallback)
+    }
+
+    private func quantitySamples(
+        type: HKQuantityType,
+        predicate: NSPredicate,
+        sort: NSSortDescriptor,
+        unit: HKUnit
+    ) async -> [WorkoutEvidencePoint] {
+        await withCheckedContinuation { continuation in
             let query = HKSampleQuery(
                 sampleType: type,
                 predicate: predicate,
@@ -78,7 +98,7 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
                 let points = (samples as? [HKQuantitySample] ?? []).map {
                     WorkoutEvidencePoint(date: $0.startDate, value: $0.quantity.doubleValue(for: unit))
                 }
-                continuation.resume(returning: WorkoutMetricSeries(metric: metric, unit: unitLabel, points: points))
+                continuation.resume(returning: points)
             }
             store.execute(query)
         }
@@ -89,10 +109,28 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
             return nil
         }
 
-        let predicate = HKQuery.predicateForObjects(from: workout)
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+        let associated = await stepCadencePoints(type: type, predicate: HKQuery.predicateForObjects(from: workout), sort: sort)
+        if !associated.isEmpty {
+            return WorkoutMetricSeries(metric: .cadence, unit: "spm", points: associated)
+        }
 
-        return await withCheckedContinuation { continuation in
+        let datePredicate = HKQuery.predicateForSamples(
+            withStart: workout.startDate.addingTimeInterval(-2),
+            end: workout.endDate.addingTimeInterval(2)
+        )
+        let sourcePredicate = HKQuery.predicateForObjects(from: workout.sourceRevision.source)
+        let fallbackPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [datePredicate, sourcePredicate])
+        let fallback = await stepCadencePoints(type: type, predicate: fallbackPredicate, sort: sort)
+        return WorkoutMetricSeries(metric: .cadence, unit: "spm", points: fallback)
+    }
+
+    private func stepCadencePoints(
+        type: HKQuantityType,
+        predicate: NSPredicate,
+        sort: NSSortDescriptor
+    ) async -> [WorkoutEvidencePoint] {
+        await withCheckedContinuation { continuation in
             let query = HKSampleQuery(
                 sampleType: type,
                 predicate: predicate,
@@ -105,7 +143,7 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
                     let steps = sample.quantity.doubleValue(for: .count())
                     return WorkoutEvidencePoint(date: sample.startDate, value: steps / minutes)
                 }
-                continuation.resume(returning: WorkoutMetricSeries(metric: .cadence, unit: "spm", points: points))
+                continuation.resume(returning: points)
             }
             store.execute(query)
         }

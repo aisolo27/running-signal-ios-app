@@ -9,6 +9,7 @@ public final class RunningAnalysisStore {
     public private(set) var snapshot = AnalyticsEngine.snapshot(for: [])
     public private(set) var authorizationState: AuthorizationState = .notDetermined
     public private(set) var isLoading = false
+    public private(set) var isEnrichingAudit = false
     public private(set) var message = "Sample data is loaded until HealthKit returns workouts."
     public private(set) var usesSampleData = true
     public private(set) var healthContext = SampleData.healthContext
@@ -44,7 +45,11 @@ public final class RunningAnalysisStore {
             healthContext = SampleData.healthContext
             PersistenceService.upsert(workouts, context: modelContext)
         } else {
-            workouts = DuplicateDetector.markDuplicates(persisted)
+            workouts = removeSampleWorkoutsIfRealDataExists(persisted)
+            if workouts.count != persisted.count {
+                PersistenceService.deleteWorkouts(ids: sampleWorkoutIDs(in: persisted), context: modelContext)
+            }
+            workouts = DuplicateDetector.markDuplicates(workouts)
         }
         reviewedRunTypes = RunTypeReviewImportService.loadSavedReviews()
         syncState = HealthKitSyncState(lastSyncAt: HealthKitSyncStateStore.loadLastSyncAt())
@@ -73,7 +78,8 @@ public final class RunningAnalysisStore {
         }
 
         usesSampleData = false
-        workouts = mergeManualFields(incoming: result.workouts, current: workouts)
+        workouts = removeSampleWorkoutsIfRealDataExists(mergeManualFields(incoming: result.workouts, current: workouts))
+        deletePersistedSampleWorkoutsIfNeeded()
         applyReviewedRunTypes()
         persistCurrent()
         recompute()
@@ -106,7 +112,8 @@ public final class RunningAnalysisStore {
 
         if !result.fetchedWorkouts.isEmpty {
             usesSampleData = false
-            workouts = mergeSyncedWorkouts(changes: result.fetchedWorkouts, current: workouts)
+            workouts = removeSampleWorkoutsIfRealDataExists(mergeSyncedWorkouts(changes: result.fetchedWorkouts, current: workouts))
+            deletePersistedSampleWorkoutsIfNeeded()
             applyReviewedRunTypes()
             persistCurrent()
         }
@@ -119,6 +126,34 @@ public final class RunningAnalysisStore {
             lastDeletedCount: deletedCount,
             lastEvidencePendingCount: evidencePendingCount(in: workouts)
         )
+        recompute()
+    }
+
+    public func enrichNextHealthKitAuditBatch(limit: Int = HealthKitService.defaultDetailedEvidenceLimit) async {
+        let candidates = includedWorkouts
+            .filter { !isSampleWorkout($0) }
+            .filter { $0.seriesSampleCount == 0 || ($0.routeAvailable && $0.routePointCount == 0) }
+            .sorted { $0.startDate > $1.startDate }
+            .prefix(limit)
+            .map(\.id)
+
+        guard !candidates.isEmpty else {
+            message = "All currently loaded workouts already have detailed audit evidence or summary-only limits."
+            return
+        }
+
+        isEnrichingAudit = true
+        defer { isEnrichingAudit = false }
+
+        let result = await healthKitService.enrichRunningWorkouts(ids: Array(candidates))
+        authorizationState = result.authorizationState
+        if result.authorizationState == .authorized || result.authorizationState == .partial {
+            workouts = removeSampleWorkoutsIfRealDataExists(mergeSyncedWorkouts(changes: result.workouts, current: workouts))
+            deletePersistedSampleWorkoutsIfNeeded()
+            applyReviewedRunTypes()
+            persistCurrent()
+        }
+        message = result.message ?? "HealthKit audit enrichment finished."
         recompute()
     }
 
@@ -200,6 +235,25 @@ public final class RunningAnalysisStore {
             byID[change.id] = merged
         }
         return byID.values.sorted { $0.startDate > $1.startDate }
+    }
+
+    private func removeSampleWorkoutsIfRealDataExists(_ workouts: [CanonicalWorkout]) -> [CanonicalWorkout] {
+        guard workouts.contains(where: { !isSampleWorkout($0) }) else { return workouts }
+        return workouts.filter { !isSampleWorkout($0) }
+    }
+
+    private func deletePersistedSampleWorkoutsIfNeeded() {
+        guard let modelContext,
+              workouts.contains(where: { !isSampleWorkout($0) }) else { return }
+        PersistenceService.deleteWorkouts(ids: Set(SampleData.workouts.map(\.id)), context: modelContext)
+    }
+
+    private func sampleWorkoutIDs(in workouts: [CanonicalWorkout]) -> Set<String> {
+        Set(workouts.filter(isSampleWorkout).map(\.id))
+    }
+
+    private func isSampleWorkout(_ workout: CanonicalWorkout) -> Bool {
+        workout.sourceName == "Sample Apple Watch" || workout.id.hasPrefix("sample-")
     }
 
     private func evidencePendingCount(in workouts: [CanonicalWorkout]) -> Int {
