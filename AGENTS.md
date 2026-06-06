@@ -1,0 +1,9 @@
+# AGENTS.md
+
+- Native iPhone SwiftUI app. Open and build `RunningWorkoutAnalysis.xcworkspace`; primary implementation lives in `RunningWorkoutAnalysisPackage/Sources/RunningWorkoutAnalysisFeature/`, while the app target stays a thin shell.
+- Before any Xcode build/run/test, call XcodeBuildMCP `session_show_defaults`; use the `RunningWorkoutAnalysis` scheme with an iPhone simulator such as `iPhone 17`. Avoid macOS build/run tools for this project.
+- Package tests may run with `swift test --package-path RunningWorkoutAnalysisPackage`; keep `Package.swift` compatible with iOS 26 and macOS 14 so local package tests do not fail on SwiftUI/SwiftData availability.
+- HealthKit v1 is read-only and Simulator-safe: keep sample data fallback, do not mutate HealthKit, and treat real workout/permission verification as a physical-iPhone step.
+- Keep milestone docs in `docs/milestones/` current. Do not mark a milestone complete until tests pass, Simulator launch is checked, and completion notes include remaining limitations.
+- Before coding, skim `docs/bug-log.md` index and read only the section relevant to the task; add new entries only for durable recurring bugs or gotchas.
+- After meaningful implementation or debugging work, before the final response, review whether any new durable gotcha belongs in `docs/bug-log.md`. Update it only for recurring project-specific issues, failed assumptions, toolchain gotchas, or verification lessons likely to affect future work; skip one-off temp paths, incidental errors, and generic advice.
