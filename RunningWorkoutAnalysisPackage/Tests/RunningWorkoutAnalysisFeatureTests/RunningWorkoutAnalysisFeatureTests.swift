@@ -110,6 +110,57 @@ import Testing
     #expect(markdown.contains("VO2 max"))
 }
 
+@Test func dataQualityCaveatsIncludeSeriesGateWhenCoverageIsLow() {
+    let start = Date()
+    let workouts = (0..<8).map { index in
+        CanonicalWorkout(
+            id: "run-\(index)",
+            sourceID: "run-\(index)",
+            sourceName: "HealthKit",
+            startDate: start.addingTimeInterval(Double(index) * 86_400),
+            endDate: start.addingTimeInterval(Double(index) * 86_400 + 1_800),
+            environment: .outdoor,
+            distanceMeters: 5_000,
+            durationSeconds: 1_800,
+            averageHeartRate: 150,
+            seriesAvailable: index < 2
+        )
+    }
+
+    let report = AnalyticsEngine.makeDataQualityReport(workouts)
+
+    #expect(report.caveats.contains("Workout Analyzer and trend detail need more per-workout series evidence."))
+}
+
+@Test func parityReadinessKeepsWorkoutAnalyzerLimitedWhenSeriesArePending() {
+    var report = AnalyticsEngine.makeDataQualityReport(SampleData.workouts)
+    report.includedWorkoutCount = 620
+    report.duplicateCount = 3
+    report.heartRateCoverage = 0.9
+    report.seriesCoverage = 0.48
+    report.mechanicsCoverage = 0.1
+    report.confidence = .moderate
+
+    let readiness = AnalyticsEngine.parityReadiness(
+        dataQuality: report,
+        pendingSeriesCount: 323,
+        reviewedRunTypeCount: 0
+    )
+
+    let dataQuality = readiness.first { $0.title == "Data Quality" }
+    let runType = readiness.first { $0.title == "Run Type Analysis" }
+    let analyzer = readiness.first { $0.title == "Workout Analyzer" }
+    let trends = readiness.first { $0.title == "Trends" }
+    let mechanics = readiness.first { $0.title == "Mechanics" }
+
+    #expect(dataQuality?.detail.contains("620 included runs") == true)
+    #expect(runType?.confidence == .limited)
+    #expect(analyzer?.value == "Series pending")
+    #expect(analyzer?.confidence == .limited)
+    #expect(trends?.confidence == .limited)
+    #expect(mechanics?.value == "Blocked")
+}
+
 @Test func webRunReviewCategoryMapsToNativeRunType() {
     #expect(WebRunReviewCategory.easyRun.runType == .easy)
     #expect(WebRunReviewCategory.longRun.runType == .longRun)

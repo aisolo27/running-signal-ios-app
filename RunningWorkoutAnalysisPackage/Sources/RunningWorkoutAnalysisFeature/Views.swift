@@ -23,7 +23,7 @@ struct TodayView: View {
                     MetricItem(title: "Long-run share", value: RunFormatters.percent(store.snapshot.longRunPercent), detail: "Last 28 days")
                 ])
 
-                MetricGrid(items: HealthContextMetrics.items(for: store.healthContext))
+                MetricGrid(items: HealthContextMetrics.todayItems(for: store.healthContext))
 
                 InsightCard(insight: store.snapshot.fitnessTrend)
 
@@ -238,11 +238,13 @@ struct DataView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
                 MetricGrid(items: [
-                    MetricItem(title: "Workouts", value: "\(store.snapshot.dataQuality.workoutCount)", detail: "Total local records"),
-                    MetricItem(title: "Included", value: "\(store.snapshot.dataQuality.includedWorkoutCount)", detail: "Duplicates excluded"),
-                    MetricItem(title: "Duplicates", value: "\(store.snapshot.dataQuality.duplicateCount)", detail: "Candidate matches"),
+                    MetricItem(title: "Workouts", value: "\(store.snapshot.dataQuality.workoutCount)", detail: "All local records"),
+                    MetricItem(title: "Included", value: "\(store.snapshot.dataQuality.includedWorkoutCount)", detail: "Used in analysis"),
+                    MetricItem(title: "Duplicates", value: "\(store.snapshot.dataQuality.duplicateCount)", detail: "Excluded candidates"),
                     MetricItem(title: "Confidence", value: store.snapshot.dataQuality.confidence.label, detail: "Current data gate")
                 ])
+
+                ParityReadinessPanel(store: store)
 
                 HealthKitSyncPanel(store: store)
 
@@ -257,7 +259,11 @@ struct DataView: View {
                 CoverageRow(label: "Series", value: store.snapshot.dataQuality.seriesCoverage)
 
                 SectionHeader("Health Context")
-                MetricGrid(items: HealthContextMetrics.items(for: store.healthContext))
+                MetricGrid(items: HealthContextMetrics.dataItems(for: store.healthContext))
+                NoticeCard(
+                    title: "Broad HealthKit context",
+                    message: "Average HR, max HR, and active energy here come from available HealthKit samples, not workout-scoped analyzer evidence."
+                )
 
                 SectionHeader("Caveats")
                 if store.snapshot.dataQuality.caveats.isEmpty {
@@ -337,6 +343,86 @@ struct HealthKitSyncPanel: View {
     private var lastSyncText: String {
         guard let lastSyncAt = store.syncState.lastSyncAt else { return "Never" }
         return RunFormatters.date.string(from: lastSyncAt)
+    }
+}
+
+struct ParityReadinessPanel: View {
+    var store: RunningAnalysisStore
+
+    private var insights: [Insight] {
+        AnalyticsEngine.parityReadiness(
+            dataQuality: store.snapshot.dataQuality,
+            pendingSeriesCount: store.syncState.lastEvidencePendingCount,
+            reviewedRunTypeCount: store.reviewedRunTypes.count
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Web app parity", systemImage: "checklist")
+                    .font(.headline)
+                Spacer()
+                ConfidencePill(text: "Next build", confidence: .limited)
+            }
+
+            Text("This shows which web-dashboard surfaces are ready to trust natively and which still need evidence before they should be promoted.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(spacing: 8) {
+                ForEach(insights) { insight in
+                    QualityGateRow(insight: insight)
+                }
+            }
+        }
+        .padding()
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+struct QualityGateRow: View {
+    let insight: Insight
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: symbol)
+                .foregroundStyle(color)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(insight.title)
+                    .font(.subheadline.bold())
+                Text(insight.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            ConfidencePill(text: insight.value, confidence: insight.confidence)
+        }
+        .padding()
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var symbol: String {
+        switch insight.confidence {
+        case .strong: "checkmark.seal"
+        case .moderate: "checkmark.circle"
+        case .limited: "exclamationmark.triangle"
+        case .unavailable: "xmark.circle"
+        }
+    }
+
+    private var color: Color {
+        switch insight.confidence {
+        case .strong: .green
+        case .moderate: .blue
+        case .limited: .orange
+        case .unavailable: .secondary
+        }
     }
 }
 
@@ -746,13 +832,20 @@ struct MetricItem: Identifiable {
 }
 
 enum HealthContextMetrics {
-    static func items(for context: HealthContext) -> [MetricItem] {
+    static func todayItems(for context: HealthContext) -> [MetricItem] {
+        [
+            MetricItem(title: "VO2 max", value: RunFormatters.number(context.vo2Max, decimals: 1), detail: "Latest available"),
+            MetricItem(title: "Resting HR", value: RunFormatters.number(context.restingHeartRate, suffix: " bpm"), detail: "Latest available")
+        ]
+    }
+
+    static func dataItems(for context: HealthContext) -> [MetricItem] {
         [
             MetricItem(title: "VO2 max", value: RunFormatters.number(context.vo2Max, decimals: 1), detail: "Latest available"),
             MetricItem(title: "Resting HR", value: RunFormatters.number(context.restingHeartRate, suffix: " bpm"), detail: "Latest available"),
-            MetricItem(title: "Avg HR", value: RunFormatters.number(context.averageHeartRate, suffix: " bpm"), detail: "All available"),
-            MetricItem(title: "Max HR", value: RunFormatters.number(context.maxHeartRate, suffix: " bpm"), detail: "All available"),
-            MetricItem(title: "Active energy", value: RunFormatters.calories(context.activeEnergyKilocaloriesTotal), detail: "All available")
+            MetricItem(title: "Avg HR", value: RunFormatters.number(context.averageHeartRate, suffix: " bpm"), detail: "Broad HealthKit"),
+            MetricItem(title: "Max HR", value: RunFormatters.number(context.maxHeartRate, suffix: " bpm"), detail: "Broad HealthKit"),
+            MetricItem(title: "Active energy", value: RunFormatters.calories(context.activeEnergyKilocaloriesTotal), detail: "Broad HealthKit")
         ]
     }
 }

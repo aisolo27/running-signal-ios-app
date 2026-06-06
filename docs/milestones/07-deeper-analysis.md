@@ -33,3 +33,4 @@ Add richer detail, run type analysis, trends, and mechanics gates where data sup
 
 ## Completion Notes
 - Completed for v1 depth. Workout detail, run type filters, HR/cadence/power/mechanics fields, and data coverage gates are implemented. Full route visualization remains intentionally deferred.
+- Added a first web-app parity readiness pass on the Data tab. The app now explains which surfaces are usable, limited, or blocked across Data Quality, Run Type Analysis, Workout Analyzer, Trends, Mechanics, and Training Plan Brief. Today no longer promotes broad all-time HealthKit average HR or active-energy totals as coach metrics; those stay in Data with a broad-context caveat.

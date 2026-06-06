@@ -44,10 +44,18 @@ enum RunFormatters {
 
     static func calories(_ value: Double?) -> String {
         guard let value else { return "Missing" }
-        return String(format: "%.0f kcal", value)
+        return "\(integer(value)) kcal"
     }
 
     static func percent(_ value: Double) -> String {
         String(format: "%.0f%%", value * 100)
+    }
+
+    private static func integer(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 0
+        formatter.minimumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: value)) ?? String(format: "%.0f", value)
     }
 }

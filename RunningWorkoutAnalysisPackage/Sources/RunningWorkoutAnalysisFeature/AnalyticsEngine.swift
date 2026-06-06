@@ -46,6 +46,9 @@ public enum AnalyticsEngine {
         if mechanicsCoverage < 0.5 {
             caveats.append("Mechanics are not promoted until cadence/form fields have enough coverage.")
         }
+        if seriesCoverage < 0.7 {
+            caveats.append("Workout Analyzer and trend detail need more per-workout series evidence.")
+        }
         if included.isEmpty {
             caveats.append("No running workouts are available yet.")
         }
@@ -74,6 +77,51 @@ public enum AnalyticsEngine {
             confidence: confidence,
             caveats: caveats
         )
+    }
+
+    public static func parityReadiness(
+        dataQuality: DataQualityReport,
+        pendingSeriesCount: Int,
+        reviewedRunTypeCount: Int
+    ) -> [Insight] {
+        [
+            Insight(
+                title: "Data Quality",
+                value: dataQuality.confidence == .strong ? "Ready" : "Usable",
+                detail: "\(dataQuality.includedWorkoutCount) included runs, \(dataQuality.duplicateCount) duplicate candidates excluded.",
+                confidence: dataQuality.confidence
+            ),
+            Insight(
+                title: "Run Type Analysis",
+                value: reviewedRunTypeCount > 0 ? "Linked" : "Needs labels",
+                detail: reviewedRunTypeCount > 0 ? "Reviewed web categories are available for native matching." : "Import reviewed web-app categories before trusting distribution by workout purpose.",
+                confidence: reviewedRunTypeCount > 0 ? .moderate : .limited
+            ),
+            Insight(
+                title: "Workout Analyzer",
+                value: pendingSeriesCount == 0 ? "Ready" : "Series pending",
+                detail: pendingSeriesCount == 0 ? "Per-workout evidence is available for deeper execution review." : "\(pendingSeriesCount) included workouts still need series evidence before split and execution claims can match the web app.",
+                confidence: pendingSeriesCount == 0 ? .moderate : .limited
+            ),
+            Insight(
+                title: "Trends",
+                value: dataQuality.heartRateCoverage >= 0.7 && dataQuality.seriesCoverage >= 0.7 ? "Ready" : "Limited",
+                detail: "Trend confidence depends on pace, heart-rate, and per-workout series coverage.",
+                confidence: dataQuality.heartRateCoverage >= 0.7 && dataQuality.seriesCoverage >= 0.7 ? .moderate : .limited
+            ),
+            Insight(
+                title: "Mechanics",
+                value: dataQuality.mechanicsCoverage >= 0.5 ? "Usable" : "Blocked",
+                detail: dataQuality.mechanicsCoverage >= 0.5 ? "Mechanics fields have enough coverage for cautious surfacing." : "Cadence, power, stride, vertical oscillation, and ground-contact fields need stronger coverage.",
+                confidence: dataQuality.mechanicsCoverage >= 0.5 ? .moderate : .limited
+            ),
+            Insight(
+                title: "Training Plan Brief",
+                value: dataQuality.confidence == .unavailable ? "Missing" : "Draftable",
+                detail: "Native export can summarize the goal and data caveats, but should stay evidence-first until analyzer parity improves.",
+                confidence: dataQuality.confidence == .unavailable ? .unavailable : .moderate
+            )
+        ]
     }
 
     public static func makeBestEfforts(_ workouts: [CanonicalWorkout]) -> [BestEffort] {
