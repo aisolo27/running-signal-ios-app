@@ -982,6 +982,42 @@ import Testing
     #expect(labeled.displayLabel == "Warmup")
 }
 
+@Test func workoutEventSummarySeparatesRawMarkersFromAppleFitnessIntervals() {
+    let start = Date(timeIntervalSince1970: 9_500)
+    let events = [
+        WorkoutEvidenceEvent(
+            startDate: start,
+            endDate: start.addingTimeInterval(60),
+            type: "HKWorkoutEventType(rawValue: 7)"
+        ),
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(60),
+            endDate: start.addingTimeInterval(120),
+            type: "HKWorkoutEventType(rawValue: 7)"
+        ),
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(120),
+            endDate: start.addingTimeInterval(120),
+            type: "HKWorkoutEventType(rawValue: 1)"
+        ),
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(180),
+            endDate: start.addingTimeInterval(240),
+            type: "HKWorkoutEventTypeMarker",
+            label: "Warmup"
+        )
+    ]
+
+    let summary = WorkoutEventSummary(events: events)
+
+    #expect(summary.totalCount == 4)
+    #expect(summary.segmentCount == 2)
+    #expect(summary.pauseCount == 1)
+    #expect(summary.labeledIntervalCount == 1)
+    #expect(summary.healthKitSummary.contains("2 segment markers"))
+    #expect(summary.healthKitSummary.contains("1 pause markers"))
+}
+
 @Test func healthKitAuditReportsPerWorkoutFieldsAndCaveats() {
     let start = Date(timeIntervalSince1970: 1_000)
     var workout = testWorkout(

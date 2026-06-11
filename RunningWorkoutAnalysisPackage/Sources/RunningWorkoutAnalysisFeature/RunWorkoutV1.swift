@@ -48,12 +48,14 @@ public struct RunWorkoutSegments: Equatable, Sendable {
     public var workoutID: String
     public var kilometerSplits: [DerivedSplitEstimate]
     public var events: [WorkoutEvidenceEvent]
+    public var eventSummary: WorkoutEventSummary
 
     public init(workout: CanonicalWorkout, analysis: DerivedWorkoutAnalysis?) {
         workoutID = workout.id
         let derivedSplits = analysis?.splitEstimates ?? []
         kilometerSplits = derivedSplits.isEmpty ? Self.fallbackKilometerSplits(workout: workout) : derivedSplits
         events = workout.evidence?.events ?? []
+        eventSummary = WorkoutEventSummary(events: events)
     }
 
     private static func fallbackKilometerSplits(workout: CanonicalWorkout) -> [DerivedSplitEstimate] {
@@ -89,6 +91,46 @@ public struct RunWorkoutSegments: Equatable, Sendable {
         }
 
         return splits
+    }
+}
+
+public struct WorkoutEventSummary: Equatable, Sendable {
+    public var totalCount: Int
+    public var segmentCount: Int
+    public var lapCount: Int
+    public var pauseCount: Int
+    public var resumeCount: Int
+    public var labeledIntervalCount: Int
+
+    public init(events: [WorkoutEvidenceEvent]) {
+        totalCount = events.count
+        segmentCount = events.filter { $0.displayLabel == "Segment" }.count
+        lapCount = events.filter { $0.displayLabel == "Lap" }.count
+        pauseCount = events.filter { $0.displayLabel.contains("Pause") || $0.displayLabel == "Motion paused" }.count
+        resumeCount = events.filter { $0.displayLabel == "Resume" || $0.displayLabel == "Motion resumed" }.count
+        labeledIntervalCount = events.filter { event in
+            guard let label = event.label?.lowercased() else { return false }
+            return ["warmup", "work", "recovery", "cooldown", "open"].contains { label.contains($0) }
+        }.count
+    }
+
+    public var hasEvents: Bool {
+        totalCount > 0
+    }
+
+    public var healthKitSummary: String {
+        guard hasEvents else {
+            return "HealthKit did not return workout events for this run."
+        }
+
+        var parts: [String] = []
+        if segmentCount > 0 { parts.append("\(segmentCount) segment markers") }
+        if lapCount > 0 { parts.append("\(lapCount) laps") }
+        if pauseCount > 0 { parts.append("\(pauseCount) pause markers") }
+        if resumeCount > 0 { parts.append("\(resumeCount) resume markers") }
+        let knownCount = segmentCount + lapCount + pauseCount + resumeCount
+        if totalCount > knownCount { parts.append("\(totalCount - knownCount) other events") }
+        return parts.isEmpty ? "\(totalCount) workout events" : parts.joined(separator: ", ")
     }
 }
 

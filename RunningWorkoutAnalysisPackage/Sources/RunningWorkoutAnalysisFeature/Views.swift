@@ -1513,29 +1513,19 @@ struct SplitsAndEventsPanel: View {
                 }
             }
 
-            SectionHeader("Laps / Segments / Intervals")
-            if segments.events.isEmpty {
-                NoticeCard(title: "Unavailable", message: "No HealthKit workout events, laps, segments, or intervals were returned for this workout.")
-            } else {
-                ForEach(Array(segments.events.enumerated()), id: \.offset) { index, event in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(event.displayLabel)
-                                .font(.subheadline.bold())
-                            Text("Event \(index + 1)")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Text(RunFormatters.duration(event.endDate.timeIntervalSince(event.startDate)))
-                            .font(.subheadline.monospacedDigit())
-                    }
-                    .padding(10)
-                    .background(.background)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-            }
+            SectionHeader("Apple Fitness Intervals")
+            NoticeCard(
+                title: segments.eventSummary.hasEvents ? "Not comparable yet" : "Unavailable",
+                message: intervalMessage
+            )
         }
+    }
+
+    private var intervalMessage: String {
+        if !segments.eventSummary.hasEvents {
+            return "HealthKit did not return workout events for this run. RunSignal cannot show Apple Fitness-style Warmup, Work, Recovery, Cooldown, or Open rows yet."
+        }
+        return "HealthKit returned \(segments.eventSummary.healthKitSummary), but not the full Apple Fitness interval table with distance, time, pace, and heart rate. RunSignal hides those raw marker durations here because they are not the same as Apple Fitness Intervals. Use Raw HealthKit Debug if you need to inspect the raw events."
     }
 }
 
