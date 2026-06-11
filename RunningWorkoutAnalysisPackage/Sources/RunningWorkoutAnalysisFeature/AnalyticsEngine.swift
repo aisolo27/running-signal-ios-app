@@ -346,7 +346,7 @@ public enum AnalyticsEngine {
     }
 
     private static func minConfidence(_ lhs: ConfidenceLevel, _ rhs: ConfidenceLevel) -> ConfidenceLevel {
-        let order: [ConfidenceLevel: Int] = [.unavailable: 0, .limited: 1, .moderate: 2, .strong: 3]
+        let order: [ConfidenceLevel: Int] = [.unavailable: 0, .blocked: 0, .weak: 1, .limited: 2, .moderate: 3, .strong: 4]
         return (order[lhs, default: 0] <= order[rhs, default: 0]) ? lhs : rhs
     }
 
@@ -371,6 +371,8 @@ public enum AnalyticsEngine {
         case .strong: "Ready evidence is forming"
         case .moderate: "Close, but keep proving it"
         case .limited: "Building with limited proof"
+        case .weak: "Building from weak evidence"
+        case .blocked: "Readiness blocked"
         case .unavailable: "Readiness unavailable"
         }
     }
@@ -380,6 +382,8 @@ public enum AnalyticsEngine {
         case .strong: "The available data supports sub-20 direction, but this is still not a prediction."
         case .moderate: "Useful evidence exists, with a few proof points still missing."
         case .limited: "The app needs more reliable workout and intensity evidence before making a strong call."
+        case .weak: "Evidence is sparse or inferred, so the app should avoid coaching conclusions."
+        case .blocked: "Required running evidence is missing for this claim."
         case .unavailable: "No reliable running sample is available yet."
         }
     }

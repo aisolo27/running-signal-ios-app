@@ -51,6 +51,8 @@ public enum ConfidenceLevel: String, Codable, CaseIterable, Sendable {
     case strong
     case moderate
     case limited
+    case weak
+    case blocked
     case unavailable
 
     var label: String {
@@ -58,6 +60,8 @@ public enum ConfidenceLevel: String, Codable, CaseIterable, Sendable {
         case .strong: "Strong"
         case .moderate: "Moderate"
         case .limited: "Limited"
+        case .weak: "Weak"
+        case .blocked: "Blocked"
         case .unavailable: "Unavailable"
         }
     }
@@ -175,12 +179,15 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
     public var id: String
     public var sourceID: String
     public var sourceName: String
+    public var deviceName: String?
     public var startDate: Date
     public var endDate: Date
     public var environment: RunEnvironment
     public var distanceMeters: Double?
     public var durationSeconds: TimeInterval
+    public var elapsedSeconds: TimeInterval
     public var activeEnergyKilocalories: Double?
+    public var totalEnergyKilocalories: Double?
     public var elevationGainMeters: Double?
     public var averageHeartRate: Double?
     public var maxHeartRate: Double?
@@ -218,12 +225,15 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
         id: String,
         sourceID: String,
         sourceName: String,
+        deviceName: String? = nil,
         startDate: Date,
         endDate: Date,
         environment: RunEnvironment,
         distanceMeters: Double?,
         durationSeconds: TimeInterval,
+        elapsedSeconds: TimeInterval? = nil,
         activeEnergyKilocalories: Double? = nil,
+        totalEnergyKilocalories: Double? = nil,
         elevationGainMeters: Double? = nil,
         averageHeartRate: Double? = nil,
         maxHeartRate: Double? = nil,
@@ -260,12 +270,15 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
         self.id = id
         self.sourceID = sourceID
         self.sourceName = sourceName
+        self.deviceName = deviceName
         self.startDate = startDate
         self.endDate = endDate
         self.environment = environment
         self.distanceMeters = distanceMeters
         self.durationSeconds = durationSeconds
+        self.elapsedSeconds = elapsedSeconds ?? endDate.timeIntervalSince(startDate)
         self.activeEnergyKilocalories = activeEnergyKilocalories
+        self.totalEnergyKilocalories = totalEnergyKilocalories
         self.elevationGainMeters = elevationGainMeters
         self.averageHeartRate = averageHeartRate
         self.maxHeartRate = maxHeartRate
@@ -362,6 +375,14 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
         guard let distanceMeters else { return nil }
         return distanceMeters / 1_000
     }
+
+    public var dataSourceLabel: String {
+        id.hasPrefix("sample-") || sourceName == "Sample Apple Watch" ? "sample fallback" : "real HealthKit"
+    }
+
+    public var workoutScopeLabel: String {
+        evidence == nil ? "HealthKit workout summary" : "workout-scoped HealthKit evidence"
+    }
 }
 
 @Model
@@ -369,12 +390,15 @@ public final class PersistedWorkout {
     @Attribute(.unique) public var id: String
     public var sourceID: String
     public var sourceName: String
+    public var deviceName: String?
     public var startDate: Date
     public var endDate: Date
     public var environmentRaw: String
     public var distanceMeters: Double?
     public var durationSeconds: Double
+    public var elapsedSeconds: Double = 0
     public var activeEnergyKilocalories: Double?
+    public var totalEnergyKilocalories: Double?
     public var elevationGainMeters: Double?
     public var averageHeartRate: Double?
     public var maxHeartRate: Double?
@@ -412,12 +436,15 @@ public final class PersistedWorkout {
         id = workout.id
         sourceID = workout.sourceID
         sourceName = workout.sourceName
+        deviceName = workout.deviceName
         startDate = workout.startDate
         endDate = workout.endDate
         environmentRaw = workout.environment.rawValue
         distanceMeters = workout.distanceMeters
         durationSeconds = workout.durationSeconds
+        elapsedSeconds = workout.elapsedSeconds
         activeEnergyKilocalories = workout.activeEnergyKilocalories
+        totalEnergyKilocalories = workout.totalEnergyKilocalories
         elevationGainMeters = workout.elevationGainMeters
         averageHeartRate = workout.averageHeartRate
         maxHeartRate = workout.maxHeartRate
@@ -455,12 +482,15 @@ public final class PersistedWorkout {
     public func update(from workout: CanonicalWorkout, preservingManualFields: Bool = true) {
         sourceID = workout.sourceID
         sourceName = workout.sourceName
+        deviceName = workout.deviceName
         startDate = workout.startDate
         endDate = workout.endDate
         environmentRaw = workout.environment.rawValue
         distanceMeters = workout.distanceMeters
         durationSeconds = workout.durationSeconds
+        elapsedSeconds = workout.elapsedSeconds
         activeEnergyKilocalories = workout.activeEnergyKilocalories
+        totalEnergyKilocalories = workout.totalEnergyKilocalories
         elevationGainMeters = workout.elevationGainMeters
         averageHeartRate = workout.averageHeartRate
         maxHeartRate = workout.maxHeartRate
@@ -505,12 +535,15 @@ public final class PersistedWorkout {
             id: id,
             sourceID: sourceID,
             sourceName: sourceName,
+            deviceName: deviceName,
             startDate: startDate,
             endDate: endDate,
             environment: RunEnvironment(rawValue: environmentRaw) ?? .unknown,
             distanceMeters: distanceMeters,
             durationSeconds: durationSeconds,
+            elapsedSeconds: elapsedSeconds,
             activeEnergyKilocalories: activeEnergyKilocalories,
+            totalEnergyKilocalories: totalEnergyKilocalories,
             elevationGainMeters: elevationGainMeters,
             averageHeartRate: averageHeartRate,
             maxHeartRate: maxHeartRate,

@@ -349,7 +349,7 @@ public enum DerivedAnalyticsEngine {
     }
 
     private static func minConfidence(_ lhs: ConfidenceLevel, _ rhs: ConfidenceLevel) -> ConfidenceLevel {
-        let order: [ConfidenceLevel: Int] = [.unavailable: 0, .limited: 1, .moderate: 2, .strong: 3]
+        let order: [ConfidenceLevel: Int] = [.unavailable: 0, .blocked: 0, .weak: 1, .limited: 2, .moderate: 3, .strong: 4]
         return (order[lhs, default: 0] <= order[rhs, default: 0]) ? lhs : rhs
     }
 

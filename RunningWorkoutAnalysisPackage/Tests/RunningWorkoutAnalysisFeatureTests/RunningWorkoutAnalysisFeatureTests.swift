@@ -1006,6 +1006,118 @@ import Testing
     #expect(markdown.contains("representative slots are still missing candidates"))
 }
 
+@Test func normalizedRunKeepsMissingMetricsNilAndLabelsProvenance() {
+    let start = Date(timeIntervalSince1970: 1_000)
+    let workout = testWorkout(
+        id: "normalized",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+
+    let normalized = NormalizedRun.from(workout)
+
+    #expect(normalized.averagePaceSecondsPerKm == 300)
+    #expect(normalized.elapsedSeconds == 1_500)
+    #expect(normalized.totalEnergyKcal == nil)
+    #expect(normalized.metricProvenance["totalEnergyKcal"]?.source == .unavailable)
+    #expect(normalized.dataQualityReport.warnings.contains("Total calories are unavailable; active calories remain separate."))
+}
+
+@Test func sampleCadenceUsesFullStepsPerMinute() {
+    let cadences = SampleData.workouts.compactMap(\.averageCadence)
+
+    #expect(!cadences.isEmpty)
+    #expect(cadences.allSatisfy { $0 >= 120 })
+}
+
+@Test func duplicateDetectorPrefersAppleWatchThenRichestEvidence() {
+    let start = Date(timeIntervalSince1970: 2_000)
+    var thirdParty = testWorkout(
+        id: "strava",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    thirdParty.sourceName = "Strava"
+    thirdParty.seriesSampleCount = 400
+
+    var appleWatch = testWorkout(
+        id: "apple-watch",
+        start: start.addingTimeInterval(20),
+        distanceMeters: 5_020,
+        durationSeconds: 1_505
+    )
+    appleWatch.sourceName = "Apple Fitness"
+    appleWatch.deviceName = "Apple Watch"
+
+    let marked = DuplicateDetector.markDuplicates([thirdParty, appleWatch])
+
+    #expect(marked.first { $0.id == "apple-watch" }?.isDuplicate == false)
+    #expect(marked.first { $0.id == "strava" }?.isDuplicate == true)
+    #expect(marked.first { $0.id == "strava" }?.duplicateOfID == "apple-watch")
+}
+
+@Test func healthKitPermissionCatalogIsReadOnlyAndDocumentsReasons() {
+    #expect(!HealthKitPermissionCatalog.readItems.isEmpty)
+    #expect(HealthKitPermissionCatalog.permissionExplanation.contains("not used for advertising or sold"))
+    #expect(HealthKitPermissionCatalog.readItems.allSatisfy { !$0.reason.isEmpty })
+    #expect(HealthKitPermissionCatalog.intentionallySkipped.contains("Cycling metrics"))
+    #expect(HealthKitPermissionCatalog.markdown().contains("requests no write permissions"))
+}
+
+@Test func goldenAppleFitnessValidationAppliesTolerances() {
+    let start = Date(timeIntervalSince1970: 3_000)
+    var workout = testWorkout(
+        id: "golden",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    workout.activeEnergyKilocalories = 300
+    workout.averageHeartRate = 150
+    workout.maxHeartRate = 172
+    workout.averageCadence = 176
+
+    let expected = GoldenAppleFitnessExpectedWorkout(
+        workoutId: "golden",
+        date: "Test",
+        expectedDistanceKm: 5.01,
+        expectedWorkoutDurationSeconds: 1_501,
+        expectedElapsedTimeSeconds: 1_500,
+        expectedAveragePaceSecPerKm: 300,
+        expectedActiveCaloriesKcal: 305,
+        expectedAverageHeartRateBpm: 151,
+        expectedMaxHeartRateBpm: 172,
+        expectedAverageCadenceSpm: 175,
+        expectedRouteAvailable: false
+    )
+
+    let results = GoldenAppleFitnessValidation.results(workouts: [workout], expected: [expected])
+    let fields = results[0].fieldResults
+
+    #expect(fields.first { $0.field == "Distance" }?.status == .pass)
+    #expect(fields.first { $0.field == "Workout duration" }?.status == .pass)
+    #expect(fields.first { $0.field == "Average HR" }?.status == .pass)
+    #expect(fields.first { $0.field == "Total calories" }?.status == .unavailable)
+}
+
+@Test func goldenAppleFitnessValidationExportsEditableCSVTemplate() {
+    let start = Date(timeIntervalSince1970: 3_000)
+    let workout = testWorkout(
+        id: "csv-golden",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+
+    let csv = GoldenAppleFitnessValidation.csvTemplate(workouts: [workout])
+
+    #expect(csv.contains("workoutId,date,appleFitnessTitle"))
+    #expect(csv.contains("csv-golden"))
+    #expect(csv.contains("expectedDistanceKm"))
+}
+
 private func fixedCalendar() -> Calendar {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(secondsFromGMT: 0)!

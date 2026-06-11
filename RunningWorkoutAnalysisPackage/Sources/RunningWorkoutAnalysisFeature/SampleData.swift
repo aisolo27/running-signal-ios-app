@@ -71,16 +71,16 @@ public enum SampleData {
         }
 
         return DuplicateDetector.markDuplicates([
-            workout(id: "sample-001", daysAgo: 1, distanceKm: 7.2, seconds: 2_760, type: .easy, heartRate: 142, cadence: 82, power: 245),
-            workout(id: "sample-002", daysAgo: 3, distanceKm: 5.1, seconds: 1_345, type: .threshold, heartRate: 168, cadence: 88, power: 310),
-            workout(id: "sample-003", daysAgo: 5, distanceKm: 4.8, seconds: 1_980, type: .recovery, heartRate: 132, cadence: 80, power: 220),
-            workout(id: "sample-004", daysAgo: 8, distanceKm: 12.4, seconds: 4_980, type: .longRun, heartRate: 148, cadence: 81, power: 238),
-            workout(id: "sample-005", daysAgo: 10, distanceKm: 6.0, seconds: 2_220, type: .interval, heartRate: 162, cadence: 90, power: 330),
+            workout(id: "sample-001", daysAgo: 1, distanceKm: 7.2, seconds: 2_760, type: .easy, heartRate: 142, cadence: 164, power: 245),
+            workout(id: "sample-002", daysAgo: 3, distanceKm: 5.1, seconds: 1_345, type: .threshold, heartRate: 168, cadence: 176, power: 310),
+            workout(id: "sample-003", daysAgo: 5, distanceKm: 4.8, seconds: 1_980, type: .recovery, heartRate: 132, cadence: 160, power: 220),
+            workout(id: "sample-004", daysAgo: 8, distanceKm: 12.4, seconds: 4_980, type: .longRun, heartRate: 148, cadence: 162, power: 238),
+            workout(id: "sample-005", daysAgo: 10, distanceKm: 6.0, seconds: 2_220, type: .interval, heartRate: 162, cadence: 180, power: 330),
             workout(id: "sample-006", daysAgo: 13, distanceKm: 7.0, seconds: 2_870, type: .easy, heartRate: 144, cadence: nil, power: nil),
             workout(id: "sample-007", daysAgo: 16, distanceKm: 3.2, seconds: 1_520, type: .recovery, heartRate: 135, environment: .indoor, route: false),
-            workout(id: "sample-008", daysAgo: 20, distanceKm: 5.0, seconds: 1_275, type: .race, heartRate: 176, cadence: 91, power: 342),
-            workout(id: "sample-009", daysAgo: 23, distanceKm: 9.2, seconds: 3_560, type: .easy, heartRate: 146, cadence: 82, power: 242),
-            workout(id: "sample-010", daysAgo: 27, distanceKm: 4.2, seconds: 1_610, type: .tempo, heartRate: 160, cadence: 86, power: 292)
+            workout(id: "sample-008", daysAgo: 20, distanceKm: 5.0, seconds: 1_275, type: .race, heartRate: 176, cadence: 182, power: 342),
+            workout(id: "sample-009", daysAgo: 23, distanceKm: 9.2, seconds: 3_560, type: .easy, heartRate: 146, cadence: 164, power: 242),
+            workout(id: "sample-010", daysAgo: 27, distanceKm: 4.2, seconds: 1_610, type: .tempo, heartRate: 160, cadence: 172, power: 292)
         ])
     }()
 }

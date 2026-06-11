@@ -20,6 +20,7 @@ enum HealthKitWorkoutMapper {
                 id: workout.uuid.uuidString,
                 sourceID: workout.uuid.uuidString,
                 sourceName: workout.sourceRevision.source.name,
+                deviceName: deviceName(workout),
                 startDate: workout.startDate,
                 endDate: workout.endDate,
                 environment: inferEnvironment(workout: workout, routeAvailable: routeAvailable),
@@ -27,9 +28,11 @@ enum HealthKitWorkoutMapper {
                     ?? quantity(workout, .distanceWalkingRunning, unit: .meter())
                     ?? evidence.sum(.distance),
                 durationSeconds: workout.duration,
+                elapsedSeconds: workout.endDate.timeIntervalSince(workout.startDate),
                 activeEnergyKilocalories: workout.totalEnergyBurned?.doubleValue(for: .kilocalorie())
                     ?? quantity(workout, .activeEnergyBurned, unit: .kilocalorie())
                     ?? evidence.sum(.activeEnergy),
+                totalEnergyKilocalories: nil,
                 elevationGainMeters: evidence.elevationGainMeters,
                 averageHeartRate: quantity(workout, .heartRate, unit: HKUnit.count().unitDivided(by: .minute()), option: .discreteAverage) ?? evidence.average(.heartRate),
                 maxHeartRate: quantity(workout, .heartRate, unit: HKUnit.count().unitDivided(by: .minute()), option: .discreteMax) ?? evidence.maximum(.heartRate),
@@ -105,6 +108,19 @@ enum HealthKitWorkoutMapper {
         return routeAvailable ? .outdoor : .unknown
     }
 
+    private static func deviceName(_ workout: HKWorkout) -> String? {
+        let device = workout.device
+        return [
+            device?.name,
+            device?.manufacturer,
+            device?.model
+        ]
+        .compactMap { $0 }
+        .filter { !$0.isEmpty }
+        .joined(separator: " ")
+        .nilIfEmpty
+    }
+
     private static func hasSeriesCandidate(_ workout: HKWorkout) -> Bool {
         workout.duration > 60 && quantity(workout, .heartRate, unit: HKUnit.count().unitDivided(by: .minute()), option: .discreteAverage) != nil
     }
@@ -165,5 +181,11 @@ enum QuantityOption {
         case .discreteAverage: statistics?.averageQuantity()
         case .discreteMax: statistics?.maximumQuantity()
         }
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }

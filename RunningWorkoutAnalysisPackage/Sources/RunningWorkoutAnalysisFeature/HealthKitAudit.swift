@@ -53,6 +53,8 @@ public enum HealthKitAudit {
     private static func row(for workout: CanonicalWorkout) -> HealthKitAuditRow {
         let fields = [
             summaryField(workout),
+            sourceField(workout),
+            elapsedField(workout),
             routeField(workout),
             sampleField(
                 label: "Heart rate",
@@ -67,6 +69,7 @@ public enum HealthKitAudit {
                 summaryAvailable: workout.activeEnergyKilocalories != nil,
                 summaryDetail: RunFormatters.calories(workout.activeEnergyKilocalories)
             ),
+            totalEnergyField(workout),
             sampleField(
                 label: "Running power",
                 count: workout.runningPowerSampleCount,
@@ -105,6 +108,34 @@ public enum HealthKitAudit {
             value: found ? "Found" : "Limited",
             detail: "\(RunFormatters.distance(workout.distanceMeters)) · \(RunFormatters.duration(workout.durationSeconds)) · \(workout.sourceName)",
             confidence: found ? .moderate : .limited
+        )
+    }
+
+    private static func sourceField(_ workout: CanonicalWorkout) -> HealthKitAuditField {
+        HealthKitAuditField(
+            label: "Data source",
+            value: workout.dataSourceLabel,
+            detail: "\(workout.sourceName)\(workout.deviceName.map { " · \($0)" } ?? "") · \(workout.workoutScopeLabel)",
+            confidence: workout.dataSourceLabel == "real HealthKit" ? .moderate : .limited
+        )
+    }
+
+    private static func elapsedField(_ workout: CanonicalWorkout) -> HealthKitAuditField {
+        let matchesDuration = abs(workout.elapsedSeconds - workout.durationSeconds) <= 2
+        return HealthKitAuditField(
+            label: "Elapsed time",
+            value: RunFormatters.duration(workout.elapsedSeconds),
+            detail: matchesDuration ? "Matches workout duration." : "Workout duration \(RunFormatters.duration(workout.durationSeconds)); elapsed may include pauses.",
+            confidence: workout.elapsedSeconds > 0 ? .moderate : .blocked
+        )
+    }
+
+    private static func totalEnergyField(_ workout: CanonicalWorkout) -> HealthKitAuditField {
+        HealthKitAuditField(
+            label: "Total calories",
+            value: RunFormatters.calories(workout.totalEnergyKilocalories),
+            detail: workout.totalEnergyKilocalories == nil ? "Unavailable unless HealthKit provides enough active plus basal evidence." : "Stored separately from active calories.",
+            confidence: workout.totalEnergyKilocalories == nil ? .unavailable : .limited
         )
     }
 

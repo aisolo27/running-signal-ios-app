@@ -282,6 +282,22 @@ struct DataView: View {
                 }
                 .buttonStyle(.bordered)
 
+                NavigationLink {
+                    GoldenValidationView(store: store)
+                } label: {
+                    Label("Open Apple Fitness validation", systemImage: "checkmark.seal")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                NavigationLink {
+                    HealthKitPermissionReviewView(store: store)
+                } label: {
+                    Label("Open permission review", systemImage: "lock.shield")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
                 SectionHeader("Health Context")
                 MetricGrid(items: HealthContextMetrics.dataItems(for: store.healthContext))
                 NoticeCard(
@@ -321,6 +337,24 @@ struct DataView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
+
+                ShareLink(item: store.goldenValidationChecklistMarkdown) {
+                    Label("Share Apple Fitness checklist", systemImage: "checklist")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                ShareLink(item: store.goldenValidationFixtureJSON) {
+                    Label("Share Apple Fitness JSON fixture", systemImage: "curlybraces")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                ShareLink(item: store.goldenValidationFixtureCSV) {
+                    Label("Share Apple Fitness CSV fixture", systemImage: "tablecells")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
             }
             .padding()
         }
@@ -332,6 +366,173 @@ struct DataView: View {
         ) { result in
             guard case let .success(urls) = result, let url = urls.first else { return }
             store.importReviewedRunTypes(from: url)
+        }
+    }
+}
+
+struct HealthKitPermissionReviewView: View {
+    var store: RunningAnalysisStore
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HeaderBlock(title: "Permission Review", subtitle: "RunSignal read-only HealthKit access.")
+
+                NoticeCard(
+                    title: "Before HealthKit asks",
+                    message: HealthKitPermissionCatalog.permissionExplanation
+                )
+
+                MetricGrid(items: [
+                    MetricItem(title: "Read types", value: "\(HealthKitPermissionCatalog.readItems.count)", detail: "Requested if SDK supports them"),
+                    MetricItem(title: "Write types", value: "0", detail: "Read-only milestone"),
+                    MetricItem(title: "Skipped", value: "\(HealthKitPermissionCatalog.intentionallySkipped.count)", detail: "Out of scope"),
+                    MetricItem(title: "HR zones", value: "Unverified", detail: "Do not assume Apple zones")
+                ])
+
+                ForEach(HealthKitPermissionCatalog.readItems) { item in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(item.displayName)
+                                .font(.headline)
+                            Spacer()
+                            Text(item.scope.rawValue)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Text(item.healthKitIdentifier)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                        Text(item.reason)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .background(.background)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+
+                ShareLink(item: store.healthKitPermissionReviewMarkdown) {
+                    Label("Share permission review", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding()
+        }
+        .navigationTitle("Permissions")
+    }
+}
+
+struct GoldenValidationView: View {
+    var store: RunningAnalysisStore
+
+    private var results: [GoldenAppleFitnessWorkoutResult] {
+        store.goldenValidationResults
+    }
+
+    private var summary: GoldenAppleFitnessSummary {
+        GoldenAppleFitnessValidation.summary(results: results)
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HeaderBlock(title: "Apple Fitness Validation", subtitle: GoldenAppleFitnessValidation.confidenceLabel)
+
+                NoticeCard(
+                    title: "Validation source",
+                    message: "Compare these selected HealthKit-derived runs to Apple Fitness display values. Do not use FIT files or the old web dashboard as the reference."
+                )
+
+                MetricGrid(items: [
+                    MetricItem(title: "Selected", value: "\(summary.selectedCount)", detail: "Recent runs"),
+                    MetricItem(title: "Need values", value: "\(summary.needsManualValuesCount)", detail: "Fill from Fitness"),
+                    MetricItem(title: "Pass", value: "\(summary.passCount)", detail: "Within tolerance"),
+                    MetricItem(title: "Warning", value: "\(summary.warningCount)", detail: "Review mismatch"),
+                    MetricItem(title: "Fail", value: "\(summary.failCount)", detail: "Outside tolerance"),
+                    MetricItem(title: "Unavailable", value: "\(summary.unavailableCount)", detail: "Missing expected")
+                ])
+
+                ShareLink(item: store.goldenValidationFixtureJSON) {
+                    Label("Share JSON fixture", systemImage: "curlybraces")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+
+                ShareLink(item: store.goldenValidationFixtureCSV) {
+                    Label("Share CSV fixture", systemImage: "tablecells")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+
+                ShareLink(item: store.goldenValidationChecklistMarkdown) {
+                    Label("Share checklist", systemImage: "checklist")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                ForEach(results) { result in
+                    GoldenValidationCard(result: result)
+                }
+            }
+            .padding()
+        }
+        .navigationTitle("Fitness Validation")
+    }
+}
+
+struct GoldenValidationCard: View {
+    let result: GoldenAppleFitnessWorkoutResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(RunFormatters.shortDate.string(from: result.workout.startDate))
+                        .font(.headline)
+                    Text("\(RunFormatters.distance(result.workout.distanceMeters)) · \(RunFormatters.duration(result.workout.durationSeconds)) · \(result.workout.sourceName)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(result.status.label)
+                    .font(.caption.bold())
+                    .foregroundStyle(color(for: result.status))
+            }
+
+            ForEach(result.fieldResults.prefix(6)) { field in
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(field.field)
+                            .font(.caption.bold())
+                        Text(field.detail)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 3) {
+                        Text(field.appValue)
+                            .font(.caption.monospacedDigit())
+                        Text(field.expectedValue)
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func color(for status: GoldenValidationStatus) -> Color {
+        switch status {
+        case .pass: .green
+        case .warning: .orange
+        case .fail: .red
+        case .unavailable: .secondary
         }
     }
 }
@@ -488,7 +689,8 @@ struct HealthKitAuditFieldTile: View {
     private var symbol: String {
         switch field.confidence {
         case .strong, .moderate: "checkmark.circle"
-        case .limited: "exclamationmark.triangle"
+        case .limited, .weak: "exclamationmark.triangle"
+        case .blocked: "xmark.octagon"
         case .unavailable: "minus.circle"
         }
     }
@@ -497,7 +699,8 @@ struct HealthKitAuditFieldTile: View {
         switch field.confidence {
         case .strong: .green
         case .moderate: .blue
-        case .limited: .orange
+        case .limited, .weak: .orange
+        case .blocked: .red
         case .unavailable: .secondary
         }
     }
@@ -725,7 +928,8 @@ struct QualityGateRow: View {
         switch insight.confidence {
         case .strong: "checkmark.seal"
         case .moderate: "checkmark.circle"
-        case .limited: "exclamationmark.triangle"
+        case .limited, .weak: "exclamationmark.triangle"
+        case .blocked: "xmark.octagon"
         case .unavailable: "xmark.circle"
         }
     }
@@ -734,7 +938,8 @@ struct QualityGateRow: View {
         switch insight.confidence {
         case .strong: .green
         case .moderate: .blue
-        case .limited: .orange
+        case .limited, .weak: .orange
+        case .blocked: .red
         case .unavailable: .secondary
         }
     }
@@ -1204,7 +1409,7 @@ struct ExecutionShapeVisual: View {
     }
 
     private func minConfidence(_ lhs: ConfidenceLevel, _ rhs: ConfidenceLevel) -> ConfidenceLevel {
-        let order: [ConfidenceLevel: Int] = [.unavailable: 0, .limited: 1, .moderate: 2, .strong: 3]
+        let order: [ConfidenceLevel: Int] = [.unavailable: 0, .blocked: 0, .weak: 1, .limited: 2, .moderate: 3, .strong: 4]
         return (order[lhs, default: 0] <= order[rhs, default: 0]) ? lhs : rhs
     }
 }
@@ -1511,7 +1716,8 @@ struct ConfidencePill: View {
         switch confidence {
         case .strong: .green
         case .moderate: .blue
-        case .limited: .orange
+        case .limited, .weak: .orange
+        case .blocked: .red
         case .unavailable: .secondary
         }
     }

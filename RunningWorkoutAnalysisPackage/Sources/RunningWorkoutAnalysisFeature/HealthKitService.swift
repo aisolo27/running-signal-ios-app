@@ -91,34 +91,7 @@ public final class HealthKitService: @unchecked Sendable {
     }
 
     private var readTypes: Set<HKObjectType> {
-        var types: Set<HKObjectType> = [
-            HKObjectType.workoutType(),
-            HKSeriesType.workoutRoute()
-        ]
-
-        quantityIdentifiers.forEach { identifier in
-            if let quantity = HKObjectType.quantityType(forIdentifier: identifier) {
-                types.insert(quantity)
-            }
-        }
-
-        return types
-    }
-
-    private var quantityIdentifiers: [HKQuantityTypeIdentifier] {
-        [
-            .distanceWalkingRunning,
-            .heartRate,
-            .runningSpeed,
-            .stepCount,
-            .runningPower,
-            .runningStrideLength,
-            .runningVerticalOscillation,
-            .runningGroundContactTime,
-            .vo2Max,
-            .restingHeartRate,
-            .activeEnergyBurned
-        ]
+        HealthKitPermissionCatalog.readTypes
     }
 
     private func queryRunningWorkouts() async throws -> [HKWorkout] {

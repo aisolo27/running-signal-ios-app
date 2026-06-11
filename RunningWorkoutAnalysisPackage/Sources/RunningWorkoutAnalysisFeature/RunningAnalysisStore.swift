@@ -236,6 +236,26 @@ public final class RunningAnalysisStore {
         PhysicalVerificationReport.markdown(workouts: workouts)
     }
 
+    public var goldenValidationResults: [GoldenAppleFitnessWorkoutResult] {
+        GoldenAppleFitnessValidation.results(workouts: workouts)
+    }
+
+    public var goldenValidationFixtureJSON: String {
+        GoldenAppleFitnessValidation.fixtureTemplate(workouts: workouts)
+    }
+
+    public var goldenValidationFixtureCSV: String {
+        GoldenAppleFitnessValidation.csvTemplate(workouts: workouts)
+    }
+
+    public var goldenValidationChecklistMarkdown: String {
+        GoldenAppleFitnessValidation.checklistMarkdown(workouts: workouts)
+    }
+
+    public var healthKitPermissionReviewMarkdown: String {
+        HealthKitPermissionCatalog.markdown()
+    }
+
     private func mergeManualFields(incoming: [CanonicalWorkout], current: [CanonicalWorkout]) -> [CanonicalWorkout] {
         let currentByID = Dictionary(uniqueKeysWithValues: current.map { ($0.id, $0) })
         return incoming.map { workout in
