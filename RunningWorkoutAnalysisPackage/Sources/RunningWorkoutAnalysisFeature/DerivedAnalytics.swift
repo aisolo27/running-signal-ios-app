@@ -91,6 +91,56 @@ public struct DerivedExecutionSegment: Codable, Equatable, Sendable {
     public var paceConfidence: ConfidenceLevel
 }
 
+public enum DerivedIntervalLabel: String, Codable, Sendable {
+    case warmup
+    case work
+    case recovery
+    case cooldown
+    case open
+    case unknown
+
+    public var displayName: String {
+        switch self {
+        case .warmup: "Warmup"
+        case .work: "Work"
+        case .recovery: "Recovery"
+        case .cooldown: "Cooldown"
+        case .open: "Open"
+        case .unknown: "Unknown"
+        }
+    }
+}
+
+public enum DerivedIntervalSource: String, Codable, Sendable {
+    case healthKitLabeledEvent
+    case healthKitSegmentPattern
+    case inferredPattern
+    case manual
+
+    public var displayName: String {
+        switch self {
+        case .healthKitLabeledEvent: "HealthKit labeled event"
+        case .healthKitSegmentPattern: "HealthKit segment pattern"
+        case .inferredPattern: "Inferred pattern"
+        case .manual: "Manual"
+        }
+    }
+}
+
+public struct DerivedWorkoutInterval: Codable, Equatable, Sendable {
+    public var index: Int
+    public var label: DerivedIntervalLabel
+    public var startDate: Date
+    public var endDate: Date
+    public var durationSeconds: Double
+    public var distanceMeters: Double?
+    public var paceSecondsPerKm: Double?
+    public var averageHeartRateBpm: Double?
+    public var source: DerivedIntervalSource
+    public var confidence: ConfidenceLevel
+    public var caveats: [String]
+}
+
 public struct DerivedWorkoutAnalysis: Codable, Equatable, Sendable {
     public static let currentVersion = "derived-workout-v2"
 
@@ -112,6 +162,7 @@ public struct DerivedWorkoutAnalysis: Codable, Equatable, Sendable {
     public var bestEffortEstimates: [DerivedBestEffortEstimate]
     public var splitEstimates: [DerivedSplitEstimate]?
     public var executionSegments: [DerivedExecutionSegment]?
+    public var intervalCandidates: [DerivedWorkoutInterval]?
     public var intervalCount: Int
     public var intervalConfidence: ConfidenceLevel
     public var readinessConfidence: ConfidenceLevel
@@ -184,6 +235,7 @@ public enum DerivedAnalyticsEngine {
             ),
             splitEstimates: splitEstimates(workout: workout, evidence: evidence),
             executionSegments: executionSegments(heartRateSeries: heartRateSeries, speedSeries: speedSeries),
+            intervalCandidates: intervalCandidates(workout: workout, evidence: evidence),
             intervalCount: evidence.events.count,
             intervalConfidence: evidence.events.isEmpty ? .unavailable : .limited,
             readinessConfidence: minConfidence(coverage.confidence, paceConfidence),
@@ -325,6 +377,131 @@ public enum DerivedAnalyticsEngine {
                 paceConfidence: speedHalves == nil ? .unavailable : .moderate
             )
         ]
+    }
+
+    public static func intervalCandidates(workout: CanonicalWorkout, evidence: WorkoutEvidence) -> [DerivedWorkoutInterval] {
+        let events = evidence.events
+            .filter { event in
+                event.endDate > event.startDate
+                    && event.startDate >= workout.startDate
+                    && event.endDate <= workout.endDate.addingTimeInterval(1)
+            }
+            .prefix(20)
+        guard !events.isEmpty else { return [] }
+
+        return events.enumerated().map { offset, event in
+            let distance = intervalDistance(start: event.startDate, end: event.endDate, workout: workout, evidence: evidence)
+            let duration = event.endDate.timeIntervalSince(event.startDate)
+            let pace = distance.flatMap { distance -> Double? in
+                guard distance > 0 else { return nil }
+                return duration / (distance / 1_000)
+            }
+            let heartRate = averageHeartRate(start: event.startDate, end: event.endDate, evidence: evidence)
+            let label = intervalLabel(for: event)
+            var caveats: [String] = []
+            if label == .unknown {
+                caveats.append("HealthKit did not expose an Apple Fitness interval label for this event.")
+            }
+            if distance == nil {
+                caveats.append("Distance series is unavailable for this event window.")
+            }
+            if heartRate == nil {
+                caveats.append("Heart-rate samples are unavailable for this event window.")
+            }
+
+            let confidence: ConfidenceLevel
+            if label != .unknown && distance != nil && heartRate != nil {
+                confidence = .strong
+            } else if label != .unknown && distance != nil {
+                confidence = .moderate
+            } else if distance != nil {
+                confidence = .limited
+            } else {
+                confidence = .unavailable
+            }
+
+            return DerivedWorkoutInterval(
+                index: offset + 1,
+                label: label,
+                startDate: event.startDate,
+                endDate: event.endDate,
+                durationSeconds: duration,
+                distanceMeters: distance,
+                paceSecondsPerKm: pace,
+                averageHeartRateBpm: heartRate,
+                source: label == .unknown ? .healthKitSegmentPattern : .healthKitLabeledEvent,
+                confidence: confidence,
+                caveats: caveats
+            )
+        }
+    }
+
+    private static func intervalDistance(start: Date, end: Date, workout: CanonicalWorkout, evidence: WorkoutEvidence) -> Double? {
+        guard let distanceSeries = evidence.series[.distance], !distanceSeries.points.isEmpty,
+              let startDistance = cumulativeDistance(at: start, workoutStart: workout.startDate, series: distanceSeries),
+              let endDistance = cumulativeDistance(at: end, workoutStart: workout.startDate, series: distanceSeries),
+              endDistance >= startDistance else {
+            return nil
+        }
+        let distance = endDistance - startDistance
+        return distance > 0 ? distance : nil
+    }
+
+    private static func cumulativeDistance(at date: Date, workoutStart: Date, series: WorkoutMetricSeries) -> Double? {
+        guard date >= workoutStart else { return nil }
+        var cumulative = 0.0
+        var previousDate = workoutStart
+        var previousDistance = 0.0
+
+        for point in series.points {
+            let currentDistance = cumulative + point.value
+            if date <= point.date {
+                let interpolated = interpolatedDistance(
+                    date: date,
+                    previousDate: previousDate,
+                    currentDate: point.date,
+                    previousDistance: previousDistance,
+                    currentDistance: currentDistance
+                )
+                return interpolated
+            }
+            cumulative = currentDistance
+            previousDistance = cumulative
+            previousDate = point.date
+        }
+
+        return cumulative
+    }
+
+    private static func interpolatedDistance(
+        date: Date,
+        previousDate: Date,
+        currentDate: Date,
+        previousDistance: Double,
+        currentDistance: Double
+    ) -> Double {
+        let timeDelta = currentDate.timeIntervalSince(previousDate)
+        guard timeDelta > 0 else { return currentDistance }
+        let ratio = min(max(date.timeIntervalSince(previousDate) / timeDelta, 0), 1)
+        return previousDistance + ((currentDistance - previousDistance) * ratio)
+    }
+
+    private static func averageHeartRate(start: Date, end: Date, evidence: WorkoutEvidence) -> Double? {
+        guard let points = evidence.series[.heartRate]?.points.filter({ $0.date >= start && $0.date <= end }),
+              !points.isEmpty else {
+            return nil
+        }
+        return points.map(\.value).reduce(0, +) / Double(points.count)
+    }
+
+    private static func intervalLabel(for event: WorkoutEvidenceEvent) -> DerivedIntervalLabel {
+        let label = (event.label ?? event.displayLabel).lowercased()
+        if label.contains("warm") { return .warmup }
+        if label.contains("recover") { return .recovery }
+        if label.contains("cool") { return .cooldown }
+        if label.contains("open") { return .open }
+        if label.contains("work") { return .work }
+        return .unknown
     }
 
     private static func halfAverages(from values: [Double], minimumCount: Int) -> (first: Double, second: Double)? {

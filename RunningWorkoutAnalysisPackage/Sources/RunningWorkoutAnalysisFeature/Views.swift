@@ -1571,10 +1571,59 @@ struct RawHealthKitWorkoutDebugView: View {
                     DebugMetricProvenanceRow(label: "Total calories", value: workout.totalEnergyKilocalories == nil ? "Unavailable; not inferred" : "Trust-gated HealthKit evidence")
                     DebugMetricProvenanceRow(label: "1 km splits", value: workout.distanceSampleCount > 1 ? "Calculated from distance series" : "Fallback distance/time estimate when shown")
                 }
+
+                SectionHeader("Derived Interval Candidates")
+                if derivedIntervalCandidates.isEmpty {
+                    NoticeCard(
+                        title: "Unavailable",
+                        message: "RunSignal did not find usable HealthKit event windows with enough evidence to derive interval candidates."
+                    )
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(derivedIntervalCandidates, id: \.index) { interval in
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("\(interval.index). \(interval.label.displayName)")
+                                            .font(.subheadline.bold())
+                                        Text("\(interval.source.displayName) · \(interval.confidence.label)")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text(RunFormatters.duration(interval.durationSeconds))
+                                            .font(.subheadline.monospacedDigit().bold())
+                                        Text(RunFormatters.distance(interval.distanceMeters))
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                MetricGrid(items: [
+                                    MetricItem(title: "Pace", value: RunFormatters.pace(interval.paceSecondsPerKm), detail: "Derived"),
+                                    MetricItem(title: "Avg HR", value: RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"), detail: "Window")
+                                ])
+                                if !interval.caveats.isEmpty {
+                                    Text(interval.caveats.joined(separator: " "))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding(10)
+                            .background(.background)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+                }
             }
             .padding()
         }
         .navigationTitle("Debug")
+    }
+
+    private var derivedIntervalCandidates: [DerivedWorkoutInterval] {
+        guard let evidence = workout.evidence else { return [] }
+        return DerivedAnalyticsEngine.intervalCandidates(workout: workout, evidence: evidence)
     }
 
     private var intervalDetail: String {

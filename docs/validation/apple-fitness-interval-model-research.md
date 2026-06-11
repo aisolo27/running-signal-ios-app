@@ -99,12 +99,19 @@ The key research question is whether the 12 HealthKit segment markers align with
 
 ## Next Implementation Slice
 
-1. Add a hidden `DerivedWorkoutInterval` model and pure derivation function.
-2. Add fixture tests using synthetic event windows and distance samples:
+Status: started on Jun 11, 2026. RunSignal now has a hidden `DerivedWorkoutInterval` candidate model, a pure event-window derivation function, synthetic tests, and Raw HealthKit Debug output. The main Apple Fitness Intervals card still stays in the explanatory unavailable state.
+
+Remaining:
+
+1. Re-export the Jun 10 Raw HealthKit Debug output from the iPhone.
+2. Compare candidate boundaries against the Apple Fitness interval screenshot before showing any interval table in the main v1 UI.
+3. Add fixture tests using real Jun 10 candidate values if the debug output shows candidate boundaries close enough to Apple Fitness.
+
+Completed:
+
+- Add a hidden `DerivedWorkoutInterval` model and pure derivation function.
+- Add fixture tests using synthetic event windows and distance samples:
    - 2 km warmup at 12:30
    - 400 m work at 1:30
    - 160 m recovery at 1:45
-3. Add a debug export section that prints candidate intervals with source, confidence, distance, time, pace, and caveats.
-4. Re-export the Jun 10 Raw HealthKit Debug output from the iPhone.
-5. Compare candidate boundaries against the Apple Fitness interval screenshot before showing any interval table in the main v1 UI.
-
+- Add a debug view section that prints candidate intervals with source, confidence, distance, time, pace, heart rate, and caveats.

@@ -1026,6 +1026,95 @@ import Testing
     #expect(summary.healthKitSummary.contains("1 pause markers"))
 }
 
+@Test func derivedIntervalCandidatesCalculateDistancePaceAndHeartRateFromEventWindows() {
+    let start = Date(timeIntervalSince1970: 9_700)
+    let workout = testWorkout(
+        id: "derived-intervals",
+        start: start,
+        distanceMeters: 2_560,
+        durationSeconds: 945
+    )
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .distance: WorkoutMetricSeries(
+                metric: .distance,
+                unit: "m",
+                points: [
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(750), value: 2_000),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(840), value: 400),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(945), value: 160)
+                ]
+            ),
+            .heartRate: WorkoutMetricSeries(
+                metric: .heartRate,
+                unit: "bpm",
+                points: [
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(300), value: 130),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(780), value: 170),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(900), value: 145)
+                ]
+            )
+        ],
+        events: [
+            WorkoutEvidenceEvent(startDate: start, endDate: start.addingTimeInterval(750), type: "HKWorkoutEventTypeSegment", label: "Warmup"),
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(750), endDate: start.addingTimeInterval(840), type: "HKWorkoutEventTypeSegment", label: "Work"),
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(840), endDate: start.addingTimeInterval(945), type: "HKWorkoutEventTypeSegment", label: "Recovery")
+        ]
+    )
+
+    let candidates = DerivedAnalyticsEngine.intervalCandidates(workout: workout, evidence: evidence)
+
+    #expect(candidates.count == 3)
+    #expect(candidates[0].label == .warmup)
+    #expect(candidates[0].distanceMeters == 2_000)
+    #expect(candidates[0].durationSeconds == 750)
+    #expect(candidates[0].paceSecondsPerKm == 375)
+    #expect(candidates[0].averageHeartRateBpm == 130)
+    #expect(candidates[0].confidence == .strong)
+    #expect(candidates[1].label == .work)
+    #expect(candidates[1].distanceMeters == 400)
+    #expect(candidates[1].paceSecondsPerKm == 225)
+    #expect(candidates[2].label == .recovery)
+    #expect(candidates[2].distanceMeters == 160)
+    #expect(abs((candidates[2].paceSecondsPerKm ?? 0) - 656.25) < 0.001)
+}
+
+@Test func derivedIntervalCandidatesKeepUnlabeledSegmentsLimited() {
+    let start = Date(timeIntervalSince1970: 9_900)
+    let workout = testWorkout(
+        id: "unlabeled-intervals",
+        start: start,
+        distanceMeters: 1_000,
+        durationSeconds: 300
+    )
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .distance: WorkoutMetricSeries(
+                metric: .distance,
+                unit: "m",
+                points: [
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(300), value: 1_000)
+                ]
+            )
+        ],
+        events: [
+            WorkoutEvidenceEvent(startDate: start, endDate: start.addingTimeInterval(300), type: "HKWorkoutEventTypeSegment")
+        ]
+    )
+
+    let candidates = DerivedAnalyticsEngine.intervalCandidates(workout: workout, evidence: evidence)
+
+    #expect(candidates.count == 1)
+    #expect(candidates[0].label == .unknown)
+    #expect(candidates[0].source == .healthKitSegmentPattern)
+    #expect(candidates[0].confidence == .limited)
+    #expect(candidates[0].caveats.contains("HealthKit did not expose an Apple Fitness interval label for this event."))
+}
+
 @Test func healthKitAuditReportsPerWorkoutFieldsAndCaveats() {
     let start = Date(timeIntervalSince1970: 1_000)
     var workout = testWorkout(
