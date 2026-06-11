@@ -56,6 +56,7 @@ Use this as a selective lookup, not required full-context reading. Read the inde
 - Rule: 1 km split parity depends on interpolating the boundary time between distance samples. Snapping a split to the next sample timestamp can drift by several seconds or more when HealthKit distance samples are sparse or uneven.
 - Rule: raw `HKWorkoutEvent` segment durations are not the same as Apple Fitness Intervals. Keep raw markers in debug/audit surfaces and do not present them as comparable Warmup/Work/Recovery/Cooldown rows until a derived interval model can calculate distance, time, pace, and heart-rate fields.
 - Rule: Apple Fitness split times can still differ by a few seconds from RunSignal's HealthKit distance-series interpolation because Apple may use private smoothing, route/distance presentation, and rounding. Treat 3 seconds on a 1 km split as an acceptable parity tolerance unless repeated evidence shows a wider drift.
+- Rule: total calories can differ from Apple Fitness by about 1 kcal after refresh because active and basal energy may be summed from unrounded HealthKit evidence while Apple Fitness rounds display values. Treat 1 kcal as acceptable rounding tolerance.
 
 ## Milestones And Docs
 
