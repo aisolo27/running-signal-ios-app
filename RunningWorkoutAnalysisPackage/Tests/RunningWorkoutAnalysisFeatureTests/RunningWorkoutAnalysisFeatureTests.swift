@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import Testing
 @testable import RunningWorkoutAnalysisFeature
 
@@ -51,6 +52,78 @@ import Testing
     )
 
     #expect(workout.effectiveRunType == RunType.threshold)
+    #expect(workout.runTypeTrust.kind == .userReviewed)
+}
+
+@Test func runTypeTrustSeparatesSuggestedImportedReviewedConflictAndUnknown() {
+    let start = Date(timeIntervalSince1970: 1_000)
+    let suggested = testWorkout(
+        id: "suggested",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_700,
+        inferredRunType: .easy
+    )
+    let imported = CanonicalWorkout(
+        id: "imported",
+        sourceID: "imported",
+        sourceName: "HealthKit",
+        startDate: start,
+        endDate: start.addingTimeInterval(1_700),
+        environment: .outdoor,
+        distanceMeters: 5_000,
+        durationSeconds: 1_700,
+        inferredRunType: .easy,
+        importedRunType: .threshold,
+        importedReviewID: "web-1"
+    )
+    let reviewed = CanonicalWorkout(
+        id: "reviewed",
+        sourceID: "reviewed",
+        sourceName: "HealthKit",
+        startDate: start,
+        endDate: start.addingTimeInterval(1_700),
+        environment: .outdoor,
+        distanceMeters: 5_000,
+        durationSeconds: 1_700,
+        inferredRunType: .easy,
+        manualRunType: .race,
+        importedRunType: .race,
+        importedReviewID: "web-2"
+    )
+    let conflict = CanonicalWorkout(
+        id: "conflict",
+        sourceID: "conflict",
+        sourceName: "HealthKit",
+        startDate: start,
+        endDate: start.addingTimeInterval(1_700),
+        environment: .outdoor,
+        distanceMeters: 5_000,
+        durationSeconds: 1_700,
+        inferredRunType: .easy,
+        manualRunType: .race,
+        importedRunType: .threshold,
+        importedReviewID: "web-3"
+    )
+    let unknown = testWorkout(
+        id: "unknown",
+        start: start,
+        distanceMeters: 3_000,
+        durationSeconds: 1_400,
+        inferredRunType: .unknown
+    )
+
+    #expect(suggested.runTypeTrust.kind == .suggested)
+    #expect(suggested.trustedPurposeRunType == nil)
+    #expect(imported.runTypeTrust.kind == .importedReview)
+    #expect(imported.effectiveRunType == .threshold)
+    #expect(imported.trustedPurposeRunType == .threshold)
+    #expect(reviewed.runTypeTrust.kind == .userReviewed)
+    #expect(reviewed.trustedPurposeRunType == .race)
+    #expect(conflict.runTypeTrust.kind == .conflict)
+    #expect(conflict.trustedPurposeRunType == nil)
+    #expect(unknown.runTypeTrust.kind == .needsReview)
+    #expect(unknown.trustedPurposeRunType == nil)
 }
 
 @Test func duplicateDetectorMarksNearMatchingRuns() {
@@ -195,7 +268,9 @@ import Testing
 
     #expect(summary.matchedCount == 1)
     #expect(summary.weakCount == 0)
-    #expect(applied[0].manualRunType == .threshold)
+    #expect(applied[0].manualRunType == nil)
+    #expect(applied[0].importedRunType == .threshold)
+    #expect(applied[0].importedReviewID == "web-run")
 }
 
 @Test func runTypeBridgeDoesNotOverwriteConflictingManualCategory() {
@@ -223,6 +298,7 @@ import Testing
 
     #expect(summary.conflictCount == 1)
     #expect(applied[0].manualRunType == .race)
+    #expect(applied[0].importedRunType == nil)
 }
 
 @Test func runTypeBridgeSurfacesWeakMatchesAndPhoneOnlyRuns() {
@@ -315,6 +391,30 @@ import Testing
     #expect(markdown.contains("- Fetched changes: 3"))
     #expect(markdown.contains("- Evidence pending: 4"))
     #expect(markdown.contains("Start time differs beyond tolerance."))
+}
+
+@MainActor
+@Test func diagnosticsExportKeepsLastHealthKitStatusAfterNonHealthKitMessage() async throws {
+    let store = RunningAnalysisStore()
+
+    await store.refreshFromHealthKit()
+    let healthKitMessage = store.healthKitStatus.message
+
+    let csv = """
+    id,localDate,localStartTime,distanceMeters,durationSeconds,category,notes
+    fit-1,2026-06-05,07:30,5000,1650,threshold_run,Track tempo
+    """
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("reviewed-runs-\(UUID().uuidString).csv")
+    try csv.write(to: url, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    store.importReviewedRunTypes(from: url)
+
+    #expect(store.message.contains("Imported 1 reviewed web run categories."))
+    #expect(store.diagnosticsMarkdown.contains("- Authorization: \(store.healthKitStatus.authorizationState.label)"))
+    #expect(store.diagnosticsMarkdown.contains("- Message: \(healthKitMessage)"))
+    #expect(!store.diagnosticsMarkdown.contains("- Message: Imported 1 reviewed web run categories."))
 }
 
 @Test func healthKitSyncStateStorePersistsLastSyncDate() {
@@ -421,6 +521,378 @@ import Testing
     #expect(markdown.contains("Route points are unavailable for this workout."))
 }
 
+@Test func evidenceQueuePrioritizesPendingWorkoutsWithoutFullHistoryQueries() {
+    let calendar = fixedCalendar()
+    let latestStart = calendar.date(from: DateComponents(year: 2026, month: 6, day: 1))!
+    let latest = testWorkout(id: "latest", start: latestStart, distanceMeters: 5_000, durationSeconds: 1_500)
+    var quality = testWorkout(
+        id: "quality",
+        start: latestStart.addingTimeInterval(-7 * 86_400),
+        distanceMeters: 6_000,
+        durationSeconds: 1_800,
+        inferredRunType: .threshold
+    )
+    var long = testWorkout(
+        id: "long",
+        start: latestStart.addingTimeInterval(-14 * 86_400),
+        distanceMeters: 14_000,
+        durationSeconds: 5_400,
+        inferredRunType: .longRun
+    )
+    let unknown = testWorkout(
+        id: "unknown",
+        start: latestStart.addingTimeInterval(-21 * 86_400),
+        distanceMeters: 4_000,
+        durationSeconds: 1_700,
+        inferredRunType: .unknown
+    )
+    quality.sourceName = "HealthKit"
+    long.sourceName = "HealthKit"
+
+    let ids = EvidenceEnrichmentQueue.nextPendingIDs(
+        workouts: [unknown, long, quality, latest],
+        cachedEvidenceIDs: [],
+        limit: 3
+    )
+    let items = EvidenceEnrichmentQueue.items(
+        workouts: [unknown, long, quality, latest],
+        cachedEvidenceIDs: []
+    )
+
+    #expect(ids == ["latest", "quality", "long"])
+    #expect(items.first?.priority == .latestRun)
+    #expect(EvidenceEnrichmentQueue.summary(for: items).pendingCount == 4)
+}
+
+@MainActor
+@Test func evidenceQueueSkipsCachedEvidenceAndSurfacesFailedState() throws {
+    let context = try inMemoryModelContext()
+    let start = Date(timeIntervalSince1970: 4_000)
+    let latest = testWorkout(id: "cached", start: start, distanceMeters: 5_000, durationSeconds: 1_500)
+    let failed = testWorkout(
+        id: "failed",
+        start: start.addingTimeInterval(-86_400),
+        distanceMeters: 5_000,
+        durationSeconds: 1_600
+    )
+    let pending = testWorkout(
+        id: "pending",
+        start: start.addingTimeInterval(-2 * 86_400),
+        distanceMeters: 5_000,
+        durationSeconds: 1_650
+    )
+    var cached = latest
+    cached.evidence = WorkoutEvidence(
+        workoutID: cached.id,
+        loadedAt: start,
+        series: [.heartRate: testSeries(.heartRate, value: 150, start: start)]
+    )
+    PersistenceService.upsert([cached, failed, pending], context: context)
+    PersistenceService.markEnrichmentAttempt(
+        ids: [failed.id],
+        status: .failed,
+        message: "Could not enrich test workout.",
+        context: context,
+        at: start
+    )
+
+    let items = EvidenceEnrichmentQueue.items(
+        workouts: PersistenceService.fetchWorkouts(context: context),
+        cachedEvidenceIDs: PersistenceService.fetchEvidenceIDs(context: context),
+        failedStates: PersistenceService.fetchEnrichmentStateByID(context: context)
+    )
+    let summary = EvidenceEnrichmentQueue.summary(for: items)
+    let nextIDs = EvidenceEnrichmentQueue.nextPendingIDs(
+        workouts: PersistenceService.fetchWorkouts(context: context),
+        cachedEvidenceIDs: PersistenceService.fetchEvidenceIDs(context: context),
+        failedStates: PersistenceService.fetchEnrichmentStateByID(context: context),
+        limit: 10
+    )
+
+    #expect(summary.enrichedCount == 1)
+    #expect(summary.failedCount == 1)
+    #expect(summary.pendingCount == 1)
+    #expect(nextIDs == [pending.id])
+    #expect(items.first { $0.workoutID == failed.id }?.message == "Could not enrich test workout.")
+}
+
+@MainActor
+@Test func persistenceStoresFullWorkoutEvidenceSeparatelyFromWorkoutSummary() throws {
+    let context = try inMemoryModelContext()
+    let start = Date(timeIntervalSince1970: 1_000)
+    var workout = testWorkout(
+        id: "persisted-evidence",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    workout.heartRateSampleCount = 1
+    workout.routePointCount = 1
+    workout.intervalCount = 1
+    workout.evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start.addingTimeInterval(60),
+        series: [
+            .heartRate: testSeries(.heartRate, value: 151, start: start),
+            .runningSpeed: testSeries(.runningSpeed, value: 3.4, start: start)
+        ],
+        route: [
+            WorkoutRoutePoint(date: start, latitude: 25.7617, longitude: -80.1918, altitudeMeters: 2)
+        ],
+        events: [
+            WorkoutEvidenceEvent(
+                startDate: start.addingTimeInterval(300),
+                endDate: start.addingTimeInterval(600),
+                type: "segment",
+                label: "Work"
+            )
+        ]
+    )
+
+    PersistenceService.upsert([workout], context: context)
+
+    let persistedWorkouts = PersistenceService.fetchWorkouts(context: context)
+    let persistedEvidence = PersistenceService.fetchEvidence(workoutID: workout.id, context: context)
+    let summaries = PersistenceService.fetchEvidenceSummaries(context: context)
+
+    #expect(persistedWorkouts.count == 1)
+    #expect(persistedWorkouts[0].evidence == nil)
+    #expect(persistedWorkouts[0].heartRateSampleCount == 1)
+    #expect(persistedEvidence?.sampleCount(.heartRate) == 1)
+    #expect(persistedEvidence?.sampleCount(.runningSpeed) == 1)
+    #expect(persistedEvidence?.route.count == 1)
+    #expect(persistedEvidence?.events.first?.label == "Work")
+    #expect(summaries.first?.workoutID == workout.id)
+    #expect(summaries.first?.seriesSampleCount == 2)
+}
+
+@MainActor
+@Test func persistenceKeepsMissingEvidenceExplicitlyMissing() throws {
+    let context = try inMemoryModelContext()
+    let start = Date(timeIntervalSince1970: 2_000)
+    var workout = testWorkout(
+        id: "missing-series-evidence",
+        start: start,
+        distanceMeters: 8_000,
+        durationSeconds: 2_800
+    )
+    workout.evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .activeEnergy: testSeries(.activeEnergy, value: 430, start: start)
+        ]
+    )
+
+    PersistenceService.upsert([workout], context: context)
+
+    let persistedEvidence = PersistenceService.fetchEvidence(workoutID: workout.id, context: context)
+
+    #expect(persistedEvidence?.sampleCount(.activeEnergy) == 1)
+    #expect(persistedEvidence?.series[.heartRate] == nil)
+    #expect(persistedEvidence?.sampleCount(.heartRate) == 0)
+    #expect(persistedEvidence?.route.isEmpty == true)
+    #expect(persistedEvidence?.events.isEmpty == true)
+}
+
+@MainActor
+@Test func persistencePreservesManualFieldsAndEvidenceAcrossSummaryRefresh() throws {
+    let context = try inMemoryModelContext()
+    let start = Date(timeIntervalSince1970: 3_000)
+    var workout = testWorkout(
+        id: "refresh-evidence",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    workout.evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .heartRate: testSeries(.heartRate, value: 148, start: start)
+        ]
+    )
+
+    PersistenceService.upsert([workout], context: context)
+    PersistenceService.updateManualFields(id: workout.id, runType: .threshold, notes: "Felt controlled", context: context)
+
+    var summaryOnlyRefresh = testWorkout(
+        id: workout.id,
+        start: start,
+        distanceMeters: 5_100,
+        durationSeconds: 1_540,
+        inferredRunType: .easy
+    )
+    summaryOnlyRefresh.averageHeartRate = 150
+
+    PersistenceService.upsert([summaryOnlyRefresh], context: context)
+
+    let refreshed = PersistenceService.fetchWorkouts(context: context).first
+    let persistedEvidence = PersistenceService.fetchEvidence(workoutID: workout.id, context: context)
+
+    #expect(refreshed?.distanceMeters == 5_100)
+    #expect(refreshed?.manualRunType == .threshold)
+    #expect(refreshed?.notes == "Felt controlled")
+    #expect(refreshed?.evidence == nil)
+    #expect(persistedEvidence?.sampleCount(.heartRate) == 1)
+    #expect(persistedEvidence?.average(.heartRate) == 148)
+}
+
+@MainActor
+@Test func persistenceStoresVersionedDerivedAnalyticsWithInputs() throws {
+    let context = try inMemoryModelContext()
+    let start = Date(timeIntervalSince1970: 4_000)
+    var workout = testWorkout(
+        id: "derived-analysis",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    workout.evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start.addingTimeInterval(60),
+        series: [
+            .heartRate: testSeries(.heartRate, values: [140, 140, 154, 154], start: start),
+            .runningSpeed: testSeries(.runningSpeed, values: [3.1, 3.2, 3.35], start: start),
+            .cadence: testSeries(.cadence, values: [172, 176], start: start),
+            .runningPower: testSeries(.runningPower, values: [280, 300], start: start),
+            .strideLength: testSeries(.strideLength, values: [1.1, 1.2], start: start)
+        ],
+        route: [
+            WorkoutRoutePoint(date: start, latitude: 25.7617, longitude: -80.1918),
+            WorkoutRoutePoint(date: start.addingTimeInterval(60), latitude: 25.7620, longitude: -80.1920)
+        ],
+        events: [
+            WorkoutEvidenceEvent(
+                startDate: start.addingTimeInterval(300),
+                endDate: start.addingTimeInterval(600),
+                type: "segment",
+                label: "Work"
+            )
+        ]
+    )
+
+    PersistenceService.upsert([workout], context: context)
+
+    let analysis = PersistenceService.fetchDerivedAnalysis(workoutID: workout.id, context: context)
+    let summary = PersistenceService.fetchDerivedAnalysisSummaries(context: context).first
+
+    #expect(analysis?.calculationVersion == DerivedWorkoutAnalysis.currentVersion)
+    #expect(analysis?.inputSummary.seriesSampleCounts[WorkoutEvidenceMetric.heartRate.rawValue] == 4)
+    #expect(analysis?.inputSummary.routePointCount == 2)
+    #expect(analysis?.inputSummary.eventCount == 1)
+    #expect(analysis?.paceConfidence == .moderate)
+    #expect(analysis?.pacingShapeConfidence == .moderate)
+    #expect(abs((analysis?.heartRateDriftPercent ?? 0) - 10) < 0.001)
+    #expect(analysis?.heartRateDriftConfidence == .moderate)
+    #expect(analysis?.executionSegments?.count == 2)
+    #expect(analysis?.executionSegments?.first?.heartRateAverage == 140)
+    #expect(analysis?.executionSegments?.last?.heartRateAverage == 154)
+    #expect(analysis?.cadenceAverage == 174)
+    #expect(analysis?.powerAverage == 290)
+    #expect(analysis?.mechanicsConfidence == .moderate)
+    #expect(analysis?.bestEffortEstimates.first { $0.label == "5K" }?.confidence == .limited)
+    #expect(summary?.calculationVersion == DerivedWorkoutAnalysis.currentVersion)
+    #expect(summary?.inputSignature.isEmpty == false)
+}
+
+@MainActor
+@Test func derivedAnalyticsRecomputesFromCachedEvidenceOnSummaryRefresh() throws {
+    let context = try inMemoryModelContext()
+    let start = Date(timeIntervalSince1970: 5_000)
+    var workout = testWorkout(
+        id: "recomputed-derived-analysis",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    workout.evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .heartRate: testSeries(.heartRate, values: [140, 142, 145, 147], start: start)
+        ]
+    )
+    PersistenceService.upsert([workout], context: context)
+    let originalAnalysis = PersistenceService.fetchDerivedAnalysis(workoutID: workout.id, context: context)
+    let originalSignature = PersistenceService.fetchDerivedAnalysisSummaries(context: context).first?.inputSignature
+
+    let summaryRefresh = testWorkout(
+        id: workout.id,
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_600
+    )
+    PersistenceService.upsert([summaryRefresh], context: context)
+
+    let refreshedAnalysis = PersistenceService.fetchDerivedAnalysis(workoutID: workout.id, context: context)
+    let refreshedSignature = PersistenceService.fetchDerivedAnalysisSummaries(context: context).first?.inputSignature
+
+    #expect(originalAnalysis?.paceSecondsPerKmEstimate == 300)
+    #expect(refreshedAnalysis?.paceSecondsPerKmEstimate == 320)
+    #expect(originalSignature != refreshedSignature)
+    #expect(refreshedAnalysis?.inputSummary.seriesSampleCounts[WorkoutEvidenceMetric.heartRate.rawValue] == 4)
+    #expect(PersistenceService.refreshDerivedAnalyses(context: context) == 1)
+}
+
+@Test func derivedAnalyticsDowngradesPaceAndHeartRateWhenSeriesAreSparse() {
+    let start = Date(timeIntervalSince1970: 6_000)
+    let workout = testWorkout(
+        id: "limited-derived-analysis",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .heartRate: testSeries(.heartRate, value: 145, start: start)
+        ]
+    )
+
+    let analysis = DerivedAnalyticsEngine.analyze(workout: workout, evidence: evidence)
+
+    #expect(analysis.paceSecondsPerKmEstimate == 300)
+    #expect(analysis.paceConfidence == .limited)
+    #expect(analysis.heartRateDriftPercent == nil)
+    #expect(analysis.heartRateDriftConfidence == .unavailable)
+    #expect(analysis.caveats.contains("Whole-workout average pace is an estimate until rolling speed or distance evidence exists."))
+    #expect(analysis.caveats.contains("Heart-rate drift is unavailable without enough heart-rate samples."))
+}
+
+@Test func derivedAnalyticsUpgradesPaceConfidenceWithRollingEvidence() {
+    let start = Date(timeIntervalSince1970: 7_000)
+    let workout = testWorkout(
+        id: "rolling-derived-analysis",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .runningSpeed: testSeries(.runningSpeed, values: [3.0, 3.2, 3.35, 3.45], start: start),
+            .distance: testSeries(.distance, values: [400, 600, 4_000], start: start, interval: 300)
+        ]
+    )
+
+    let analysis = DerivedAnalyticsEngine.analyze(workout: workout, evidence: evidence)
+
+    #expect(analysis.paceConfidence == .moderate)
+    #expect(analysis.pacingShape == "Faster finish")
+    #expect(analysis.caveats.contains("Whole-workout average pace is an estimate until rolling speed or distance evidence exists.") == false)
+    #expect(analysis.bestEffortEstimates.first { $0.label == "1K" }?.source == "rolling distance evidence")
+    #expect(analysis.bestEffortEstimates.first { $0.label == "1K" }?.confidence == .moderate)
+    #expect(analysis.splitEstimates?.first?.label == "KM 1")
+    #expect(analysis.splitEstimates?.first?.durationSecondsEstimate == 300)
+    #expect(analysis.splitEstimates?.first?.confidence == .moderate)
+    #expect(analysis.executionSegments?.count == 2)
+    #expect(abs((analysis.executionSegments?.first?.paceSecondsPerKmEstimate ?? 0) - 322.58) < 0.01)
+    #expect(abs((analysis.executionSegments?.last?.paceSecondsPerKmEstimate ?? 0) - 294.11) < 0.01)
+}
+
 @Test func healthKitAuditReportsPerWorkoutFieldsAndCaveats() {
     let start = Date(timeIntervalSince1970: 1_000)
     var workout = testWorkout(
@@ -489,10 +961,68 @@ import Testing
     #expect(HealthKitAudit.markdown(workouts: [duplicate], generatedAt: start).contains("No non-duplicate workouts are available for audit."))
 }
 
+@Test func physicalVerificationReportSelectsRepresentativeRunsAndMissingSlots() {
+    let calendar = Calendar(identifier: .gregorian)
+    let easyDate = calendar.date(from: DateComponents(year: 2026, month: 6, day: 1))!
+    let indoorDate = calendar.date(from: DateComponents(year: 2026, month: 5, day: 20))!
+    let intervalDate = calendar.date(from: DateComponents(year: 2026, month: 5, day: 10))!
+    let olderDate = calendar.date(from: DateComponents(year: 2019, month: 1, day: 3))!
+
+    var easy = testWorkout(id: "easy", start: easyDate, distanceMeters: 6_000, durationSeconds: 1_900, inferredRunType: .easy)
+    easy.routePointCount = 300
+    easy.heartRateSampleCount = 20
+    easy.runningSpeedSampleCount = 20
+
+    var treadmill = CanonicalWorkout(
+        id: "treadmill",
+        sourceID: "treadmill",
+        sourceName: "HealthKit",
+        startDate: indoorDate,
+        endDate: indoorDate.addingTimeInterval(2_000),
+        environment: .indoor,
+        distanceMeters: 5_000,
+        durationSeconds: 2_000,
+        inferredRunType: .easy
+    )
+    treadmill.heartRateSampleCount = 12
+
+    var interval = testWorkout(id: "interval", start: intervalDate, distanceMeters: 8_000, durationSeconds: 2_800, inferredRunType: .interval)
+    interval.intervalCount = 8
+    interval.heartRateSampleCount = 30
+    interval.distanceSampleCount = 30
+
+    let older = testWorkout(id: "older", start: olderDate, distanceMeters: 4_000, durationSeconds: 1_600, inferredRunType: .unknown)
+
+    let rows = PhysicalVerificationReport.rows(for: [easy, treadmill, interval, older])
+
+    #expect(rows.first { $0.kind == .easyOutdoor }?.workout?.id == "easy")
+    #expect(rows.first { $0.kind == .treadmill }?.workout?.id == "treadmill")
+    #expect(rows.first { $0.kind == .intervalOrStructured }?.workout?.id == "interval")
+    #expect(rows.first { $0.kind == .olderHistorical }?.workout?.id == "older")
+    #expect(rows.first { $0.kind == .raceOrTimeTrial }?.workout == nil)
+
+    let markdown = PhysicalVerificationReport.markdown(workouts: [easy, treadmill, interval, older], generatedAt: easyDate)
+    #expect(markdown.contains("Race or time trial | Missing"))
+    #expect(markdown.contains("representative slots are still missing candidates"))
+}
+
 private func fixedCalendar() -> Calendar {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(secondsFromGMT: 0)!
     return calendar
+}
+
+@MainActor
+private func inMemoryModelContext() throws -> ModelContext {
+    let schema = Schema([
+        PersistedWorkout.self,
+        PersistedWorkoutEvidence.self,
+        PersistedEvidenceEnrichmentState.self,
+        PersistedDerivedWorkoutAnalysis.self
+    ])
+    let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+    let container = try ModelContainer(for: schema, configurations: [configuration])
+    return ModelContext(container)
 }
 
 private func testSeries(_ metric: WorkoutEvidenceMetric, value: Double, start: Date) -> WorkoutMetricSeries {
@@ -502,6 +1032,21 @@ private func testSeries(_ metric: WorkoutEvidenceMetric, value: Double, start: D
         points: [
             WorkoutEvidencePoint(date: start, value: value)
         ]
+    )
+}
+
+private func testSeries(
+    _ metric: WorkoutEvidenceMetric,
+    values: [Double],
+    start: Date,
+    interval: TimeInterval = 60
+) -> WorkoutMetricSeries {
+    WorkoutMetricSeries(
+        metric: metric,
+        unit: "test",
+        points: values.enumerated().map { index, value in
+            WorkoutEvidencePoint(date: start.addingTimeInterval(TimeInterval(index) * interval), value: value)
+        }
     )
 }
 

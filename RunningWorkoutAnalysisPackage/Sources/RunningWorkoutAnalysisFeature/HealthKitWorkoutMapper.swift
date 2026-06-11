@@ -53,7 +53,8 @@ enum HealthKitWorkoutMapper {
                 verticalOscillationSampleCount: evidence.sampleCount(.verticalOscillation),
                 groundContactTimeSampleCount: evidence.sampleCount(.groundContactTime),
                 intervalCount: intervalEvents(workout).count,
-                intervalLabelsSummary: intervalLabelsSummary(workout)
+                intervalLabelsSummary: intervalLabelsSummary(workout),
+                evidence: shouldLoadDetail ? evidence : nil
             )
             canonical.inferredRunType = RunClassifier.inferRunType(for: canonical)
             normalized.append(canonical)

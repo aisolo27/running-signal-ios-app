@@ -50,7 +50,8 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
             workoutID: workout.uuid.uuidString,
             loadedAt: Date(),
             series: series,
-            route: route
+            route: route,
+            events: evidenceEvents(for: workout)
         )
     }
 
@@ -183,6 +184,44 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
             }
             store.execute(query)
         }
+    }
+
+    private func evidenceEvents(for workout: HKWorkout) -> [WorkoutEvidenceEvent] {
+        (workout.workoutEvents ?? []).map { event in
+            WorkoutEvidenceEvent(
+                startDate: event.dateInterval.start,
+                endDate: event.dateInterval.end,
+                type: eventTypeLabel(event.type),
+                label: eventLabel(event)
+            )
+        }
+    }
+
+    private func eventTypeLabel(_ type: HKWorkoutEventType) -> String {
+        String(describing: type)
+    }
+
+    private func eventLabel(_ event: HKWorkoutEvent) -> String? {
+        guard let metadata = event.metadata else { return nil }
+        let preferredKeys = [
+            HKMetadataKeyWorkoutBrandName,
+            "HKWorkoutSegmentName",
+            "WorkoutSegmentName",
+            "segmentName",
+            "name",
+            "label"
+        ]
+
+        for key in preferredKeys {
+            if let value = metadata[key] as? String, !value.isEmpty {
+                return value
+            }
+        }
+
+        return metadata.values.compactMap { value -> String? in
+            guard let label = value as? String, !label.isEmpty else { return nil }
+            return label
+        }.first
     }
 }
 

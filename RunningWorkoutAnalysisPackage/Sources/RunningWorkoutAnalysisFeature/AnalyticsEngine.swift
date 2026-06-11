@@ -165,8 +165,9 @@ public enum AnalyticsEngine {
         let fiveK = bestEfforts.first { $0.label == "5K" }
         let gap = fiveK.map { $0.paceSecondsPerKm - RunningGoal.sub20FiveK.targetPaceSecondsPerKm }
         let recent = workouts.filter { $0.startDate >= daysBefore(now, 56) }
-        let qualityCount = recent.filter { [.threshold, .interval, .race, .tempo].contains($0.effectiveRunType) }.count
-        let easyCount = recent.filter { [.easy, .recovery, .longRun].contains($0.effectiveRunType) }.count
+        let trustedRecent = recent.filter { $0.trustedPurposeRunType != nil }
+        let qualityCount = trustedRecent.filter { isQualityPurpose($0.trustedPurposeRunType) }.count
+        let easyCount = trustedRecent.filter { isEasyPurpose($0.trustedPurposeRunType) || $0.trustedPurposeRunType == .longRun }.count
         let consistencyWeeks = Set(recent.map(weekKey)).count
 
         let evidence = [
@@ -178,14 +179,14 @@ public enum AnalyticsEngine {
             ),
             Insight(
                 title: "Quality sessions",
-                value: "\(qualityCount) recent",
-                detail: qualityCount >= 4 ? "Enough race-specific work to read direction." : "More threshold, interval, or race evidence is needed.",
+                value: "\(qualityCount) trusted",
+                detail: qualityCount >= 4 ? "Reviewed or imported quality labels are available." : "More reviewed threshold, interval, or race evidence is needed.",
                 confidence: qualityCount >= 4 ? .moderate : .limited
             ),
             Insight(
                 title: "Aerobic support",
-                value: "\(easyCount) easy/long",
-                detail: easyCount >= qualityCount * 2 ? "Easy volume is supporting hard sessions." : "Intensity may be too concentrated or under-labeled.",
+                value: "\(easyCount) trusted easy/long",
+                detail: easyCount >= qualityCount * 2 ? "Reviewed or imported easy volume supports hard sessions." : "Intensity may be too concentrated or under-reviewed.",
                 confidence: easyCount >= 4 ? .moderate : .limited
             ),
             Insight(
@@ -241,7 +242,7 @@ public enum AnalyticsEngine {
         let confidence: ConfidenceLevel = workout.seriesAvailable ? .moderate : .limited
 
         return [
-            Insight(title: "Execution", value: workout.effectiveRunType.label, detail: splitSignal, confidence: confidence),
+            Insight(title: "Execution", value: workout.effectiveRunType.label, detail: "\(workout.runTypeTrust.kind.label). \(splitSignal)", confidence: minConfidence(confidence, workout.runTypeTrust.confidence)),
             Insight(title: "Intensity", value: RunFormatters.pace(workout.paceSecondsPerKm), detail: hrSignal, confidence: workout.averageHeartRate == nil ? .limited : .moderate),
             Insight(title: "Next time", value: "Control the first third", detail: "Until split data is available, keep the opening segment smooth and judge finish quality after the run.", confidence: .limited)
         ]
@@ -326,11 +327,27 @@ public enum AnalyticsEngine {
 
     private static func intensityBalance(_ workouts: [CanonicalWorkout], from start: Date, through end: Date) -> (easy: Double, quality: Double, longRun: Double) {
         let recent = workouts.filter { $0.startDate >= start && $0.startDate < end }
-        let total = max(recent.count, 1)
-        let easy = recent.filter { [.easy, .recovery].contains($0.effectiveRunType) }.count
-        let quality = recent.filter { [.tempo, .threshold, .interval, .race, .hills, .progression].contains($0.effectiveRunType) }.count
-        let longRun = recent.filter { $0.effectiveRunType == .longRun }.count
+        let trusted = recent.filter { $0.trustedPurposeRunType != nil }
+        let total = max(trusted.count, 1)
+        let easy = trusted.filter { isEasyPurpose($0.trustedPurposeRunType) }.count
+        let quality = trusted.filter { isQualityPurpose($0.trustedPurposeRunType) }.count
+        let longRun = trusted.filter { $0.trustedPurposeRunType == .longRun }.count
         return (Double(easy) / Double(total), Double(quality) / Double(total), Double(longRun) / Double(total))
+    }
+
+    private static func isEasyPurpose(_ runType: RunType?) -> Bool {
+        guard let runType else { return false }
+        return [.easy, .recovery].contains(runType)
+    }
+
+    private static func isQualityPurpose(_ runType: RunType?) -> Bool {
+        guard let runType else { return false }
+        return [.tempo, .threshold, .interval, .race, .hills, .progression].contains(runType)
+    }
+
+    private static func minConfidence(_ lhs: ConfidenceLevel, _ rhs: ConfidenceLevel) -> ConfidenceLevel {
+        let order: [ConfidenceLevel: Int] = [.unavailable: 0, .limited: 1, .moderate: 2, .strong: 3]
+        return (order[lhs, default: 0] <= order[rhs, default: 0]) ? lhs : rhs
     }
 
     private static func totalDistance(_ workouts: [CanonicalWorkout], from start: Date, through end: Date) -> Double {

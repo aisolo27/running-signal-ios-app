@@ -7,15 +7,17 @@ import SwiftData
 public final class RunningAnalysisStore {
     public private(set) var workouts: [CanonicalWorkout] = []
     public private(set) var snapshot = AnalyticsEngine.snapshot(for: [])
-    public private(set) var authorizationState: AuthorizationState = .notDetermined
+    public private(set) var healthKitStatus = HealthKitActionStatus()
     public private(set) var isLoading = false
     public private(set) var isEnrichingAudit = false
-    public private(set) var message = "Sample data is loaded until HealthKit returns workouts."
+    public private(set) var message = HealthKitActionStatus().message
     public private(set) var usesSampleData = true
     public private(set) var healthContext = SampleData.healthContext
     public private(set) var reviewedRunTypes: [ReviewedRunTypeRecord] = []
     public private(set) var runTypeReconciliation = RunTypeReconciliationSummary.empty
     public private(set) var syncState = HealthKitSyncState.empty
+    public private(set) var evidenceQueueSummary = EvidenceEnrichmentQueueSummary.empty
+    public private(set) var derivedAnalysesByWorkoutID: [String: DerivedWorkoutAnalysis] = [:]
 
     private let healthKitService: HealthKitService
     private let syncService: HealthKitWorkoutSyncService
@@ -28,6 +30,10 @@ public final class RunningAnalysisStore {
     ) {
         self.healthKitService = healthKitService
         self.syncService = syncService ?? HealthKitWorkoutSyncService(healthKitService: healthKitService)
+    }
+
+    public var authorizationState: AuthorizationState {
+        healthKitStatus.authorizationState
     }
 
     public func bootstrap(modelContext: ModelContext) async {
@@ -62,9 +68,11 @@ public final class RunningAnalysisStore {
         defer { isLoading = false }
 
         let result = await healthKitService.loadRunningWorkouts()
-        authorizationState = result.authorizationState
         healthContext = result.healthContext
-        message = result.message ?? "Loaded \(result.workouts.count) HealthKit running workouts."
+        updateHealthKitStatus(
+            authorizationState: result.authorizationState,
+            message: result.message ?? "Loaded \(result.workouts.count) HealthKit running workouts."
+        )
 
         guard !result.workouts.isEmpty else {
             usesSampleData = true
@@ -91,9 +99,11 @@ public final class RunningAnalysisStore {
 
         let currentIDs = Set(workouts.map(\.id))
         let result = await syncService.syncRunningWorkouts(from: HealthKitSyncStateStore.loadAnchor())
-        authorizationState = result.authorizationState
         healthContext = result.healthContext
-        message = result.message ?? "HealthKit sync finished."
+        updateHealthKitStatus(
+            authorizationState: result.authorizationState,
+            message: result.message ?? "HealthKit sync finished."
+        )
 
         guard result.authorizationState == .authorized || result.authorizationState == .partial else {
             recompute()
@@ -117,6 +127,7 @@ public final class RunningAnalysisStore {
             applyReviewedRunTypes()
             persistCurrent()
         }
+        refreshEvidenceQueueSummary()
 
         syncState = HealthKitSyncState(
             lastSyncAt: syncedAt,
@@ -124,21 +135,16 @@ public final class RunningAnalysisStore {
             lastInsertedCount: insertedCount,
             lastUpdatedCount: updatedCount,
             lastDeletedCount: deletedCount,
-            lastEvidencePendingCount: evidencePendingCount(in: workouts)
+            lastEvidencePendingCount: evidenceQueueSummary.pendingCount
         )
         recompute()
     }
 
     public func enrichNextHealthKitAuditBatch(limit: Int = HealthKitService.defaultDetailedEvidenceLimit) async {
-        let candidates = includedWorkouts
-            .filter { !isSampleWorkout($0) }
-            .filter { $0.seriesSampleCount == 0 || ($0.routeAvailable && $0.routePointCount == 0) }
-            .sorted { $0.startDate > $1.startDate }
-            .prefix(limit)
-            .map(\.id)
+        let candidates = nextEvidenceQueueCandidateIDs(limit: limit)
 
         guard !candidates.isEmpty else {
-            message = "All currently loaded workouts already have detailed audit evidence or summary-only limits."
+            message = "No pending HealthKit evidence enrichment items are available."
             return
         }
 
@@ -146,14 +152,24 @@ public final class RunningAnalysisStore {
         defer { isEnrichingAudit = false }
 
         let result = await healthKitService.enrichRunningWorkouts(ids: Array(candidates))
-        authorizationState = result.authorizationState
+        let statusMessage = result.message ?? "HealthKit audit enrichment finished."
+        updateHealthKitStatus(authorizationState: result.authorizationState, message: statusMessage)
         if result.authorizationState == .authorized || result.authorizationState == .partial {
+            let returnedIDs = Set(result.workouts.map(\.id))
             workouts = removeSampleWorkoutsIfRealDataExists(mergeSyncedWorkouts(changes: result.workouts, current: workouts))
             deletePersistedSampleWorkoutsIfNeeded()
             applyReviewedRunTypes()
             persistCurrent()
+            markEvidenceQueueAttempt(ids: Array(returnedIDs), status: .enriched, message: result.message)
+            let missingIDs = candidates.filter { !returnedIDs.contains($0) }
+            markEvidenceQueueAttempt(
+                ids: missingIDs,
+                status: .failed,
+                message: "HealthKit did not return this workout for enrichment."
+            )
+        } else {
+            markEvidenceQueueAttempt(ids: candidates, status: .failed, message: result.message)
         }
-        message = result.message ?? "HealthKit audit enrichment finished."
         recompute()
     }
 
@@ -192,6 +208,10 @@ public final class RunningAnalysisStore {
         workouts.filter { !$0.isDuplicate }
     }
 
+    public func derivedAnalysis(for workoutID: String) -> DerivedWorkoutAnalysis? {
+        derivedAnalysesByWorkoutID[workoutID]
+    }
+
     public var exportMarkdown: String {
         AnalyticsEngine.markdownSummary(workouts: workouts, snapshot: snapshot, healthContext: healthContext)
     }
@@ -202,14 +222,18 @@ public final class RunningAnalysisStore {
             snapshot: snapshot,
             healthContext: healthContext,
             reconciliation: runTypeReconciliation,
-            authorizationState: authorizationState,
+            authorizationState: healthKitStatus.authorizationState,
             syncState: syncState,
-            message: message
+            message: healthKitStatus.message
         )
     }
 
     public var healthKitAuditMarkdown: String {
         HealthKitAudit.markdown(workouts: workouts)
+    }
+
+    public var physicalVerificationMarkdown: String {
+        PhysicalVerificationReport.markdown(workouts: workouts)
     }
 
     private func mergeManualFields(incoming: [CanonicalWorkout], current: [CanonicalWorkout]) -> [CanonicalWorkout] {
@@ -218,6 +242,8 @@ public final class RunningAnalysisStore {
             var merged = workout
             if let existing = currentByID[workout.id] {
                 merged.manualRunType = existing.manualRunType
+                merged.importedRunType = existing.importedRunType
+                merged.importedReviewID = existing.importedReviewID
                 merged.notes = existing.notes
             }
             return merged
@@ -230,6 +256,8 @@ public final class RunningAnalysisStore {
             var merged = change
             if let existing = byID[change.id] {
                 merged.manualRunType = existing.manualRunType
+                merged.importedRunType = existing.importedRunType
+                merged.importedReviewID = existing.importedReviewID
                 merged.notes = existing.notes
             }
             byID[change.id] = merged
@@ -257,7 +285,7 @@ public final class RunningAnalysisStore {
     }
 
     private func evidencePendingCount(in workouts: [CanonicalWorkout]) -> Int {
-        workouts.filter { !$0.isDuplicate && !$0.seriesAvailable }.count
+        evidenceQueueSummary.pendingCount
     }
 
     private func needsSampleEvidenceBackfill(_ workouts: [CanonicalWorkout]) -> Bool {
@@ -274,10 +302,73 @@ public final class RunningAnalysisStore {
         workouts = DuplicateDetector.markDuplicates(workouts)
         runTypeReconciliation = RunTypeReviewBridge.reconcile(reviews: reviewedRunTypes, workouts: workouts)
         snapshot = AnalyticsEngine.snapshot(for: workouts)
+        refreshEvidenceQueueSummary()
+        refreshDerivedAnalyses()
     }
 
     private func applyReviewedRunTypes() {
         guard !reviewedRunTypes.isEmpty else { return }
         workouts = RunTypeReviewBridge.applyConfidentMatches(reviews: reviewedRunTypes, to: workouts)
+    }
+
+    private func nextEvidenceQueueCandidateIDs(limit: Int) -> [String] {
+        guard let modelContext else {
+            return EvidenceEnrichmentQueue.nextPendingIDs(
+                workouts: workouts,
+                cachedEvidenceIDs: [],
+                limit: limit
+            )
+        }
+        return EvidenceEnrichmentQueue.nextPendingIDs(
+            workouts: workouts,
+            cachedEvidenceIDs: PersistenceService.fetchEvidenceIDs(context: modelContext),
+            failedStates: PersistenceService.fetchEnrichmentStateByID(context: modelContext),
+            limit: limit
+        )
+    }
+
+    private func markEvidenceQueueAttempt(ids: [String], status: EvidenceEnrichmentStatus, message: String?) {
+        guard let modelContext else { return }
+        PersistenceService.markEnrichmentAttempt(ids: ids, status: status, message: message, context: modelContext)
+    }
+
+    private func refreshEvidenceQueueSummary() {
+        guard let modelContext else {
+            let items = EvidenceEnrichmentQueue.items(workouts: workouts, cachedEvidenceIDs: [])
+            evidenceQueueSummary = EvidenceEnrichmentQueue.summary(for: items)
+            return
+        }
+        let items = EvidenceEnrichmentQueue.items(
+            workouts: workouts,
+            cachedEvidenceIDs: PersistenceService.fetchEvidenceIDs(context: modelContext),
+            failedStates: PersistenceService.fetchEnrichmentStateByID(context: modelContext)
+        )
+        evidenceQueueSummary = EvidenceEnrichmentQueue.summary(for: items)
+    }
+
+    private func refreshDerivedAnalyses() {
+        guard let modelContext else {
+            derivedAnalysesByWorkoutID = [:]
+            return
+        }
+        let records = PersistenceService.fetchDerivedAnalysisSummaries(context: modelContext)
+        if records.contains(where: { $0.calculationVersion != DerivedWorkoutAnalysis.currentVersion }) {
+            PersistenceService.refreshDerivedAnalyses(context: modelContext)
+        }
+        derivedAnalysesByWorkoutID = Dictionary(
+            uniqueKeysWithValues: PersistenceService.fetchDerivedAnalysisSummaries(context: modelContext).compactMap { record in
+                guard let analysis = record.analysis else { return nil }
+                return (record.workoutID, analysis)
+            }
+        )
+    }
+
+    private func updateHealthKitStatus(authorizationState: AuthorizationState, message: String) {
+        healthKitStatus = HealthKitActionStatus(
+            authorizationState: authorizationState,
+            message: message,
+            updatedAt: Date()
+        )
+        self.message = message
     }
 }

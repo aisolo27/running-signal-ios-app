@@ -243,7 +243,8 @@ struct DataView: View {
                     MetricItem(title: "Duplicates", value: "\(store.snapshot.dataQuality.duplicateCount)", detail: "Excluded candidates"),
                     MetricItem(title: "Confidence", value: store.snapshot.dataQuality.confidence.label, detail: "Current data gate"),
                     MetricItem(title: "Route points", value: "\(store.includedWorkouts.map(\.routePointCount).reduce(0, +))", detail: "Workout routes"),
-                    MetricItem(title: "Samples", value: "\(store.includedWorkouts.map(\.seriesSampleCount).reduce(0, +))", detail: "Workout evidence")
+                    MetricItem(title: "Samples", value: "\(store.includedWorkouts.map(\.seriesSampleCount).reduce(0, +))", detail: "Workout evidence"),
+                    MetricItem(title: "Evidence queue", value: "\(store.evidenceQueueSummary.pendingCount)", detail: store.evidenceQueueSummary.nextPriority?.label ?? "No pending")
                 ])
 
                 ParityReadinessPanel(store: store)
@@ -272,6 +273,14 @@ struct DataView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+
+                NavigationLink {
+                    PhysicalVerificationView(store: store)
+                } label: {
+                    Label("Open physical verification", systemImage: "iphone.gen3")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
 
                 SectionHeader("Health Context")
                 MetricGrid(items: HealthContextMetrics.dataItems(for: store.healthContext))
@@ -303,6 +312,12 @@ struct DataView: View {
 
                 ShareLink(item: store.healthKitAuditMarkdown) {
                     Label("Share HealthKit audit", systemImage: "square.and.arrow.up.on.square")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                ShareLink(item: store.physicalVerificationMarkdown) {
+                    Label("Share physical verification", systemImage: "iphone.gen3")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -340,12 +355,14 @@ struct HealthKitAuditView: View {
                         MetricItem(title: "Runs", value: "\(rows.count)", detail: "Non-duplicate"),
                         MetricItem(title: "Routes", value: "\(rows.filter { $0.workout.routeAvailable }.count)", detail: "Objects or points"),
                         MetricItem(title: "HR data", value: "\(rows.filter { hasHeartRateData($0.workout) }.count)", detail: "Summary or series"),
-                        MetricItem(title: "Dynamics", value: "\(rows.filter { hasRunningDynamics($0.workout) }.count)", detail: "Summary or series")
+                        MetricItem(title: "Dynamics", value: "\(rows.filter { hasRunningDynamics($0.workout) }.count)", detail: "Summary or series"),
+                        MetricItem(title: "Pending", value: "\(store.evidenceQueueSummary.pendingCount)", detail: "Evidence queue"),
+                        MetricItem(title: "Failed", value: "\(store.evidenceQueueSummary.failedCount)", detail: "Needs review")
                     ])
 
                     NoticeCard(
                         title: "Read-only audit",
-                        message: "This screen reports what HealthKit returned for each workout. Missing optional fields are caveats, not app errors."
+                        message: "This screen reports what HealthKit returned for each workout. The queue enriches bounded batches and skips workouts already cached with detailed evidence."
                     )
 
                     Button {
@@ -355,7 +372,7 @@ struct HealthKitAuditView: View {
                             Label("Enriching audit", systemImage: "hourglass")
                                 .frame(maxWidth: .infinity)
                         } else {
-                            Label("Enrich next 20 runs", systemImage: "arrow.down.doc")
+                            Label("Enrich next pending runs", systemImage: "arrow.down.doc")
                                 .frame(maxWidth: .infinity)
                         }
                     }
@@ -483,6 +500,117 @@ struct HealthKitAuditFieldTile: View {
         case .limited: .orange
         case .unavailable: .secondary
         }
+    }
+}
+
+struct PhysicalVerificationView: View {
+    var store: RunningAnalysisStore
+
+    private var rows: [PhysicalVerificationRow] {
+        PhysicalVerificationReport.rows(for: store.workouts)
+    }
+
+    private var missingCount: Int {
+        rows.filter { $0.workout == nil }.count
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HeaderBlock(
+                    title: "Physical Verification",
+                    subtitle: "Step 6 representative HealthKit evidence checklist."
+                )
+
+                MetricGrid(items: [
+                    MetricItem(title: "Slots", value: "\(rows.count)", detail: "Required archetypes"),
+                    MetricItem(title: "Candidates", value: "\(rows.count - missingCount)", detail: "Loaded workouts"),
+                    MetricItem(title: "Missing", value: "\(missingCount)", detail: "Need proof"),
+                    MetricItem(title: "Device proof", value: store.authorizationState == .authorized || store.authorizationState == .partial ? "Loaded" : "Pending", detail: "Physical iPhone only")
+                ])
+
+                NoticeCard(
+                    title: "Physical-device gate",
+                    message: "Use this screen after running on the iPhone and loading HealthKit. Simulator sample data can preview layout but does not complete Step 6."
+                )
+
+                ForEach(rows) { row in
+                    PhysicalVerificationCard(row: row)
+                }
+
+                ShareLink(item: store.physicalVerificationMarkdown) {
+                    Label("Share physical verification", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding()
+        }
+        .navigationTitle("Physical Verification")
+    }
+}
+
+struct PhysicalVerificationCard: View {
+    let row: PhysicalVerificationRow
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(row.kind.title)
+                        .font(.headline)
+                    Text(candidateSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                ConfidencePill(text: row.decision.label, confidence: row.decision)
+            }
+
+            if let workout = row.workout {
+                MetricGrid(items: [
+                    MetricItem(title: "HR", value: "\(workout.heartRateSampleCount)", detail: "Samples"),
+                    MetricItem(title: "Pace data", value: "\(workout.runningSpeedSampleCount + workout.distanceSampleCount)", detail: "Speed/distance"),
+                    MetricItem(title: "Route", value: workout.routePointCount > 0 ? "\(workout.routePointCount)" : routeFallbackText(for: workout), detail: "Points"),
+                    MetricItem(title: "Events", value: "\(workout.intervalCount)", detail: "Laps/segments"),
+                    MetricItem(title: "Mechanics", value: "\(mechanicsCount(for: workout))", detail: "Sample rows"),
+                    MetricItem(title: "Trust", value: workout.runTypeTrust.kind.label, detail: workout.effectiveRunType.label)
+                ])
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(row.notes.prefix(4), id: \.self) { note in
+                    Text(note)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding()
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var candidateSummary: String {
+        guard let workout = row.workout else {
+            return "No loaded non-duplicate workout currently matches this required slot."
+        }
+        return "\(RunFormatters.shortDate.string(from: workout.startDate)) · \(RunFormatters.distance(workout.distanceMeters)) · \(RunFormatters.duration(workout.durationSeconds)) · \(workout.sourceName)"
+    }
+
+    private func mechanicsCount(for workout: CanonicalWorkout) -> Int {
+        workout.runningPowerSampleCount
+            + workout.cadenceSampleCount
+            + workout.stepCountSampleCount
+            + workout.strideLengthSampleCount
+            + workout.verticalOscillationSampleCount
+            + workout.groundContactTimeSampleCount
+    }
+
+    private func routeFallbackText(for workout: CanonicalWorkout) -> String {
+        workout.routeAvailable ? "Object" : "Missing"
     }
 }
 
@@ -758,7 +886,7 @@ struct WorkoutDetailView: View {
                         Text("Manual label")
                             .font(.headline)
                         Picker("Manual label", selection: $selectedType) {
-                            Text("Use inferred: \(workout.inferredRunType.label)").tag(nil as RunType?)
+                            Text("Use current trust state").tag(nil as RunType?)
                             ForEach(RunType.allCases) { type in
                                 Text(type.label).tag(type as RunType?)
                             }
@@ -805,6 +933,11 @@ struct WorkoutDetailView: View {
                         title: workout.seriesAvailable ? "HealthKit details extracted" : "Series not loaded",
                         message: workout.seriesAvailable ? "This workout has associated HealthKit samples for deeper execution review. Charting and split tables can build on this evidence." : "This run can still be summarized, but detailed execution confidence stays limited."
                     )
+
+                    ExecutionAnalysisCard(
+                        workout: workout,
+                        analysis: store.derivedAnalysis(for: workout.id)
+                    )
                 } else {
                     EmptyStateView(title: "Workout missing", message: "The selected workout is no longer in local state.")
                 }
@@ -817,6 +950,294 @@ struct WorkoutDetailView: View {
             selectedType = workout.manualRunType
             notes = workout.notes
             didLoad = true
+        }
+    }
+}
+
+struct ExecutionAnalysisCard: View {
+    let workout: CanonicalWorkout
+    let analysis: DerivedWorkoutAnalysis?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Execution Analysis")
+                        .font(.headline)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                ConfidencePill(text: confidence.label, confidence: confidence)
+            }
+
+            if let analysis {
+                MetricGrid(items: [
+                    MetricItem(title: "Pace basis", value: RunFormatters.pace(analysis.paceSecondsPerKmEstimate), detail: analysis.paceConfidence.label),
+                    MetricItem(title: "Pacing shape", value: analysis.pacingShape ?? "Missing", detail: analysis.pacingShapeConfidence.label),
+                    MetricItem(title: "HR drift", value: driftText(analysis.heartRateDriftPercent), detail: analysis.heartRateDriftConfidence.label),
+                    MetricItem(title: "Intervals", value: "\(analysis.intervalCount)", detail: analysis.intervalConfidence.label),
+                    MetricItem(title: "Mechanics", value: mechanicsSummary(analysis), detail: analysis.mechanicsConfidence.label),
+                    MetricItem(title: "Data quality", value: analysis.dataQualityConfidence.label, detail: analysis.calculationVersion)
+                ])
+
+                let segments = analysis.executionSegments ?? []
+                if !segments.isEmpty {
+                    SectionHeader("HR Drift / Pace Shape")
+                    ExecutionShapeVisual(
+                        segments: segments,
+                        driftPercent: analysis.heartRateDriftPercent,
+                        paceShape: analysis.pacingShape
+                    )
+                }
+
+                if !analysis.bestEffortEstimates.isEmpty {
+                    SectionHeader("Best Effort Estimates")
+                    VStack(spacing: 8) {
+                        ForEach(analysis.bestEffortEstimates.prefix(4), id: \.label) { effort in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(effort.label)
+                                        .font(.subheadline.bold())
+                                    Text(effort.source)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 3) {
+                                    Text(RunFormatters.duration(effort.durationSecondsEstimate))
+                                        .font(.subheadline.monospacedDigit().bold())
+                                    Text(RunFormatters.pace(effort.paceSecondsPerKmEstimate))
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding(10)
+                            .background(.thinMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+                }
+
+                let splitEstimates = analysis.splitEstimates ?? []
+                if !splitEstimates.isEmpty {
+                    SectionHeader("Split Review")
+                    VStack(spacing: 8) {
+                        ForEach(splitEstimates.prefix(5), id: \.label) { split in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(split.label)
+                                        .font(.subheadline.bold())
+                                    Text("\(RunFormatters.distance(split.distanceMeters)) estimate")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 3) {
+                                    Text(RunFormatters.duration(split.durationSecondsEstimate))
+                                        .font(.subheadline.monospacedDigit().bold())
+                                    Text(RunFormatters.pace(split.paceSecondsPerKmEstimate))
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding(10)
+                            .background(.thinMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+                }
+
+                if !analysis.caveats.isEmpty {
+                    VStack(alignment: .leading, spacing: 5) {
+                        ForEach(analysis.caveats.prefix(3), id: \.self) { caveat in
+                            Text(caveat)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            } else {
+                EmptyStateView(
+                    title: "No cached analysis",
+                    message: workout.seriesAvailable ? "Run the enrichment queue again if this workout should have derived execution details." : "This workout needs associated HealthKit samples before execution analysis can be shown."
+                )
+            }
+        }
+        .padding()
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var confidence: ConfidenceLevel {
+        analysis?.dataQualityConfidence ?? .unavailable
+    }
+
+    private var subtitle: String {
+        guard analysis != nil else {
+            return "Gated until cached HealthKit evidence is available."
+        }
+        return "Built from persisted HealthKit evidence, not a new live query."
+    }
+
+    private func driftText(_ value: Double?) -> String {
+        guard let value else { return "Missing" }
+        return String(format: "%+.1f%%", value)
+    }
+
+    private func mechanicsSummary(_ analysis: DerivedWorkoutAnalysis) -> String {
+        let values = [
+            analysis.cadenceAverage.map { RunFormatters.number($0, suffix: " spm") },
+            analysis.powerAverage.map { RunFormatters.number($0, suffix: " W") }
+        ].compactMap { $0 }
+        return values.isEmpty ? "Missing" : values.joined(separator: " / ")
+    }
+}
+
+struct ExecutionShapeVisual: View {
+    let segments: [DerivedExecutionSegment]
+    let driftPercent: Double?
+    let paceShape: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 10) {
+                    segmentCards
+                }
+
+                VStack(spacing: 8) {
+                    segmentCards
+                }
+            }
+
+            Text(summaryText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var summaryText: String {
+        let drift = driftPercent.map { String(format: "%+.1f%% HR drift", $0) } ?? "HR drift missing"
+        return "\(drift). Pace shape: \(paceShape ?? "missing")."
+    }
+
+    private var heartRateRange: (lower: Double, upper: Double) {
+        range(for: segments.compactMap(\.heartRateAverage), minimumSpread: 8)
+    }
+
+    private var paceRange: (lower: Double, upper: Double) {
+        range(for: segments.compactMap(\.paceSecondsPerKmEstimate), minimumSpread: 20)
+    }
+
+    private func segmentConfidence(_ segment: DerivedExecutionSegment) -> ConfidenceLevel {
+        if segment.heartRateConfidence == .unavailable {
+            return segment.paceConfidence
+        }
+        if segment.paceConfidence == .unavailable {
+            return segment.heartRateConfidence
+        }
+        return minConfidence(segment.heartRateConfidence, segment.paceConfidence)
+    }
+
+    @ViewBuilder
+    private var segmentCards: some View {
+        ForEach(segments.prefix(2), id: \.label) { segment in
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(segment.label)
+                        .font(.subheadline.bold())
+                    Spacer()
+                    ConfidencePill(text: segmentConfidence(segment).label, confidence: segmentConfidence(segment))
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    ShapeMeter(
+                        label: "HR",
+                        value: RunFormatters.number(segment.heartRateAverage, suffix: " bpm"),
+                        fill: fillRatio(
+                            value: segment.heartRateAverage,
+                            lower: heartRateRange.lower,
+                            upper: heartRateRange.upper
+                        ),
+                        tint: .red
+                    )
+                    ShapeMeter(
+                        label: "Pace",
+                        value: RunFormatters.pace(segment.paceSecondsPerKmEstimate),
+                        fill: inverseFillRatio(
+                            value: segment.paceSecondsPerKmEstimate,
+                            lower: paceRange.lower,
+                            upper: paceRange.upper
+                        ),
+                        tint: .blue
+                    )
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.thinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    private func range(for values: [Double], minimumSpread: Double) -> (lower: Double, upper: Double) {
+        guard let minValue = values.min(), let maxValue = values.max() else { return (0, 1) }
+        let spread = max(maxValue - minValue, minimumSpread)
+        let midpoint = (minValue + maxValue) / 2
+        return (midpoint - spread / 2, midpoint + spread / 2)
+    }
+
+    private func fillRatio(value: Double?, lower: Double, upper: Double) -> Double {
+        guard let value, upper > lower else { return 0 }
+        return min(max((value - lower) / (upper - lower), 0.08), 1)
+    }
+
+    private func inverseFillRatio(value: Double?, lower: Double, upper: Double) -> Double {
+        guard let value, upper > lower else { return 0 }
+        return min(max((upper - value) / (upper - lower), 0.08), 1)
+    }
+
+    private func minConfidence(_ lhs: ConfidenceLevel, _ rhs: ConfidenceLevel) -> ConfidenceLevel {
+        let order: [ConfidenceLevel: Int] = [.unavailable: 0, .limited: 1, .moderate: 2, .strong: 3]
+        return (order[lhs, default: 0] <= order[rhs, default: 0]) ? lhs : rhs
+    }
+}
+
+struct ShapeMeter: View {
+    let label: String
+    let value: String
+    let fill: Double
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(value)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.secondary.opacity(0.16))
+                    Capsule()
+                        .fill(tint.opacity(fill == 0 ? 0.18 : 0.72))
+                        .frame(width: proxy.size.width * fill)
+                }
+            }
+            .frame(height: 7)
+            .accessibilityHidden(true)
         }
     }
 }
@@ -835,8 +1256,9 @@ struct WorkoutSummaryCard: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                ConfidencePill(text: workout.manualRunType == nil ? "Inferred" : "Manual", confidence: workout.manualRunType == nil ? .limited : .moderate)
+                ConfidencePill(text: workout.runTypeTrust.kind.label, confidence: workout.runTypeTrust.confidence)
             }
+            NoticeCard(title: "Run type trust", message: workout.runTypeTrust.detail)
 
             MetricGrid(items: [
                 MetricItem(title: "Distance", value: RunFormatters.distance(workout.distanceMeters), detail: workout.environment.label),
@@ -875,7 +1297,7 @@ struct WorkoutRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            ConfidencePill(text: confidence.label, confidence: confidence)
+            ConfidencePill(text: workout.runTypeTrust.kind.label, confidence: workout.runTypeTrust.confidence)
         }
         .padding(.vertical, 4)
     }

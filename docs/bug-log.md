@@ -17,6 +17,7 @@ Use this as a selective lookup, not required full-context reading. Read the inde
 - Symptom: build/run failed with signing/team errors. Cause: used a macOS run tool on an iOS app. Fix: use iOS simulator tools (`test_sim`, `build_run_sim`) with the `RunningWorkoutAnalysis` scheme.
 - Symptom: tests failed before compiling because Xcode could not read the test plan. Cause: generated scheme contained a stale duplicate test-plan reference. Fix: keep only `RunningWorkoutAnalysis/RunningWorkoutAnalysis.xctestplan` in the shared scheme.
 - Rule: before any Xcode build/run/test, call XcodeBuildMCP `session_show_defaults` and verify workspace, scheme, and simulator.
+- Rule: after a physical `build_run_device`, XcodeBuildMCP UI snapshot/screenshot tools can still target the active Simulator. Do not treat Simulator snapshots as physical-iPhone proof; physical HealthKit verification still needs on-device export or a device-specific capture path.
 
 ## Package And Platform Configuration
 

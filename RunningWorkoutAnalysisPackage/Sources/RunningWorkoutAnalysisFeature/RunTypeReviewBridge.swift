@@ -202,21 +202,22 @@ public enum RunTypeReviewBridge {
         calendar: Calendar = .current
     ) -> [CanonicalWorkout] {
         let summary = reconcile(reviews: reviews, workouts: workouts, calendar: calendar)
-        let matchedTypes = Dictionary(
-            uniqueKeysWithValues: summary.rows.compactMap { row -> (String, RunType)? in
+        let matchedReviews = Dictionary(
+            uniqueKeysWithValues: summary.rows.compactMap { row -> (String, (RunType, String))? in
                 guard row.status == .matched, let workoutID = row.workoutID, let runType = row.matchedRunType else {
                     return nil
                 }
-                return (workoutID, runType)
+                return (workoutID, (runType, row.review?.id ?? "unknown-review"))
             }
         )
 
         return workouts.map { workout in
-            guard workout.manualRunType == nil, let runType = matchedTypes[workout.id] else {
+            guard workout.manualRunType == nil, let imported = matchedReviews[workout.id] else {
                 return workout
             }
             var updated = workout
-            updated.manualRunType = runType
+            updated.importedRunType = imported.0
+            updated.importedReviewID = imported.1
             return updated
         }
     }

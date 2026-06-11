@@ -8,6 +8,11 @@ struct RunningWorkoutAnalysisApp: App {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(for: PersistedWorkout.self)
+        .modelContainer(for: [
+            PersistedWorkout.self,
+            PersistedWorkoutEvidence.self,
+            PersistedEvidenceEnrichmentState.self,
+            PersistedDerivedWorkoutAnalysis.self
+        ])
     }
 }

@@ -62,6 +62,20 @@ public struct WorkoutRoutePoint: Codable, Equatable, Sendable {
     }
 }
 
+public struct WorkoutEvidenceEvent: Codable, Equatable, Sendable {
+    public var startDate: Date
+    public var endDate: Date
+    public var type: String
+    public var label: String?
+
+    public init(startDate: Date, endDate: Date, type: String, label: String? = nil) {
+        self.startDate = startDate
+        self.endDate = endDate
+        self.type = type
+        self.label = label
+    }
+}
+
 public struct WorkoutMetricSeries: Codable, Equatable, Sendable {
     public var metric: WorkoutEvidenceMetric
     public var unit: String
@@ -90,17 +104,20 @@ public struct WorkoutEvidence: Codable, Equatable, Sendable {
     public var loadedAt: Date
     public var series: [WorkoutEvidenceMetric: WorkoutMetricSeries]
     public var route: [WorkoutRoutePoint]
+    public var events: [WorkoutEvidenceEvent]
 
     public init(
         workoutID: String,
         loadedAt: Date = Date(),
         series: [WorkoutEvidenceMetric: WorkoutMetricSeries] = [:],
-        route: [WorkoutRoutePoint] = []
+        route: [WorkoutRoutePoint] = [],
+        events: [WorkoutEvidenceEvent] = []
     ) {
         self.workoutID = workoutID
         self.loadedAt = loadedAt
         self.series = series
         self.route = route
+        self.events = events.sorted { $0.startDate < $1.startDate }
     }
 
     public func hasSeries(_ metric: WorkoutEvidenceMetric) -> Bool {
@@ -240,6 +257,7 @@ public enum WorkoutEvidenceAnalyzer {
         - Workout ID: \(evidence.workoutID)
         - Confidence: \(coverage.confidence.label)
         - Route points: \(evidence.route.count)
+        - Events: \(evidence.events.count)
 
         ## Evidence Samples
         \(metricLines)

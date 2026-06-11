@@ -63,6 +63,38 @@ public enum ConfidenceLevel: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public enum RunTypeTrustKind: String, Codable, CaseIterable, Sendable {
+    case suggested
+    case importedReview
+    case userReviewed
+    case needsReview
+    case conflict
+
+    public var label: String {
+        switch self {
+        case .suggested: "Suggested"
+        case .importedReview: "Imported review"
+        case .userReviewed: "User reviewed"
+        case .needsReview: "Needs review"
+        case .conflict: "Conflict"
+        }
+    }
+}
+
+public struct RunTypeTrustState: Equatable, Sendable {
+    public var kind: RunTypeTrustKind
+    public var runType: RunType?
+    public var confidence: ConfidenceLevel
+    public var detail: String
+
+    public init(kind: RunTypeTrustKind, runType: RunType?, confidence: ConfidenceLevel, detail: String) {
+        self.kind = kind
+        self.runType = runType
+        self.confidence = confidence
+        self.detail = detail
+    }
+}
+
 public enum AuthorizationState: String, Sendable {
     case notDetermined
     case unavailable
@@ -82,6 +114,22 @@ public enum AuthorizationState: String, Sendable {
         case .partial: "Partial"
         case .error: "Error"
         }
+    }
+}
+
+public struct HealthKitActionStatus: Equatable, Sendable {
+    public var authorizationState: AuthorizationState
+    public var message: String
+    public var updatedAt: Date?
+
+    public init(
+        authorizationState: AuthorizationState = .notDetermined,
+        message: String = "Sample data is loaded until HealthKit returns workouts.",
+        updatedAt: Date? = nil
+    ) {
+        self.authorizationState = authorizationState
+        self.message = message
+        self.updatedAt = updatedAt
     }
 }
 
@@ -159,9 +207,12 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
     public var intervalLabelsSummary: String?
     public var inferredRunType: RunType
     public var manualRunType: RunType?
+    public var importedRunType: RunType?
+    public var importedReviewID: String?
     public var notes: String
     public var isDuplicate: Bool
     public var duplicateOfID: String?
+    public var evidence: WorkoutEvidence?
 
     public init(
         id: String,
@@ -199,9 +250,12 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
         intervalLabelsSummary: String? = nil,
         inferredRunType: RunType = .unknown,
         manualRunType: RunType? = nil,
+        importedRunType: RunType? = nil,
+        importedReviewID: String? = nil,
         notes: String = "",
         isDuplicate: Bool = false,
-        duplicateOfID: String? = nil
+        duplicateOfID: String? = nil,
+        evidence: WorkoutEvidence? = nil
     ) {
         self.id = id
         self.sourceID = sourceID
@@ -238,13 +292,66 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
         self.intervalLabelsSummary = intervalLabelsSummary
         self.inferredRunType = inferredRunType
         self.manualRunType = manualRunType
+        self.importedRunType = importedRunType
+        self.importedReviewID = importedReviewID
         self.notes = notes
         self.isDuplicate = isDuplicate
         self.duplicateOfID = duplicateOfID
+        self.evidence = evidence
     }
 
     public var effectiveRunType: RunType {
-        manualRunType ?? inferredRunType
+        manualRunType ?? importedRunType ?? inferredRunType
+    }
+
+    public var runTypeTrust: RunTypeTrustState {
+        if let manualRunType, let importedRunType, manualRunType != importedRunType {
+            return RunTypeTrustState(
+                kind: .conflict,
+                runType: manualRunType,
+                confidence: .limited,
+                detail: "User-reviewed label differs from imported reviewed category."
+            )
+        }
+        if let manualRunType {
+            return RunTypeTrustState(
+                kind: .userReviewed,
+                runType: manualRunType,
+                confidence: .strong,
+                detail: "Explicitly chosen in the iPhone app."
+            )
+        }
+        if let importedRunType {
+            return RunTypeTrustState(
+                kind: .importedReview,
+                runType: importedRunType,
+                confidence: .moderate,
+                detail: importedReviewID.map { "Matched imported review \($0)." } ?? "Matched an imported reviewed web category."
+            )
+        }
+        if inferredRunType == .unknown {
+            return RunTypeTrustState(
+                kind: .needsReview,
+                runType: nil,
+                confidence: .limited,
+                detail: "HealthKit evidence is insufficient for a useful suggested run type."
+            )
+        }
+        return RunTypeTrustState(
+            kind: .suggested,
+            runType: inferredRunType,
+            confidence: .limited,
+            detail: "Rule-based suggestion from HealthKit summary/evidence."
+        )
+    }
+
+    public var trustedPurposeRunType: RunType? {
+        switch runTypeTrust.kind {
+        case .userReviewed, .importedReview:
+            effectiveRunType
+        case .conflict, .suggested, .needsReview:
+            nil
+        }
     }
 
     public var paceSecondsPerKm: Double? {
@@ -294,6 +401,8 @@ public final class PersistedWorkout {
     public var intervalLabelsSummary: String?
     public var inferredRunTypeRaw: String
     public var manualRunTypeRaw: String?
+    public var importedRunTypeRaw: String?
+    public var importedReviewID: String?
     public var notes: String
     public var isDuplicate: Bool
     public var duplicateOfID: String?
@@ -335,6 +444,8 @@ public final class PersistedWorkout {
         intervalLabelsSummary = workout.intervalLabelsSummary
         inferredRunTypeRaw = workout.inferredRunType.rawValue
         manualRunTypeRaw = workout.manualRunType?.rawValue
+        importedRunTypeRaw = workout.importedRunType?.rawValue
+        importedReviewID = workout.importedReviewID
         notes = workout.notes
         isDuplicate = workout.isDuplicate
         duplicateOfID = workout.duplicateOfID
@@ -377,7 +488,12 @@ public final class PersistedWorkout {
         inferredRunTypeRaw = workout.inferredRunType.rawValue
         if !preservingManualFields {
             manualRunTypeRaw = workout.manualRunType?.rawValue
+            importedRunTypeRaw = workout.importedRunType?.rawValue
+            importedReviewID = workout.importedReviewID
             notes = workout.notes
+        } else if workout.importedRunType != nil || workout.importedReviewID != nil {
+            importedRunTypeRaw = workout.importedRunType?.rawValue
+            importedReviewID = workout.importedReviewID
         }
         isDuplicate = workout.isDuplicate
         duplicateOfID = workout.duplicateOfID
@@ -421,10 +537,147 @@ public final class PersistedWorkout {
             intervalLabelsSummary: intervalLabelsSummary,
             inferredRunType: RunType(rawValue: inferredRunTypeRaw) ?? .unknown,
             manualRunType: manualRunTypeRaw.flatMap(RunType.init(rawValue:)),
+            importedRunType: importedRunTypeRaw.flatMap(RunType.init(rawValue:)),
+            importedReviewID: importedReviewID,
             notes: notes,
             isDuplicate: isDuplicate,
             duplicateOfID: duplicateOfID
         )
+    }
+}
+
+@Model
+public final class PersistedWorkoutEvidence {
+    @Attribute(.unique) public var workoutID: String
+    public var loadedAt: Date
+    public var sourceSummary: String
+    public var seriesSampleCount: Int
+    public var routePointCount: Int
+    public var eventCount: Int
+    public var evidenceData: Data
+    public var updatedAt: Date
+
+    public init(workoutID: String, evidence: WorkoutEvidence, sourceSummary: String = "") {
+        self.workoutID = workoutID
+        self.loadedAt = evidence.loadedAt
+        self.sourceSummary = sourceSummary
+        self.seriesSampleCount = evidence.seriesSampleCount
+        self.routePointCount = evidence.route.count
+        self.eventCount = evidence.events.count
+        self.evidenceData = (try? JSONEncoder().encode(evidence)) ?? Data()
+        self.updatedAt = Date()
+    }
+
+    public func update(evidence: WorkoutEvidence, sourceSummary: String = "") {
+        loadedAt = evidence.loadedAt
+        self.sourceSummary = sourceSummary
+        seriesSampleCount = evidence.seriesSampleCount
+        routePointCount = evidence.route.count
+        eventCount = evidence.events.count
+        evidenceData = (try? JSONEncoder().encode(evidence)) ?? Data()
+        updatedAt = Date()
+    }
+
+    public var evidence: WorkoutEvidence? {
+        try? JSONDecoder().decode(WorkoutEvidence.self, from: evidenceData)
+    }
+}
+
+@Model
+public final class PersistedEvidenceEnrichmentState {
+    @Attribute(.unique) public var workoutID: String
+    public var statusRaw: String
+    public var lastAttemptAt: Date?
+    public var attemptCount: Int
+    public var message: String?
+    public var updatedAt: Date
+
+    public init(
+        workoutID: String,
+        status: EvidenceEnrichmentStatus,
+        lastAttemptAt: Date? = nil,
+        attemptCount: Int = 0,
+        message: String? = nil
+    ) {
+        self.workoutID = workoutID
+        self.statusRaw = status.rawValue
+        self.lastAttemptAt = lastAttemptAt
+        self.attemptCount = attemptCount
+        self.message = message
+        self.updatedAt = Date()
+    }
+
+    public var status: EvidenceEnrichmentStatus {
+        EvidenceEnrichmentStatus(rawValue: statusRaw) ?? .pending
+    }
+
+    public func markAttempt(status: EvidenceEnrichmentStatus, message: String?, at date: Date = Date()) {
+        statusRaw = status.rawValue
+        lastAttemptAt = date
+        attemptCount += 1
+        self.message = message
+        updatedAt = Date()
+    }
+}
+
+@Model
+public final class PersistedDerivedWorkoutAnalysis {
+    @Attribute(.unique) public var workoutID: String
+    public var calculationVersion: String
+    public var inputSignature: String
+    public var analysisData: Data
+    public var updatedAt: Date
+
+    public init(analysis: DerivedWorkoutAnalysis) {
+        workoutID = analysis.workoutID
+        calculationVersion = analysis.calculationVersion
+        inputSignature = Self.signature(for: analysis.inputSummary)
+        analysisData = (try? JSONEncoder().encode(analysis)) ?? Data()
+        updatedAt = Date()
+    }
+
+    public func update(analysis: DerivedWorkoutAnalysis) {
+        calculationVersion = analysis.calculationVersion
+        inputSignature = Self.signature(for: analysis.inputSummary)
+        analysisData = (try? JSONEncoder().encode(analysis)) ?? Data()
+        updatedAt = Date()
+    }
+
+    public var analysis: DerivedWorkoutAnalysis? {
+        try? JSONDecoder().decode(DerivedWorkoutAnalysis.self, from: analysisData)
+    }
+
+    private static func signature(for input: DerivedAnalyticsInputSummary) -> String {
+        let counts = input.seriesSampleCounts
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: "|")
+        let sums = input.seriesValueSums
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: "|")
+        let firstSamples = input.seriesFirstSampleAt
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value.ISO8601Format())" }
+            .joined(separator: "|")
+        let lastSamples = input.seriesLastSampleAt
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value.ISO8601Format())" }
+            .joined(separator: "|")
+        return [
+            input.workoutID,
+            input.evidenceLoadedAt.ISO8601Format(),
+            "route=\(input.routePointCount)",
+            "routeSig=\(input.routeSignature)",
+            "events=\(input.eventCount)",
+            "eventSig=\(input.eventSignature)",
+            "distance=\(input.distanceMeters ?? -1)",
+            "duration=\(input.durationSeconds)",
+            counts,
+            sums,
+            firstSamples,
+            lastSamples
+        ].joined(separator: "|")
     }
 }
 
