@@ -2,6 +2,17 @@
 
 A modern iOS application using a **workspace + SPM package** architecture for clean separation between app shell and feature code.
 
+## RunSignal Project Notes
+
+RunSignal is a native iPhone SwiftUI app for Apple Fitness parity work over running workouts. The current product data source is HealthKit, with real workout evidence verified on a physical iPhone.
+
+- Completed workout summaries, samples, routes, and raw events come from HealthKit.
+- Apple Watch custom workout planned structure should come from WorkoutKit `HKWorkout.workoutPlan` when available.
+- HealthKit segment markers are retained for Raw HealthKit Debug only and should not be used as Apple Fitness interval labels.
+- The debug-only `WorkoutKit Reconstructed Intervals` surface pairs WorkoutKit planned steps with HealthKit distance/time samples to validate Apple Fitness interval parity before any main-UI promotion.
+
+Current verification focus: Jun 10, 2026 `Wednesday Interval (6kmm)` custom running workout. See `docs/validation/apple-fitness-interval-model-research.md` and `docs/validation/2026-06-10-apple-fitness-parity.md`.
+
 ## AI Assistant Rules Files
 
 This template includes **opinionated rules files** for popular AI coding assistants. These files establish coding standards, architectural patterns, and best practices for modern iOS development using the latest APIs and Swift features.

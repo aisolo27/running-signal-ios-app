@@ -7,6 +7,7 @@
 - Package tests may run with `swift test --package-path RunningWorkoutAnalysisPackage`; keep `Package.swift` compatible with iOS 26 and macOS 14 so local package tests do not fail on SwiftUI/SwiftData availability.
 - HealthKit v1 is read-only and Simulator-safe: keep sample data fallback, do not mutate HealthKit, and treat real workout/permission verification as a physical-iPhone step.
 - Product data source is HealthKit-only. Do not add FIT file import, FIT backup, HealthFit export, or file-based workout ingestion unless the user explicitly reverses this direction.
+- For Apple Watch custom workout intervals, use WorkoutKit `HKWorkout.workoutPlan` as the planned structure source when available and HealthKit samples for completed stats. Keep HealthKit segment markers raw/debug-only; do not treat them as Apple Fitness interval rows or labels.
 - For HealthKit-heavy work, use `docs/healthkit-reference/` as the selective reference pack: start with `00-START-HERE-CODEX.md`, read `13-codex-rules-for-healthkit.md`, then only the relevant topic file(s). Avoid `COMBINED-HEALTHKIT-CODEX-REFERENCE.md` unless explicitly needed; verify API decisions against Apple docs.
 - Keep milestone docs in `docs/milestones/` current. Do not mark a milestone complete until tests pass, Simulator launch is checked, and completion notes include remaining limitations.
 - Before coding, skim `docs/bug-log.md` index and read only the section relevant to the task; add new entries only for durable recurring bugs or gotchas.
