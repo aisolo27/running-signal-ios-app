@@ -1072,6 +1072,9 @@ import Testing
     #expect(candidates[0].durationSeconds == 750)
     #expect(candidates[0].paceSecondsPerKm == 375)
     #expect(candidates[0].averageHeartRateBpm == 130)
+    #expect(candidates[0].startOffsetSeconds == 0)
+    #expect(candidates[0].endOffsetSeconds == 750)
+    #expect(candidates[0].markerKind == .appleFitnessIntervalCandidate)
     #expect(candidates[0].confidence == .strong)
     #expect(candidates[1].label == .work)
     #expect(candidates[1].distanceMeters == 400)
@@ -1111,8 +1114,47 @@ import Testing
     #expect(candidates.count == 1)
     #expect(candidates[0].label == .unknown)
     #expect(candidates[0].source == .healthKitSegmentPattern)
+    #expect(candidates[0].markerKind == .splitMarker)
     #expect(candidates[0].confidence == .limited)
     #expect(candidates[0].caveats.contains("HealthKit did not expose an Apple Fitness interval label for this event."))
+    #expect(candidates[0].caveats.contains("This event window matches a split-like distance marker, not an Apple Fitness interval row."))
+}
+
+@Test func derivedIntervalCandidatesFlagOverlappingRawSegments() {
+    let start = Date(timeIntervalSince1970: 10_100)
+    let workout = testWorkout(
+        id: "overlapping-intervals",
+        start: start,
+        distanceMeters: 1_600,
+        durationSeconds: 600
+    )
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .distance: WorkoutMetricSeries(
+                metric: .distance,
+                unit: "m",
+                points: [
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(300), value: 800),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(600), value: 800)
+                ]
+            )
+        ],
+        events: [
+            WorkoutEvidenceEvent(startDate: start, endDate: start.addingTimeInterval(300), type: "HKWorkoutEventTypeSegment"),
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(150), endDate: start.addingTimeInterval(450), type: "HKWorkoutEventTypeSegment")
+        ]
+    )
+
+    let candidates = DerivedAnalyticsEngine.intervalCandidates(workout: workout, evidence: evidence)
+
+    #expect(candidates.count == 2)
+    #expect(candidates[0].markerKind == .rawSegmentMarker)
+    #expect(candidates[1].markerKind == .overlappingSegmentMarker)
+    #expect(candidates[1].startOffsetSeconds == 150)
+    #expect(candidates[1].endOffsetSeconds == 450)
+    #expect(candidates[1].caveats.contains("This event overlaps another segment window, so it should stay raw/debug-only."))
 }
 
 @Test func healthKitAuditReportsPerWorkoutFieldsAndCaveats() {

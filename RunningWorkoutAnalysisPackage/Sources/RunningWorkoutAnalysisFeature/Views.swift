@@ -1572,11 +1572,11 @@ struct RawHealthKitWorkoutDebugView: View {
                     DebugMetricProvenanceRow(label: "1 km splits", value: workout.distanceSampleCount > 1 ? "Calculated from distance series" : "Fallback distance/time estimate when shown")
                 }
 
-                SectionHeader("Derived Interval Candidates")
+                SectionHeader("HealthKit Segment Markers")
                 if derivedIntervalCandidates.isEmpty {
                     NoticeCard(
                         title: "Unavailable",
-                        message: "RunSignal did not find usable HealthKit event windows with enough evidence to derive interval candidates."
+                        message: "RunSignal did not find usable HealthKit event windows with enough evidence to inspect segment markers."
                     )
                 } else {
                     VStack(spacing: 8) {
@@ -1586,7 +1586,7 @@ struct RawHealthKitWorkoutDebugView: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("\(interval.index). \(interval.label.displayName)")
                                             .font(.subheadline.bold())
-                                        Text("\(interval.source.displayName) · \(interval.confidence.label)")
+                                        Text("\(interval.markerKind.displayName) · \(interval.source.displayName) · \(interval.confidence.label)")
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
                                     }
@@ -1599,6 +1599,9 @@ struct RawHealthKitWorkoutDebugView: View {
                                             .foregroundStyle(.secondary)
                                     }
                                 }
+                                Text("\(RunFormatters.duration(interval.startOffsetSeconds)) -> \(RunFormatters.duration(interval.endOffsetSeconds)) from workout start")
+                                    .font(.caption2.monospacedDigit())
+                                    .foregroundStyle(.secondary)
                                 MetricGrid(items: [
                                     MetricItem(title: "Pace", value: RunFormatters.pace(interval.paceSecondsPerKm), detail: "Derived"),
                                     MetricItem(title: "Avg HR", value: RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"), detail: "Window")

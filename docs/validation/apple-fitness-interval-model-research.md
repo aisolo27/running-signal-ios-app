@@ -15,6 +15,8 @@ Jun 10, 2026 Apple Fitness workout:
   - Work: 400 m, 1:31, 3:46 /km
   - Recovery: 164 m, 1:45, 10:40 /km
 - RunSignal raw HealthKit event summary for this workout: `12 segment markers, 1 pause markers`
+- Apple Fitness split breakdown shows seven 1 km split rows: 6:16, 6:12, 4:52, 5:57, 6:33, 6:02, and 4:46.
+- The first RunSignal event-window debug pass showed several HealthKit segment windows matching those split rows rather than the Apple Fitness interval table. Example: marker 1 was 6:16 / 1.01 km, marker 3 was 6:12 / 1.00 km, marker 5 was 4:52 / 1.00 km, marker 6 was 5:57 / 1.00 km, and marker 8 was 6:33 / 0.99 km.
 
 ## Why Raw Events Are Not Enough
 
@@ -100,6 +102,8 @@ The key research question is whether the 12 HealthKit segment markers align with
 ## Next Implementation Slice
 
 Status: started on Jun 11, 2026. RunSignal now has a hidden `DerivedWorkoutInterval` candidate model, a pure event-window derivation function, synthetic tests, and Raw HealthKit Debug output. The main Apple Fitness Intervals card still stays in the explanatory unavailable state.
+
+Follow-up on Jun 11, 2026: Raw HealthKit Debug now labels these rows as `HealthKit Segment Markers`, includes start/end offsets from workout start, and classifies split-like or overlapping marker windows so they are not mistaken for Apple Fitness intervals.
 
 Remaining:
 

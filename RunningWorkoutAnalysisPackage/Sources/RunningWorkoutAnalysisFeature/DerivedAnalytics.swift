@@ -127,16 +127,35 @@ public enum DerivedIntervalSource: String, Codable, Sendable {
     }
 }
 
+public enum DerivedIntervalMarkerKind: String, Codable, Sendable {
+    case appleFitnessIntervalCandidate
+    case splitMarker
+    case overlappingSegmentMarker
+    case rawSegmentMarker
+
+    public var displayName: String {
+        switch self {
+        case .appleFitnessIntervalCandidate: "Interval candidate"
+        case .splitMarker: "Split marker"
+        case .overlappingSegmentMarker: "Overlapping segment marker"
+        case .rawSegmentMarker: "Raw segment marker"
+        }
+    }
+}
+
 public struct DerivedWorkoutInterval: Codable, Equatable, Sendable {
     public var index: Int
     public var label: DerivedIntervalLabel
     public var startDate: Date
     public var endDate: Date
+    public var startOffsetSeconds: Double
+    public var endOffsetSeconds: Double
     public var durationSeconds: Double
     public var distanceMeters: Double?
     public var paceSecondsPerKm: Double?
     public var averageHeartRateBpm: Double?
     public var source: DerivedIntervalSource
+    public var markerKind: DerivedIntervalMarkerKind
     public var confidence: ConfidenceLevel
     public var caveats: [String]
 }
@@ -390,6 +409,7 @@ public enum DerivedAnalyticsEngine {
         guard !events.isEmpty else { return [] }
 
         return events.enumerated().map { offset, event in
+            let previous = offset > 0 ? events[events.index(events.startIndex, offsetBy: offset - 1)] : nil
             let distance = intervalDistance(start: event.startDate, end: event.endDate, workout: workout, evidence: evidence)
             let duration = event.endDate.timeIntervalSince(event.startDate)
             let pace = distance.flatMap { distance -> Double? in
@@ -398,9 +418,20 @@ public enum DerivedAnalyticsEngine {
             }
             let heartRate = averageHeartRate(start: event.startDate, end: event.endDate, evidence: evidence)
             let label = intervalLabel(for: event)
+            let markerKind = markerKind(event: event, previous: previous, label: label, distanceMeters: distance)
             var caveats: [String] = []
             if label == .unknown {
                 caveats.append("HealthKit did not expose an Apple Fitness interval label for this event.")
+            }
+            switch markerKind {
+            case .splitMarker:
+                caveats.append("This event window matches a split-like distance marker, not an Apple Fitness interval row.")
+            case .overlappingSegmentMarker:
+                caveats.append("This event overlaps another segment window, so it should stay raw/debug-only.")
+            case .rawSegmentMarker:
+                caveats.append("This event is a raw HealthKit marker until interval parity is proven.")
+            case .appleFitnessIntervalCandidate:
+                break
             }
             if distance == nil {
                 caveats.append("Distance series is unavailable for this event window.")
@@ -425,15 +456,36 @@ public enum DerivedAnalyticsEngine {
                 label: label,
                 startDate: event.startDate,
                 endDate: event.endDate,
+                startOffsetSeconds: event.startDate.timeIntervalSince(workout.startDate),
+                endOffsetSeconds: event.endDate.timeIntervalSince(workout.startDate),
                 durationSeconds: duration,
                 distanceMeters: distance,
                 paceSecondsPerKm: pace,
                 averageHeartRateBpm: heartRate,
                 source: label == .unknown ? .healthKitSegmentPattern : .healthKitLabeledEvent,
+                markerKind: markerKind,
                 confidence: confidence,
-                caveats: caveats
+                caveats: orderedUnique(caveats)
             )
         }
+    }
+
+    private static func markerKind(
+        event: WorkoutEvidenceEvent,
+        previous: WorkoutEvidenceEvent?,
+        label: DerivedIntervalLabel,
+        distanceMeters: Double?
+    ) -> DerivedIntervalMarkerKind {
+        if label != .unknown {
+            return .appleFitnessIntervalCandidate
+        }
+        if let previous, event.startDate < previous.endDate {
+            return .overlappingSegmentMarker
+        }
+        if let distanceMeters, distanceMeters >= 950, distanceMeters <= 1_050 {
+            return .splitMarker
+        }
+        return .rawSegmentMarker
     }
 
     private static func intervalDistance(start: Date, end: Date, workout: CanonicalWorkout, evidence: WorkoutEvidence) -> Double? {
