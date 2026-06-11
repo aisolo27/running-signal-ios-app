@@ -4,41 +4,23 @@ import SwiftUI
 public struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var store = RunningAnalysisStore()
-    @State private var selectedTab = AppTab.today
+    @State private var selectedTab = AppTab.runs
 
     public init() {}
 
     public var body: some View {
         TabView(selection: $selectedTab) {
             NavigationStack {
-                TodayView(store: store)
+                RunsView(store: store)
             }
-            .tabItem { Label(AppTab.today.title, systemImage: AppTab.today.symbol) }
-            .tag(AppTab.today)
+            .tabItem { Label(AppTab.runs.title, systemImage: AppTab.runs.symbol) }
+            .tag(AppTab.runs)
 
             NavigationStack {
-                LatestRunView(store: store)
+                SettingsView(store: store)
             }
-            .tabItem { Label(AppTab.latestRun.title, systemImage: AppTab.latestRun.symbol) }
-            .tag(AppTab.latestRun)
-
-            NavigationStack {
-                RaceGoalView(store: store)
-            }
-            .tabItem { Label(AppTab.raceGoal.title, systemImage: AppTab.raceGoal.symbol) }
-            .tag(AppTab.raceGoal)
-
-            NavigationStack {
-                HistoryView(store: store)
-            }
-            .tabItem { Label(AppTab.history.title, systemImage: AppTab.history.symbol) }
-            .tag(AppTab.history)
-
-            NavigationStack {
-                DataView(store: store)
-            }
-            .tabItem { Label(AppTab.data.title, systemImage: AppTab.data.symbol) }
-            .tag(AppTab.data)
+            .tabItem { Label(AppTab.settings.title, systemImage: AppTab.settings.symbol) }
+            .tag(AppTab.settings)
         }
         .task {
             await store.bootstrap(modelContext: modelContext)
@@ -47,29 +29,20 @@ public struct ContentView: View {
 }
 
 private enum AppTab: String {
-    case today
-    case latestRun
-    case raceGoal
-    case history
-    case data
+    case runs
+    case settings
 
     var title: String {
         switch self {
-        case .today: "Today"
-        case .latestRun: "Latest Run"
-        case .raceGoal: "Race Goal"
-        case .history: "History"
-        case .data: "Data"
+        case .runs: "Runs"
+        case .settings: "Settings"
         }
     }
 
     var symbol: String {
         switch self {
-        case .today: "sun.max"
-        case .latestRun: "figure.run"
-        case .raceGoal: "flag.checkered"
-        case .history: "list.bullet.rectangle"
-        case .data: "shield.lefthalf.filled"
+        case .runs: "figure.run"
+        case .settings: "gearshape"
         }
     }
 }

@@ -74,6 +74,41 @@ public struct WorkoutEvidenceEvent: Codable, Equatable, Sendable {
         self.type = type
         self.label = label
     }
+
+    public var displayLabel: String {
+        if let label, !label.isEmpty {
+            return label
+        }
+        return Self.displayLabel(for: type)
+    }
+
+    public static func displayLabel(for type: String) -> String {
+        let normalized = type
+            .replacingOccurrences(of: "HKWorkoutEventType", with: "")
+            .replacingOccurrences(of: "WorkoutEventType", with: "")
+            .replacingOccurrences(of: ".", with: "")
+            .replacingOccurrences(of: "_", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        if normalized.contains("pauseorresumerequest") { return "Pause/resume request" }
+        if normalized.contains("motionpaused") { return "Motion paused" }
+        if normalized.contains("motionresumed") { return "Motion resumed" }
+        if normalized.contains("pause") { return "Pause" }
+        if normalized.contains("resume") { return "Resume" }
+        if normalized.contains("lap") { return "Lap" }
+        if normalized.contains("segment") { return "Segment" }
+        if normalized.contains("marker") { return "Marker" }
+        if normalized.contains("rawvalue: 1") { return "Pause" }
+        if normalized.contains("rawvalue: 2") { return "Resume" }
+        if normalized.contains("rawvalue: 3") { return "Lap" }
+        if normalized.contains("rawvalue: 4") { return "Marker" }
+        if normalized.contains("rawvalue: 5") { return "Motion paused" }
+        if normalized.contains("rawvalue: 6") { return "Motion resumed" }
+        if normalized.contains("rawvalue: 7") { return "Segment" }
+        if normalized.contains("rawvalue: 8") { return "Pause/resume request" }
+        return "Workout event"
+    }
 }
 
 public struct WorkoutMetricSeries: Codable, Equatable, Sendable {

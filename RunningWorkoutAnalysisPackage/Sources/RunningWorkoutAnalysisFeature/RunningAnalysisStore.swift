@@ -45,17 +45,39 @@ public final class RunningAnalysisStore {
         if persisted.isEmpty {
             workouts = SampleData.workouts
             healthContext = SampleData.healthContext
+            usesSampleData = true
+            updateHealthKitStatus(
+                authorizationState: .notDetermined,
+                message: "Using Sample Data. Load HealthKit to replace these sample workouts."
+            )
             PersistenceService.upsert(workouts, context: modelContext)
         } else if needsSampleEvidenceBackfill(persisted) {
             workouts = SampleData.workouts
             healthContext = SampleData.healthContext
+            usesSampleData = true
+            updateHealthKitStatus(
+                authorizationState: .notDetermined,
+                message: "Using Sample Data. Load HealthKit to replace these sample workouts."
+            )
             PersistenceService.upsert(workouts, context: modelContext)
         } else {
             workouts = removeSampleWorkoutsIfRealDataExists(persisted)
+            usesSampleData = workouts.allSatisfy(isSampleWorkout)
             if workouts.count != persisted.count {
                 PersistenceService.deleteWorkouts(ids: sampleWorkoutIDs(in: persisted), context: modelContext)
             }
             workouts = DuplicateDetector.markDuplicates(workouts)
+            if usesSampleData {
+                updateHealthKitStatus(
+                    authorizationState: .notDetermined,
+                    message: "Using Sample Data. Load HealthKit to replace these sample workouts."
+                )
+            } else {
+                updateHealthKitStatus(
+                    authorizationState: .authorized,
+                    message: "HealthKit Loaded from local cache: \(workouts.count) completed running workouts."
+                )
+            }
         }
         reviewedRunTypes = RunTypeReviewImportService.loadSavedReviews()
         syncState = HealthKitSyncState(lastSyncAt: HealthKitSyncStateStore.loadLastSyncAt())
@@ -75,9 +97,19 @@ public final class RunningAnalysisStore {
         )
 
         guard !result.workouts.isEmpty else {
-            usesSampleData = true
-            healthContext = SampleData.healthContext
-            if workouts.isEmpty {
+            if result.authorizationState == .authorized || result.authorizationState == .partial {
+                usesSampleData = false
+                let previousSampleIDs = sampleWorkoutIDs(in: workouts)
+                workouts = []
+                if let modelContext, !previousSampleIDs.isEmpty {
+                    PersistenceService.deleteWorkouts(ids: previousSampleIDs, context: modelContext)
+                }
+                persistCurrent()
+            } else {
+                usesSampleData = true
+                healthContext = SampleData.healthContext
+            }
+            if workouts.isEmpty && usesSampleData {
                 workouts = SampleData.workouts
                 persistCurrent()
             }
@@ -319,11 +351,30 @@ public final class RunningAnalysisStore {
     }
 
     private func recompute() {
+        hydrateCachedEvidence()
         workouts = DuplicateDetector.markDuplicates(workouts)
         runTypeReconciliation = RunTypeReviewBridge.reconcile(reviews: reviewedRunTypes, workouts: workouts)
         snapshot = AnalyticsEngine.snapshot(for: workouts)
         refreshEvidenceQueueSummary()
         refreshDerivedAnalyses()
+    }
+
+    private func hydrateCachedEvidence() {
+        guard let modelContext else { return }
+        let evidenceByID = PersistenceService.fetchEvidenceByWorkoutID(context: modelContext)
+        guard !evidenceByID.isEmpty else { return }
+        workouts = workouts.map { workout in
+            guard workout.evidence == nil, let evidence = evidenceByID[workout.id] else {
+                return workout
+            }
+            var hydrated = workout
+            hydrated.evidence = evidence
+            hydrated.routePointCount = evidence.route.count
+            hydrated.seriesSampleCount = evidence.seriesSampleCount
+            hydrated.routeAvailable = hydrated.routeAvailable || !evidence.route.isEmpty
+            hydrated.seriesAvailable = hydrated.seriesAvailable || evidence.seriesSampleCount > 0
+            return hydrated
+        }
     }
 
     private func applyReviewedRunTypes() {

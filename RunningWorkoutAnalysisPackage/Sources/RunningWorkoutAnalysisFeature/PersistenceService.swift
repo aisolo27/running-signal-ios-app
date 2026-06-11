@@ -82,6 +82,13 @@ public enum PersistenceService {
             .evidence
     }
 
+    public static func fetchEvidenceByWorkoutID(context: ModelContext) -> [String: WorkoutEvidence] {
+        Dictionary(uniqueKeysWithValues: fetchPersistedEvidence(context: context).compactMap { record in
+            guard let evidence = record.evidence else { return nil }
+            return (record.workoutID, evidence)
+        })
+    }
+
     public static func fetchEvidenceSummaries(context: ModelContext) -> [PersistedWorkoutEvidence] {
         fetchPersistedEvidence(context: context)
     }

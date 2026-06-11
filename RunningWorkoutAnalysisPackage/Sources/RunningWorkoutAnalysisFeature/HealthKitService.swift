@@ -50,7 +50,7 @@ public final class HealthKitService: @unchecked Sendable {
                 authorizationState: canonical.isEmpty ? .partial : .authorized,
                 workouts: DuplicateDetector.markDuplicates(canonical),
                 healthContext: healthContext,
-                message: canonical.isEmpty ? "No HealthKit running workouts were returned. Sample data is still available for Simulator testing." : nil
+                message: canonical.isEmpty ? "HealthKit Loaded: no completed running workouts were returned." : nil
             )
         } catch {
             return HealthKitLoadResult(authorizationState: .error, workouts: [], healthContext: HealthContext(), message: "Could not read HealthKit running workouts.")

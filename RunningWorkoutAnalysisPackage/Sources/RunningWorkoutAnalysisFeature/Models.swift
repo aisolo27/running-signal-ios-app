@@ -371,6 +371,14 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
         PaceMath.paceSecondsPerKm(distanceMeters: distanceMeters, durationSeconds: durationSeconds)
     }
 
+    public var fullStepCadence: Double? {
+        guard let averageCadence else { return nil }
+        if averageCadence > 0, averageCadence < 120 {
+            return averageCadence * 2
+        }
+        return averageCadence
+    }
+
     public var distanceKilometers: Double? {
         guard let distanceMeters else { return nil }
         return distanceMeters / 1_000
@@ -541,7 +549,7 @@ public final class PersistedWorkout {
             environment: RunEnvironment(rawValue: environmentRaw) ?? .unknown,
             distanceMeters: distanceMeters,
             durationSeconds: durationSeconds,
-            elapsedSeconds: elapsedSeconds,
+            elapsedSeconds: elapsedSeconds > 0 ? elapsedSeconds : endDate.timeIntervalSince(startDate),
             activeEnergyKilocalories: activeEnergyKilocalories,
             totalEnergyKilocalories: totalEnergyKilocalories,
             elevationGainMeters: elevationGainMeters,

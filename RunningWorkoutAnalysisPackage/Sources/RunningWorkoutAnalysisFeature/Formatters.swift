@@ -15,12 +15,12 @@ enum RunFormatters {
     }()
 
     static func distance(_ meters: Double?) -> String {
-        guard let meters else { return "Missing" }
+        guard let meters else { return "Unavailable" }
         return String(format: "%.2f km", meters / 1_000)
     }
 
     static func duration(_ seconds: Double?) -> String {
-        guard let seconds else { return "Missing" }
+        guard let seconds else { return "Unavailable" }
         let total = Int(seconds.rounded())
         let hours = total / 3_600
         let minutes = (total % 3_600) / 60
@@ -32,18 +32,18 @@ enum RunFormatters {
     }
 
     static func pace(_ secondsPerKm: Double?) -> String {
-        guard let secondsPerKm, secondsPerKm.isFinite, secondsPerKm > 0 else { return "Missing" }
+        guard let secondsPerKm, secondsPerKm.isFinite, secondsPerKm > 0 else { return "Unavailable" }
         let rounded = Int(secondsPerKm.rounded())
         return String(format: "%d:%02d /km", rounded / 60, rounded % 60)
     }
 
     static func number(_ value: Double?, suffix: String = "", decimals: Int = 0) -> String {
-        guard let value else { return "Missing" }
+        guard let value else { return "Unavailable" }
         return String(format: "%.\(decimals)f%@", value, suffix)
     }
 
     static func calories(_ value: Double?) -> String {
-        guard let value else { return "Missing" }
+        guard let value else { return "Unavailable" }
         return "\(integer(value)) kcal"
     }
 

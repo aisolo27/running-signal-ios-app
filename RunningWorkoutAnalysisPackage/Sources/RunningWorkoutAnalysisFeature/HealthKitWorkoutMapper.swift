@@ -29,14 +29,13 @@ enum HealthKitWorkoutMapper {
                     ?? evidence.sum(.distance),
                 durationSeconds: workout.duration,
                 elapsedSeconds: workout.endDate.timeIntervalSince(workout.startDate),
-                activeEnergyKilocalories: workout.totalEnergyBurned?.doubleValue(for: .kilocalorie())
-                    ?? quantity(workout, .activeEnergyBurned, unit: .kilocalorie())
+                activeEnergyKilocalories: quantity(workout, .activeEnergyBurned, unit: .kilocalorie())
                     ?? evidence.sum(.activeEnergy),
                 totalEnergyKilocalories: nil,
                 elevationGainMeters: evidence.elevationGainMeters,
                 averageHeartRate: quantity(workout, .heartRate, unit: HKUnit.count().unitDivided(by: .minute()), option: .discreteAverage) ?? evidence.average(.heartRate),
                 maxHeartRate: quantity(workout, .heartRate, unit: HKUnit.count().unitDivided(by: .minute()), option: .discreteMax) ?? evidence.maximum(.heartRate),
-                averageCadence: quantity(workout, .stepCount, unit: HKUnit.count().unitDivided(by: .minute()), option: .discreteAverage) ?? evidence.average(.cadence),
+                averageCadence: evidence.average(.cadence),
                 averagePower: quantity(workout, .runningPower, unit: .watt(), option: .discreteAverage) ?? evidence.average(.runningPower),
                 strideLengthMeters: quantity(workout, .runningStrideLength, unit: .meter(), option: .discreteAverage) ?? evidence.average(.strideLength),
                 verticalOscillationCentimeters: quantity(workout, .runningVerticalOscillation, unit: HKUnit.meterUnit(with: .centi), option: .discreteAverage) ?? evidence.average(.verticalOscillation),

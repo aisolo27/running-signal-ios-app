@@ -739,6 +739,35 @@ import Testing
 }
 
 @MainActor
+@Test func storeHydratesCachedEvidenceForRouteRenderingOnBootstrap() async throws {
+    let context = try inMemoryModelContext()
+    let start = Date(timeIntervalSince1970: 3_500)
+    var workout = testWorkout(
+        id: "route-hydration",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    workout.routePointCount = 2
+    workout.evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        route: [
+            WorkoutRoutePoint(date: start, latitude: 25.7617, longitude: -80.1918),
+            WorkoutRoutePoint(date: start.addingTimeInterval(60), latitude: 25.7620, longitude: -80.1922)
+        ]
+    )
+
+    PersistenceService.upsert([workout], context: context)
+    let store = RunningAnalysisStore()
+
+    await store.bootstrap(modelContext: context)
+
+    #expect(store.workouts.first?.evidence?.route.count == 2)
+    #expect(store.workouts.first?.routePointCount == 2)
+}
+
+@MainActor
 @Test func persistenceStoresVersionedDerivedAnalyticsWithInputs() throws {
     let context = try inMemoryModelContext()
     let start = Date(timeIntervalSince1970: 4_000)
@@ -891,6 +920,66 @@ import Testing
     #expect(analysis.executionSegments?.count == 2)
     #expect(abs((analysis.executionSegments?.first?.paceSecondsPerKmEstimate ?? 0) - 322.58) < 0.01)
     #expect(abs((analysis.executionSegments?.last?.paceSecondsPerKmEstimate ?? 0) - 294.11) < 0.01)
+}
+
+@Test func derivedAnalyticsInterpolatesSplitBoundaryTimesBetweenDistanceSamples() {
+    let start = Date(timeIntervalSince1970: 8_000)
+    let workout = testWorkout(
+        id: "interpolated-splits",
+        start: start,
+        distanceMeters: 2_100,
+        durationSeconds: 600
+    )
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .distance: WorkoutMetricSeries(
+                metric: .distance,
+                unit: "m",
+                points: [
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(60), value: 900),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(180), value: 200),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(360), value: 900),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(420), value: 100)
+                ]
+            )
+        ]
+    )
+
+    let analysis = DerivedAnalyticsEngine.analyze(workout: workout, evidence: evidence)
+    let splits = analysis.splitEstimates ?? []
+
+    #expect(splits.count == 2)
+    #expect(splits[0].label == "KM 1")
+    #expect(abs(splits[0].durationSecondsEstimate - 120) < 0.001)
+    #expect(splits[1].label == "KM 2")
+    #expect(abs(splits[1].durationSecondsEstimate - 240) < 0.001)
+    #expect(analysis.bestEffortEstimates.first { $0.label == "1K" }?.durationSecondsEstimate == 120)
+}
+
+@Test func workoutEvidenceEventTranslatesRawHealthKitEventNamesForDisplay() {
+    let start = Date(timeIntervalSince1970: 9_000)
+    let rawSegment = WorkoutEvidenceEvent(
+        startDate: start,
+        endDate: start.addingTimeInterval(60),
+        type: "HKWorkoutEventTypeSegment"
+    )
+    let rawValueLap = WorkoutEvidenceEvent(
+        startDate: start,
+        endDate: start.addingTimeInterval(60),
+        type: "HKWorkoutEventType(rawValue: 3)"
+    )
+    let labeled = WorkoutEvidenceEvent(
+        startDate: start,
+        endDate: start.addingTimeInterval(60),
+        type: "HKWorkoutEventTypeMarker",
+        label: "Warmup"
+    )
+
+    #expect(rawSegment.displayLabel == "Segment")
+    #expect(rawValueLap.displayLabel == "Lap")
+    #expect(labeled.displayLabel == "Warmup")
 }
 
 @Test func healthKitAuditReportsPerWorkoutFieldsAndCaveats() {

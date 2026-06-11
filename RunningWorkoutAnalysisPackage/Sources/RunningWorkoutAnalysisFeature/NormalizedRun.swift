@@ -110,7 +110,7 @@ public struct NormalizedRun: Identifiable, Codable, Equatable, Sendable {
             maxHeartRateBpm: workout.maxHeartRate,
             averagePowerWatts: workout.averagePower,
             averageSpeedMetersPerSecond: evidence?.average(.runningSpeed),
-            averageCadenceSpm: workout.averageCadence,
+            averageCadenceSpm: workout.fullStepCadence,
             averageStrideLengthMeters: workout.strideLengthMeters,
             averageVerticalOscillationMeters: workout.verticalOscillationCentimeters.map { $0 / 100 },
             averageGroundContactTimeMilliseconds: workout.groundContactMilliseconds,

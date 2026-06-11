@@ -19,8 +19,10 @@ final class RunningWorkoutAnalysisUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        XCTAssertTrue(app.tabBars.buttons["Data"].waitForExistence(timeout: 5))
-        app.tabBars.buttons["Data"].tap()
-        XCTAssertTrue(app.staticTexts["Web category bridge"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.tabBars.buttons["Runs"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 5))
+
+        app.tabBars.buttons["Settings"].tap()
+        XCTAssertTrue(app.staticTexts["HealthKit status, data coverage, and v1 debug tools."].waitForExistence(timeout: 5))
     }
 }

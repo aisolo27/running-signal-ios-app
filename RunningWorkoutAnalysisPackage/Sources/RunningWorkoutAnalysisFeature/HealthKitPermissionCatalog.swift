@@ -36,7 +36,7 @@ public struct HealthKitPermissionItem: Identifiable, Equatable, Sendable {
 }
 
 public enum HealthKitPermissionCatalog {
-    public static let permissionExplanation = "RunSignal reads HealthKit data to analyze running workouts, routes, heart rate, pace, power, cadence, mechanics, calories, training load, recovery context, and progress. Health data is used for in-app analysis and is not used for advertising or sold."
+    public static let permissionExplanation = "RunSignal reads completed running workouts from HealthKit, including workout summaries, routes, heart rate, pace, power, cadence, running mechanics, and workout calories. Health data is used only for this read-only workout viewer and is not used for advertising or sold."
 
     public static let readItems: [HealthKitPermissionItem] = [
         item("Workouts", "HKWorkoutTypeIdentifier", .coreRunning, "Find completed running workouts and preserve workout identity, source, duration, distance, and events.", workout: true),
@@ -50,19 +50,7 @@ public enum HealthKitPermissionCatalog {
         item("Running Power", "HKQuantityTypeIdentifierRunningPower", .coreRunning, "Analyze power trends and interval execution when Apple Watch records power.", workout: true),
         item("Running Stride Length", "HKQuantityTypeIdentifierRunningStrideLength", .coreRunning, "Show running mechanics only when HealthKit records stride evidence.", workout: true),
         item("Ground Contact Time", "HKQuantityTypeIdentifierRunningGroundContactTime", .coreRunning, "Show form/mechanics only when HealthKit records ground contact evidence.", workout: true),
-        item("Vertical Oscillation", "HKQuantityTypeIdentifierRunningVerticalOscillation", .coreRunning, "Show form/mechanics only when HealthKit records vertical oscillation evidence.", workout: true),
-        item("Resting Heart Rate", "HKQuantityTypeIdentifierRestingHeartRate", .recovery, "Use as broad recovery context, not workout-scoped execution proof.", context: true),
-        item("Heart Rate Variability", "HKQuantityTypeIdentifierHeartRateVariabilitySDNN", .recovery, "Use as optional readiness context when available.", context: true),
-        item("Respiratory Rate", "HKQuantityTypeIdentifierRespiratoryRate", .recovery, "Use as optional recovery context when available.", context: true),
-        item("Sleep Analysis", "HKCategoryTypeIdentifierSleepAnalysis", .recovery, "Use sleep as a soft readiness signal and label missing coverage clearly.", context: true),
-        item("Cardio Fitness / VO2 Max", "HKQuantityTypeIdentifierVO2Max", .recovery, "Track broad aerobic fitness context and progress.", context: true),
-        item("Date of Birth", "HKCharacteristicTypeIdentifierDateOfBirth", .profile, "Support age-aware profile context if the user grants it.", context: true),
-        item("Biological Sex", "HKCharacteristicTypeIdentifierBiologicalSex", .profile, "Support profile context if the user grants it.", context: true),
-        item("Height", "HKQuantityTypeIdentifierHeight", .profile, "Support running dynamics and profile context if needed.", context: true),
-        item("Body Mass / Weight", "HKQuantityTypeIdentifierBodyMass", .profile, "Support power-to-weight and profile context later, clearly labeled as broad context.", context: true),
-        item("Body Fat Percentage", "HKQuantityTypeIdentifierBodyFatPercentage", .profile, "Optional profile context only; not required for core running analysis.", context: true),
-        item("Body Mass Index", "HKQuantityTypeIdentifierBodyMassIndex", .profile, "Optional profile context only; not used for coaching conclusions.", context: true),
-        item("Exercise Minutes", "HKQuantityTypeIdentifierAppleExerciseTime", .trainingLoad, "Support daily training context separate from completed running workouts.", context: true)
+        item("Vertical Oscillation", "HKQuantityTypeIdentifierRunningVerticalOscillation", .coreRunning, "Show form/mechanics only when HealthKit records vertical oscillation evidence.", workout: true)
     ]
 
     public static let intentionallySkipped: [String] = [
@@ -78,7 +66,14 @@ public enum HealthKitPermissionCatalog {
         "Cycling metrics",
         "Rowing metrics",
         "Wheelchair metrics",
-        "Unrelated mobility metrics"
+        "Unrelated mobility metrics",
+        "VO2 Max",
+        "Resting Heart Rate",
+        "Heart Rate Variability",
+        "Sleep Analysis",
+        "Profile characteristics",
+        "Body composition",
+        "Exercise minutes"
     ]
 
     public static var readTypes: Set<HKObjectType> {

@@ -259,11 +259,22 @@ public enum DerivedAnalyticsEngine {
         var previousCrossingDate = workout.startDate
         var estimates: [DerivedSplitEstimate] = []
 
+        var previousSampleDate = workout.startDate
+
         for point in distanceSeries.points {
+            let previousDistance = cumulativeDistance
+            let previousDate = previousSampleDate
             cumulativeDistance += point.value
 
             while cumulativeDistance >= nextTarget && estimates.count < maxSplits {
-                let splitDuration = point.date.timeIntervalSince(previousCrossingDate)
+                let crossingDate = interpolatedDate(
+                    targetDistance: nextTarget,
+                    previousDistance: previousDistance,
+                    currentDistance: cumulativeDistance,
+                    previousDate: previousDate,
+                    currentDate: point.date
+                )
+                let splitDuration = crossingDate.timeIntervalSince(previousCrossingDate)
                 if splitDuration > 0 {
                     let splitNumber = estimates.count + 1
                     estimates.append(
@@ -275,10 +286,11 @@ public enum DerivedAnalyticsEngine {
                             confidence: .moderate
                         )
                     )
-                    previousCrossingDate = point.date
+                    previousCrossingDate = crossingDate
                 }
                 nextTarget += targetMeters
             }
+            previousSampleDate = point.date
         }
 
         return estimates
@@ -339,13 +351,39 @@ public enum DerivedAnalyticsEngine {
     ) -> Double? {
         guard series.points.count > 1 else { return nil }
         var total = 0.0
+        var previousDate = workoutStart
         for point in series.points {
+            let previousTotal = total
             total += point.value
-            guard total >= target else { continue }
-            let duration = point.date.timeIntervalSince(workoutStart)
-            return duration > 0 ? duration : nil
+            if total >= target {
+                let crossingDate = interpolatedDate(
+                    targetDistance: target,
+                    previousDistance: previousTotal,
+                    currentDistance: total,
+                    previousDate: previousDate,
+                    currentDate: point.date
+                )
+                let duration = crossingDate.timeIntervalSince(workoutStart)
+                return duration > 0 ? duration : nil
+            }
+            previousDate = point.date
         }
         return nil
+    }
+
+    private static func interpolatedDate(
+        targetDistance: Double,
+        previousDistance: Double,
+        currentDistance: Double,
+        previousDate: Date,
+        currentDate: Date
+    ) -> Date {
+        let distanceDelta = currentDistance - previousDistance
+        guard distanceDelta > 0 else { return currentDate }
+        let ratio = min(max((targetDistance - previousDistance) / distanceDelta, 0), 1)
+        let timeDelta = currentDate.timeIntervalSince(previousDate)
+        guard timeDelta > 0 else { return currentDate }
+        return previousDate.addingTimeInterval(timeDelta * ratio)
     }
 
     private static func minConfidence(_ lhs: ConfidenceLevel, _ rhs: ConfidenceLevel) -> ConfidenceLevel {

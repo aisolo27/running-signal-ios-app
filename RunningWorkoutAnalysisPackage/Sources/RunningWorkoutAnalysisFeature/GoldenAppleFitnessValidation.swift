@@ -207,7 +207,7 @@ public enum GoldenAppleFitnessValidation {
             - Workout ID: \(workout.id)
             - Source: \(workout.sourceName)\(workout.deviceName.map { " · \($0)" } ?? "")
             - Copy from Apple Fitness: distance, workout time, elapsed time, average pace, active calories, total calories, average heart rate, max heart rate if visible, elevation gain, cadence, power, route available yes/no, splits if validating splits.
-            - App values now: distance \(RunFormatters.distance(workout.distanceMeters)), duration \(RunFormatters.duration(workout.durationSeconds)), elapsed \(RunFormatters.duration(workout.elapsedSeconds)), pace \(RunFormatters.pace(workout.paceSecondsPerKm)), active calories \(RunFormatters.calories(workout.activeEnergyKilocalories)), total calories \(RunFormatters.calories(workout.totalEnergyKilocalories)), cadence \(RunFormatters.number(workout.averageCadence, suffix: " spm")), power \(RunFormatters.number(workout.averagePower, suffix: " W")).
+            - App values now: distance \(RunFormatters.distance(workout.distanceMeters)), duration \(RunFormatters.duration(workout.durationSeconds)), elapsed \(RunFormatters.duration(workout.elapsedSeconds)), pace \(RunFormatters.pace(workout.paceSecondsPerKm)), active calories \(RunFormatters.calories(workout.activeEnergyKilocalories)), total calories \(RunFormatters.calories(workout.totalEnergyKilocalories)), cadence \(RunFormatters.number(workout.fullStepCadence, suffix: " spm")), power \(RunFormatters.number(workout.averagePower, suffix: " W")).
             - Notes:
             """
         }.joined(separator: "\n\n")

@@ -121,12 +121,13 @@ public enum HealthKitAudit {
     }
 
     private static func elapsedField(_ workout: CanonicalWorkout) -> HealthKitAuditField {
-        let matchesDuration = abs(workout.elapsedSeconds - workout.durationSeconds) <= 2
+        let elapsed = workout.elapsedSeconds > 0 ? workout.elapsedSeconds : workout.durationSeconds
+        let matchesDuration = abs(elapsed - workout.durationSeconds) <= 2
         return HealthKitAuditField(
             label: "Elapsed time",
-            value: RunFormatters.duration(workout.elapsedSeconds),
+            value: RunFormatters.duration(elapsed),
             detail: matchesDuration ? "Matches workout duration." : "Workout duration \(RunFormatters.duration(workout.durationSeconds)); elapsed may include pauses.",
-            confidence: workout.elapsedSeconds > 0 ? .moderate : .blocked
+            confidence: elapsed > 0 ? .moderate : .blocked
         )
     }
 
@@ -190,7 +191,7 @@ public enum HealthKitAudit {
         return HealthKitAuditField(
             label: "Cadence/steps",
             value: workout.averageCadence == nil ? "Missing" : "Summary only",
-            detail: workout.averageCadence == nil ? "No cadence or step samples were found." : RunFormatters.number(workout.averageCadence, suffix: " spm"),
+            detail: workout.averageCadence == nil ? "No cadence or step samples were found." : RunFormatters.number(workout.fullStepCadence, suffix: " spm"),
             confidence: workout.averageCadence == nil ? .unavailable : .limited
         )
     }
