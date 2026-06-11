@@ -1203,6 +1203,20 @@ import Testing
     workout.averageHeartRate = 150
     workout.maxHeartRate = 172
     workout.averageCadence = 176
+    workout.evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .distance: WorkoutMetricSeries(
+                metric: .distance,
+                unit: "m",
+                points: [
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(300), value: 1_000),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(600), value: 1_000)
+                ]
+            )
+        ]
+    )
 
     let expected = GoldenAppleFitnessExpectedWorkout(
         workoutId: "golden",
@@ -1215,7 +1229,9 @@ import Testing
         expectedAverageHeartRateBpm: 151,
         expectedMaxHeartRateBpm: 172,
         expectedAverageCadenceSpm: 175,
-        expectedRouteAvailable: false
+        expectedRouteAvailable: false,
+        expectedSplitCount: 2,
+        expectedSplitTimesSeconds: [303, 300]
     )
 
     let results = GoldenAppleFitnessValidation.results(workouts: [workout], expected: [expected])
@@ -1225,6 +1241,8 @@ import Testing
     #expect(fields.first { $0.field == "Workout duration" }?.status == .pass)
     #expect(fields.first { $0.field == "Average HR" }?.status == .pass)
     #expect(fields.first { $0.field == "Total calories" }?.status == .unavailable)
+    #expect(fields.first { $0.field == "Split count" }?.status == .pass)
+    #expect(fields.first { $0.field == "KM 1 split" }?.status == .pass)
 }
 
 @Test func goldenAppleFitnessValidationExportsEditableCSVTemplate() {
@@ -1241,6 +1259,40 @@ import Testing
     #expect(csv.contains("workoutId,date,appleFitnessTitle"))
     #expect(csv.contains("csv-golden"))
     #expect(csv.contains("expectedDistanceKm"))
+    #expect(csv.contains("expectedSplitTimesSeconds"))
+}
+
+@Test func goldenAppleFitnessChecklistExportsHeartRateAndSplitRows() {
+    let start = Date(timeIntervalSince1970: 3_000)
+    var workout = testWorkout(
+        id: "checklist-golden",
+        start: start,
+        distanceMeters: 2_000,
+        durationSeconds: 600
+    )
+    workout.averageHeartRate = 146
+    workout.maxHeartRate = 179
+    workout.evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .distance: WorkoutMetricSeries(
+                metric: .distance,
+                unit: "m",
+                points: [
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(300), value: 1_000),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(600), value: 1_000)
+                ]
+            )
+        ]
+    )
+
+    let markdown = GoldenAppleFitnessValidation.checklistMarkdown(workouts: [workout], generatedAt: start)
+
+    #expect(markdown.contains("average HR 146 bpm"))
+    #expect(markdown.contains("max HR 179 bpm"))
+    #expect(markdown.contains("RunSignal 1 km splits"))
+    #expect(markdown.contains("KM 1: 5:00"))
 }
 
 private func fixedCalendar() -> Calendar {

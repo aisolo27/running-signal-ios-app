@@ -33,6 +33,7 @@ public struct GoldenAppleFitnessExpectedWorkout: Codable, Equatable, Identifiabl
     public var expectedAveragePowerWatts: Double?
     public var expectedRouteAvailable: Bool?
     public var expectedSplitCount: Int?
+    public var expectedSplitTimesSeconds: [Double]?
     public var notes: String?
 
     public var id: String { workoutId }
@@ -54,6 +55,7 @@ public struct GoldenAppleFitnessExpectedWorkout: Codable, Equatable, Identifiabl
         expectedAveragePowerWatts: Double? = nil,
         expectedRouteAvailable: Bool? = nil,
         expectedSplitCount: Int? = nil,
+        expectedSplitTimesSeconds: [Double]? = nil,
         notes: String? = nil
     ) {
         self.workoutId = workoutId
@@ -72,6 +74,7 @@ public struct GoldenAppleFitnessExpectedWorkout: Codable, Equatable, Identifiabl
         self.expectedAveragePowerWatts = expectedAveragePowerWatts
         self.expectedRouteAvailable = expectedRouteAvailable
         self.expectedSplitCount = expectedSplitCount
+        self.expectedSplitTimesSeconds = expectedSplitTimesSeconds
         self.notes = notes
     }
 }
@@ -172,12 +175,14 @@ public enum GoldenAppleFitnessValidation {
             "expectedAveragePowerWatts",
             "expectedRouteAvailable",
             "expectedSplitCount",
+            "expectedSplitTimesSeconds",
             "notes"
         ]
         let rows = selectedWorkouts(from: workouts).map { workout in
             [
                 workout.id,
                 RunFormatters.date.string(from: workout.startDate),
+                "",
                 "",
                 "",
                 "",
@@ -202,12 +207,19 @@ public enum GoldenAppleFitnessValidation {
 
     public static func checklistMarkdown(workouts: [CanonicalWorkout], generatedAt: Date = Date()) -> String {
         let rows = selectedWorkouts(from: workouts).map { workout in
-            """
+            let splitLines = splitEstimates(for: workout).prefix(10).map { split in
+                "- \(split.label): \(RunFormatters.duration(split.durationSecondsEstimate)) (\(RunFormatters.pace(split.paceSecondsPerKmEstimate))) · \(split.confidence.label)"
+            }
+            let splitsText = splitLines.isEmpty
+                ? "- Splits: Unavailable"
+                : (["- RunSignal 1 km splits:"] + splitLines).joined(separator: "\n")
+            return """
             ## \(RunFormatters.date.string(from: workout.startDate)) · \(RunFormatters.distance(workout.distanceMeters))
             - Workout ID: \(workout.id)
             - Source: \(workout.sourceName)\(workout.deviceName.map { " · \($0)" } ?? "")
             - Copy from Apple Fitness: distance, workout time, elapsed time, average pace, active calories, total calories, average heart rate, max heart rate if visible, elevation gain, cadence, power, route available yes/no, splits if validating splits.
-            - App values now: distance \(RunFormatters.distance(workout.distanceMeters)), duration \(RunFormatters.duration(workout.durationSeconds)), elapsed \(RunFormatters.duration(workout.elapsedSeconds)), pace \(RunFormatters.pace(workout.paceSecondsPerKm)), active calories \(RunFormatters.calories(workout.activeEnergyKilocalories)), total calories \(RunFormatters.calories(workout.totalEnergyKilocalories)), cadence \(RunFormatters.number(workout.fullStepCadence, suffix: " spm")), power \(RunFormatters.number(workout.averagePower, suffix: " W")).
+            - App values now: distance \(RunFormatters.distance(workout.distanceMeters)), duration \(RunFormatters.duration(workout.durationSeconds)), elapsed \(RunFormatters.duration(workout.elapsedSeconds)), pace \(RunFormatters.pace(workout.paceSecondsPerKm)), active calories \(RunFormatters.calories(workout.activeEnergyKilocalories)), total calories \(RunFormatters.calories(workout.totalEnergyKilocalories)), average HR \(RunFormatters.number(workout.averageHeartRate, suffix: " bpm")), max HR \(RunFormatters.number(workout.maxHeartRate, suffix: " bpm")), elevation \(RunFormatters.number(workout.elevationGainMeters, suffix: " m")), cadence \(RunFormatters.number(workout.fullStepCadence, suffix: " spm")), power \(RunFormatters.number(workout.averagePower, suffix: " W")), route \(workout.routeAvailable || workout.routePointCount > 0 ? "Available" : "Unavailable").
+            \(splitsText)
             - Notes:
             """
         }.joined(separator: "\n\n")
@@ -235,7 +247,7 @@ public enum GoldenAppleFitnessValidation {
             return GoldenAppleFitnessWorkoutResult(
                 workout: workout,
                 expected: expected,
-                fieldResults: compare(normalized: normalized, expected: expected)
+                fieldResults: compare(workout: workout, normalized: normalized, expected: expected)
             )
         }
     }
@@ -252,6 +264,7 @@ public enum GoldenAppleFitnessValidation {
     }
 
     private static func compare(
+        workout: CanonicalWorkout,
         normalized: NormalizedRun,
         expected: GoldenAppleFitnessExpectedWorkout?
     ) -> [GoldenAppleFitnessFieldResult] {
@@ -265,7 +278,7 @@ public enum GoldenAppleFitnessValidation {
             )]
         }
 
-        return [
+        var results = [
             compareNumber("Distance", app: normalized.distanceMeters, expected: expected.expectedDistanceKm.map { $0 * 1_000 }, tolerance: distanceTolerance(expectedMeters: expected.expectedDistanceKm.map { $0 * 1_000 })),
             compareNumber("Workout duration", app: normalized.durationSeconds, expected: expected.expectedWorkoutDurationSeconds, tolerance: 2),
             compareNumber("Elapsed time", app: normalized.elapsedSeconds, expected: expected.expectedElapsedTimeSeconds, tolerance: 2),
@@ -277,8 +290,23 @@ public enum GoldenAppleFitnessValidation {
             compareNumber("Elevation gain", app: normalized.elevationGainMeters, expected: expected.expectedElevationGainMeters, tolerance: elevationTolerance(expectedMeters: expected.expectedElevationGainMeters)),
             compareNumber("Cadence", app: normalized.averageCadenceSpm, expected: expected.expectedAverageCadenceSpm, tolerance: 2),
             compareNumber("Power", app: normalized.averagePowerWatts, expected: expected.expectedAveragePowerWatts, tolerance: powerTolerance(expectedWatts: expected.expectedAveragePowerWatts)),
-            compareBool("Route available", app: !normalized.routePoints.isEmpty, expected: expected.expectedRouteAvailable)
+            compareBool("Route available", app: !normalized.routePoints.isEmpty || workout.routeAvailable || workout.routePointCount > 0, expected: expected.expectedRouteAvailable)
         ]
+        let splits = splitEstimates(for: workout)
+        results.append(compareNumber("Split count", app: splits.isEmpty ? nil : Double(splits.count), expected: expected.expectedSplitCount.map(Double.init), tolerance: 0))
+        results.append(contentsOf: compareSplits(workout: workout, expected: expected.expectedSplitTimesSeconds))
+        return results
+    }
+
+    private static func compareSplits(workout: CanonicalWorkout, expected: [Double]?) -> [GoldenAppleFitnessFieldResult] {
+        guard let expected else {
+            return [GoldenAppleFitnessFieldResult(field: "Split times", appValue: splitSummary(for: workout), expectedValue: "Blank", status: .unavailable, detail: "Manual Apple Fitness split times not entered.")]
+        }
+        let splits = splitEstimates(for: workout)
+        return expected.enumerated().map { index, expectedSeconds in
+            let appSeconds = splits.indices.contains(index) ? splits[index].durationSecondsEstimate : nil
+            return compareNumber("KM \(index + 1) split", app: appSeconds, expected: expectedSeconds, tolerance: 3)
+        }
     }
 
     private static func compareNumber(_ field: String, app: Double?, expected: Double?, tolerance: Double?) -> GoldenAppleFitnessFieldResult {
@@ -322,6 +350,19 @@ public enum GoldenAppleFitnessValidation {
     private static func display(_ value: Double?) -> String {
         guard let value else { return "Missing" }
         return String(format: "%.1f", value)
+    }
+
+    private static func splitEstimates(for workout: CanonicalWorkout) -> [DerivedSplitEstimate] {
+        guard let evidence = workout.evidence else { return [] }
+        return DerivedAnalyticsEngine.analyze(workout: workout, evidence: evidence).splitEstimates ?? []
+    }
+
+    private static func splitSummary(for workout: CanonicalWorkout) -> String {
+        let splits = splitEstimates(for: workout)
+        guard !splits.isEmpty else { return "Missing" }
+        return splits.prefix(10)
+            .map { "\($0.label) \(RunFormatters.duration($0.durationSecondsEstimate))" }
+            .joined(separator: "; ")
     }
 
     private static func csvEscape(_ value: String) -> String {
