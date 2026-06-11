@@ -1,6 +1,9 @@
 import CoreLocation
 import Foundation
 @preconcurrency import HealthKit
+#if canImport(WorkoutKit)
+import WorkoutKit
+#endif
 
 public final class WorkoutEvidenceService: @unchecked Sendable {
     private let store: HKHealthStore
@@ -26,6 +29,7 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
         async let vertical = quantitySeries(.runningVerticalOscillation, unit: HKUnit.meterUnit(with: .centi), metric: .verticalOscillation, unitLabel: "cm", workout: workout)
         async let ground = quantitySeries(.runningGroundContactTime, unit: HKUnit.secondUnit(with: .milli), metric: .groundContactTime, unitLabel: "ms", workout: workout)
         async let route = routePoints(for: workout)
+        async let planAudit = workoutPlanAudit(for: workout)
 
         let loadedSeries = await [
             heartRate,
@@ -53,7 +57,8 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
             loadedAt: Date(),
             series: series,
             route: route,
-            events: evidenceEvents(for: workout)
+            events: evidenceEvents(for: workout),
+            workoutPlanAudit: planAudit
         )
     }
 
@@ -225,7 +230,321 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
             return label
         }.first
     }
+
+    private func workoutPlanAudit(for workout: HKWorkout) async -> WorkoutPlanAudit {
+        #if canImport(WorkoutKit)
+        if #available(iOS 17.0, macOS 15.0, macCatalyst 18.0, watchOS 10.0, *) {
+            do {
+                guard let plan = try await workout.workoutPlan else {
+                    return WorkoutPlanAudit(
+                        status: .unavailable,
+                        summaryLines: ["WorkoutKit returned no workout plan for this completed workout."]
+                    )
+                }
+                return WorkoutKitPlanAuditFormatter.audit(plan)
+            } catch {
+                return WorkoutPlanAudit(
+                    status: .failed,
+                    summaryLines: ["WorkoutKit lookup failed; keep interval UI gated."],
+                    errorMessage: String(describing: error)
+                )
+            }
+        }
+        #endif
+
+        return WorkoutPlanAudit(
+            status: .unsupported,
+            summaryLines: ["WorkoutKit workout plan lookup is not available on this OS or SDK."]
+        )
+    }
 }
+
+#if canImport(WorkoutKit)
+@available(iOS 17.0, macOS 15.0, macCatalyst 18.0, watchOS 10.0, *)
+private enum WorkoutKitPlanAuditFormatter {
+    static func audit(_ plan: WorkoutPlan) -> WorkoutPlanAudit {
+        switch plan.workout {
+        case .custom(let workout):
+            return WorkoutPlanAudit(
+                status: .available,
+                planID: plan.id.uuidString,
+                planType: "Custom workout",
+                displayName: workout.displayName,
+                summaryLines: customWorkoutLines(workout),
+                plannedSteps: customWorkoutSteps(workout)
+            )
+        case .goal(let workout):
+            return WorkoutPlanAudit(
+                status: .available,
+                planID: plan.id.uuidString,
+                planType: "Single goal workout",
+                summaryLines: [
+                    "Activity: \(activityLabel(workout.activity))",
+                    "Goal: \(goalLabel(workout.goal))"
+                ]
+            )
+        case .pacer(let workout):
+            return WorkoutPlanAudit(
+                status: .available,
+                planID: plan.id.uuidString,
+                planType: "Pacer workout",
+                summaryLines: [
+                    "Activity: \(activityLabel(workout.activity))",
+                    "Distance: \(measurementLabel(workout.distance))",
+                    "Time: \(measurementLabel(workout.time))"
+                ]
+            )
+        case .swimBikeRun(let workout):
+            return WorkoutPlanAudit(
+                status: .available,
+                planID: plan.id.uuidString,
+                planType: "Swim bike run workout",
+                displayName: workout.displayName,
+                summaryLines: workout.activities.enumerated().map { index, activity in
+                    "Activity \(index + 1): \(String(describing: activity))"
+                }
+            )
+        @unknown default:
+            return WorkoutPlanAudit(
+                status: .available,
+                planID: plan.id.uuidString,
+                planType: "Unknown workout plan",
+                summaryLines: ["WorkoutKit returned a workout plan type RunSignal does not recognize yet."]
+            )
+        }
+    }
+
+    private static func customWorkoutLines(_ workout: CustomWorkout) -> [String] {
+        var lines: [String] = ["Activity: \(activityLabel(workout.activity))"]
+        if let warmup = workout.warmup {
+            lines.append("Warmup: \(stepLabel(warmup))")
+        } else {
+            lines.append("Warmup: none")
+        }
+
+        if workout.blocks.isEmpty {
+            lines.append("Interval blocks: none")
+        } else {
+            for (blockIndex, block) in workout.blocks.enumerated() {
+                lines.append("Block \(blockIndex + 1): \(block.iterations)x, \(block.steps.count) step(s)")
+                for (stepIndex, intervalStep) in block.steps.enumerated() {
+                    lines.append("Block \(blockIndex + 1) step \(stepIndex + 1): \(purposeLabel(intervalStep.purpose)) - \(stepLabel(intervalStep.step))")
+                }
+            }
+        }
+
+        if let cooldown = workout.cooldown {
+            lines.append("Cooldown: \(stepLabel(cooldown))")
+        } else {
+            lines.append("Cooldown: none")
+        }
+        return lines
+    }
+
+    private static func customWorkoutSteps(_ workout: CustomWorkout) -> [PlannedWorkoutStep] {
+        var steps: [PlannedWorkoutStep] = []
+
+        if let warmup = workout.warmup {
+            steps.append(
+                plannedStep(
+                    index: steps.count + 1,
+                    label: "Warmup",
+                    stepType: .warmup,
+                    step: warmup
+                )
+            )
+        }
+
+        for (blockIndex, block) in workout.blocks.enumerated() {
+            for repeatIndex in 1...max(block.iterations, 1) {
+                for intervalStep in block.steps {
+                    let type: DerivedIntervalLabel = intervalStep.purpose == .work ? .work : .recovery
+                    let label = type == .work ? "Work \(repeatIndex)" : "Recovery \(repeatIndex)"
+                    steps.append(
+                        plannedStep(
+                            index: steps.count + 1,
+                            label: label,
+                            stepType: type,
+                            repeatBlockIndex: blockIndex + 1,
+                            repeatIndex: repeatIndex,
+                            step: intervalStep.step
+                        )
+                    )
+                }
+            }
+        }
+
+        if let cooldown = workout.cooldown {
+            steps.append(
+                plannedStep(
+                    index: steps.count + 1,
+                    label: "Cooldown",
+                    stepType: .cooldown,
+                    step: cooldown
+                )
+            )
+        }
+
+        return steps
+    }
+
+    private static func plannedStep(
+        index: Int,
+        label: String,
+        stepType: DerivedIntervalLabel,
+        repeatBlockIndex: Int? = nil,
+        repeatIndex: Int? = nil,
+        step: WorkoutStep
+    ) -> PlannedWorkoutStep {
+        let goal = plannedGoal(step.goal)
+        return PlannedWorkoutStep(
+            index: index,
+            label: label,
+            stepType: stepType,
+            repeatBlockIndex: repeatBlockIndex,
+            repeatIndex: repeatIndex,
+            plannedGoalType: goal.type,
+            plannedGoalValue: goal.value,
+            plannedGoalDisplayText: goal.display,
+            plannedTargetDisplayText: step.alert.map(alertLabel)
+        )
+    }
+
+    private static func plannedGoal(_ goal: WorkoutGoal) -> (type: PlannedWorkoutGoalType, value: Double?, display: String) {
+        switch goal {
+        case .open:
+            return (.open, nil, "Open")
+        case .distance(let value, let unit):
+            let meters = Measurement(value: value, unit: unit).converted(to: .meters).value
+            return (.distance, meters, distanceDisplay(meters))
+        case .time(let value, let unit):
+            let seconds = Measurement(value: value, unit: unit).converted(to: .seconds).value
+            return (.time, seconds, "\(Int(seconds.rounded())) s")
+        case .energy(let value, let unit):
+            let kilocalories = Measurement(value: value, unit: unit).converted(to: .kilocalories).value
+            return (.energy, kilocalories, "\(numberLabel(kilocalories)) kcal")
+        case .poolSwimDistanceWithTime(let distance, let time):
+            let meters = distance.converted(to: .meters).value
+            let seconds = time.converted(to: .seconds).value
+            return (.distance, meters, "\(distanceDisplay(meters)) in \(Int(seconds.rounded())) s")
+        @unknown default:
+            return (.unavailable, nil, String(describing: goal))
+        }
+    }
+
+    private static func stepLabel(_ step: WorkoutStep) -> String {
+        var parts = ["goal \(goalLabel(step.goal))"]
+        if let displayName = stepDisplayName(step) {
+            parts.append("display name \(displayName)")
+        }
+        if let alert = step.alert {
+            parts.append("alert \(alertLabel(alert))")
+        } else {
+            parts.append("alert none")
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    private static func stepDisplayName(_ step: WorkoutStep) -> String? {
+        if #available(iOS 18.0, macCatalyst 18.0, watchOS 11.0, *) {
+            return step.displayName
+        }
+        return nil
+    }
+
+    private static func purposeLabel(_ purpose: IntervalStep.Purpose) -> String {
+        switch purpose {
+        case .work: "Work"
+        case .recovery: "Recovery"
+        @unknown default: String(describing: purpose)
+        }
+    }
+
+    private static func goalLabel(_ goal: WorkoutGoal) -> String {
+        switch goal {
+        case .open:
+            return "open"
+        case .distance(let value, let unit):
+            return measurementLabel(Measurement(value: value, unit: unit))
+        case .time(let value, let unit):
+            return measurementLabel(Measurement(value: value, unit: unit))
+        case .energy(let value, let unit):
+            return measurementLabel(Measurement(value: value, unit: unit))
+        case .poolSwimDistanceWithTime(let distance, let time):
+            return "\(measurementLabel(distance)) in \(measurementLabel(time))"
+        @unknown default:
+            return String(describing: goal)
+        }
+    }
+
+    private static func distanceDisplay(_ meters: Double) -> String {
+        if meters >= 1_000 {
+            return "\(numberLabel(meters / 1_000)) km"
+        }
+        return "\(numberLabel(meters)) m"
+    }
+
+    private static func alertLabel(_ alert: any WorkoutAlert) -> String {
+        switch alert {
+        case let alert as SpeedRangeAlert:
+            return speedRangeLabel(alert.target, metric: alert.metric)
+        case let alert as SpeedThresholdAlert:
+            return speedThresholdLabel(alert.target, metric: alert.metric)
+        case let alert as HeartRateRangeAlert:
+            return "heart rate range \(measurementLabel(alert.target.lowerBound))-\(measurementLabel(alert.target.upperBound))"
+        case let alert as HeartRateZoneAlert:
+            return "heart rate zone \(alert.zone)"
+        case let alert as PowerRangeAlert:
+            return "power range \(measurementLabel(alert.target.lowerBound))-\(measurementLabel(alert.target.upperBound))"
+        case let alert as PowerThresholdAlert:
+            return "power \(measurementLabel(alert.target))"
+        case let alert as PowerZoneAlert:
+            return "power zone \(alert.zone)"
+        case let alert as CadenceRangeAlert:
+            return "cadence range \(measurementLabel(alert.target.lowerBound))-\(measurementLabel(alert.target.upperBound))"
+        case let alert as CadenceThresholdAlert:
+            return "cadence \(measurementLabel(alert.target))"
+        default:
+            return String(describing: type(of: alert))
+        }
+    }
+
+    private static func activityLabel(_ activity: HKWorkoutActivityType) -> String {
+        String(describing: activity)
+    }
+
+    private static func measurementLabel<UnitType: Unit>(_ measurement: Measurement<UnitType>) -> String {
+        "\(numberLabel(measurement.value)) \(measurement.unit.symbol)"
+    }
+
+    private static func speedRangeLabel(_ range: ClosedRange<Measurement<UnitSpeed>>, metric: WorkoutAlertMetric) -> String {
+        let lowerMetersPerSecond = range.lowerBound.converted(to: .metersPerSecond).value
+        let upperMetersPerSecond = range.upperBound.converted(to: .metersPerSecond).value
+        if let paceRange = WorkoutIntervalReconstructionFormat.paceRangeDisplay(
+            speedLowerMetersPerSecond: lowerMetersPerSecond,
+            speedUpperMetersPerSecond: upperMetersPerSecond
+        ) {
+            return "pace range \(paceRange), speed \(measurementLabel(range.lowerBound))-\(measurementLabel(range.upperBound)), metric \(String(describing: metric))"
+        }
+        return "speed range \(measurementLabel(range.lowerBound))-\(measurementLabel(range.upperBound)), metric \(String(describing: metric))"
+    }
+
+    private static func speedThresholdLabel(_ speed: Measurement<UnitSpeed>, metric: WorkoutAlertMetric) -> String {
+        let metersPerSecond = speed.converted(to: .metersPerSecond).value
+        if let pace = WorkoutIntervalReconstructionFormat.paceSecondsPerKilometer(speedMetersPerSecond: metersPerSecond) {
+            return "pace \(WorkoutIntervalReconstructionFormat.durationLabel(pace)) /km, speed \(measurementLabel(speed)), metric \(String(describing: metric))"
+        }
+        return "speed \(measurementLabel(speed)), metric \(String(describing: metric))"
+    }
+
+    private static func numberLabel(_ value: Double) -> String {
+        if abs(value.rounded() - value) < 0.01 {
+            return String(Int(value.rounded()))
+        }
+        return String(format: "%.2f", value)
+    }
+}
+#endif
 
 private final class RoutePointCollector: @unchecked Sendable {
     private let lock = NSLock()

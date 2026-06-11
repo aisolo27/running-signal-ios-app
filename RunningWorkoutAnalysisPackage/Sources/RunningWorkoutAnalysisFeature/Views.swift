@@ -1572,7 +1572,17 @@ struct RawHealthKitWorkoutDebugView: View {
                     DebugMetricProvenanceRow(label: "1 km splits", value: workout.distanceSampleCount > 1 ? "Calculated from distance series" : "Fallback distance/time estimate when shown")
                 }
 
+                SectionHeader("WorkoutKit Plan Audit")
+                workoutPlanAuditView
+
+                SectionHeader("WorkoutKit Reconstructed Intervals")
+                reconstructedIntervalsView
+
                 SectionHeader("HealthKit Segment Markers")
+                NoticeCard(
+                    title: "Raw debug only",
+                    message: "HealthKit segment markers are raw/debug-only and do not represent Apple Fitness custom workout interval rows for this workout."
+                )
                 if derivedIntervalCandidates.isEmpty {
                     NoticeCard(
                         title: "Unavailable",
@@ -1629,6 +1639,11 @@ struct RawHealthKitWorkoutDebugView: View {
         return DerivedAnalyticsEngine.intervalCandidates(workout: workout, evidence: evidence)
     }
 
+    private var reconstructedIntervals: WorkoutIntervalReconstructionResult? {
+        guard let evidence = workout.evidence else { return nil }
+        return WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: evidence)
+    }
+
     private var intervalDetail: String {
         if let summary = workout.intervalLabelsSummary { return summary }
         if workout.intervalCount > 0 { return "Events found; labels unavailable" }
@@ -1646,6 +1661,103 @@ struct RawHealthKitWorkoutDebugView: View {
             return "Summary value normalized to full steps/min"
         }
         return "Unavailable"
+    }
+
+    @ViewBuilder
+    private var workoutPlanAuditView: some View {
+        if let audit = workout.evidence?.workoutPlanAudit {
+            VStack(alignment: .leading, spacing: 8) {
+                MetricGrid(items: [
+                    MetricItem(title: "Status", value: audit.status.label, detail: "WorkoutKit"),
+                    MetricItem(title: "Plan type", value: audit.planType ?? "Unavailable", detail: audit.planID ?? "No plan ID")
+                ])
+
+                if let displayName = audit.displayName {
+                    DebugMetricProvenanceRow(label: "Display name", value: displayName)
+                }
+                if let errorMessage = audit.errorMessage {
+                    DebugMetricProvenanceRow(label: "Error", value: errorMessage)
+                }
+                if audit.summaryLines.isEmpty {
+                    NoticeCard(title: "No public plan fields", message: "WorkoutKit did not return public custom-workout structure for this completed workout.")
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(audit.summaryLines.enumerated()), id: \.offset) { _, line in
+                            Text(line)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(10)
+                    .background(.background)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+            }
+        } else {
+            NoticeCard(title: "Not audited", message: "Reload HealthKit evidence on the physical iPhone to check whether WorkoutKit exposes a completed workout plan.")
+        }
+    }
+
+    @ViewBuilder
+    private var reconstructedIntervalsView: some View {
+        if let result = reconstructedIntervals {
+            VStack(alignment: .leading, spacing: 8) {
+                MetricGrid(items: [
+                    MetricItem(title: "Plan source", value: result.planSource.label, detail: "Structure"),
+                    MetricItem(title: "Window source", value: result.windowSource.label, detail: "Segment markers not used")
+                ])
+
+                ForEach(result.intervals, id: \.index) { interval in
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("\(interval.index). \(interval.label)")
+                                    .font(.subheadline.bold())
+                                Text("\(interval.plannedGoalDisplayText) · \(interval.plannedTargetDisplayText ?? "Target unavailable")")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 3) {
+                                Text(RunFormatters.duration(interval.actualDurationSeconds))
+                                    .font(.subheadline.monospacedDigit().bold())
+                                Text(RunFormatters.distance(interval.actualDistanceMeters))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        MetricGrid(items: [
+                            MetricItem(title: "Pace", value: RunFormatters.pace(interval.actualPaceSecondsPerKm), detail: "Derived"),
+                            MetricItem(title: "Avg HR", value: RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"), detail: "Window"),
+                            MetricItem(title: "Max HR", value: RunFormatters.number(interval.maxHeartRateBpm, suffix: " bpm"), detail: "Window"),
+                            MetricItem(title: "Power", value: RunFormatters.number(interval.averagePower, suffix: " W"), detail: "Avg")
+                        ])
+
+                        Text("\(interval.confidence.label) · \(interval.sourceNote)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(10)
+                    .background(.background)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+
+                if !result.notes.isEmpty {
+                    Text(result.notes.joined(separator: " · "))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        } else {
+            NoticeCard(
+                title: "Unavailable",
+                message: "RunSignal needs a WorkoutKit plan and HealthKit distance/time evidence before it can reconstruct custom workout intervals."
+            )
+        }
     }
 
     private func metricSourceText(summary: Bool, samples: Int) -> String {

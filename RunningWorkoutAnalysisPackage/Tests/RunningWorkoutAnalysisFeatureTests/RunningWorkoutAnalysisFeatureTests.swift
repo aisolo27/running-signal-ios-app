@@ -529,6 +529,31 @@ import Testing
     #expect(markdown.contains("Route points are unavailable for this workout."))
 }
 
+@Test func workoutEvidenceDiagnosticsIncludesWorkoutKitPlanAudit() {
+    let evidence = WorkoutEvidence(
+        workoutID: "workoutkit-plan-audit",
+        workoutPlanAudit: WorkoutPlanAudit(
+            status: .available,
+            planID: "plan-123",
+            planType: "Custom workout",
+            displayName: "Wednesday Interval",
+            summaryLines: [
+                "Warmup: goal 2 km, alert speed range",
+                "Block 1: 4x, 2 step(s)"
+            ]
+        )
+    )
+
+    let markdown = DiagnosticsExport.workoutEvidenceMarkdown(evidence)
+
+    #expect(markdown.contains("- WorkoutKit plan: Available"))
+    #expect(markdown.contains("- Plan ID: plan-123"))
+    #expect(markdown.contains("- Plan type: Custom workout"))
+    #expect(markdown.contains("- Display name: Wednesday Interval"))
+    #expect(markdown.contains("- Warmup: goal 2 km, alert speed range"))
+    #expect(markdown.contains("- Block 1: 4x, 2 step(s)"))
+}
+
 @Test func evidenceQueuePrioritizesPendingWorkoutsWithoutFullHistoryQueries() {
     let calendar = fixedCalendar()
     let latestStart = calendar.date(from: DateComponents(year: 2026, month: 6, day: 1))!
@@ -1082,6 +1107,111 @@ import Testing
     #expect(candidates[2].label == .recovery)
     #expect(candidates[2].distanceMeters == 160)
     #expect(abs((candidates[2].paceSecondsPerKm ?? 0) - 656.25) < 0.001)
+}
+
+@Test func workoutKitSpeedRangeConvertsToPaceRangeFastToSlow() {
+    let display = WorkoutIntervalReconstructionFormat.paceRangeDisplay(
+        speedLowerMetersPerSecond: 2.56,
+        speedUpperMetersPerSecond: 2.78
+    )
+    let workDisplay = WorkoutIntervalReconstructionFormat.paceRangeDisplay(
+        speedLowerMetersPerSecond: 4.35,
+        speedUpperMetersPerSecond: 4.55
+    )
+
+    #expect(display == "6:00-6:30 /km")
+    #expect(workDisplay == "3:40-3:50 /km")
+}
+
+@Test func workoutKitReconstructionUsesPlanDistanceTimeAndTailWithoutSegmentMarkers() {
+    let start = Date(timeIntervalSince1970: 10_250)
+    let workout = testWorkout(
+        id: "workoutkit-reconstruction",
+        start: start,
+        distanceMeters: 2_565,
+        durationSeconds: 951
+    )
+    let plannedSteps = [
+        PlannedWorkoutStep(
+            index: 1,
+            label: "Warmup",
+            stepType: .warmup,
+            plannedGoalType: .distance,
+            plannedGoalValue: 2_000,
+            plannedGoalDisplayText: "2 km",
+            plannedTargetDisplayText: "pace range 6:00-6:30 /km"
+        ),
+        PlannedWorkoutStep(
+            index: 2,
+            label: "Work 1",
+            stepType: .work,
+            repeatBlockIndex: 1,
+            repeatIndex: 1,
+            plannedGoalType: .distance,
+            plannedGoalValue: 400,
+            plannedGoalDisplayText: "400 m",
+            plannedTargetDisplayText: "pace range 3:40-3:50 /km"
+        ),
+        PlannedWorkoutStep(
+            index: 3,
+            label: "Recovery 1",
+            stepType: .recovery,
+            repeatBlockIndex: 1,
+            repeatIndex: 1,
+            plannedGoalType: .time,
+            plannedGoalValue: 105,
+            plannedGoalDisplayText: "105 s"
+        )
+    ]
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .distance: WorkoutMetricSeries(
+                metric: .distance,
+                unit: "m",
+                points: [
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(750), value: 2_000),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(840), value: 400),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(945), value: 160),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(951), value: 5)
+                ]
+            ),
+            .heartRate: WorkoutMetricSeries(
+                metric: .heartRate,
+                unit: "bpm",
+                points: [
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(300), value: 129),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(780), value: 164),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(900), value: 147),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(950), value: 154)
+                ]
+            )
+        ],
+        events: [
+            WorkoutEvidenceEvent(startDate: start, endDate: start.addingTimeInterval(300), type: "HKWorkoutEventTypeSegment"),
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(150), endDate: start.addingTimeInterval(450), type: "HKWorkoutEventTypeSegment")
+        ],
+        workoutPlanAudit: WorkoutPlanAudit(status: .available, planType: "Custom workout", plannedSteps: plannedSteps)
+    )
+
+    let result = WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: evidence)
+
+    #expect(result?.intervals.count == 4)
+    #expect(result?.notes.contains("HealthKit segment markers: not used") == true)
+    #expect(result?.intervals[0].label == "Warmup")
+    #expect(result?.intervals[0].actualDurationSeconds == 750)
+    #expect(result?.intervals[0].actualDistanceMeters == 2_000)
+    #expect(result?.intervals[0].actualPaceSecondsPerKm == 375)
+    #expect(result?.intervals[1].label == "Work 1")
+    #expect(result?.intervals[1].actualDurationSeconds == 90)
+    #expect(result?.intervals[1].actualDistanceMeters == 400)
+    #expect(result?.intervals[2].label == "Recovery 1")
+    #expect(result?.intervals[2].actualDurationSeconds == 105)
+    #expect(result?.intervals[2].actualDistanceMeters == 160)
+    #expect(result?.intervals[3].label == "Open / Extra")
+    #expect(result?.intervals[3].actualDurationSeconds == 6)
+    #expect(result?.intervals[3].actualDistanceMeters == 5)
 }
 
 @Test func derivedIntervalCandidatesKeepUnlabeledSegmentsLimited() {

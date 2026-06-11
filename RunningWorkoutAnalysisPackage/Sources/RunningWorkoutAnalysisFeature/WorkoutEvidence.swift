@@ -113,6 +113,50 @@ public struct WorkoutEvidenceEvent: Codable, Equatable, Sendable {
     }
 }
 
+public enum WorkoutPlanAuditStatus: String, Codable, Equatable, Sendable {
+    case available
+    case unavailable
+    case failed
+    case unsupported
+
+    public var label: String {
+        switch self {
+        case .available: "Available"
+        case .unavailable: "Unavailable"
+        case .failed: "Failed"
+        case .unsupported: "Unsupported"
+        }
+    }
+}
+
+public struct WorkoutPlanAudit: Codable, Equatable, Sendable {
+    public var status: WorkoutPlanAuditStatus
+    public var planID: String?
+    public var planType: String?
+    public var displayName: String?
+    public var summaryLines: [String]
+    public var plannedSteps: [PlannedWorkoutStep]
+    public var errorMessage: String?
+
+    public init(
+        status: WorkoutPlanAuditStatus,
+        planID: String? = nil,
+        planType: String? = nil,
+        displayName: String? = nil,
+        summaryLines: [String] = [],
+        plannedSteps: [PlannedWorkoutStep] = [],
+        errorMessage: String? = nil
+    ) {
+        self.status = status
+        self.planID = planID
+        self.planType = planType
+        self.displayName = displayName
+        self.summaryLines = summaryLines
+        self.plannedSteps = plannedSteps
+        self.errorMessage = errorMessage
+    }
+}
+
 public struct WorkoutMetricSeries: Codable, Equatable, Sendable {
     public var metric: WorkoutEvidenceMetric
     public var unit: String
@@ -142,19 +186,22 @@ public struct WorkoutEvidence: Codable, Equatable, Sendable {
     public var series: [WorkoutEvidenceMetric: WorkoutMetricSeries]
     public var route: [WorkoutRoutePoint]
     public var events: [WorkoutEvidenceEvent]
+    public var workoutPlanAudit: WorkoutPlanAudit?
 
     public init(
         workoutID: String,
         loadedAt: Date = Date(),
         series: [WorkoutEvidenceMetric: WorkoutMetricSeries] = [:],
         route: [WorkoutRoutePoint] = [],
-        events: [WorkoutEvidenceEvent] = []
+        events: [WorkoutEvidenceEvent] = [],
+        workoutPlanAudit: WorkoutPlanAudit? = nil
     ) {
         self.workoutID = workoutID
         self.loadedAt = loadedAt
         self.series = series
         self.route = route
         self.events = events.sorted { $0.startDate < $1.startDate }
+        self.workoutPlanAudit = workoutPlanAudit
     }
 
     public func hasSeries(_ metric: WorkoutEvidenceMetric) -> Bool {
@@ -295,12 +342,35 @@ public enum WorkoutEvidenceAnalyzer {
         - Confidence: \(coverage.confidence.label)
         - Route points: \(evidence.route.count)
         - Events: \(evidence.events.count)
+        - WorkoutKit plan: \(evidence.workoutPlanAudit?.status.label ?? "Not audited")
 
         ## Evidence Samples
         \(metricLines)
 
+        ## WorkoutKit Plan Audit
+        \(planAuditLines(evidence.workoutPlanAudit))
+
         ## Evidence Caveats
         \(coverage.caveats.isEmpty ? "- None" : coverage.caveats.map { "- \($0)" }.joined(separator: "\n"))
         """
+    }
+
+    private static func planAuditLines(_ audit: WorkoutPlanAudit?) -> String {
+        guard let audit else { return "- Not audited" }
+        var lines = ["- Status: \(audit.status.label)"]
+        if let planID = audit.planID {
+            lines.append("- Plan ID: \(planID)")
+        }
+        if let planType = audit.planType {
+            lines.append("- Plan type: \(planType)")
+        }
+        if let displayName = audit.displayName {
+            lines.append("- Display name: \(displayName)")
+        }
+        if let errorMessage = audit.errorMessage {
+            lines.append("- Error: \(errorMessage)")
+        }
+        lines.append(contentsOf: audit.summaryLines.map { "- \($0)" })
+        return lines.joined(separator: "\n")
     }
 }
