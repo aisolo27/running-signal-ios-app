@@ -5,6 +5,7 @@ public enum WorkoutEvidenceMetric: String, Codable, CaseIterable, Identifiable, 
     case runningSpeed
     case distance
     case activeEnergy
+    case basalEnergy
     case runningPower
     case cadence
     case stepCount
@@ -20,6 +21,7 @@ public enum WorkoutEvidenceMetric: String, Codable, CaseIterable, Identifiable, 
         case .runningSpeed: "Running speed"
         case .distance: "Distance"
         case .activeEnergy: "Active energy"
+        case .basalEnergy: "Basal energy"
         case .runningPower: "Power"
         case .cadence: "Cadence"
         case .stepCount: "Steps"

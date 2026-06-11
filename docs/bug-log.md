@@ -51,6 +51,7 @@ Use this as a selective lookup, not required full-context reading. Read the inde
 - Rule: duplicate candidates are excluded from weekly volume, readiness, intensity distribution, trends, and best efforts.
 - Rule: missing HealthKit fields must lower confidence or show caveats; do not promote mechanics/form insights until coverage supports them.
 - Rule: calories stay supplemental and must not drive primary coaching decisions.
+- Rule: total calories may be shown only when HealthKit returns both active energy and basal energy evidence for the workout. Do not estimate basal calories from body metrics or elapsed time to force Apple Fitness parity.
 - Rule: cadence must display as full steps per minute for Apple Fitness parity. If a persisted or imported summary cadence is clearly half-cadence, normalize display/parity outputs to full-step cadence and keep raw sample counts visible in debug.
 - Rule: 1 km split parity depends on interpolating the boundary time between distance samples. Snapping a split to the next sample timestamp can drift by several seconds or more when HealthKit distance samples are sparse or uneven.
 - Rule: raw `HKWorkoutEvent` segment durations are not the same as Apple Fitness Intervals. Keep raw markers in debug/audit surfaces and do not present them as comparable Warmup/Work/Recovery/Cooldown rows until a derived interval model can calculate distance, time, pace, and heart-rate fields.

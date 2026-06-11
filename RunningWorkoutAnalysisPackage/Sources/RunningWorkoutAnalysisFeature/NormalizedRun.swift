@@ -195,7 +195,7 @@ public struct NormalizedRun: Identifiable, Codable, Equatable, Sendable {
             "totalEnergyKcal": MetricProvenance(
                 source: workout.totalEnergyKilocalories == nil ? .unavailable : .derived,
                 healthKitType: "HKQuantityTypeIdentifierActiveEnergyBurned + HKQuantityTypeIdentifierBasalEnergyBurned",
-                calculationMethod: "Only set when enough HealthKit evidence exists; otherwise nil.",
+                calculationMethod: "Active energy plus workout-scoped basal energy when both are returned by HealthKit; otherwise nil.",
                 confidence: workout.totalEnergyKilocalories == nil ? .unavailable : .limited,
                 warning: workout.totalEnergyKilocalories == nil ? "Total calories are not invented from active calories." : nil
             ),

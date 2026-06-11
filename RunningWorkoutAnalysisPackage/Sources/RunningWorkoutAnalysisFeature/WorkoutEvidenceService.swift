@@ -18,6 +18,7 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
         async let speed = quantitySeries(.runningSpeed, unit: HKUnit.meter().unitDivided(by: .second()), metric: .runningSpeed, unitLabel: "m/s", workout: workout)
         async let distance = quantitySeries(.distanceWalkingRunning, unit: .meter(), metric: .distance, unitLabel: "m", workout: workout)
         async let activeEnergy = quantitySeries(.activeEnergyBurned, unit: .kilocalorie(), metric: .activeEnergy, unitLabel: "kcal", workout: workout)
+        async let basalEnergy = quantitySeries(.basalEnergyBurned, unit: .kilocalorie(), metric: .basalEnergy, unitLabel: "kcal", workout: workout)
         async let power = quantitySeries(.runningPower, unit: .watt(), metric: .runningPower, unitLabel: "W", workout: workout)
         async let cadence = stepCadenceSeries(for: workout)
         async let steps = quantitySeries(.stepCount, unit: .count(), metric: .stepCount, unitLabel: "steps", workout: workout)
@@ -31,6 +32,7 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
             speed,
             distance,
             activeEnergy,
+            basalEnergy,
             power,
             cadence,
             steps,

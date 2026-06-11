@@ -484,6 +484,7 @@ import Testing
         loadedAt: start,
         series: [
             .activeEnergy: testSeries(.activeEnergy, value: 410, start: start),
+            .basalEnergy: testSeries(.basalEnergy, value: 58, start: start),
             .stepCount: testSeries(.stepCount, value: 120, start: start)
         ],
         route: []
@@ -494,10 +495,17 @@ import Testing
     #expect(!coverage.heartRate)
     #expect(!coverage.speedOrDistance)
     #expect(coverage.activeEnergy)
+    #expect(evidence.sum(.basalEnergy) == 58)
     #expect(coverage.cadenceOrSteps)
     #expect(coverage.confidence == .limited)
     #expect(coverage.caveats.contains("Heart-rate series is missing, so drift and intensity claims stay limited."))
     #expect(coverage.caveats.contains("Speed or distance series is missing, so pacing-shape claims stay limited."))
+}
+
+@Test func totalCaloriesRequireActiveAndBasalEnergyEvidence() {
+    #expect(HealthKitWorkoutMapper.totalEnergyKilocalories(active: 432, basal: nil) == nil)
+    #expect(HealthKitWorkoutMapper.totalEnergyKilocalories(active: nil, basal: 59) == nil)
+    #expect(HealthKitWorkoutMapper.totalEnergyKilocalories(active: 432, basal: 59) == 491)
 }
 
 @Test func workoutEvidenceDiagnosticsIncludesSampleCountsAndCaveats() {
@@ -1200,6 +1208,7 @@ import Testing
         durationSeconds: 1_500
     )
     workout.activeEnergyKilocalories = 300
+    workout.totalEnergyKilocalories = 358
     workout.averageHeartRate = 150
     workout.maxHeartRate = 172
     workout.averageCadence = 176
@@ -1226,6 +1235,7 @@ import Testing
         expectedElapsedTimeSeconds: 1_500,
         expectedAveragePaceSecPerKm: 300,
         expectedActiveCaloriesKcal: 305,
+        expectedTotalCaloriesKcal: 359,
         expectedAverageHeartRateBpm: 151,
         expectedMaxHeartRateBpm: 172,
         expectedAverageCadenceSpm: 175,
@@ -1240,7 +1250,7 @@ import Testing
     #expect(fields.first { $0.field == "Distance" }?.status == .pass)
     #expect(fields.first { $0.field == "Workout duration" }?.status == .pass)
     #expect(fields.first { $0.field == "Average HR" }?.status == .pass)
-    #expect(fields.first { $0.field == "Total calories" }?.status == .unavailable)
+    #expect(fields.first { $0.field == "Total calories" }?.status == .pass)
     #expect(fields.first { $0.field == "Split count" }?.status == .pass)
     #expect(fields.first { $0.field == "KM 1 split" }?.status == .pass)
 }

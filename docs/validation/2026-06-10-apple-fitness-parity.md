@@ -47,6 +47,5 @@ Result:
 
 - Top-level parity is strong for distance, workout time, average pace, active calories, cadence, and power.
 - The first 1 km split differs by 3 seconds. This is acceptable for HealthKit-derived split interpolation because Apple Fitness can apply private smoothing, route/distance presentation, and rounding that are not exposed as public HealthKit fields.
-- Total calories remain unavailable in RunSignal even though Apple Fitness shows 491 kcal. This should be treated as the next parity gap, not inferred from active calories.
+- Total calories were unavailable in RunSignal at validation time even though Apple Fitness showed 491 kcal. The follow-up implementation should fill this only from HealthKit active plus basal energy evidence, not by inference.
 - Apple Fitness interval rows remain not comparable to raw `HKWorkoutEvent` segment markers. Keep the explanatory unavailable state until a derived interval model can calculate distance, time, pace, and heart-rate fields.
-

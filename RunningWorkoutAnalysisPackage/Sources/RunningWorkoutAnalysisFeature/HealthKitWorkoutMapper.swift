@@ -31,7 +31,7 @@ enum HealthKitWorkoutMapper {
                 elapsedSeconds: workout.endDate.timeIntervalSince(workout.startDate),
                 activeEnergyKilocalories: quantity(workout, .activeEnergyBurned, unit: .kilocalorie())
                     ?? evidence.sum(.activeEnergy),
-                totalEnergyKilocalories: nil,
+                totalEnergyKilocalories: totalEnergyKilocalories(workout: workout, evidence: evidence),
                 elevationGainMeters: evidence.elevationGainMeters,
                 averageHeartRate: quantity(workout, .heartRate, unit: HKUnit.count().unitDivided(by: .minute()), option: .discreteAverage) ?? evidence.average(.heartRate),
                 maxHeartRate: quantity(workout, .heartRate, unit: HKUnit.count().unitDivided(by: .minute()), option: .discreteMax) ?? evidence.maximum(.heartRate),
@@ -98,6 +98,20 @@ enum HealthKitWorkoutMapper {
         case .discreteMax:
             return statistics.maximumQuantity()?.doubleValue(for: unit)
         }
+    }
+
+    static func totalEnergyKilocalories(workout: HKWorkout? = nil, evidence: WorkoutEvidence) -> Double? {
+        let active = workout.flatMap { quantity($0, .activeEnergyBurned, unit: .kilocalorie()) }
+            ?? evidence.sum(.activeEnergy)
+        let basal = workout.flatMap { quantity($0, .basalEnergyBurned, unit: .kilocalorie()) }
+            ?? evidence.sum(.basalEnergy)
+        return totalEnergyKilocalories(active: active, basal: basal)
+    }
+
+    static func totalEnergyKilocalories(active: Double?, basal: Double?) -> Double? {
+        guard let active, let basal else { return nil }
+        let total = active + basal
+        return total > 0 ? total : nil
     }
 
     private static func inferEnvironment(workout: HKWorkout, routeAvailable: Bool) -> RunEnvironment {
