@@ -1537,6 +1537,12 @@ struct RawHealthKitWorkoutDebugView: View {
             VStack(alignment: .leading, spacing: 14) {
                 HeaderBlock(title: "Raw HealthKit Debug", subtitle: "Per-workout fields and evidence counts.")
 
+                ShareLink(item: rawDebugExportMarkdown) {
+                    Label("Share raw debug export", systemImage: "doc.text.magnifyingglass")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
                 MetricGrid(items: [
                     MetricItem(title: "UUID", value: workout.id, detail: "HKWorkout"),
                     MetricItem(title: "Source", value: workout.sourceName, detail: workout.sourceID),
@@ -1642,6 +1648,10 @@ struct RawHealthKitWorkoutDebugView: View {
     private var reconstructedIntervals: WorkoutIntervalReconstructionResult? {
         guard let evidence = workout.evidence else { return nil }
         return WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: evidence)
+    }
+
+    private var rawDebugExportMarkdown: String {
+        DiagnosticsExport.rawHealthKitDebugMarkdown(workout: workout)
     }
 
     private var intervalDetail: String {

@@ -1,0 +1,292 @@
+{
+  "version": 1,
+  "updated": "2026-06-12",
+  "purpose": "Visible Apple Fitness expected values and current RunSignal reconstructed values for June 1-5 interval parity validation.",
+  "rules": {
+    "plannedStructure": "exact when WorkoutKit plan exists",
+    "segmentMarkersUsedAsNormalRows": false,
+    "labelPolicy": "Open / Extra is compatible with Apple Fitness Open, but not with Apple Fitness Cooldown.",
+    "promotionAllowed": false
+  },
+  "workouts": [
+    {
+      "date": "2026-06-01",
+      "folder": "2026-06-01-easy-run",
+      "workoutType": "easy run",
+      "expectedStatus": "blocked",
+      "blocker": "RunSignal Work ends about 6 seconds early and Open / Extra becomes about 6 seconds too long.",
+      "rows": [
+        {
+          "row": 1,
+          "expectedLabel": "Work",
+          "observedLabel": "Work 1",
+          "expectedDistanceMeters": 6450,
+          "observedDistanceMeters": 6450.635445654858,
+          "expectedTimeSeconds": 2564,
+          "observedTimeSeconds": 2558.318410396576,
+          "preferredTimeToleranceSeconds": 2,
+          "temporaryTimeToleranceSeconds": 5,
+          "preferredDistanceToleranceMeters": 5,
+          "temporaryDistanceToleranceMeters": 15
+        },
+        {
+          "row": 2,
+          "expectedLabel": "Open",
+          "observedLabel": "Open / Extra",
+          "expectedDistanceMeters": 5,
+          "observedDistanceMeters": 12.345910287927836,
+          "expectedTimeSeconds": 7,
+          "observedTimeSeconds": 12.6536306142807,
+          "preferredTimeToleranceSeconds": 2,
+          "temporaryTimeToleranceSeconds": 5,
+          "preferredDistanceToleranceMeters": 10,
+          "temporaryDistanceToleranceMeters": 15
+        }
+      ]
+    },
+    {
+      "date": "2026-06-02",
+      "folder": "2026-06-02-easy-run",
+      "workoutType": "easy run",
+      "expectedStatus": "pass",
+      "blocker": "",
+      "rows": [
+        {
+          "row": 1,
+          "expectedLabel": "Work",
+          "observedLabel": "Work 1",
+          "expectedDistanceMeters": 5650,
+          "observedDistanceMeters": 5651.9,
+          "expectedTimeSeconds": 2175,
+          "observedTimeSeconds": 2173,
+          "preferredTimeToleranceSeconds": 2,
+          "temporaryTimeToleranceSeconds": 5,
+          "preferredDistanceToleranceMeters": 5,
+          "temporaryDistanceToleranceMeters": 15
+        },
+        {
+          "row": 2,
+          "expectedLabel": "Open",
+          "observedLabel": "Open / Extra",
+          "expectedDistanceMeters": 57,
+          "observedDistanceMeters": 60,
+          "expectedTimeSeconds": 28,
+          "observedTimeSeconds": 30,
+          "preferredTimeToleranceSeconds": 2,
+          "temporaryTimeToleranceSeconds": 5,
+          "preferredDistanceToleranceMeters": 10,
+          "temporaryDistanceToleranceMeters": 15
+        }
+      ]
+    },
+    {
+      "date": "2026-06-03",
+      "folder": "2026-06-03-interval-workout",
+      "workoutType": "interval workout",
+      "expectedStatus": "temporary pass",
+      "blocker": "Warmup remains about 4.6 seconds early, but the planned open cooldown label is now aligned.",
+      "rows": [
+        {
+          "row": 1,
+          "expectedLabel": "Warmup",
+          "observedLabel": "Warmup",
+          "expectedDistanceMeters": 2000,
+          "observedDistanceMeters": 2001.4803571118973,
+          "expectedTimeSeconds": 767,
+          "observedTimeSeconds": 762.3678689002991,
+          "preferredTimeToleranceSeconds": 2,
+          "temporaryTimeToleranceSeconds": 5,
+          "preferredDistanceToleranceMeters": 5,
+          "temporaryDistanceToleranceMeters": 15
+        },
+        {
+          "row": 2,
+          "expectedLabel": "Work",
+          "observedLabel": "Work 1",
+          "expectedDistanceMeters": 1000,
+          "observedDistanceMeters": 1001.916550203925,
+          "expectedTimeSeconds": 252,
+          "observedTimeSeconds": 252.10444629192352,
+          "preferredTimeToleranceSeconds": 1,
+          "temporaryTimeToleranceSeconds": 2,
+          "preferredDistanceToleranceMeters": 5,
+          "temporaryDistanceToleranceMeters": 15
+        },
+        {
+          "row": 3,
+          "expectedLabel": "Recovery",
+          "observedLabel": "Recovery 1",
+          "expectedDistanceMeters": 209,
+          "observedDistanceMeters": 218.0779792302228,
+          "expectedTimeSeconds": 150,
+          "observedTimeSeconds": 150,
+          "preferredTimeToleranceSeconds": 1,
+          "temporaryTimeToleranceSeconds": 2,
+          "preferredDistanceToleranceMeters": 10,
+          "temporaryDistanceToleranceMeters": 15
+        },
+        {
+          "row": 4,
+          "expectedLabel": "Work",
+          "observedLabel": "Work 2",
+          "expectedDistanceMeters": 1000,
+          "observedDistanceMeters": 1001.662512039632,
+          "expectedTimeSeconds": 246,
+          "observedTimeSeconds": 246.17060542106628,
+          "preferredTimeToleranceSeconds": 1,
+          "temporaryTimeToleranceSeconds": 2,
+          "preferredDistanceToleranceMeters": 5,
+          "temporaryDistanceToleranceMeters": 15
+        },
+        {
+          "row": 5,
+          "expectedLabel": "Recovery",
+          "observedLabel": "Recovery 2",
+          "expectedDistanceMeters": 207,
+          "observedDistanceMeters": 210.152753663946,
+          "expectedTimeSeconds": 150,
+          "observedTimeSeconds": 150,
+          "preferredTimeToleranceSeconds": 1,
+          "temporaryTimeToleranceSeconds": 2,
+          "preferredDistanceToleranceMeters": 10,
+          "temporaryDistanceToleranceMeters": 15
+        },
+        {
+          "row": 6,
+          "expectedLabel": "Work",
+          "observedLabel": "Work 3",
+          "expectedDistanceMeters": 1000,
+          "observedDistanceMeters": 1003.9927266573086,
+          "expectedTimeSeconds": 240,
+          "observedTimeSeconds": 241.03275203704834,
+          "preferredTimeToleranceSeconds": 1,
+          "temporaryTimeToleranceSeconds": 2,
+          "preferredDistanceToleranceMeters": 5,
+          "temporaryDistanceToleranceMeters": 15
+        },
+        {
+          "row": 7,
+          "expectedLabel": "Recovery",
+          "observedLabel": "Recovery 3",
+          "expectedDistanceMeters": 197,
+          "observedDistanceMeters": 199.11763657189385,
+          "expectedTimeSeconds": 150,
+          "observedTimeSeconds": 150,
+          "preferredTimeToleranceSeconds": 1,
+          "temporaryTimeToleranceSeconds": 2,
+          "preferredDistanceToleranceMeters": 10,
+          "temporaryDistanceToleranceMeters": 15
+        },
+        {
+          "row": 8,
+          "expectedLabel": "Cooldown",
+          "observedLabel": "Cooldown",
+          "expectedDistanceMeters": 1030,
+          "observedDistanceMeters": 1030,
+          "expectedTimeSeconds": 382,
+          "observedTimeSeconds": 385,
+          "preferredTimeToleranceSeconds": 2,
+          "temporaryTimeToleranceSeconds": 5,
+          "preferredDistanceToleranceMeters": 5,
+          "temporaryDistanceToleranceMeters": 15
+        }
+      ]
+    },
+    {
+      "date": "2026-06-04",
+      "folder": "2026-06-04-easy-recovery-run",
+      "workoutType": "easy/recovery run",
+      "expectedStatus": "pass",
+      "blocker": "",
+      "rows": [
+        {
+          "row": 1,
+          "expectedLabel": "Work",
+          "observedLabel": "Work 1",
+          "expectedDistanceMeters": 5650,
+          "observedDistanceMeters": 5652.9,
+          "expectedTimeSeconds": 2196,
+          "observedTimeSeconds": 2194,
+          "preferredTimeToleranceSeconds": 2,
+          "temporaryTimeToleranceSeconds": 5,
+          "preferredDistanceToleranceMeters": 5,
+          "temporaryDistanceToleranceMeters": 15
+        },
+        {
+          "row": 2,
+          "expectedLabel": "Open",
+          "observedLabel": "Open / Extra",
+          "expectedDistanceMeters": 44,
+          "observedDistanceMeters": 42,
+          "expectedTimeSeconds": 21,
+          "observedTimeSeconds": 22,
+          "preferredTimeToleranceSeconds": 2,
+          "temporaryTimeToleranceSeconds": 5,
+          "preferredDistanceToleranceMeters": 10,
+          "temporaryDistanceToleranceMeters": 15
+        }
+      ]
+    },
+    {
+      "date": "2026-06-05",
+      "folder": "2026-06-05-tempo-threshold-run",
+      "workoutType": "tempo/threshold run",
+      "expectedStatus": "temporary pass",
+      "blocker": "Warmup/cooldown remain temporary passes; cooldown displayed distance differs by about 18 m.",
+      "rows": [
+        {
+          "row": 1,
+          "expectedLabel": "Warmup",
+          "observedLabel": "Warmup",
+          "expectedDistanceMeters": 2000,
+          "observedDistanceMeters": 2005.5431161262095,
+          "expectedTimeSeconds": 750,
+          "observedTimeSeconds": 746.6089458465576,
+          "preferredTimeToleranceSeconds": 2,
+          "temporaryTimeToleranceSeconds": 5,
+          "preferredDistanceToleranceMeters": 5,
+          "temporaryDistanceToleranceMeters": 15
+        },
+        {
+          "row": 2,
+          "expectedLabel": "Work",
+          "observedLabel": "Work 1",
+          "expectedDistanceMeters": 2000,
+          "observedDistanceMeters": 2008.5514865885489,
+          "expectedTimeSeconds": 510,
+          "observedTimeSeconds": 511.92775106430054,
+          "preferredTimeToleranceSeconds": 2,
+          "temporaryTimeToleranceSeconds": 5,
+          "preferredDistanceToleranceMeters": 10,
+          "temporaryDistanceToleranceMeters": 15
+        },
+        {
+          "row": 3,
+          "expectedLabel": "Cooldown",
+          "observedLabel": "Cooldown",
+          "expectedDistanceMeters": 2490,
+          "observedDistanceMeters": 2507.68615806452,
+          "expectedTimeSeconds": 876,
+          "observedTimeSeconds": 879.8365006446838,
+          "preferredTimeToleranceSeconds": 2,
+          "temporaryTimeToleranceSeconds": 5,
+          "preferredDistanceToleranceMeters": 15,
+          "temporaryDistanceToleranceMeters": 20
+        },
+        {
+          "row": 4,
+          "expectedLabel": "Open",
+          "observedLabel": "Open / Extra",
+          "expectedDistanceMeters": 453,
+          "observedDistanceMeters": 440.01422860636376,
+          "expectedTimeSeconds": 160,
+          "observedTimeSeconds": 157.76232945919037,
+          "preferredTimeToleranceSeconds": 2,
+          "temporaryTimeToleranceSeconds": 5,
+          "preferredDistanceToleranceMeters": 15,
+          "temporaryDistanceToleranceMeters": 20
+        }
+      ]
+    }
+  ]
+}

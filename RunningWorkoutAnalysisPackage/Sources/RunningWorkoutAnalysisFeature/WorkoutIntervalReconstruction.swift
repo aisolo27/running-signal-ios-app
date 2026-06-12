@@ -50,6 +50,20 @@ public enum IntervalReconstructionConfidence: String, Codable, Equatable, Sendab
     }
 }
 
+public enum DistanceGoalBoundaryStrategy: String, Codable, Equatable, Sendable {
+    case interpolatedCrossing
+    case crossingSampleEnd
+    case nearestSampleBoundaryAfterCrossing
+
+    public var label: String {
+        switch self {
+        case .interpolatedCrossing: "interpolated crossing"
+        case .crossingSampleEnd: "crossing sample end"
+        case .nearestSampleBoundaryAfterCrossing: "nearest sample boundary"
+        }
+    }
+}
+
 public struct PlannedWorkoutStep: Codable, Equatable, Sendable {
     public var index: Int
     public var label: String
@@ -103,8 +117,43 @@ public struct ReconstructedWorkoutInterval: Codable, Equatable, Sendable {
     public var averagePower: Double?
     public var planSource: IntervalPlanSource
     public var windowSource: IntervalWindowSource
+    public var boundaryStrategy: DistanceGoalBoundaryStrategy?
+    public var boundaryAdjustmentSeconds: Double?
+    public var boundaryOvershootMeters: Double?
+    public var boundaryDiagnostics: DistanceBoundaryDiagnostics?
+    public var tailDiagnostics: TailDiagnostics?
     public var sourceNote: String
     public var confidence: IntervalReconstructionConfidence
+}
+
+public struct DistanceBoundaryDiagnostics: Codable, Equatable, Sendable {
+    public var targetDistanceMeters: Double
+    public var cumulativeDistanceAtStartMeters: Double
+    public var cumulativeDistanceAtEndMeters: Double
+    public var interpolationFraction: Double?
+    public var previousSample: DistanceBoundarySample?
+    public var crossingSample: DistanceBoundarySample?
+    public var nextSample: DistanceBoundarySample?
+}
+
+public struct DistanceBoundarySample: Codable, Equatable, Sendable {
+    public var startDate: Date
+    public var endDate: Date
+    public var startCumulativeDistanceMeters: Double
+    public var endCumulativeDistanceMeters: Double
+}
+
+public struct TailDiagnostics: Codable, Equatable, Sendable {
+    public var plannedFinalStepEndDate: Date
+    public var workoutEndDate: Date
+    public var remainingSeconds: Double
+    public var remainingMeters: Double?
+    public var finalDistanceSampleDate: Date?
+    public var finalDistanceSampleCumulativeDistanceMeters: Double?
+    public var lastHeartRateSampleDate: Date?
+    public var lastPowerSampleDate: Date?
+    public var lastCadenceSampleDate: Date?
+    public var creationReason: String
 }
 
 public struct WorkoutIntervalReconstructionResult: Codable, Equatable, Sendable {
@@ -166,21 +215,40 @@ public enum WorkoutIntervalReconstructionEngine {
         for step in audit.plannedSteps {
             guard cursor < workout.endDate else { break }
             let endDate: Date?
+            let boundaryResolution: DistanceBoundaryResolution?
+            let sourceNoteOverride: String?
             switch step.plannedGoalType {
             case .distance:
+                sourceNoteOverride = nil
                 if let target = step.plannedGoalValue, target > 0 {
-                    endDate = dateAfterDistance(target, from: cursor, workout: workout, evidence: evidence)
+                    boundaryResolution = distanceBoundary(
+                        after: target,
+                        from: cursor,
+                        workout: workout,
+                        evidence: evidence
+                    )
+                    endDate = boundaryResolution?.endDate
                 } else {
+                    boundaryResolution = nil
                     endDate = nil
                 }
             case .time:
+                sourceNoteOverride = nil
+                boundaryResolution = nil
                 if let seconds = step.plannedGoalValue, seconds > 0 {
                     endDate = minDate(cursor.addingTimeInterval(seconds), workout.endDate)
                 } else {
                     endDate = nil
                 }
             case .open, .energy, .unavailable:
-                endDate = nil
+                boundaryResolution = nil
+                if step.plannedGoalType == .open && step.stepType == .cooldown {
+                    endDate = workout.endDate
+                    sourceNoteOverride = "Planned open cooldown extended to workout end"
+                } else {
+                    endDate = nil
+                    sourceNoteOverride = nil
+                }
             }
 
             guard let endDate, endDate > cursor else {
@@ -194,7 +262,9 @@ public enum WorkoutIntervalReconstructionEngine {
                 end: endDate,
                 workout: workout,
                 evidence: evidence,
-                sourceNote: sourceNote(for: step)
+                sourceNote: sourceNoteOverride ?? sourceNote(for: step, boundaryResolution: boundaryResolution),
+                boundaryResolution: boundaryResolution,
+                tailDiagnostics: nil
             )
             intervals.append(interval)
             cursor = endDate
@@ -202,7 +272,8 @@ public enum WorkoutIntervalReconstructionEngine {
 
         if cursor < workout.endDate {
             let remainingTime = workout.endDate.timeIntervalSince(cursor)
-            let remainingDistance = intervalDistance(start: cursor, end: workout.endDate, workout: workout, evidence: evidence) ?? 0
+            let tailDistance = intervalDistance(start: cursor, end: workout.endDate, workout: workout, evidence: evidence)
+            let remainingDistance = tailDistance ?? 0
             if remainingTime > 5 || remainingDistance > 5 {
                 let step = PlannedWorkoutStep(
                     index: intervals.count + 1,
@@ -219,7 +290,16 @@ public enum WorkoutIntervalReconstructionEngine {
                         end: workout.endDate,
                         workout: workout,
                         evidence: evidence,
-                        sourceNote: "Extra tail after planned WorkoutKit steps"
+                        sourceNote: "Extra tail after planned WorkoutKit steps",
+                        boundaryResolution: nil,
+                        tailDiagnostics: tailDiagnostics(
+                            plannedFinalStepEnd: cursor,
+                            workout: workout,
+                            evidence: evidence,
+                            remainingTime: remainingTime,
+                            remainingDistance: tailDistance,
+                            reason: "Remaining workout time or distance exceeded Open / Extra threshold after planned WorkoutKit steps."
+                        )
                     )
                 )
             }
@@ -240,7 +320,9 @@ public enum WorkoutIntervalReconstructionEngine {
         end: Date,
         workout: CanonicalWorkout,
         evidence: WorkoutEvidence,
-        sourceNote: String
+        sourceNote: String,
+        boundaryResolution: DistanceBoundaryResolution?,
+        tailDiagnostics: TailDiagnostics?
     ) -> ReconstructedWorkoutInterval {
         let duration = end.timeIntervalSince(start)
         let distance = intervalDistance(start: start, end: end, workout: workout, evidence: evidence)
@@ -281,31 +363,62 @@ public enum WorkoutIntervalReconstructionEngine {
             averagePower: power,
             planSource: .workoutKit,
             windowSource: .planDerivedFromDistanceAndTimeSamples,
+            boundaryStrategy: boundaryResolution?.strategy,
+            boundaryAdjustmentSeconds: boundaryResolution?.adjustmentSeconds,
+            boundaryOvershootMeters: boundaryResolution?.overshootMeters,
+            boundaryDiagnostics: boundaryResolution?.diagnostics,
+            tailDiagnostics: tailDiagnostics,
             sourceNote: sourceNote,
             confidence: confidence
         )
     }
 
-    private static func sourceNote(for step: PlannedWorkoutStep) -> String {
+    private static func sourceNote(
+        for step: PlannedWorkoutStep,
+        boundaryResolution: DistanceBoundaryResolution?
+    ) -> String {
         switch step.plannedGoalType {
-        case .distance: "Distance-goal window reconstructed from HealthKit distance samples"
-        case .time: "Time-goal window reconstructed from WorkoutKit duration; TODO pause-adjusted active duration"
-        case .open: "Open step reconstructed from remaining workout tail"
-        case .energy: "Energy-goal steps are not reconstructed in this prototype"
-        case .unavailable: "Planned goal unavailable"
+        case .distance:
+            guard let boundaryResolution else {
+                return "Distance-goal window reconstructed from HealthKit distance samples"
+            }
+            return "Distance-goal boundary: \(boundaryResolution.strategy.label), adjustment \(signedSeconds(boundaryResolution.adjustmentSeconds)), overshoot \(metersLabel(boundaryResolution.overshootMeters))"
+        case .time:
+            return "Time-goal window reconstructed from WorkoutKit duration; TODO pause-adjusted active duration"
+        case .open:
+            return "Open step reconstructed from remaining workout tail"
+        case .energy:
+            return "Energy-goal steps are not reconstructed in this prototype"
+        case .unavailable:
+            return "Planned goal unavailable"
         }
     }
 
-    private static func dateAfterDistance(
-        _ targetDistance: Double,
+    private struct DistanceBoundaryResolution {
+        var endDate: Date
+        var interpolatedDate: Date
+        var strategy: DistanceGoalBoundaryStrategy
+        var adjustmentSeconds: Double
+        var overshootMeters: Double
+        var diagnostics: DistanceBoundaryDiagnostics
+    }
+
+    private static func distanceBoundary(
+        after targetDistance: Double,
         from start: Date,
         workout: CanonicalWorkout,
         evidence: WorkoutEvidence
-    ) -> Date? {
+    ) -> DistanceBoundaryResolution? {
         guard let startDistance = cumulativeDistance(at: start, workoutStart: workout.startDate, evidence: evidence) else {
             return nil
         }
-        return dateAtCumulativeDistance(startDistance + targetDistance, workoutStart: workout.startDate, evidence: evidence)
+        return boundaryAtCumulativeDistance(
+            startDistance + targetDistance,
+            stepGoalDistance: targetDistance,
+            stepStartDistance: startDistance,
+            workoutStart: workout.startDate,
+            evidence: evidence
+        )
     }
 
     private static func intervalDistance(start: Date, end: Date, workout: CanonicalWorkout, evidence: WorkoutEvidence) -> Double? {
@@ -342,27 +455,93 @@ public enum WorkoutIntervalReconstructionEngine {
         return cumulative
     }
 
-    private static func dateAtCumulativeDistance(_ targetDistance: Double, workoutStart: Date, evidence: WorkoutEvidence) -> Date? {
+    private static func boundaryAtCumulativeDistance(
+        _ targetDistance: Double,
+        stepGoalDistance: Double,
+        stepStartDistance: Double,
+        workoutStart: Date,
+        evidence: WorkoutEvidence
+    ) -> DistanceBoundaryResolution? {
         guard let series = evidence.series[.distance] else { return nil }
         var cumulative = 0.0
         var previousDate = workoutStart
+        var sampleWindows: [DistanceBoundarySample] = []
 
-        for point in series.points {
+        for (index, point) in series.points.enumerated() {
             let previousDistance = cumulative
             cumulative += point.value
+            let crossingSample = DistanceBoundarySample(
+                startDate: previousDate,
+                endDate: point.date,
+                startCumulativeDistanceMeters: previousDistance,
+                endCumulativeDistanceMeters: cumulative
+            )
+            sampleWindows.append(crossingSample)
             if cumulative >= targetDistance {
-                return interpolatedDate(
+                let fraction = interpolationFraction(
                     targetDistance: targetDistance,
                     previousDistance: previousDistance,
                     currentDistance: cumulative,
                     previousDate: previousDate,
                     currentDate: point.date
                 )
+                let interpolatedDate = previousDate.addingTimeInterval(point.date.timeIntervalSince(previousDate) * fraction)
+                let overshoot = max(0, cumulative - targetDistance)
+                let nextSample: DistanceBoundarySample?
+                if series.points.indices.contains(index + 1) {
+                    let nextPoint = series.points[index + 1]
+                    nextSample = DistanceBoundarySample(
+                        startDate: point.date,
+                        endDate: nextPoint.date,
+                        startCumulativeDistanceMeters: cumulative,
+                        endCumulativeDistanceMeters: cumulative + nextPoint.value
+                    )
+                } else {
+                    nextSample = nil
+                }
+                let diagnostics = DistanceBoundaryDiagnostics(
+                    targetDistanceMeters: stepGoalDistance,
+                    cumulativeDistanceAtStartMeters: stepStartDistance,
+                    cumulativeDistanceAtEndMeters: cumulative,
+                    interpolationFraction: fraction,
+                    previousSample: index > 0 ? sampleWindows[index - 1] : nil,
+                    crossingSample: crossingSample,
+                    nextSample: nextSample
+                )
+                if shouldUseCrossingSampleEnd(overshootMeters: overshoot, stepGoalDistance: stepGoalDistance) {
+                    return DistanceBoundaryResolution(
+                        endDate: point.date,
+                        interpolatedDate: interpolatedDate,
+                        strategy: .crossingSampleEnd,
+                        adjustmentSeconds: point.date.timeIntervalSince(interpolatedDate),
+                        overshootMeters: overshoot,
+                        diagnostics: diagnostics
+                    )
+                }
+                return DistanceBoundaryResolution(
+                    endDate: interpolatedDate,
+                    interpolatedDate: interpolatedDate,
+                    strategy: .interpolatedCrossing,
+                    adjustmentSeconds: 0,
+                    overshootMeters: overshoot,
+                    diagnostics: diagnostics
+                )
             }
             previousDate = point.date
         }
 
         return nil
+    }
+
+    private static func shouldUseCrossingSampleEnd(overshootMeters: Double, stepGoalDistance: Double) -> Bool {
+        overshootMeters <= crossingSampleEndToleranceMeters(stepGoalDistance: stepGoalDistance)
+    }
+
+    private static func crossingSampleEndToleranceMeters(stepGoalDistance: Double) -> Double {
+        if stepGoalDistance <= 500 {
+            return min(5, stepGoalDistance * 0.01)
+        }
+        return min(15, max(10, stepGoalDistance * 0.0075))
     }
 
     private static func interpolatedDistance(
@@ -378,17 +557,16 @@ public enum WorkoutIntervalReconstructionEngine {
         return previousDistance + ((currentDistance - previousDistance) * ratio)
     }
 
-    private static func interpolatedDate(
+    private static func interpolationFraction(
         targetDistance: Double,
         previousDistance: Double,
         currentDistance: Double,
         previousDate: Date,
         currentDate: Date
-    ) -> Date {
+    ) -> Double {
         let distanceDelta = currentDistance - previousDistance
-        guard distanceDelta > 0 else { return currentDate }
-        let ratio = min(max((targetDistance - previousDistance) / distanceDelta, 0), 1)
-        return previousDate.addingTimeInterval(currentDate.timeIntervalSince(previousDate) * ratio)
+        guard distanceDelta > 0, currentDate > previousDate else { return 1 }
+        return min(max((targetDistance - previousDistance) / distanceDelta, 0), 1)
     }
 
     private static func values(metric: WorkoutEvidenceMetric, start: Date, end: Date, evidence: WorkoutEvidence) -> [Double] {
@@ -400,6 +578,41 @@ public enum WorkoutIntervalReconstructionEngine {
     private static func average(_ values: [Double]) -> Double? {
         guard !values.isEmpty else { return nil }
         return values.reduce(0, +) / Double(values.count)
+    }
+
+    private static func tailDiagnostics(
+        plannedFinalStepEnd: Date,
+        workout: CanonicalWorkout,
+        evidence: WorkoutEvidence,
+        remainingTime: Double,
+        remainingDistance: Double?,
+        reason: String
+    ) -> TailDiagnostics {
+        TailDiagnostics(
+            plannedFinalStepEndDate: plannedFinalStepEnd,
+            workoutEndDate: workout.endDate,
+            remainingSeconds: remainingTime,
+            remainingMeters: remainingDistance,
+            finalDistanceSampleDate: evidence.series[.distance]?.points.last?.date,
+            finalDistanceSampleCumulativeDistanceMeters: finalCumulativeDistance(metric: .distance, evidence: evidence),
+            lastHeartRateSampleDate: evidence.series[.heartRate]?.points.last?.date,
+            lastPowerSampleDate: evidence.series[.runningPower]?.points.last?.date,
+            lastCadenceSampleDate: evidence.series[.cadence]?.points.last?.date ?? evidence.series[.stepCount]?.points.last?.date,
+            creationReason: reason
+        )
+    }
+
+    private static func finalCumulativeDistance(metric: WorkoutEvidenceMetric, evidence: WorkoutEvidence) -> Double? {
+        guard let points = evidence.series[metric]?.points, !points.isEmpty else { return nil }
+        return points.map(\.value).reduce(0, +)
+    }
+
+    private static func signedSeconds(_ seconds: Double) -> String {
+        "\(seconds >= 0 ? "+" : "")\(String(format: "%.1f", seconds))s"
+    }
+
+    private static func metersLabel(_ meters: Double) -> String {
+        "\(String(format: "%.1f", meters)) m"
     }
 
     private static func minDate(_ lhs: Date, _ rhs: Date) -> Date {

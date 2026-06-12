@@ -1,0 +1,55 @@
+# Apple Fitness Interval Parity Dataset
+
+This dataset is for Apple Fitness parity validation before promoting WorkoutKit Reconstructed Intervals into the normal RunSignal workout detail UI.
+
+Apple Fitness screenshots are the visual reference. Screenshots alone are not enough, so each workout folder also includes a manually typed expected Apple Fitness interval table. Type only values that are visible in Apple Fitness. Do not infer hidden data from screenshots.
+
+RunSignal should use WorkoutKit for planned custom workout structure when available, and HealthKit samples for measured stats. HealthKit Segment Markers must remain raw/debug-only and should not be promoted as Apple Fitness interval rows.
+
+Apple documentation defines the WorkoutKit and HealthKit model, but it does not document the exact Apple Fitness interval-row rendering algorithm. See `apple-docs-research.md` for the current documentation-informed evidence contract and tail-labeling policy.
+
+Goal type determines tail interpretation. A final planned `Cooldown` with an `open` WorkoutKit goal can extend to workout end and remain `Cooldown`. A planned `Cooldown` with a fixed distance/time goal completes at that boundary; if the runner keeps going afterward, the continued activity should remain `Open / Extra`. Open / Extra after Cooldown is not automatically wrong, and Cooldown after an open planned cooldown is not automatically wrong.
+
+The purpose is to compare Apple Fitness against RunSignal across multiple real workouts before promoting the interval section into the normal workout detail UI.
+
+## Validation Week
+
+| Date | Workout folder | Intended type |
+|---|---|---|
+| 2026-06-01 | `2026-06-01-easy-run/` | Easy run |
+| 2026-06-02 | `2026-06-02-easy-run/` | Easy run |
+| 2026-06-03 | `2026-06-03-interval-workout/` | Interval workout |
+| 2026-06-04 | `2026-06-04-easy-recovery-run/` | Easy, recovery, or zone 2 run |
+| 2026-06-05 | `2026-06-05-tempo-threshold-run/` | Tempo or threshold run |
+
+## How To Collect Screenshots
+
+1. Open Apple Fitness.
+2. Open the workout for the date.
+3. Screenshot the interval or split section fully.
+4. Open RunSignal.
+5. Open the same workout.
+6. Screenshot the normal workout detail.
+7. Open Raw HealthKit Debug.
+8. Screenshot WorkoutKit Plan Audit, WorkoutKit Reconstructed Intervals, and HealthKit Segment Markers.
+9. If diagnostics export exists, save it into `exports/runsignal-diagnostics/`.
+10. Manually fill `expected_apple_fitness_intervals.md` from Apple Fitness.
+
+## File Roles
+
+- `expected_apple_fitness_intervals.md`: manually typed Apple Fitness interval or split rows.
+- `runsignal_observed_intervals.md`: observed RunSignal reconstructed rows from workout detail or Raw HealthKit Debug.
+- `comparison.md`: row-by-row Apple Fitness versus RunSignal deltas and tolerance checklist.
+- `notes.md`: screenshot filenames, source availability, mismatches, pauses, GPS issues, and extra tail behavior.
+- `screenshots/apple-fitness/`: Apple Fitness reference screenshots.
+- `screenshots/runsignal-workout-detail/`: RunSignal normal workout detail screenshots.
+- `screenshots/runsignal-raw-healthkit-debug/`: RunSignal Raw HealthKit Debug screenshots.
+- `exports/runsignal-diagnostics/`: RunSignal diagnostics exports for this workout.
+- `interval-parity-fixture.json`: cross-workout visible Apple Fitness and RunSignal observed values used by the lightweight validator.
+- `validate_interval_parity.py`: docs-level harness for checking current pass/temporary/blocker status without parsing screenshots.
+
+## Do Not Implement Yet
+
+- Do not promote WorkoutKit Reconstructed Intervals into the normal workout detail UI until this validation set is populated and reviewed.
+- Do not add coaching, readiness, VDOT, training load, recovery, race prediction, workout recommendations, or auto-categorization.
+- This remains v1 Apple Fitness parity validation only.
