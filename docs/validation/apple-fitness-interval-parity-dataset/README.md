@@ -53,6 +53,8 @@ Raw HealthKit Debug and parity packet exports also include a debug-only `HKWorko
 
 Raw HealthKit Debug and parity packet exports also include a diagnostics/export-only activity-boundary candidate: `activityBoundaryCandidateSummary` and `activityBoundaryCandidateIntervals`. The latest physical-device archive confirms these fields are present on-device for all active fixture packets. These fields show the `hkworkoutactivity_boundary` prototype beside current `reconstructedIntervals`, including activity/planned-step counts, mapping status, direct activity rows, inferred final Open / Extra tails, confidence labels, caveats, and not-scoreable reasons. They are explicitly not production UI and do not replace current interval reconstruction.
 
+Raw HealthKit Debug also includes a diagnostics-only monthly export for the selected workout's month. From any workout in Raw HealthKit Debug, share `monthly diagnostics JSON` for a month-level bundle and `monthly diagnostics summary` for a compact markdown index. The JSON has `exportVersion`, `selectedMonth`, `generatedAt`, `workoutCount`, debug-only safety flags, and one record per loaded running workout with a diagnostics summary plus embedded parity-packet-style fields. This is for offline comparison against HealthFit FIT files and Apple Fitness/manual references only.
+
 ## Next Validation Phase
 
 - Do not tune June 1 from one workout.
@@ -64,6 +66,7 @@ Raw HealthKit Debug and parity packet exports also include a diagnostics/export-
 - Current scorecard result: next-sample-end improves drift rows but regresses guard rows; tail-shrink-to-expected-Open uses Apple Fitness/manual expected values as an oracle, so it is not production-safe.
 - Current pattern result: packet-visible features such as target distance, tail size, interpolation fraction, overshoot, boundary adjustment, and sample gaps overlap across drift and guard cases.
 - Current collection target: add 5-10 simple Work + Open guard examples and rerun both scorecards before considering any production boundary experiment. The active fixture exports with activity-boundary candidate fields are archived.
+- Month-scale collection target: export February 2026, March 2026, April 2026, May 2026, and June 2026 monthly diagnostics bundles from the physical iPhone before selecting additional fixture candidates.
 - Normal interval UI promotion remains blocked until this is resolved or explicitly accepted.
 
 ## How To Collect Screenshots
@@ -93,6 +96,7 @@ Raw HealthKit Debug and parity packet exports also include a diagnostics/export-
 - `runsignal-parity-packet-YYYY-MM-DD.json`: physical-device force re-enrich parity packet when available.
 - Raw boundary source export fields: debug-only raw HKWorkoutEvent inventory, HKWorkoutActivity inventory, and planned-step comparison data used to compare public event/sample/activity evidence against FIT/Apple boundary timing.
 - Activity-boundary candidate export fields: `activityBoundaryCandidateSummary` and `activityBoundaryCandidateIntervals`, diagnostics/export-only rows for comparing public HKWorkoutActivity windows with current reconstruction.
+- Monthly diagnostics export fields: one debug/research-only JSON bundle per selected month, plus optional markdown summary. Use these to find workouts with WorkoutKit plans, HKWorkoutActivity rows, Open / Extra tails, missing evidence, no plan, structured intervals, warmup/work/cooldown special cases, and duplicate/same-day extra run candidates.
 - `interval-parity-fixture.json`: cross-workout visible Apple Fitness and RunSignal observed values used by the lightweight validator.
 - `validate_interval_parity.py`: docs-level harness for checking current pass/temporary/blocker status without parsing screenshots.
 - `next-boundary-validation-plan.md`: evidence plan for fixed-distance Work plus real Open tail boundary validation.

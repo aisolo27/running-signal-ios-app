@@ -1197,6 +1197,233 @@ public enum DiagnosticsExport {
         return json
     }
 
+    public static func monthlyDiagnosticsJSON(
+        workouts: [CanonicalWorkout],
+        selectedMonth: Date,
+        calendar: Calendar = .current,
+        forceReenrichResults: [String: ParityForceReenrichResult] = [:],
+        generatedAt: Date = Date()
+    ) -> String {
+        let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth)
+        let monthWorkouts = workouts
+            .filter { workout in
+                guard let monthInterval else { return false }
+                return monthInterval.contains(workout.startDate)
+            }
+            .sorted { $0.startDate < $1.startDate }
+
+        let records = monthWorkouts.map { workout -> [String: Any] in
+            let packet = parityPacketObject(
+                workout: workout,
+                forceReenrichResult: forceReenrichResults[workout.id],
+                generatedAt: generatedAt
+            )
+            let classification = monthlyClassification(workout: workout, in: monthWorkouts, calendar: calendar)
+            return [
+                "workoutID": workout.id,
+                "startDate": workout.startDate.ISO8601Format(),
+                "classification": classification,
+                "diagnosticsSummary": monthlyDiagnosticsSummary(
+                    workout: workout,
+                    classification: classification
+                ).jsonObject,
+                "parityPacket": packet
+            ]
+        }
+
+        let payload: [String: Any] = [
+            "exportVersion": 1,
+            "scope": "debug/research-only",
+            "selectedMonth": monthlyIdentifier(for: selectedMonth, calendar: calendar),
+            "generatedAt": generatedAt.ISO8601Format(),
+            "workoutCount": records.count,
+            "productionIntervalBehaviorChanged": false,
+            "normalWorkoutUIChanged": false,
+            "boundaryLogicChanged": false,
+            "usesFITRuntimeTruth": false,
+            "usesAppleFitnessManualRuntimeLogic": false,
+            "records": records
+        ]
+
+        return jsonString(payload)
+    }
+
+    public static func monthlyDiagnosticsMarkdown(
+        workouts: [CanonicalWorkout],
+        selectedMonth: Date,
+        calendar: Calendar = .current,
+        generatedAt: Date = Date()
+    ) -> String {
+        let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth)
+        let monthWorkouts = workouts
+            .filter { workout in
+                guard let monthInterval else { return false }
+                return monthInterval.contains(workout.startDate)
+            }
+            .sorted { $0.startDate < $1.startDate }
+
+        let rows = monthWorkouts.map { workout -> String in
+            let summary = monthlyDiagnosticsSummary(
+                workout: workout,
+                classification: monthlyClassification(workout: workout, in: monthWorkouts, calendar: calendar)
+            )
+            return "| \(markdownCell(workout.startDate.ISO8601Format())) | \(markdownCell(workout.id)) | \(markdownCell(summary.classification)) | \(summary.hasWorkoutKitPlan ? "Yes" : "No") | \(summary.hkWorkoutActivityCount) | \(summary.reconstructedIntervalCount) | \(summary.hasOpenExtraTail ? "Yes" : "No") | \(markdownCell(summary.caveat)) |"
+        }.joined(separator: "\n")
+
+        return """
+        # RunSignal Monthly Diagnostics Export
+
+        Generated: \(RunFormatters.date.string(from: generatedAt))
+        Selected month: \(monthlyIdentifier(for: selectedMonth, calendar: calendar))
+        Scope: debug/research-only. Production interval behavior, normal workout UI, and boundary logic are unchanged.
+
+        | Start | Workout ID | Classification | WorkoutKit plan | Activities | Reconstructed rows | Open / Extra tail | Caveat |
+        | --- | --- | --- | --- | ---: | ---: | --- | --- |
+        \(rows.isEmpty ? "| No workouts | n/a | empty month | No | 0 | 0 | No | No running workouts loaded for this month. |" : rows)
+        """
+    }
+
+    private static func monthlyIdentifier(for date: Date, calendar: Calendar) -> String {
+        let components = calendar.dateComponents([.year, .month], from: date)
+        let year = components.year ?? 0
+        let month = components.month ?? 0
+        return String(format: "%04d-%02d", year, month)
+    }
+
+    private static func parityPacketObject(
+        workout: CanonicalWorkout,
+        forceReenrichResult: ParityForceReenrichResult?,
+        generatedAt: Date
+    ) -> [String: Any] {
+        let json = parityPacketJSON(
+            workout: workout,
+            forceReenrichResult: forceReenrichResult,
+            generatedAt: generatedAt
+        )
+        guard
+            let data = json.data(using: .utf8),
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return [
+                "packetError": "Unable to encode parity packet for monthly diagnostics export.",
+                "workoutID": workout.id
+            ]
+        }
+        return object
+    }
+
+    private static func jsonString(_ object: Any) -> String {
+        guard
+            JSONSerialization.isValidJSONObject(object),
+            let data = try? JSONSerialization.data(
+                withJSONObject: object,
+                options: [.prettyPrinted, .sortedKeys]
+            ),
+            let json = String(data: data, encoding: .utf8)
+        else {
+            return """
+            {
+              "exportVersion" : 1,
+              "error" : "Unable to encode monthly diagnostics export."
+            }
+            """
+        }
+        return json
+    }
+
+    private static func monthlyClassification(
+        workout: CanonicalWorkout,
+        in monthWorkouts: [CanonicalWorkout],
+        calendar: Calendar
+    ) -> String {
+        guard let evidence = workout.evidence else {
+            return "missing evidence"
+        }
+
+        let plannedSteps = evidence.workoutPlanAudit?.plannedSteps ?? []
+        guard !plannedSteps.isEmpty else {
+            if monthWorkouts.contains(where: { other in
+                other.id != workout.id && calendar.isDate(other.startDate, inSameDayAs: workout.startDate)
+            }) {
+                return "duplicate/same-day extra run candidate"
+            }
+            return "no WorkoutKit plan"
+        }
+
+        let activities = evidence.activities
+        if activities.isEmpty {
+            return "no HKWorkoutActivity rows"
+        }
+
+        let reconstructed = WorkoutIntervalReconstructionEngine.reconstruct(
+            workout: workout,
+            evidence: evidence
+        )
+        let labels = reconstructed?.intervals.map { $0.label.lowercased() } ?? []
+        let hasOpenTail = labels.contains { $0.contains("open") || $0.contains("extra") }
+        let hasWarmup = labels.contains { $0.contains("warmup") }
+        let hasCooldown = labels.contains { $0.contains("cooldown") }
+        let workCount = labels.filter { $0.contains("work") }.count
+        let recoveryCount = labels.filter { $0.contains("recovery") }.count
+
+        if hasWarmup && hasCooldown && workCount == 1 && recoveryCount == 0 {
+            return "warmup/work/cooldown special"
+        }
+        if workCount > 1 || recoveryCount > 0 || plannedSteps.count > 2 {
+            return "structured interval workout"
+        }
+        if workCount == 1 && hasOpenTail {
+            return "simple fixed-distance Work + Open candidate"
+        }
+        return "drift/guard candidate unknown"
+    }
+
+    private static func monthlyDiagnosticsSummary(
+        workout: CanonicalWorkout,
+        classification: String
+    ) -> MonthlyDiagnosticsSummary {
+        let evidence = workout.evidence
+        let reconstructed = evidence.flatMap {
+            WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: $0)
+        }
+        let labels = reconstructed?.intervals.map { $0.label.lowercased() } ?? []
+        let plannedSteps = evidence?.workoutPlanAudit?.plannedSteps ?? []
+        let hasOpenTail = labels.contains { $0.contains("open") || $0.contains("extra") }
+
+        let caveat: String
+        if evidence == nil {
+            caveat = "No loaded WorkoutEvidence is available for this workout."
+        } else if plannedSteps.isEmpty {
+            caveat = "WorkoutKit planned steps are missing."
+        } else if evidence?.activities.isEmpty != false {
+            caveat = "No HKWorkoutActivity rows are available."
+        } else {
+            caveat = "Debug-only classification; compare with Apple Fitness/manual and FIT exports offline."
+        }
+
+        return MonthlyDiagnosticsSummary(
+            classification: classification,
+            sourceName: workout.sourceName,
+            deviceName: workout.deviceName,
+            startDate: workout.startDate.ISO8601Format(),
+            endDate: workout.endDate.ISO8601Format(),
+            durationSeconds: workout.durationSeconds,
+            elapsedSeconds: workout.elapsedSeconds,
+            distanceMeters: workout.distanceMeters,
+            hasWorkoutKitPlan: !plannedSteps.isEmpty,
+            plannedStepCount: plannedSteps.count,
+            hkWorkoutActivityCount: evidence?.activities.count ?? 0,
+            rawWorkoutEventCount: evidence?.events.count ?? workout.intervalCount,
+            reconstructedIntervalCount: reconstructed?.intervals.count ?? 0,
+            hasOpenExtraTail: hasOpenTail,
+            evidenceLoadedAt: evidence?.loadedAt.ISO8601Format(),
+            caveat: caveat,
+            productionIntervalBehaviorChanged: false,
+            normalWorkoutUIChanged: false,
+            boundaryLogicChanged: false
+        )
+    }
+
     private static func markdownCell(_ value: String) -> String {
         value.replacingOccurrences(of: "|", with: "\\|")
     }
@@ -1300,6 +1527,61 @@ public struct ParityForceReenrichResult: Equatable, Sendable {
 private extension String {
     func withMarkdownTablePipes() -> String {
         "| \(self) |"
+    }
+}
+
+private struct MonthlyDiagnosticsSummary {
+    var classification: String
+    var sourceName: String
+    var deviceName: String?
+    var startDate: String
+    var endDate: String
+    var durationSeconds: Double
+    var elapsedSeconds: Double?
+    var distanceMeters: Double?
+    var hasWorkoutKitPlan: Bool
+    var plannedStepCount: Int
+    var hkWorkoutActivityCount: Int
+    var rawWorkoutEventCount: Int
+    var reconstructedIntervalCount: Int
+    var hasOpenExtraTail: Bool
+    var evidenceLoadedAt: String?
+    var caveat: String
+    var productionIntervalBehaviorChanged: Bool
+    var normalWorkoutUIChanged: Bool
+    var boundaryLogicChanged: Bool
+
+    var jsonObject: [String: Any] {
+        var object: [String: Any] = [
+            "classification": classification,
+            "sourceName": sourceName,
+            "startDate": startDate,
+            "endDate": endDate,
+            "durationSeconds": durationSeconds,
+            "hasWorkoutKitPlan": hasWorkoutKitPlan,
+            "plannedStepCount": plannedStepCount,
+            "hkWorkoutActivityCount": hkWorkoutActivityCount,
+            "rawWorkoutEventCount": rawWorkoutEventCount,
+            "reconstructedIntervalCount": reconstructedIntervalCount,
+            "hasOpenExtraTail": hasOpenExtraTail,
+            "caveat": caveat,
+            "productionIntervalBehaviorChanged": productionIntervalBehaviorChanged,
+            "normalWorkoutUIChanged": normalWorkoutUIChanged,
+            "boundaryLogicChanged": boundaryLogicChanged
+        ]
+        if let deviceName {
+            object["deviceName"] = deviceName
+        }
+        if let elapsedSeconds {
+            object["elapsedSeconds"] = elapsedSeconds
+        }
+        if let distanceMeters {
+            object["distanceMeters"] = distanceMeters
+        }
+        if let evidenceLoadedAt {
+            object["evidenceLoadedAt"] = evidenceLoadedAt
+        }
+        return object
     }
 }
 

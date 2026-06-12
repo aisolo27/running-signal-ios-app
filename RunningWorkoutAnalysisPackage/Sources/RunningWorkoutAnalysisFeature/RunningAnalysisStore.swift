@@ -378,6 +378,21 @@ public final class RunningAnalysisStore {
         )
     }
 
+    public func monthlyDiagnosticsJSON(containing workout: CanonicalWorkout) -> String {
+        DiagnosticsExport.monthlyDiagnosticsJSON(
+            workouts: workouts,
+            selectedMonth: workout.startDate,
+            forceReenrichResults: parityForceReenrichResults
+        )
+    }
+
+    public func monthlyDiagnosticsMarkdown(containing workout: CanonicalWorkout) -> String {
+        DiagnosticsExport.monthlyDiagnosticsMarkdown(
+            workouts: workouts,
+            selectedMonth: workout.startDate
+        )
+    }
+
     private func mergeManualFields(incoming: [CanonicalWorkout], current: [CanonicalWorkout]) -> [CanonicalWorkout] {
         let currentByID = Dictionary(uniqueKeysWithValues: current.map { ($0.id, $0) })
         return incoming.map { workout in

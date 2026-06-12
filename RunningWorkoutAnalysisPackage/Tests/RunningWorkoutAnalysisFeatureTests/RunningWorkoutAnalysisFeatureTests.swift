@@ -2113,6 +2113,138 @@ import Testing
     #expect(markdown.contains("KM 1: 5:00"))
 }
 
+@Test func monthlyDiagnosticsExportIncludesSchemaAndMultipleWorkoutRecords() throws {
+    let calendar = fixedCalendar()
+    let month = calendar.date(from: DateComponents(year: 2026, month: 6, day: 1))!
+    let simpleStart = calendar.date(from: DateComponents(year: 2026, month: 6, day: 2, hour: 7))!
+    let noPlanStart = calendar.date(from: DateComponents(year: 2026, month: 6, day: 3, hour: 8))!
+    let outsideStart = calendar.date(from: DateComponents(year: 2026, month: 5, day: 31, hour: 7))!
+
+    var simple = testWorkout(id: "simple", start: simpleStart, distanceMeters: 5_060, durationSeconds: 1_830)
+    simple.evidence = monthlyEvidence(
+        workout: simple,
+        plannedSteps: [
+            PlannedWorkoutStep(
+                index: 1,
+                label: "Work 1",
+                stepType: .work,
+                plannedGoalType: .distance,
+                plannedGoalValue: 5_000,
+                plannedGoalDisplayText: "5 km"
+            )
+        ],
+        activityEndOffset: 1_800,
+        activityDistanceMeters: 5_000,
+        distancePoints: [(0, 0), (1_800, 5_000), (1_830, 5_060)]
+    )
+
+    var noPlan = testWorkout(id: "no-plan", start: noPlanStart, distanceMeters: 1_000, durationSeconds: 360)
+    noPlan.evidence = monthlyEvidence(
+        workout: noPlan,
+        plannedSteps: [],
+        activityEndOffset: 360,
+        activityDistanceMeters: 1_000,
+        distancePoints: [(0, 0), (360, 1_000)]
+    )
+
+    let outside = testWorkout(id: "outside", start: outsideStart, distanceMeters: 5_000, durationSeconds: 1_500)
+
+    let object = try monthlyDiagnosticsObject(
+        DiagnosticsExport.monthlyDiagnosticsJSON(
+            workouts: [outside, noPlan, simple],
+            selectedMonth: month,
+            calendar: calendar,
+            generatedAt: month
+        )
+    )
+    let records = try #require(object["records"] as? [[String: Any]])
+
+    #expect(object["exportVersion"] as? Int == 1)
+    #expect(object["selectedMonth"] as? String == "2026-06")
+    #expect(object["workoutCount"] as? Int == 2)
+    #expect(object["productionIntervalBehaviorChanged"] as? Bool == false)
+    #expect(object["normalWorkoutUIChanged"] as? Bool == false)
+    #expect(object["boundaryLogicChanged"] as? Bool == false)
+    #expect(records.map { $0["workoutID"] as? String } == ["simple", "no-plan"])
+
+    let firstSummary = try #require(records[0]["diagnosticsSummary"] as? [String: Any])
+    #expect(firstSummary["classification"] as? String == "simple fixed-distance Work + Open candidate")
+    #expect(firstSummary["hasWorkoutKitPlan"] as? Bool == true)
+    #expect(firstSummary["hkWorkoutActivityCount"] as? Int == 1)
+    #expect(firstSummary["hasOpenExtraTail"] as? Bool == true)
+
+    let firstPacket = try #require(records[0]["parityPacket"] as? [String: Any])
+    #expect(firstPacket["activityBoundaryCandidateSummary"] != nil)
+    #expect(firstPacket["activityBoundaryCandidateIntervals"] != nil)
+
+    let secondSummary = try #require(records[1]["diagnosticsSummary"] as? [String: Any])
+    #expect(secondSummary["classification"] as? String == "no WorkoutKit plan")
+    #expect(secondSummary["hasWorkoutKitPlan"] as? Bool == false)
+}
+
+@Test func monthlyDiagnosticsExportHandlesEmptyMonth() throws {
+    let calendar = fixedCalendar()
+    let month = calendar.date(from: DateComponents(year: 2026, month: 2, day: 1))!
+    let object = try monthlyDiagnosticsObject(
+        DiagnosticsExport.monthlyDiagnosticsJSON(
+            workouts: [],
+            selectedMonth: month,
+            calendar: calendar,
+            generatedAt: month
+        )
+    )
+    let records = try #require(object["records"] as? [[String: Any]])
+
+    #expect(object["selectedMonth"] as? String == "2026-02")
+    #expect(object["workoutCount"] as? Int == 0)
+    #expect(records.isEmpty)
+}
+
+@Test func monthlyDiagnosticsExportClassifiesStructuredAndSameDayExtraRuns() throws {
+    let calendar = fixedCalendar()
+    let month = calendar.date(from: DateComponents(year: 2026, month: 6, day: 1))!
+    let intervalStart = calendar.date(from: DateComponents(year: 2026, month: 6, day: 3, hour: 7))!
+    let extraStart = calendar.date(from: DateComponents(year: 2026, month: 6, day: 3, hour: 18))!
+
+    var interval = testWorkout(id: "interval", start: intervalStart, distanceMeters: 2_200, durationSeconds: 900)
+    interval.evidence = monthlyEvidence(
+        workout: interval,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .time, plannedGoalValue: 300, plannedGoalDisplayText: "5 min"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, plannedGoalType: .distance, plannedGoalValue: 400, plannedGoalDisplayText: "400 m"),
+            PlannedWorkoutStep(index: 3, label: "Recovery 1", stepType: .recovery, plannedGoalType: .time, plannedGoalValue: 120, plannedGoalDisplayText: "2 min"),
+            PlannedWorkoutStep(index: 4, label: "Cooldown", stepType: .cooldown, plannedGoalType: .open, plannedGoalValue: nil, plannedGoalDisplayText: "Open")
+        ],
+        activityEndOffset: 900,
+        activityDistanceMeters: 2_200,
+        distancePoints: [(0, 0), (300, 1_000), (420, 1_400), (540, 1_600), (900, 2_200)]
+    )
+
+    var extra = testWorkout(id: "extra", start: extraStart, distanceMeters: 1_000, durationSeconds: 360)
+    extra.evidence = monthlyEvidence(
+        workout: extra,
+        plannedSteps: [],
+        activityEndOffset: 360,
+        activityDistanceMeters: 1_000,
+        distancePoints: [(0, 0), (360, 1_000)]
+    )
+
+    let object = try monthlyDiagnosticsObject(
+        DiagnosticsExport.monthlyDiagnosticsJSON(
+            workouts: [extra, interval],
+            selectedMonth: month,
+            calendar: calendar,
+            generatedAt: month
+        )
+    )
+    let records = try #require(object["records"] as? [[String: Any]])
+    let summaries = try records.map { try #require($0["diagnosticsSummary"] as? [String: Any]) }
+
+    #expect(summaries[0]["classification"] as? String == "structured interval workout")
+    #expect(summaries[1]["classification"] as? String == "duplicate/same-day extra run candidate")
+    #expect(records.map { $0["workoutID"] as? String } == ["interval", "extra"])
+}
+
 private func jun10PlannedWorkoutSteps() -> [PlannedWorkoutStep] {
     [
         PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km", plannedTargetDisplayText: "pace range 6:00-6:30 /km"),
@@ -2139,6 +2271,65 @@ private func assertInterval(
     #expect(interval.label == label)
     #expect(abs(interval.actualDurationSeconds - expectedDuration) <= durationTolerance)
     #expect(abs((interval.actualDistanceMeters ?? 0) - expectedDistance) <= distanceTolerance)
+}
+
+private func monthlyDiagnosticsObject(_ json: String) throws -> [String: Any] {
+    let data = try #require(json.data(using: .utf8))
+    return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+}
+
+private func monthlyEvidence(
+    workout: CanonicalWorkout,
+    plannedSteps: [PlannedWorkoutStep],
+    activityEndOffset: TimeInterval,
+    activityDistanceMeters: Double,
+    distancePoints: [(TimeInterval, Double)]
+) -> WorkoutEvidence {
+    WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: workout.startDate,
+        series: [
+            .distance: WorkoutMetricSeries(
+                metric: .distance,
+                unit: "m",
+                points: distancePoints.map { offset, distance in
+                    WorkoutEvidencePoint(
+                        date: workout.startDate.addingTimeInterval(offset),
+                        value: distance
+                    )
+                }
+            )
+        ],
+        events: [],
+        activities: [
+            WorkoutEvidenceActivity(
+                id: "\(workout.id)-activity",
+                activityType: "HKWorkoutActivityTypeRunning",
+                locationType: nil,
+                startDate: workout.startDate,
+                endDate: workout.startDate.addingTimeInterval(activityEndOffset),
+                durationSeconds: activityEndOffset,
+                metadataKeys: [],
+                events: [],
+                statistics: [
+                    WorkoutEvidenceActivityStatistic(
+                        quantityType: "HKQuantityTypeIdentifierDistanceWalkingRunning",
+                        unit: "m",
+                        startDate: workout.startDate,
+                        endDate: workout.startDate.addingTimeInterval(activityEndOffset),
+                        sourceCount: 1,
+                        sum: activityDistanceMeters,
+                        durationSeconds: activityEndOffset
+                    )
+                ]
+            )
+        ],
+        workoutPlanAudit: WorkoutPlanAudit(
+            status: plannedSteps.isEmpty ? .unavailable : .available,
+            planType: plannedSteps.isEmpty ? nil : "Custom workout",
+            plannedSteps: plannedSteps
+        )
+    )
 }
 
 private func fixedCalendar() -> Calendar {

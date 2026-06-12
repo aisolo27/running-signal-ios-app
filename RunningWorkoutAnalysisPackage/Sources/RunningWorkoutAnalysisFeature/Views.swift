@@ -1569,6 +1569,18 @@ struct RawHealthKitWorkoutDebugView: View {
                 }
                 .buttonStyle(.bordered)
 
+                ShareLink(item: monthlyDiagnosticsJSON) {
+                    Label("Share monthly diagnostics JSON", systemImage: "calendar.badge.clock")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                ShareLink(item: monthlyDiagnosticsMarkdown) {
+                    Label("Share monthly diagnostics summary", systemImage: "calendar")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
                 MetricGrid(items: [
                     MetricItem(title: "UUID", value: workout.id, detail: "HKWorkout"),
                     MetricItem(title: "Source", value: workout.sourceName, detail: workout.sourceID),
@@ -1682,6 +1694,14 @@ struct RawHealthKitWorkoutDebugView: View {
 
     private var parityPacketJSON: String {
         store.parityPacketJSON(for: currentWorkout)
+    }
+
+    private var monthlyDiagnosticsJSON: String {
+        store.monthlyDiagnosticsJSON(containing: currentWorkout)
+    }
+
+    private var monthlyDiagnosticsMarkdown: String {
+        store.monthlyDiagnosticsMarkdown(containing: currentWorkout)
     }
 
     private var currentWorkout: CanonicalWorkout {

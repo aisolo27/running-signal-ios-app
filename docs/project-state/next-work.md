@@ -11,6 +11,7 @@ Last updated: 2026-06-12
 - Use the completed docs-only HealthFit FIT comparison summary and lap-boundary source investigation as research evidence only. FIT lap rows are useful for investigation, but they do not approve production boundary logic or a FIT import path.
 - Review `hkworkoutactivity-boundary-scorecard.md`: `HKWorkoutActivity` improves the three drift cases and June 2, but June 4 regresses from preferred pass to temporary pass and June 3 has three special-fixture regressions.
 - Latest physical-device Raw HealthKit Debug markdown and parity packet JSON exports are archived for the active fixtures with `activityBoundaryCandidateSummary` and `activityBoundaryCandidateIntervals` beside current `reconstructedIntervals`; this is diagnostics/export-only and not production UI.
+- Use the new Raw HealthKit Debug monthly diagnostics export to capture February 2026 through June 2026 month bundles from the physical iPhone. The monthly JSON/markdown exports are debug/research-only and should be compared offline with HealthFit FIT files and Apple Fitness/manual references.
 - Collect more guard/pass examples before any production experiment. Any activity-boundary prototype must remain debug-only, use `HKWorkoutActivity` only when activity count/order reconciles with WorkoutKit planned steps, infer final Open / Extra tails from workout end when needed, and fall back to current reconstruction for missing or incompatible activity evidence.
 
 ## Priority 2
@@ -26,6 +27,7 @@ Last updated: 2026-06-12
 - Run physical-device validation only when the task needs real HealthKit proof.
 - Capture and save additional parity packets only for new validation workouts or re-checks; also save Raw HealthKit Debug markdown so raw HKWorkoutEvent rows, HKWorkoutActivity inventory rows, and planned-step comparison tables are preserved.
 - Current active fixture exports have been recaptured with activity-boundary candidate summary/rows; future captures should focus on new validation workouts or re-checks.
+- For month-scale review, use the monthly diagnostics export first, then promote individual workouts into fixture folders only after Apple Fitness/manual references are captured.
 
 ## Blocked
 
