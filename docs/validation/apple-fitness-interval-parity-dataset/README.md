@@ -43,6 +43,8 @@ Debug-only candidate boundary scoring is available in `score_candidate_boundary_
 
 `fit-comparison-summary.md` archives the completed pilot result. FIT session totals match RunSignal parity packet totals to rounding, while FIT planned-step lap rows and inferred Open tails often align more closely with Apple Fitness/manual row timing. Treat this as research evidence only; it does not approve a boundary strategy or production FIT path.
 
+`fit-lap-boundary-source-investigation.md` checks whether FIT lap boundaries can be traced to public HealthKit/WorkoutKit evidence. Current read: FIT laps map to planned step order, but not cleanly to exported HealthKit segment marker windows or parity packet distance diagnostics; the source remains inconclusive and production behavior stays unchanged.
+
 ## Next Validation Phase
 
 - Do not tune June 1 from one workout.
@@ -88,6 +90,7 @@ Debug-only candidate boundary scoring is available in `score_candidate_boundary_
 - `analyze_fixed_distance_boundaries.py`: offline docs-level harness for comparing candidate boundary timings from fixture values and Raw HealthKit Debug exports.
 - `fit-comparison-research-plan.md`: docs-only pilot plan for comparing RunSignal parity packets, Apple Fitness/manual rows, and HealthFit FIT exports.
 - `fit-comparison-summary.md`: docs/debug pilot summary of archived HealthFit FIT files, matched/unmatched files, FIT lap evidence, and research-only interpretation.
+- `fit-lap-boundary-source-investigation.md`: docs/debug investigation of whether FIT lap boundary timing maps to public HealthKit/WorkoutKit evidence.
 - `_future-fixed-distance-open-tail-template/`: reusable drop folder for future fixed-distance Work plus real Open tail examples.
 
 ## Do Not Implement Yet
