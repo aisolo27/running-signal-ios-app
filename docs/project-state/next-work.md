@@ -8,7 +8,7 @@ Last updated: 2026-06-12
 - Use the boundary pattern investigation as the current evidence summary: no public-API separator is production-safe yet.
 - Collect 5-10 additional simple fixed-distance Work + Open tail examples, prioritizing guard/pass cases similar to June 2 and June 4.
 - Keep WorkoutKit reconstructed intervals gated from normal UI; the current scorecard does not approve a production boundary strategy.
-- Optionally run the docs-only HealthFit FIT comparison pilot for the existing packet-backed running fixtures, using FIT as research evidence only and excluding strength workouts.
+- Use the completed docs-only HealthFit FIT comparison summary as research evidence only. FIT lap rows are useful for investigation, but they do not approve production boundary logic or a FIT import path.
 
 ## Priority 2
 

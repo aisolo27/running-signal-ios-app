@@ -42,6 +42,8 @@ Use `guard-case-collection-plan.md` for the next bounded collection round. The t
 
 Use `fit-comparison-research-plan.md` only as a docs/debug cross-check against the existing packet-backed running fixtures. HealthFit FIT exports may help inspect laps, splits, events, totals, or transformed evidence, but they do not approve a production boundary strategy and do not replace Apple Fitness as the visual parity reference.
 
+The completed FIT pilot is summarized in `fit-comparison-summary.md`. Its current read is that FIT session totals match RunSignal totals, while FIT lap rows and inferred Open tails often match Apple Fitness/manual row timing more closely than RunSignal's public distance-sample crossing boundaries. This is useful research evidence, but it still does not identify a production-safe public API separator or approve boundary logic changes.
+
 ## Future Examples Needed
 
 Collect more fixed-distance Work plus real Open tail examples and pass-case boundary diagnostics as new workouts become available. Each future workout should have:
