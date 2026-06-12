@@ -1,6 +1,6 @@
 # RunSignal Raw HealthKit Debug Export
 
-Generated: 2026-06-12T21:29:01Z
+Generated: 2026-06-12T22:24:48Z
 
 ## Workout
 
@@ -72,6 +72,23 @@ Planned structure source: WorkoutKit when available. Measured stats source: Heal
 
 Unavailable. RunSignal needs a WorkoutKit plan and HealthKit distance/time evidence before it can reconstruct custom workout intervals.
 
+## HKWorkoutActivity Boundary Candidate Intervals
+
+Debug-only alternate reconstruction for Parity Lab exports. These rows are not production interval logic and are not shown in the normal workout UI.
+
+| Field | Value |
+|---|---|
+| Mapping status | activity mapping ambiguous |
+| Activity count | 1 |
+| Planned step count | 0 |
+| Scoreable | No |
+| Not scoreable reason | WorkoutKit planned steps are missing. |
+| Production UI warning | HKWorkoutActivity boundary rows are debug-only Parity Lab output and are not production UI. |
+
+No activity-boundary candidate rows were produced.
+
+Caveats: debug-only, not promoted · not production interval logic · not shown in normal workout UI · FIT and Apple Fitness/manual rows are not runtime inputs
+
 ## WorkoutKit Boundary Diagnostics
 
 Unavailable. No reconstructed intervals available for boundary diagnostics.
@@ -107,6 +124,31 @@ Unavailable. No reconstructed WorkoutKit rows are available for boundary compari
 
 ```json
 {
+  "activityBoundaryCandidateIntervals" : [
+
+  ],
+  "activityBoundaryCandidateSummary" : {
+    "activityCount" : 1,
+    "boundaryLogicChanged" : false,
+    "candidateConfidence" : "activity mapping ambiguous",
+    "caveats" : [
+      "debug-only, not promoted",
+      "not production interval logic",
+      "not shown in normal workout UI",
+      "FIT and Apple Fitness\/manual rows are not runtime inputs"
+    ],
+    "isScoreable" : false,
+    "mappingStatus" : "activity mapping ambiguous",
+    "normalWorkoutUIChanged" : false,
+    "notScoreableReason" : "WorkoutKit planned steps are missing.",
+    "plannedStepCount" : 0,
+    "productionIntervalBehaviorChanged" : false,
+    "productionUIWarning" : "HKWorkoutActivity boundary rows are debug-only Parity Lab output and are not production UI.",
+    "scope" : "debug\/export-only",
+    "strategyID" : "hkworkoutactivity_boundary",
+    "usesAppleFitnessManualRuntimeLogic" : false,
+    "usesFITRuntimeTruth" : false
+  },
   "boundaryDiagnostics" : [
 
   ],
@@ -135,7 +177,7 @@ Unavailable. No reconstructed WorkoutKit rows are available for boundary compari
     "strideLength" : 70,
     "verticalOscillation" : 69
   },
-  "generatedAt" : "2026-06-12T21:29:01Z",
+  "generatedAt" : "2026-06-12T22:24:48Z",
   "plannedStepBoundaryComparisons" : [
 
   ],

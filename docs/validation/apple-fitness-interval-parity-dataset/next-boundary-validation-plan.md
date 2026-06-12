@@ -2,9 +2,9 @@
 
 Status: validation evidence needed before changing June 1 boundary logic or promoting WorkoutKit Reconstructed Intervals into the normal workout detail UI.
 
-Physical-device parity packet status: archived for April 28, May 26, June 1, June 2, June 3, June 4, June 5, and June 12. The May 26 through June 12 batch included parity packet JSON only; matching raw debug markdown exports were not included in that batch.
+Physical-device parity packet status: archived for April 28, May 26, June 1, June 2, June 3, June 4, June 5, and June 12. The latest regenerated archive includes both parity packet JSON and matching Raw HealthKit Debug markdown exports for the active fixture set.
 
-Next export status: regenerated packet-backed fixture exports are archived after the raw HKWorkoutEvent and HKWorkoutActivity boundary source enhancements. Raw HealthKit Debug and parity packet JSON now include a diagnostics/export-only activity-boundary candidate beside current reconstructed intervals, but the active physical-device fixture exports still need to be regenerated to archive those new fields. The activity-boundary scorer has been run against the current fixture set; it improves drift cases but does not prove guard/special-fixture safety.
+Next export status: regenerated packet-backed fixture exports are archived after the raw HKWorkoutEvent, HKWorkoutActivity boundary source, and activity-boundary candidate enhancements. Raw HealthKit Debug and parity packet JSON now include a diagnostics/export-only activity-boundary candidate beside current reconstructed intervals, and the latest physical-device pass confirms those fields are present on-device. The activity-boundary scorer has been run against the current fixture set; it improves drift cases but does not prove guard/special-fixture safety.
 
 ## Current Status
 
@@ -69,7 +69,7 @@ Ideal examples:
 - Any workout where Apple Fitness and RunSignal differ by more than 2 seconds.
 - Additional guard examples where current RunSignal already matches Apple Fitness, with parity packets that include boundary diagnostics.
 
-April 28 evidence and the May 26 through June 12 parity packets have been regenerated and saved with HKWorkoutActivity inventory. Regenerate them again from a physical device to capture `activityBoundaryCandidateSummary` and `activityBoundaryCandidateIntervals`. Use the complete packet-backed fixture set and current scorecards for research, not for immediate production boundary changes.
+April 28 evidence and the May 26 through June 12 parity packets have been regenerated and saved with HKWorkoutActivity inventory plus `activityBoundaryCandidateSummary` and `activityBoundaryCandidateIntervals`. Use the complete packet-backed fixture set and current scorecards for research, not for immediate production boundary changes.
 
 After 5-10 new simple Work + Open examples, rerun the scorer. If no public-API separator emerges, keep the current public reconstruction and document Apple Fitness exact-boundary matching as a limitation for this phase.
 

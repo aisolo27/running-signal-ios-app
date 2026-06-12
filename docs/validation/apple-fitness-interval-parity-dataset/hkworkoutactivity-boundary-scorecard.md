@@ -10,6 +10,8 @@ Production behavior remains unchanged. This scorecard is docs/debug-only and doe
 
 Implementation follow-up: Raw HealthKit Debug and parity packet exports now include the same candidate as diagnostics/export-only fields: `activityBoundaryCandidateSummary` and `activityBoundaryCandidateIntervals`. These fields sit beside current `reconstructedIntervals`, report mapping status and count/order reconciliation, include direct activity rows and inferred final Open / Extra tails, and repeat that the rows are not production UI.
 
+Latest physical-device export pass: the active fixture packets and Raw HealthKit Debug markdown exports were regenerated from the iPhone and archived under each fixture's `exports/runsignal-diagnostics/` folder. All active parity packets include `activityBoundaryCandidateSummary` and `activityBoundaryCandidateIntervals`; the second June 3 short run is archived under `_nonfixture-exports/2026-06-03-short-run/` and remains excluded from production approval scoring.
+
 ## Activity-Boundary Strategy Definition
 
 - Strategy id: `hkworkoutactivity_boundary`.

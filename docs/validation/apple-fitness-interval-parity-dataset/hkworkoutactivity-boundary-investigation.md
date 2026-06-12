@@ -2,7 +2,7 @@
 
 Status: docs/debug investigation. No production behavior changed.
 
-Regenerated physical-device Raw HealthKit Debug markdown and parity packet JSON are archived for the active fixture set after adding debug-only `HKWorkout.workoutActivities` export fields.
+Regenerated physical-device Raw HealthKit Debug markdown and parity packet JSON are archived for the active fixture set after adding debug-only `HKWorkout.workoutActivities` export fields and the diagnostics/export-only activity-boundary candidate fields.
 
 ## Executive Summary
 
@@ -11,6 +11,8 @@ Regenerated physical-device Raw HealthKit Debug markdown and parity packet JSON 
 Across the active packet-backed fixtures, activity end offsets align with FIT lap or Apple Fitness/manual row timing within about half a second for the known planned-step boundaries. This includes the May 26, June 1, and June 12 drift cases where RunSignal's current distance-sample crossing boundary ends several seconds early.
 
 This does not approve a production change. The activity rows expose public date windows and statistics, but the exported activity type is still generic (`HKWorkoutActivityType(rawValue: 37)`) and labels must be mapped from WorkoutKit planned-step order. The docs/debug scorer now shows the candidate improves drift cases, but June 4 regresses from preferred pass to temporary pass and June 3 has three special-fixture regressions.
+
+The latest physical-device export pass confirms the app writes `activityBoundaryCandidateSummary` and `activityBoundaryCandidateIntervals` on-device for all active fixture parity packets, and the Raw HealthKit Debug markdown exports include `## HKWorkoutActivity Boundary Candidate Intervals`. These rows remain diagnostics/export-only and are not production UI.
 
 ## Fixture Read
 
@@ -32,6 +34,7 @@ This does not approve a production change. The activity rows expose public date 
 - The structured June 3 interval fixture exports eight activities, matching the eight planned/Apple Fitness rows by order and timing.
 - The June 5 tempo/threshold fixture exports three activities matching Warmup, Work, and Cooldown. The final Open tail is not a separate activity row, so it must be inferred from workout end if activity-based reconstruction is ever tested.
 - The extra June 3 short run is archived separately under `_nonfixture-exports/2026-06-03-short-run/`; it has one activity and zero reconstructed WorkoutKit rows, so it should not be used for active fixture scoring.
+- The nonfixture June 3 short-run packet also includes the candidate summary fields, but is not scoreable because WorkoutKit planned steps are missing.
 
 ## Production Boundary
 

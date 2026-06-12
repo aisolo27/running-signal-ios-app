@@ -31,7 +31,7 @@ June 1, May 26, and June 12 remain blocked because the boundary diagnostics are 
 
 April 28 is no longer evidence unavailable. A physical-device force re-enrich on 2026-06-12 recovered rich HealthKit evidence, route data, a WorkoutKit plan, reconstructed Work/Open rows, and boundary diagnostics. Keep April 28 as an evidence-recovery and fresh-query/cache-invalidation validation fixture; do not use it as a main repeated-interval boundary tuning fixture.
 
-Physical-device parity packets are now archived for the full active fixture set: April 28, May 26, June 1, June 2, June 3, June 4, June 5, and June 12. The May 26 through June 12 batch contains parity packet JSON only; no matching raw debug markdown exports were included in that batch.
+Physical-device parity packets and matching Raw HealthKit Debug markdown exports are now archived for the full active fixture set: April 28, May 26, June 1, June 2, June 3, June 4, June 5, and June 12. The latest regenerated batch includes the debug-only activity-boundary candidate fields in both export surfaces.
 
 Debug-only candidate boundary scoring is available in `score_candidate_boundary_strategies.py`. It writes `candidate-boundary-strategy-scorecard.md`, `candidate-boundary-strategy-scorecard.json`, `hkworkoutactivity-boundary-scorecard.md`, and `hkworkoutactivity-boundary-scorecard.json`; none of these files change app behavior or approve production boundary logic.
 
@@ -51,7 +51,7 @@ Raw HealthKit Debug and parity packet exports now include debug-only boundary so
 
 Raw HealthKit Debug and parity packet exports also include a debug-only `HKWorkoutActivity` inventory from public `HKWorkout.workoutActivities` when available. Activity rows include activity type, start/end dates and offsets, duration, metadata keys, nested events, public activity statistics summaries, nearest reconstructed row, nearest planned-step alignment, nearest raw event/segment marker boundaries, and nearest distance-sample boundary references. Regenerated activity exports are archived for the active fixture set.
 
-Future Raw HealthKit Debug and parity packet exports also include a diagnostics/export-only activity-boundary candidate: `activityBoundaryCandidateSummary` and `activityBoundaryCandidateIntervals`. These fields show the `hkworkoutactivity_boundary` prototype beside current `reconstructedIntervals`, including activity/planned-step counts, mapping status, direct activity rows, inferred final Open / Extra tails, confidence labels, caveats, and not-scoreable reasons. They are explicitly not production UI and do not replace current interval reconstruction.
+Raw HealthKit Debug and parity packet exports also include a diagnostics/export-only activity-boundary candidate: `activityBoundaryCandidateSummary` and `activityBoundaryCandidateIntervals`. The latest physical-device archive confirms these fields are present on-device for all active fixture packets. These fields show the `hkworkoutactivity_boundary` prototype beside current `reconstructedIntervals`, including activity/planned-step counts, mapping status, direct activity rows, inferred final Open / Extra tails, confidence labels, caveats, and not-scoreable reasons. They are explicitly not production UI and do not replace current interval reconstruction.
 
 ## Next Validation Phase
 
@@ -63,7 +63,7 @@ Future Raw HealthKit Debug and parity packet exports also include a diagnostics/
 - June 2 remains a simple fixed-distance Work plus Open / Extra guard, but exact packet values put it in the existing temporary-pass band because the Work time is 2.4 seconds from Apple Fitness.
 - Current scorecard result: next-sample-end improves drift rows but regresses guard rows; tail-shrink-to-expected-Open uses Apple Fitness/manual expected values as an oracle, so it is not production-safe.
 - Current pattern result: packet-visible features such as target distance, tail size, interpolation fraction, overshoot, boundary adjustment, and sample gaps overlap across drift and guard cases.
-- Current collection target: regenerate the active fixture exports to archive the new activity-boundary candidate fields, then add 5-10 simple Work + Open guard examples and rerun both scorecards before considering any production boundary experiment.
+- Current collection target: add 5-10 simple Work + Open guard examples and rerun both scorecards before considering any production boundary experiment. The active fixture exports with activity-boundary candidate fields are archived.
 - Normal interval UI promotion remains blocked until this is resolved or explicitly accepted.
 
 ## How To Collect Screenshots

@@ -1,6 +1,6 @@
 # RunSignal Raw HealthKit Debug Export
 
-Generated: 2026-06-12T21:27:16Z
+Generated: 2026-06-12T22:23:18Z
 
 ## Workout
 
@@ -88,6 +88,26 @@ Planned structure source: WorkoutKit when available. Measured stats source: Heal
 
 Notes: Plan source: WorkoutKit · Window source: Plan-derived from HealthKit distance/time samples · Stats source: HealthKit samples · HealthKit segment markers: not used
 
+## HKWorkoutActivity Boundary Candidate Intervals
+
+Debug-only alternate reconstruction for Parity Lab exports. These rows are not production interval logic and are not shown in the normal workout UI.
+
+| Field | Value |
+|---|---|
+| Mapping status | mappedByPlannedStepOrder |
+| Activity count | 1 |
+| Planned step count | 1 |
+| Scoreable | Yes |
+| Not scoreable reason | n/a |
+| Production UI warning | HKWorkoutActivity boundary rows are debug-only Parity Lab output and are not production UI. |
+
+| Row | Label | Goal | Mapping | Activity | Start Offset | End Offset | Distance | Time | Candidate Confidence | Reason If Not Scoreable | Caveats |
+|---:|---|---|---|---:|---:|---:|---:|---:|---|---|---|
+| 1 | Work 1 | 5.65 km | mappedByPlannedStepOrder | 1 | 0.0 s | 2174.8 s | 5651.2 m | 2174.8 s | activity boundary direct |  | debug-only, not promoted not production interval logic not shown in normal workout UI FIT and Apple Fitness/manual rows are not runtime inputs Mapped to WorkoutKit planned step order only. Uses public HKWorkoutActivity statistics and date windows. |
+| 2 | Open / Extra | Open | inferredOpenTailFromWorkoutEnd | Inferred | 2174.8 s | 2202.7 s | 57.7 m | 27.8 s | activity boundary inferred tail |  | debug-only, not promoted not production interval logic not shown in normal workout UI FIT and Apple Fitness/manual rows are not runtime inputs Inferred from workout end minus final mapped activity boundary. No separate HKWorkoutActivity row represented this tail. |
+
+Caveats: debug-only, not promoted · not production interval logic · not shown in normal workout UI · FIT and Apple Fitness/manual rows are not runtime inputs · Activities are generic HealthKit activity windows and labels are mapped from WorkoutKit planned step order. · Missing or ambiguous activity rows must not replace current reconstruction.
+
 ## WorkoutKit Boundary Diagnostics
 
 ### Row 1: Work 1
@@ -165,6 +185,77 @@ Debug-only comparison helper for FIT/Apple boundary investigation. The FIT lap e
 
 ```json
 {
+  "activityBoundaryCandidateIntervals" : [
+    {
+      "activityIndex" : 1,
+      "candidateConfidence" : "activity boundary direct",
+      "caveats" : [
+        "debug-only, not promoted",
+        "not production interval logic",
+        "not shown in normal workout UI",
+        "FIT and Apple Fitness\/manual rows are not runtime inputs",
+        "Mapped to WorkoutKit planned step order only.",
+        "Uses public HKWorkoutActivity statistics and date windows."
+      ],
+      "distanceMeters" : 5651.165565357682,
+      "durationSeconds" : 2174.8261779546738,
+      "endOffsetSeconds" : 2174.8261779546738,
+      "index" : 1,
+      "label" : "Work 1",
+      "mappingStatus" : "mappedByPlannedStepOrder",
+      "plannedGoalDisplayText" : "5.65 km",
+      "plannedGoalType" : "distance",
+      "plannedGoalValue" : 5650,
+      "productionUIWarning" : "HKWorkoutActivity boundary rows are debug-only Parity Lab output and are not production UI.",
+      "startOffsetSeconds" : 0,
+      "stepType" : "work"
+    },
+    {
+      "candidateConfidence" : "activity boundary inferred tail",
+      "caveats" : [
+        "debug-only, not promoted",
+        "not production interval logic",
+        "not shown in normal workout UI",
+        "FIT and Apple Fitness\/manual rows are not runtime inputs",
+        "Inferred from workout end minus final mapped activity boundary.",
+        "No separate HKWorkoutActivity row represented this tail."
+      ],
+      "distanceMeters" : 57.71503306282739,
+      "durationSeconds" : 27.843677043914795,
+      "endOffsetSeconds" : 2202.6698549985886,
+      "index" : 2,
+      "label" : "Open \/ Extra",
+      "mappingStatus" : "inferredOpenTailFromWorkoutEnd",
+      "plannedGoalDisplayText" : "Open",
+      "plannedGoalType" : "open",
+      "productionUIWarning" : "HKWorkoutActivity boundary rows are debug-only Parity Lab output and are not production UI.",
+      "startOffsetSeconds" : 2174.8261779546738,
+      "stepType" : "open"
+    }
+  ],
+  "activityBoundaryCandidateSummary" : {
+    "activityCount" : 1,
+    "boundaryLogicChanged" : false,
+    "candidateConfidence" : "activity boundary direct",
+    "caveats" : [
+      "debug-only, not promoted",
+      "not production interval logic",
+      "not shown in normal workout UI",
+      "FIT and Apple Fitness\/manual rows are not runtime inputs",
+      "Activities are generic HealthKit activity windows and labels are mapped from WorkoutKit planned step order.",
+      "Missing or ambiguous activity rows must not replace current reconstruction."
+    ],
+    "isScoreable" : true,
+    "mappingStatus" : "mappedByPlannedStepOrder",
+    "normalWorkoutUIChanged" : false,
+    "plannedStepCount" : 1,
+    "productionIntervalBehaviorChanged" : false,
+    "productionUIWarning" : "HKWorkoutActivity boundary rows are debug-only Parity Lab output and are not production UI.",
+    "scope" : "debug\/export-only",
+    "strategyID" : "hkworkoutactivity_boundary",
+    "usesAppleFitnessManualRuntimeLogic" : false,
+    "usesFITRuntimeTruth" : false
+  },
   "boundaryDiagnostics" : [
     {
       "distanceBoundary" : {
@@ -240,7 +331,7 @@ Debug-only comparison helper for FIT/Apple boundary investigation. The FIT lap e
     "strideLength" : 405,
     "verticalOscillation" : 405
   },
-  "generatedAt" : "2026-06-12T21:27:16Z",
+  "generatedAt" : "2026-06-12T22:23:18Z",
   "plannedStepBoundaryComparisons" : [
     {
       "crossingDistanceSampleEndOffsetSeconds" : 2172.5804797410965,

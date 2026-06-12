@@ -1,4 +1,29 @@
 {
+  "activityBoundaryCandidateIntervals" : [
+
+  ],
+  "activityBoundaryCandidateSummary" : {
+    "activityCount" : 1,
+    "boundaryLogicChanged" : false,
+    "candidateConfidence" : "activity mapping ambiguous",
+    "caveats" : [
+      "debug-only, not promoted",
+      "not production interval logic",
+      "not shown in normal workout UI",
+      "FIT and Apple Fitness\/manual rows are not runtime inputs"
+    ],
+    "isScoreable" : false,
+    "mappingStatus" : "activity mapping ambiguous",
+    "normalWorkoutUIChanged" : false,
+    "notScoreableReason" : "WorkoutKit planned steps are missing.",
+    "plannedStepCount" : 0,
+    "productionIntervalBehaviorChanged" : false,
+    "productionUIWarning" : "HKWorkoutActivity boundary rows are debug-only Parity Lab output and are not production UI.",
+    "scope" : "debug\/export-only",
+    "strategyID" : "hkworkoutactivity_boundary",
+    "usesAppleFitnessManualRuntimeLogic" : false,
+    "usesFITRuntimeTruth" : false
+  },
   "boundarySourceWarnings" : [
     "One or more raw HKWorkoutEvent records have unavailable metadata keys.",
     "One or more HKWorkoutActivity records have unavailable metadata keys.",
@@ -7,7 +32,7 @@
     "Apple Fitness\/manual row offsets are not read by RunSignal; compare HKWorkoutActivity timing manually after physical-device export."
   ],
   "cacheStatus" : {
-    "evidenceLoadedAt" : "2026-06-12T21:28:46Z",
+    "evidenceLoadedAt" : "2026-06-12T22:24:34Z",
     "evidenceSource" : "freshQuery",
     "hasCachedEvidence" : true
   },
@@ -32,7 +57,7 @@
   "forceReenrichResult" : {
     "authorizationState" : "authorized",
     "cacheWasPresent" : true,
-    "completedAt" : "2026-06-12T21:28:54Z",
+    "completedAt" : "2026-06-12T22:24:41Z",
     "diagnosticsWarnings" : [
 
     ],
@@ -53,10 +78,10 @@
     "freshQueryReturnedWorkout" : true,
     "invalidatedCache" : true,
     "message" : "Enriched 1 HealthKit running workouts.",
-    "requestedAt" : "2026-06-12T21:28:37Z",
+    "requestedAt" : "2026-06-12T22:24:25Z",
     "workoutID" : "0DA6CAFE-C9A1-41CF-B576-1CDFF1190E73"
   },
-  "generatedAt" : "2026-06-12T21:29:01Z",
+  "generatedAt" : "2026-06-12T22:24:48Z",
   "packetVersion" : 1,
   "plannedStepBoundaryComparisons" : [
 

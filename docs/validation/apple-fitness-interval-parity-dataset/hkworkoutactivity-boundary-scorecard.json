@@ -1,4 +1,19 @@
 {
+  "archivedPhysicalDeviceExports": {
+    "activeFixtureCount": 8,
+    "allActivePacketsIncludeActivityBoundaryCandidateIntervals": true,
+    "allActivePacketsIncludeActivityBoundaryCandidateSummary": true,
+    "nonfixtureExports": [
+      {
+        "includedInProductionApprovalScoring": false,
+        "parityPacketJSONCount": 1,
+        "path": "_nonfixture-exports/2026-06-03-short-run/",
+        "rawHealthKitDebugMarkdownCount": 1
+      }
+    ],
+    "parityPacketJSONCount": 8,
+    "rawHealthKitDebugMarkdownCount": 8
+  },
   "boundaryLogicChanged": false,
   "generated": "2026-06-12",
   "nonfixtureJune3ShortRun": {

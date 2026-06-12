@@ -1,4 +1,75 @@
 {
+  "activityBoundaryCandidateIntervals" : [
+    {
+      "activityIndex" : 1,
+      "candidateConfidence" : "activity boundary direct",
+      "caveats" : [
+        "debug-only, not promoted",
+        "not production interval logic",
+        "not shown in normal workout UI",
+        "FIT and Apple Fitness\/manual rows are not runtime inputs",
+        "Mapped to WorkoutKit planned step order only.",
+        "Uses public HKWorkoutActivity statistics and date windows."
+      ],
+      "distanceMeters" : 6457.840454066021,
+      "durationSeconds" : 2563.549857020378,
+      "endOffsetSeconds" : 2563.549857020378,
+      "index" : 1,
+      "label" : "Work 1",
+      "mappingStatus" : "mappedByPlannedStepOrder",
+      "plannedGoalDisplayText" : "6.45 km",
+      "plannedGoalType" : "distance",
+      "plannedGoalValue" : 6450,
+      "productionUIWarning" : "HKWorkoutActivity boundary rows are debug-only Parity Lab output and are not production UI.",
+      "startOffsetSeconds" : 0,
+      "stepType" : "work"
+    },
+    {
+      "candidateConfidence" : "activity boundary inferred tail",
+      "caveats" : [
+        "debug-only, not promoted",
+        "not production interval logic",
+        "not shown in normal workout UI",
+        "FIT and Apple Fitness\/manual rows are not runtime inputs",
+        "Inferred from workout end minus final mapped activity boundary.",
+        "No separate HKWorkoutActivity row represented this tail."
+      ],
+      "distanceMeters" : 5.140901876764474,
+      "durationSeconds" : 7.422183990478516,
+      "endOffsetSeconds" : 2570.9720410108566,
+      "index" : 2,
+      "label" : "Open \/ Extra",
+      "mappingStatus" : "inferredOpenTailFromWorkoutEnd",
+      "plannedGoalDisplayText" : "Open",
+      "plannedGoalType" : "open",
+      "productionUIWarning" : "HKWorkoutActivity boundary rows are debug-only Parity Lab output and are not production UI.",
+      "startOffsetSeconds" : 2563.549857020378,
+      "stepType" : "open"
+    }
+  ],
+  "activityBoundaryCandidateSummary" : {
+    "activityCount" : 1,
+    "boundaryLogicChanged" : false,
+    "candidateConfidence" : "activity boundary direct",
+    "caveats" : [
+      "debug-only, not promoted",
+      "not production interval logic",
+      "not shown in normal workout UI",
+      "FIT and Apple Fitness\/manual rows are not runtime inputs",
+      "Activities are generic HealthKit activity windows and labels are mapped from WorkoutKit planned step order.",
+      "Missing or ambiguous activity rows must not replace current reconstruction."
+    ],
+    "isScoreable" : true,
+    "mappingStatus" : "mappedByPlannedStepOrder",
+    "normalWorkoutUIChanged" : false,
+    "plannedStepCount" : 1,
+    "productionIntervalBehaviorChanged" : false,
+    "productionUIWarning" : "HKWorkoutActivity boundary rows are debug-only Parity Lab output and are not production UI.",
+    "scope" : "debug\/export-only",
+    "strategyID" : "hkworkoutactivity_boundary",
+    "usesAppleFitnessManualRuntimeLogic" : false,
+    "usesFITRuntimeTruth" : false
+  },
   "boundarySourceWarnings" : [
     "One or more raw HKWorkoutEvent records have unavailable metadata keys.",
     "HKWorkoutActivity end boundaries do not align within 3 seconds of reconstructed planned-step row ends.",
@@ -6,7 +77,7 @@
     "Apple Fitness\/manual row offsets are not read by RunSignal; compare HKWorkoutActivity timing manually after physical-device export."
   ],
   "cacheStatus" : {
-    "evidenceLoadedAt" : "2026-06-12T21:24:43Z",
+    "evidenceLoadedAt" : "2026-06-12T22:22:11Z",
     "evidenceSource" : "freshQuery",
     "hasCachedEvidence" : true
   },
@@ -31,7 +102,7 @@
   "forceReenrichResult" : {
     "authorizationState" : "authorized",
     "cacheWasPresent" : true,
-    "completedAt" : "2026-06-12T21:24:51Z",
+    "completedAt" : "2026-06-12T22:22:19Z",
     "diagnosticsWarnings" : [
 
     ],
@@ -52,10 +123,10 @@
     "freshQueryReturnedWorkout" : true,
     "invalidatedCache" : true,
     "message" : "Enriched 1 HealthKit running workouts.",
-    "requestedAt" : "2026-06-12T21:24:35Z",
+    "requestedAt" : "2026-06-12T22:22:03Z",
     "workoutID" : "559663F5-6229-4079-A483-39A04BBA9385"
   },
-  "generatedAt" : "2026-06-12T21:24:58Z",
+  "generatedAt" : "2026-06-12T22:22:26Z",
   "packetVersion" : 1,
   "plannedStepBoundaryComparisons" : [
     {
