@@ -24,6 +24,7 @@ Keep active validation lean. Once a date-specific parity investigation is comple
 - `docs/validation/apple-fitness-interval-parity-dataset/apple-docs-research.md`: public API constraints for interval validation.
 - `docs/validation/apple-fitness-interval-parity-dataset/fit-comparison-summary.md`: completed docs/debug HealthFit FIT pilot summary; research evidence only, not production truth.
 - `docs/validation/apple-fitness-interval-parity-dataset/fit-lap-boundary-source-investigation.md`: docs/debug source investigation for FIT lap boundary timing versus public HealthKit/WorkoutKit evidence.
+- `docs/validation/apple-fitness-interval-parity-dataset/hkworkoutactivity-boundary-investigation.md`: current docs/debug review of regenerated physical-device `HKWorkoutActivity` boundary evidence.
 
 ## Reference Docs To Read Selectively
 

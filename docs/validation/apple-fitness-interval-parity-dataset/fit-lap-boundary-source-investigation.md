@@ -8,15 +8,15 @@ FIT files remain research evidence only. HealthKit/WorkoutKit remain RunSignal p
 
 The FIT comparison pilot shows that HealthFit FIT `lap` rows often align with Apple Fitness/manual row timing more closely than RunSignal's current public HealthKit distance-sample crossing boundary. This investigation checked whether those FIT lap boundaries can be traced to public evidence already available in the archived RunSignal diagnostics.
 
-Current answer: inconclusive, leaning not proven accessible from the existing RunSignal evidence. A new public-API lead, `HKWorkout.workoutActivities` / `HKWorkoutActivity`, is now exported for debug review but has not yet been evaluated on regenerated physical-device fixture exports.
+Updated answer after the regenerated activity pass: raw events, segment markers, and distance-sample diagnostics still do not cleanly explain FIT/Apple row timing, but public `HKWorkout.workoutActivities` / `HKWorkoutActivity` windows now align closely with FIT/Apple boundaries across the active packet-backed fixtures. See `hkworkoutactivity-boundary-investigation.md` for the activity-specific review.
 
 - FIT `session` records match RunSignal whole-workout totals to rounding.
 - FIT `lap` records map cleanly to planned WorkoutKit step order for simple Work rows and structured Warmup/Work/Recovery/Cooldown rows.
 - FIT `event` records in this pilot only expose timer start and session stop. They do not expose the step boundary transitions that explain Apple Fitness row timing.
-- Existing regenerated RunSignal exports contain raw HealthKit workout event timestamp inventory, but not the newly added `HKWorkoutActivity` inventory. Regenerate exports before reassessing source equivalence for activities.
+- Regenerated RunSignal exports now contain the newly added `HKWorkoutActivity` inventory for the active fixture set. Activity boundaries are the strongest public-API source-equivalence lead so far.
 - Saved Raw HealthKit Debug exports include derived HealthKit segment marker windows, but those segment markers do not cleanly or consistently align with FIT lap boundaries.
 - FIT lap boundaries are often close to the next HealthKit distance sample end, but not consistently enough to explain Apple Fitness/FIT row timing or approve a boundary strategy.
-- Public `HKWorkoutActivity` rows may expose additional sub-activity date windows, nested events, and per-activity statistics. This is a debug-only lead; it does not change the current production boundary rule.
+- Public `HKWorkoutActivity` rows expose sub-activity date windows, nested events, and per-activity statistics. In the current fixtures, those date windows align with FIT/Apple boundaries. This is still a debug-only lead; it does not change the current production boundary rule.
 
 This creates a worthwhile debug-only hypothesis: FIT laps may represent Apple Watch/HealthFit exported step-completion lap boundaries that are closer to Apple Fitness presentation timing than RunSignal's current sample-crossing reconstruction. It does not prove that RunSignal can access the same boundary timing from public APIs today.
 
@@ -201,11 +201,11 @@ The archived artifacts are not enough to prove source equivalence. RunSignal now
 
 This stays Raw HealthKit Debug / parity packet evidence only. It does not change normal UI or production reconstruction.
 
-## Regenerated Export Pass
+## Regenerated Raw-Event Export Pass
 
 Status: regenerated physical-device Raw HealthKit Debug markdown and parity packet JSON are archived for April 28, May 26, June 1, June 2, June 3, June 4, June 5, and June 12.
 
-These regenerated exports prove the raw HKWorkoutEvent inventory path, but they predate the `HKWorkoutActivity` inventory enhancement. Regenerate the same fixture set before updating the source-equivalence conclusion for workout activities.
+These regenerated exports prove the raw HKWorkoutEvent inventory path. The follow-up activity export pass is also complete and archived. The activity-specific conclusion lives in `hkworkoutactivity-boundary-investigation.md`; unlike raw events and segment markers, activity boundaries line up closely with FIT/Apple row timing in the current fixtures.
 
 The new export fields improve observability, but they do not prove that FIT/Apple lap timing is available as a clean public HealthKit/WorkoutKit boundary source:
 

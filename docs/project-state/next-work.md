@@ -9,15 +9,15 @@ Last updated: 2026-06-12
 - Collect 5-10 additional simple fixed-distance Work + Open tail examples, prioritizing guard/pass cases similar to June 2 and June 4.
 - Keep WorkoutKit reconstructed intervals gated from normal UI; the current scorecard does not approve a production boundary strategy.
 - Use the completed docs-only HealthFit FIT comparison summary and lap-boundary source investigation as research evidence only. FIT lap rows are useful for investigation, but they do not approve production boundary logic or a FIT import path.
-- Review the regenerated physical-device Raw HealthKit Debug exports and parity packet JSON for the packet-backed fixture set. The new raw event inventory is archived, but it still does not prove a clean public boundary source for FIT/Apple row timing.
-- Regenerate physical-device Raw HealthKit Debug markdown and parity packet JSON for the active fixture set with the new debug-only `HKWorkoutActivity` inventory. Use those exports to check whether activity boundaries align with planned steps, FIT laps, or Apple Fitness/manual rows better than current distance-sample boundaries.
+- Review `hkworkoutactivity-boundary-investigation.md`: regenerated physical-device Raw HealthKit Debug markdown and parity packet JSON are archived for the active fixture set, and `HKWorkoutActivity` boundaries align closely with FIT/Apple row timing in the current fixtures.
+- Build a docs/debug-only activity-boundary scorer or prototype before any production change. It should use `HKWorkoutActivity` only when activity count/order reconciles with WorkoutKit planned steps, infer final Open / Extra tails from workout end when needed, and fall back to current reconstruction for missing or incompatible activity evidence.
 
 ## Priority 2
 
 - Collect pass-case boundary diagnostics before changing distance-goal boundary behavior.
 - Collect more Work + Open examples that vary target distance, tail distance, and tail duration.
 - Stop this phase after 5-10 new examples and rerun the scorer; if no separator emerges, keep current public reconstruction and document the limitation.
-- Preserve the current production interval reconstruction behavior until packet-backed pass/regression evidence supports a strategy change.
+- Preserve the current production interval reconstruction behavior until packet-backed activity-boundary scoring/prototyping proves pass/regression safety.
 - Archive completed date-specific validation evidence to `docs/archive/old-validation/` after it is no longer active.
 
 ## Priority 3

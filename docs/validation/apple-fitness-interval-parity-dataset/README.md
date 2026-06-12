@@ -43,11 +43,13 @@ Debug-only candidate boundary scoring is available in `score_candidate_boundary_
 
 `fit-comparison-summary.md` archives the completed pilot result. FIT session totals match RunSignal parity packet totals to rounding, while FIT planned-step lap rows and inferred Open tails often align more closely with Apple Fitness/manual row timing. Treat this as research evidence only; it does not approve a boundary strategy or production FIT path.
 
-`fit-lap-boundary-source-investigation.md` checks whether FIT lap boundaries can be traced to public HealthKit/WorkoutKit evidence. Current read: FIT laps map to planned step order, but not cleanly to exported HealthKit segment marker windows or parity packet distance diagnostics; the source remains inconclusive and production behavior stays unchanged.
+`fit-lap-boundary-source-investigation.md` checks whether FIT lap boundaries can be traced to public HealthKit/WorkoutKit evidence. Current read: FIT laps map to planned step order, but not cleanly to exported HealthKit segment marker windows or parity packet distance diagnostics.
+
+`hkworkoutactivity-boundary-investigation.md` reviews the regenerated physical-device activity pass. Current read: `HKWorkoutActivity` boundaries align closely with FIT/Apple row timing across the active fixtures and are the strongest public-API lead so far. This still does not approve production behavior; it needs a docs/debug scorer or prototype with guard-case fallback rules first.
 
 Raw HealthKit Debug and parity packet exports now include debug-only boundary source fields: raw HKWorkoutEvent inventory rows, event metadata keys when available, segment-marker rendering use/exclusion reasons, planned-step boundary comparisons, nearest raw event and segment marker endings, distance sample boundary references, warnings, and a manual placeholder for later FIT lap end offsets. Regenerated raw-event exports for the full active fixture set are archived. These fields are for investigation only and must not be used as production interval truth.
 
-Raw HealthKit Debug and parity packet exports also include a debug-only `HKWorkoutActivity` inventory from public `HKWorkout.workoutActivities` when available. Activity rows include activity type, start/end dates and offsets, duration, metadata keys, nested events, public activity statistics summaries, nearest reconstructed row, nearest planned-step alignment, nearest raw event/segment marker boundaries, and nearest distance-sample boundary references. The active fixture exports need to be regenerated again before this activity lead can be evaluated against FIT lap and Apple Fitness/manual timing.
+Raw HealthKit Debug and parity packet exports also include a debug-only `HKWorkoutActivity` inventory from public `HKWorkout.workoutActivities` when available. Activity rows include activity type, start/end dates and offsets, duration, metadata keys, nested events, public activity statistics summaries, nearest reconstructed row, nearest planned-step alignment, nearest raw event/segment marker boundaries, and nearest distance-sample boundary references. Regenerated activity exports are archived for the active fixture set.
 
 ## Next Validation Phase
 
@@ -59,7 +61,7 @@ Raw HealthKit Debug and parity packet exports also include a debug-only `HKWorko
 - June 2 remains a simple fixed-distance Work plus Open / Extra guard, but exact packet values put it in the existing temporary-pass band because the Work time is 2.4 seconds from Apple Fitness.
 - Current scorecard result: next-sample-end improves drift rows but regresses guard rows; tail-shrink-to-expected-Open uses Apple Fitness/manual expected values as an oracle, so it is not production-safe.
 - Current pattern result: packet-visible features such as target distance, tail size, interpolation fraction, overshoot, boundary adjustment, and sample gaps overlap across drift and guard cases.
-- Current collection target: add 5-10 simple Work + Open examples, then rerun the scorer. If no public-API separator emerges, keep current public reconstruction and document the limitation.
+- Current collection target: score or prototype the activity-boundary candidate with the active fixtures, then add 5-10 simple Work + Open guard examples before considering a production boundary change.
 - Normal interval UI promotion remains blocked until this is resolved or explicitly accepted.
 
 ## How To Collect Screenshots
@@ -96,6 +98,8 @@ Raw HealthKit Debug and parity packet exports also include a debug-only `HKWorko
 - `fit-comparison-research-plan.md`: docs-only pilot plan for comparing RunSignal parity packets, Apple Fitness/manual rows, and HealthFit FIT exports.
 - `fit-comparison-summary.md`: docs/debug pilot summary of archived HealthFit FIT files, matched/unmatched files, FIT lap evidence, and research-only interpretation.
 - `fit-lap-boundary-source-investigation.md`: docs/debug investigation of whether FIT lap boundary timing maps to public HealthKit/WorkoutKit evidence.
+- `hkworkoutactivity-boundary-investigation.md`: docs/debug investigation of whether public `HKWorkoutActivity` windows explain FIT/Apple boundary timing.
+- `_nonfixture-exports/2026-06-03-short-run/`: archived second June 3 run; useful for reference, but not part of active fixture scoring.
 - `_future-fixed-distance-open-tail-template/`: reusable drop folder for future fixed-distance Work plus real Open tail examples.
 
 ## Do Not Implement Yet

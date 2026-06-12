@@ -1,6 +1,6 @@
 # RunSignal Raw HealthKit Debug Export
 
-Generated: 2026-06-12T19:45:30Z
+Generated: 2026-06-12T21:31:29Z
 
 ## Workout
 
@@ -37,6 +37,7 @@ Generated: 2026-06-12T19:45:30Z
 | Ground contact | 359 |
 | Route points | 1940 |
 | Events | 11 |
+| Workout activities | 1 |
 
 ## WorkoutKit Plan Audit
 
@@ -67,6 +68,14 @@ Debug-only inventory of public `HKWorkoutEvent` date windows and metadata keys. 
 | 9 | HKWorkoutEventType(rawValue: 7) | Unavailable | 30:56 | 32:17 | 80.4 s | Unavailable | 30:56-32:17 | 0.21 km | Overlapping segment marker | Yes |  | HealthKit segment markers are raw/debug-only and not Apple Fitness interval truth. |
 | 10 | HKWorkoutEventType(rawValue: 7) | Unavailable | 32:01 | 32:17 | 16.0 s | Unavailable | 32:01-32:17 | 0.04 km | Overlapping segment marker | Yes |  | HealthKit segment markers are raw/debug-only and not Apple Fitness interval truth. |
 | 11 | HKWorkoutEventType(rawValue: 1) | Unavailable | 32:21 | 32:21 | 0.0 s | Unavailable | Unavailable | Unavailable | Unavailable | No | Excluded from segment rendering: zero or negative duration. | No rendered segment marker candidate. |
+
+## HKWorkoutActivity Inventory
+
+Debug-only inventory of public `HKWorkout.workoutActivities` rows. These rows are not used for production interval reconstruction.
+
+| Activity | Type | Start Date | End Date | Start Offset | End Offset | Duration | Metadata Keys | Nested Events | Statistics | Aligns Planned Step | Aligned Planned Step | Nearest Reconstructed Row | Row End Delta | Apple Fitness/manual | FIT Lap | Raw Event Start | Raw Start Delta | Raw Event End | Raw End Delta | Segment Start | Segment Start Delta | Segment End | Segment End Delta | Previous Sample End | Crossing Sample End | Next Sample End |
+|---:|---|---|---|---:|---:|---:|---|---|---|---|---|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | HKWorkoutActivityType(rawValue: 37) | 2026-06-12T11:49:54Z | 2026-06-12T12:21:57Z | 0.0 s | 1923.4 s | 1923.4 s | HKElevationAscended, WOIntervalStepKeyPath | 10 event(s): HKWorkoutEventType(rawValue: 7) | ActiveEnergyBurned: sum 298.5 kcal; BasalEnergyBurned: sum 47.1 kcal; DistanceWalkingRunning: sum 5007.9 m; HeartRate: avg 126.6 bpm, min 77.0 bpm, max 138.0 bpm | No | Unavailable | Work 1 | -4.8 s | Unavailable in runtime export; compare manual fixture after export. | Manual FIT placeholder; FIT is not runtime truth. | 0.0 s | 0.0 s | 1920.5 s | -2.9 s | 0.0 s | 0.0 s | 1920.5 s | -2.9 s | 1916.0 s | 1918.5 s | 1921.1 s |
 
 ## WorkoutKit Reconstructed Intervals
 
@@ -137,15 +146,17 @@ Raw debug only. HealthKit Segment Markers must not be promoted as Apple Fitness 
 
 Debug-only comparison helper for FIT/Apple boundary investigation. The FIT lap end offset is intentionally a manual placeholder; RunSignal does not read FIT at runtime.
 
-| Row | Planned Step | Goal | RunSignal End | FIT Lap End | Nearest Raw Event End | Event Delta | Nearest Segment End | Segment Delta | Previous Sample End | Crossing Sample End | Next Sample End | Warning |
-|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| 1 | Work 1 | 5 km | 1918.5 s | Manual FIT placeholder | 1920.5 s | 2.0 s | 1920.5 s | 2.0 s | 1916.0 s | 1918.5 s | 1921.1 s |  |
-| 2 | Open / Extra | Open | 1940.8 s | Manual FIT placeholder | 1936.6 s | -4.2 s | 1936.6 s | -4.2 s | Unavailable | Unavailable | Unavailable | Nearest raw HKWorkoutEvent end is more than 3 seconds from the reconstructed row end. |
+| Row | Planned Step | Goal | RunSignal End | FIT Lap End | Nearest Raw Event End | Event Delta | Nearest Activity End | Activity Delta | Activity Type | Nearest Segment End | Segment Delta | Previous Sample End | Crossing Sample End | Next Sample End | Warning |
+|---:|---|---|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---|
+| 1 | Work 1 | 5 km | 1918.5 s | Manual FIT placeholder | 1920.5 s | 2.0 s | 1923.4 s | 4.8 s | HKWorkoutActivityType(rawValue: 37) | 1920.5 s | 2.0 s | 1916.0 s | 1918.5 s | 1921.1 s |  |
+| 2 | Open / Extra | Open | 1940.8 s | Manual FIT placeholder | 1936.6 s | -4.2 s | 1923.4 s | -17.4 s | HKWorkoutActivityType(rawValue: 37) | 1936.6 s | -4.2 s | Unavailable | Unavailable | Unavailable | Nearest raw HKWorkoutEvent end is more than 3 seconds from the reconstructed row end. |
 
 ## Boundary Source Warnings
 
 - One or more raw HKWorkoutEvent records have unavailable metadata keys.
+- HKWorkoutActivity end boundaries do not align within 3 seconds of reconstructed planned-step row ends.
 - FIT lap end offsets are not read by RunSignal; compare them manually after physical-device export.
+- Apple Fitness/manual row offsets are not read by RunSignal; compare HKWorkoutActivity timing manually after physical-device export.
 
 ## Evidence Caveats
 
@@ -209,13 +220,16 @@ Debug-only comparison helper for FIT/Apple boundary investigation. The FIT lap e
   ],
   "boundarySourceWarnings" : [
     "One or more raw HKWorkoutEvent records have unavailable metadata keys.",
-    "FIT lap end offsets are not read by RunSignal; compare them manually after physical-device export."
+    "HKWorkoutActivity end boundaries do not align within 3 seconds of reconstructed planned-step row ends.",
+    "FIT lap end offsets are not read by RunSignal; compare them manually after physical-device export.",
+    "Apple Fitness\/manual row offsets are not read by RunSignal; compare HKWorkoutActivity timing manually after physical-device export."
   ],
   "caveats" : [
 
   ],
   "evidenceCounts" : {
     "activeEnergy" : 753,
+    "activities" : 1,
     "cadence" : 754,
     "distance" : 752,
     "events" : 11,
@@ -228,7 +242,7 @@ Debug-only comparison helper for FIT/Apple boundary investigation. The FIT lap e
     "strideLength" : 358,
     "verticalOscillation" : 361
   },
-  "generatedAt" : "2026-06-12T19:45:30Z",
+  "generatedAt" : "2026-06-12T21:31:29Z",
   "plannedStepBoundaryComparisons" : [
     {
       "crossingDistanceSampleEndOffsetSeconds" : 1918.5470229387283,
@@ -241,6 +255,10 @@ Debug-only comparison helper for FIT/Apple boundary investigation. The FIT lap e
       "nearestSegmentMarkerEndOffsetSeconds" : 1920.5136184692383,
       "nearestSegmentMarkerKind" : "overlappingSegmentMarker",
       "nearestSegmentMarkerStartOffsetSeconds" : 1531.120176076889,
+      "nearestWorkoutActivityEndDeltaSeconds" : 4.844252228736877,
+      "nearestWorkoutActivityEndOffsetSeconds" : 1923.3912751674652,
+      "nearestWorkoutActivityStartOffsetSeconds" : 0,
+      "nearestWorkoutActivityType" : "HKWorkoutActivityType(rawValue: 37)",
       "nextDistanceSampleEndOffsetSeconds" : 1921.1196330785751,
       "plannedGoalDisplayText" : "5 km",
       "plannedStepLabel" : "Work 1",
@@ -258,6 +276,10 @@ Debug-only comparison helper for FIT/Apple boundary investigation. The FIT lap e
       "nearestSegmentMarkerEndOffsetSeconds" : 1936.555363535881,
       "nearestSegmentMarkerKind" : "overlappingSegmentMarker",
       "nearestSegmentMarkerStartOffsetSeconds" : 1856.1311131715775,
+      "nearestWorkoutActivityEndDeltaSeconds" : -17.365667819976807,
+      "nearestWorkoutActivityEndOffsetSeconds" : 1923.3912751674652,
+      "nearestWorkoutActivityStartOffsetSeconds" : 0,
+      "nearestWorkoutActivityType" : "HKWorkoutActivityType(rawValue: 37)",
       "plannedGoalDisplayText" : "Open",
       "reconstructedEndOffsetSeconds" : 1940.756942987442,
       "reconstructedLabel" : "Open \/ Extra",
@@ -748,6 +770,341 @@ Debug-only comparison helper for FIT/Apple boundary investigation. The FIT lap e
     "sourceName" : "Adriel’s Apple Watch",
     "startDate" : "2026-06-12T11:49:54Z"
   },
+  "workoutActivities" : [
+    {
+      "activityType" : "HKWorkoutActivityType(rawValue: 37)",
+      "alignsWithPlannedStep" : false,
+      "appleFitnessManualRowReference" : "Unavailable in runtime export; compare manual fixture after export.",
+      "crossingDistanceSampleEndOffsetSeconds" : 1918.5470229387283,
+      "durationSeconds" : 1923.3912751674652,
+      "endDate" : "2026-06-12T12:21:57Z",
+      "endOffsetSeconds" : 1923.3912751674652,
+      "events" : [
+        {
+          "durationSeconds" : 382.6612080335617,
+          "endDate" : "2026-06-12T11:56:16Z",
+          "endOffsetSeconds" : 382.6612080335617,
+          "index" : 1,
+          "metadataKeys" : [
+
+          ],
+          "renderedSegmentMarkerDistanceMeters" : 1006.8670128582658,
+          "renderedSegmentMarkerDurationSeconds" : 382.6612080335617,
+          "renderedSegmentMarkerEndOffsetSeconds" : 382.6612080335617,
+          "renderedSegmentMarkerKind" : "splitMarker",
+          "renderedSegmentMarkerStartOffsetSeconds" : 0,
+          "segmentMarkerDebugOnlyReason" : "healthKitSegmentMarkersAreDebugOnlyNotAppleFitnessTruth",
+          "startDate" : "2026-06-12T11:49:54Z",
+          "startOffsetSeconds" : 0,
+          "type" : "HKWorkoutEventType(rawValue: 7)",
+          "usedBySegmentMarkerRendering" : true
+        },
+        {
+          "durationSeconds" : 614.1962389945984,
+          "endDate" : "2026-06-12T12:00:08Z",
+          "endOffsetSeconds" : 614.1962389945984,
+          "index" : 2,
+          "metadataKeys" : [
+
+          ],
+          "renderedSegmentMarkerDistanceMeters" : 1615.4936611867922,
+          "renderedSegmentMarkerDurationSeconds" : 614.1962389945984,
+          "renderedSegmentMarkerEndOffsetSeconds" : 614.1962389945984,
+          "renderedSegmentMarkerKind" : "overlappingSegmentMarker",
+          "renderedSegmentMarkerStartOffsetSeconds" : 0,
+          "segmentMarkerDebugOnlyReason" : "healthKitSegmentMarkersAreDebugOnlyNotAppleFitnessTruth",
+          "startDate" : "2026-06-12T11:49:54Z",
+          "startOffsetSeconds" : 0,
+          "type" : "HKWorkoutEventType(rawValue: 7)",
+          "usedBySegmentMarkerRendering" : true
+        },
+        {
+          "durationSeconds" : 383.5910943746567,
+          "endDate" : "2026-06-12T12:02:40Z",
+          "endOffsetSeconds" : 766.2523024082184,
+          "index" : 3,
+          "metadataKeys" : [
+
+          ],
+          "renderedSegmentMarkerDistanceMeters" : 1000.9319390313299,
+          "renderedSegmentMarkerDurationSeconds" : 383.5910943746567,
+          "renderedSegmentMarkerEndOffsetSeconds" : 766.2523024082184,
+          "renderedSegmentMarkerKind" : "overlappingSegmentMarker",
+          "renderedSegmentMarkerStartOffsetSeconds" : 382.6612080335617,
+          "segmentMarkerDebugOnlyReason" : "healthKitSegmentMarkersAreDebugOnlyNotAppleFitnessTruth",
+          "startDate" : "2026-06-12T11:56:16Z",
+          "startOffsetSeconds" : 382.6612080335617,
+          "type" : "HKWorkoutEventType(rawValue: 7)",
+          "usedBySegmentMarkerRendering" : true
+        },
+        {
+          "durationSeconds" : 618.1870852708817,
+          "endDate" : "2026-06-12T12:10:26Z",
+          "endOffsetSeconds" : 1232.38332426548,
+          "index" : 4,
+          "metadataKeys" : [
+
+          ],
+          "renderedSegmentMarkerDistanceMeters" : 1609.2064833012607,
+          "renderedSegmentMarkerDurationSeconds" : 618.1870852708817,
+          "renderedSegmentMarkerEndOffsetSeconds" : 1232.38332426548,
+          "renderedSegmentMarkerKind" : "overlappingSegmentMarker",
+          "renderedSegmentMarkerStartOffsetSeconds" : 614.1962389945984,
+          "segmentMarkerDebugOnlyReason" : "healthKitSegmentMarkersAreDebugOnlyNotAppleFitnessTruth",
+          "startDate" : "2026-06-12T12:00:08Z",
+          "startOffsetSeconds" : 614.1962389945984,
+          "type" : "HKWorkoutEventType(rawValue: 7)",
+          "usedBySegmentMarkerRendering" : true
+        },
+        {
+          "durationSeconds" : 381.8240830898285,
+          "endDate" : "2026-06-12T12:09:02Z",
+          "endOffsetSeconds" : 1148.0763854980469,
+          "index" : 5,
+          "metadataKeys" : [
+
+          ],
+          "renderedSegmentMarkerDistanceMeters" : 999.284226662035,
+          "renderedSegmentMarkerDurationSeconds" : 381.8240830898285,
+          "renderedSegmentMarkerEndOffsetSeconds" : 1148.0763854980469,
+          "renderedSegmentMarkerKind" : "overlappingSegmentMarker",
+          "renderedSegmentMarkerStartOffsetSeconds" : 766.2523024082184,
+          "segmentMarkerDebugOnlyReason" : "healthKitSegmentMarkersAreDebugOnlyNotAppleFitnessTruth",
+          "startDate" : "2026-06-12T12:02:40Z",
+          "startOffsetSeconds" : 766.2523024082184,
+          "type" : "HKWorkoutEventType(rawValue: 7)",
+          "usedBySegmentMarkerRendering" : true
+        },
+        {
+          "durationSeconds" : 383.04379057884216,
+          "endDate" : "2026-06-12T12:15:25Z",
+          "endOffsetSeconds" : 1531.120176076889,
+          "index" : 6,
+          "metadataKeys" : [
+
+          ],
+          "renderedSegmentMarkerDistanceMeters" : 1000.0051222730467,
+          "renderedSegmentMarkerDurationSeconds" : 383.04379057884216,
+          "renderedSegmentMarkerEndOffsetSeconds" : 1531.120176076889,
+          "renderedSegmentMarkerKind" : "splitMarker",
+          "renderedSegmentMarkerStartOffsetSeconds" : 1148.0763854980469,
+          "segmentMarkerDebugOnlyReason" : "healthKitSegmentMarkersAreDebugOnlyNotAppleFitnessTruth",
+          "startDate" : "2026-06-12T12:09:02Z",
+          "startOffsetSeconds" : 1148.0763854980469,
+          "type" : "HKWorkoutEventType(rawValue: 7)",
+          "usedBySegmentMarkerRendering" : true
+        },
+        {
+          "durationSeconds" : 623.7477889060974,
+          "endDate" : "2026-06-12T12:20:50Z",
+          "endOffsetSeconds" : 1856.1311131715775,
+          "index" : 7,
+          "metadataKeys" : [
+
+          ],
+          "renderedSegmentMarkerDistanceMeters" : 1610.6066247166368,
+          "renderedSegmentMarkerDurationSeconds" : 623.7477889060974,
+          "renderedSegmentMarkerEndOffsetSeconds" : 1856.1311131715775,
+          "renderedSegmentMarkerKind" : "overlappingSegmentMarker",
+          "renderedSegmentMarkerStartOffsetSeconds" : 1232.38332426548,
+          "segmentMarkerDebugOnlyReason" : "healthKitSegmentMarkersAreDebugOnlyNotAppleFitnessTruth",
+          "startDate" : "2026-06-12T12:10:26Z",
+          "startOffsetSeconds" : 1232.38332426548,
+          "type" : "HKWorkoutEventType(rawValue: 7)",
+          "usedBySegmentMarkerRendering" : true
+        },
+        {
+          "durationSeconds" : 389.39344239234924,
+          "endDate" : "2026-06-12T12:21:54Z",
+          "endOffsetSeconds" : 1920.5136184692383,
+          "index" : 8,
+          "metadataKeys" : [
+
+          ],
+          "renderedSegmentMarkerDistanceMeters" : 999.9987363913142,
+          "renderedSegmentMarkerDurationSeconds" : 389.39344239234924,
+          "renderedSegmentMarkerEndOffsetSeconds" : 1920.5136184692383,
+          "renderedSegmentMarkerKind" : "overlappingSegmentMarker",
+          "renderedSegmentMarkerStartOffsetSeconds" : 1531.120176076889,
+          "segmentMarkerDebugOnlyReason" : "healthKitSegmentMarkersAreDebugOnlyNotAppleFitnessTruth",
+          "startDate" : "2026-06-12T12:15:25Z",
+          "startOffsetSeconds" : 1531.120176076889,
+          "type" : "HKWorkoutEventType(rawValue: 7)",
+          "usedBySegmentMarkerRendering" : true
+        },
+        {
+          "durationSeconds" : 80.42425036430359,
+          "endDate" : "2026-06-12T12:22:10Z",
+          "endOffsetSeconds" : 1936.555363535881,
+          "index" : 9,
+          "metadataKeys" : [
+
+          ],
+          "renderedSegmentMarkerDistanceMeters" : 209.50951229325437,
+          "renderedSegmentMarkerDurationSeconds" : 80.42425036430359,
+          "renderedSegmentMarkerEndOffsetSeconds" : 1936.555363535881,
+          "renderedSegmentMarkerKind" : "overlappingSegmentMarker",
+          "renderedSegmentMarkerStartOffsetSeconds" : 1856.1311131715775,
+          "segmentMarkerDebugOnlyReason" : "healthKitSegmentMarkersAreDebugOnlyNotAppleFitnessTruth",
+          "startDate" : "2026-06-12T12:20:50Z",
+          "startOffsetSeconds" : 1856.1311131715775,
+          "type" : "HKWorkoutEventType(rawValue: 7)",
+          "usedBySegmentMarkerRendering" : true
+        },
+        {
+          "durationSeconds" : 16.04174506664276,
+          "endDate" : "2026-06-12T12:22:10Z",
+          "endOffsetSeconds" : 1936.555363535881,
+          "index" : 10,
+          "metadataKeys" : [
+
+          ],
+          "renderedSegmentMarkerDistanceMeters" : 37.72924428195256,
+          "renderedSegmentMarkerDurationSeconds" : 16.04174506664276,
+          "renderedSegmentMarkerEndOffsetSeconds" : 1936.555363535881,
+          "renderedSegmentMarkerKind" : "overlappingSegmentMarker",
+          "renderedSegmentMarkerStartOffsetSeconds" : 1920.5136184692383,
+          "segmentMarkerDebugOnlyReason" : "healthKitSegmentMarkersAreDebugOnlyNotAppleFitnessTruth",
+          "startDate" : "2026-06-12T12:21:54Z",
+          "startOffsetSeconds" : 1920.5136184692383,
+          "type" : "HKWorkoutEventType(rawValue: 7)",
+          "usedBySegmentMarkerRendering" : true
+        }
+      ],
+      "eventsSummary" : "10 event(s): HKWorkoutEventType(rawValue: 7)",
+      "fitLapReference" : "Manual FIT placeholder; FIT is not runtime truth.",
+      "id" : "F7A471B4-22A3-4C38-A90C-0BE55AA511B7",
+      "index" : 1,
+      "locationType" : "HKWorkoutSessionLocationType(rawValue: 3)",
+      "metadataKeys" : [
+        "HKElevationAscended",
+        "WOIntervalStepKeyPath"
+      ],
+      "nearestRawEventEndDeltaSeconds" : -2.8776566982269287,
+      "nearestRawEventEndOffsetSeconds" : 1920.5136184692383,
+      "nearestRawEventStartDeltaSeconds" : 0,
+      "nearestRawEventStartOffsetSeconds" : 0,
+      "nearestRawEventType" : "HKWorkoutEventType(rawValue: 7)",
+      "nearestReconstructedIntervalEndDeltaSeconds" : -4.844252228736877,
+      "nearestReconstructedIntervalEndOffsetSeconds" : 1918.5470229387283,
+      "nearestReconstructedIntervalIndex" : 1,
+      "nearestReconstructedIntervalLabel" : "Work 1",
+      "nearestSegmentMarkerEndDeltaSeconds" : -2.8776566982269287,
+      "nearestSegmentMarkerEndOffsetSeconds" : 1920.5136184692383,
+      "nearestSegmentMarkerKind" : "overlappingSegmentMarker",
+      "nearestSegmentMarkerStartDeltaSeconds" : 0,
+      "nearestSegmentMarkerStartOffsetSeconds" : 0,
+      "nextDistanceSampleEndOffsetSeconds" : 1921.1196330785751,
+      "previousDistanceSampleEndOffsetSeconds" : 1915.9744114875793,
+      "startDate" : "2026-06-12T11:49:54Z",
+      "startOffsetSeconds" : 0,
+      "statistics" : [
+        {
+          "endDate" : "2026-06-12T12:21:57Z",
+          "quantityType" : "HKQuantityTypeIdentifierActiveEnergyBurned",
+          "sourceCount" : 0,
+          "startDate" : "2026-06-12T11:49:54Z",
+          "sum" : 298.4584694185275,
+          "summary" : "ActiveEnergyBurned: sum 298.5 kcal",
+          "unit" : "kcal"
+        },
+        {
+          "endDate" : "2026-06-12T12:21:57Z",
+          "quantityType" : "HKQuantityTypeIdentifierBasalEnergyBurned",
+          "sourceCount" : 0,
+          "startDate" : "2026-06-12T11:49:54Z",
+          "sum" : 47.10156558362423,
+          "summary" : "BasalEnergyBurned: sum 47.1 kcal",
+          "unit" : "kcal"
+        },
+        {
+          "endDate" : "2026-06-12T12:21:57Z",
+          "quantityType" : "HKQuantityTypeIdentifierDistanceWalkingRunning",
+          "sourceCount" : 0,
+          "startDate" : "2026-06-12T11:49:54Z",
+          "sum" : 5007.940703799874,
+          "summary" : "DistanceWalkingRunning: sum 5007.9 m",
+          "unit" : "m"
+        },
+        {
+          "average" : 126.56035379555578,
+          "endDate" : "2026-06-12T12:21:57Z",
+          "maximum" : 138,
+          "minimum" : 77,
+          "quantityType" : "HKQuantityTypeIdentifierHeartRate",
+          "sourceCount" : 0,
+          "startDate" : "2026-06-12T11:49:54Z",
+          "summary" : "HeartRate: avg 126.6 bpm, min 77.0 bpm, max 138.0 bpm",
+          "unit" : "bpm"
+        },
+        {
+          "average" : 266.170868347339,
+          "endDate" : "2026-06-12T12:21:57Z",
+          "maximum" : 288,
+          "minimum" : 237,
+          "quantityType" : "HKQuantityTypeIdentifierRunningGroundContactTime",
+          "sourceCount" : 0,
+          "startDate" : "2026-06-12T11:49:54Z",
+          "summary" : "RunningGroundContactTime: avg 266.2 ms, min 237.0 ms, max 288.0 ms",
+          "unit" : "ms"
+        },
+        {
+          "average" : 187.34362416107402,
+          "endDate" : "2026-06-12T12:21:57Z",
+          "maximum" : 216,
+          "minimum" : 52,
+          "quantityType" : "HKQuantityTypeIdentifierRunningPower",
+          "sourceCount" : 0,
+          "startDate" : "2026-06-12T11:49:54Z",
+          "summary" : "RunningPower: avg 187.3 W, min 52.0 W, max 216.0 W",
+          "unit" : "W"
+        },
+        {
+          "average" : 2.6322284703375787,
+          "endDate" : "2026-06-12T12:21:57Z",
+          "maximum" : 3.0430707040918903,
+          "minimum" : 0.3680817519593786,
+          "quantityType" : "HKQuantityTypeIdentifierRunningSpeed",
+          "sourceCount" : 0,
+          "startDate" : "2026-06-12T11:49:54Z",
+          "summary" : "RunningSpeed: avg 2.6 m\/s, min 0.4 m\/s, max 3.0 m\/s",
+          "unit" : "m\/s"
+        },
+        {
+          "average" : 0.8952100840336135,
+          "endDate" : "2026-06-12T12:21:57Z",
+          "maximum" : 1.04,
+          "minimum" : 0.77,
+          "quantityType" : "HKQuantityTypeIdentifierRunningStrideLength",
+          "sourceCount" : 0,
+          "startDate" : "2026-06-12T11:49:54Z",
+          "summary" : "RunningStrideLength: avg 0.9 m, min 0.8 m, max 1.0 m",
+          "unit" : "m"
+        },
+        {
+          "average" : 7.070833333333333,
+          "endDate" : "2026-06-12T12:21:57Z",
+          "maximum" : 8.1,
+          "minimum" : 6.4,
+          "quantityType" : "HKQuantityTypeIdentifierRunningVerticalOscillation",
+          "sourceCount" : 0,
+          "startDate" : "2026-06-12T11:49:54Z",
+          "summary" : "RunningVerticalOscillation: avg 7.1 cm, min 6.4 cm, max 8.1 cm",
+          "unit" : "cm"
+        },
+        {
+          "endDate" : "2026-06-12T12:21:57Z",
+          "quantityType" : "HKQuantityTypeIdentifierStepCount",
+          "sourceCount" : 0,
+          "startDate" : "2026-06-12T11:49:54Z",
+          "sum" : 5591.181066072764,
+          "summary" : "StepCount: sum 5591.2 count",
+          "unit" : "count"
+        }
+      ],
+      "statisticsSummary" : "ActiveEnergyBurned: sum 298.5 kcal; BasalEnergyBurned: sum 47.1 kcal; DistanceWalkingRunning: sum 5007.9 m; HeartRate: avg 126.6 bpm, min 77.0 bpm, max 138.0 bpm"
+    }
+  ],
   "workoutKitPlanAudit" : {
     "displayName" : "Friday Easy 5km",
     "planID" : "B7CBD195-881D-48E9-9A5B-7E0567FA52AB",
