@@ -4,7 +4,7 @@ Status: validation evidence needed before changing June 1 boundary logic or prom
 
 Physical-device parity packet status: archived for April 28, May 26, June 1, June 2, June 3, June 4, June 5, and June 12. The May 26 through June 12 batch included parity packet JSON only; matching raw debug markdown exports were not included in that batch.
 
-Next export status: regenerated packet-backed fixture exports are archived after the raw HKWorkoutEvent and HKWorkoutActivity boundary source enhancements. Raw HealthKit Debug and parity packet JSON include a debug-only `HKWorkoutActivity` inventory from public `HKWorkout.workoutActivities` when available, including nested events and public activity statistics summaries. The activity-boundary scorer has been run against the current fixture set; it improves drift cases but does not prove guard/special-fixture safety.
+Next export status: regenerated packet-backed fixture exports are archived after the raw HKWorkoutEvent and HKWorkoutActivity boundary source enhancements. Raw HealthKit Debug and parity packet JSON now include a diagnostics/export-only activity-boundary candidate beside current reconstructed intervals, but the active physical-device fixture exports still need to be regenerated to archive those new fields. The activity-boundary scorer has been run against the current fixture set; it improves drift cases but does not prove guard/special-fixture safety.
 
 ## Current Status
 
@@ -36,7 +36,7 @@ April 28 is now an evidence-recovery fixture: the physical-device fresh query pa
 
 Use `fixed-distance-boundary-strategy-research.md`, `analyze_fixed_distance_boundaries.py`, and `score_candidate_boundary_strategies.py` for offline strategy comparison only. No candidate strategy is approved for production yet.
 
-The debug-only candidate scorecards compare strategies side by side against the complete packet-backed fixture set without changing production interval behavior. The `hkworkoutactivity_boundary` scorecard improves May 26, June 1, and June 12, but it regresses June 4 from pass to temporary pass and has three June 3 special-fixture regressions. Its current result does not approve any production boundary strategy.
+The debug-only candidate scorecards compare strategies side by side against the complete packet-backed fixture set without changing production interval behavior. The `hkworkoutactivity_boundary` scorecard improves May 26, June 1, and June 12, but it regresses June 4 from pass to temporary pass and has three June 3 special-fixture regressions. Its current result does not approve any production boundary strategy. The app now exports the same activity-boundary idea as debug-only packet fields for future evidence review, not as production reconstruction.
 
 The boundary pattern investigation compares packet-visible drift and guard features. It did not find a production-safe public-API separator; current Work/Open error versus Apple Fitness/manual reference separates the groups offline, but cannot be used as runtime logic.
 
@@ -69,7 +69,7 @@ Ideal examples:
 - Any workout where Apple Fitness and RunSignal differ by more than 2 seconds.
 - Additional guard examples where current RunSignal already matches Apple Fitness, with parity packets that include boundary diagnostics.
 
-April 28 evidence and the May 26 through June 12 parity packets have been regenerated and saved with HKWorkoutActivity inventory. Use the complete packet-backed fixture set and current scorecards for research, not for immediate production boundary changes.
+April 28 evidence and the May 26 through June 12 parity packets have been regenerated and saved with HKWorkoutActivity inventory. Regenerate them again from a physical device to capture `activityBoundaryCandidateSummary` and `activityBoundaryCandidateIntervals`. Use the complete packet-backed fixture set and current scorecards for research, not for immediate production boundary changes.
 
 After 5-10 new simple Work + Open examples, rerun the scorer. If no public-API separator emerges, keep the current public reconstruction and document Apple Fitness exact-boundary matching as a limitation for this phase.
 
@@ -77,7 +77,7 @@ After 5-10 new simple Work + Open examples, rerun the scorer. If no public-API s
 
 April 28 and similar older runs with zero detailed evidence should stay separate from boundary tuning. The April 28 physical-device force re-enrich recovered evidence, but stale cache is not proven because `cacheWasPresent` was false. For any remaining zero-evidence workouts, use the targeted `Force re-enrich this workout` action and save a parity packet before diagnosing old-data availability or query coverage.
 
-Implemented diagnostic-only path: Raw HealthKit Debug can invalidate cached evidence for one selected workout, rerun HealthKit sample/event/WorkoutKit plan queries, and export a parity packet with explicit evidence counts and failure reasons when available. The export now also records raw HKWorkoutEvent inventory, HKWorkoutActivity inventory, and planned-step boundary source comparisons. This does not change production interval behavior.
+Implemented diagnostic-only path: Raw HealthKit Debug can invalidate cached evidence for one selected workout, rerun HealthKit sample/event/WorkoutKit plan queries, and export a parity packet with explicit evidence counts and failure reasons when available. The export now also records raw HKWorkoutEvent inventory, HKWorkoutActivity inventory, activity-boundary candidate rows, and planned-step boundary source comparisons. This does not change production interval behavior.
 
 ## Decision Goal
 

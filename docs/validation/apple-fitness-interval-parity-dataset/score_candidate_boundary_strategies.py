@@ -1005,6 +1005,10 @@ def write_activity_markdown(
         "Production behavior remains unchanged. This scorecard is docs/debug-only and does not use FIT or Apple Fitness/manual rows as runtime logic."
     )
     lines.append("")
+    lines.append(
+        "Implementation follow-up: Raw HealthKit Debug and parity packet exports now include the same candidate as diagnostics/export-only fields: `activityBoundaryCandidateSummary` and `activityBoundaryCandidateIntervals`. These fields sit beside current `reconstructedIntervals`, report mapping status and count/order reconciliation, include direct activity rows and inferred final Open / Extra tails, and repeat that the rows are not production UI."
+    )
+    lines.append("")
     lines.append("## Activity-Boundary Strategy Definition")
     lines.append("")
     lines.append("- Strategy id: `hkworkoutactivity_boundary`.")
@@ -1122,6 +1126,10 @@ def write_activity_markdown(
     lines.append("")
     lines.append(
         f"Scorecard assessment for `{candidate_summary['strategyID']}`: {candidate_summary['productionAssessment']}."
+    )
+    lines.append("")
+    lines.append(
+        "Export prototype assessment: useful for future physical-device evidence review only. It does not change current reconstruction, fixed-distance boundary logic, normal workout UI, or production approval status."
     )
     lines.append("")
     lines.append("## Explicit Risks And Rollback Notes")

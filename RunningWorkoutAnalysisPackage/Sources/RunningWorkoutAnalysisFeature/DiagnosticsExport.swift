@@ -167,6 +167,18 @@ public enum DiagnosticsExport {
 
         \(reconstructedIntervalsMarkdown(reconstructedIntervals, workout: workout))
 
+        ## HKWorkoutActivity Boundary Candidate Intervals
+
+        Debug-only alternate reconstruction for Parity Lab exports. These rows are not production interval logic and are not shown in the normal workout UI.
+
+        \(activityBoundaryCandidateMarkdown(
+            activityBoundaryCandidate(
+                plannedSteps: plannedSteps,
+                activities: evidence?.activities ?? [],
+                workout: workout
+            )
+        ))
+
         ## WorkoutKit Boundary Diagnostics
 
         \(boundaryDiagnosticsMarkdown(reconstructedIntervals, workout: workout))
@@ -224,6 +236,11 @@ public enum DiagnosticsExport {
             DerivedAnalyticsEngine.intervalCandidates(workout: workout, evidence: $0)
         } ?? []
         let plannedSteps = evidence?.workoutPlanAudit?.plannedSteps ?? []
+        let activityCandidate = activityBoundaryCandidate(
+            plannedSteps: plannedSteps,
+            activities: evidence?.activities ?? [],
+            workout: workout
+        )
         let payload = ParityPacketPayload(
             packetVersion: 1,
             generatedAt: generatedAt.ISO8601Format(),
@@ -277,6 +294,8 @@ public enum DiagnosticsExport {
             ),
             workoutKitPlanAudit: evidence?.workoutPlanAudit.map(RawDebugPlanAudit.init(audit:)),
             reconstructedIntervals: reconstructedIntervals?.intervals.map { RawDebugReconstructedInterval(interval: $0, workout: workout) } ?? [],
+            activityBoundaryCandidateSummary: activityCandidate.summary,
+            activityBoundaryCandidateIntervals: activityCandidate.rows,
             plannedStepBoundaryComparisons: plannedStepBoundaryComparisons(
                 reconstructedIntervals: reconstructedIntervals,
                 plannedSteps: plannedSteps,
@@ -371,6 +390,57 @@ public enum DiagnosticsExport {
         \(rows)
 
         Notes: \(result.notes.map(markdownCell).joined(separator: " · "))
+        """
+    }
+
+    private static func activityBoundaryCandidateMarkdown(_ candidate: RawDebugActivityBoundaryCandidate) -> String {
+        let summary = candidate.summary
+        let summaryTable = """
+        | Field | Value |
+        |---|---|
+        | Mapping status | \(markdownCell(summary.mappingStatus)) |
+        | Activity count | \(summary.activityCount) |
+        | Planned step count | \(summary.plannedStepCount) |
+        | Scoreable | \(summary.isScoreable ? "Yes" : "No") |
+        | Not scoreable reason | \(markdownCell(summary.notScoreableReason ?? "n/a")) |
+        | Production UI warning | \(markdownCell(summary.productionUIWarning)) |
+        """
+
+        guard !candidate.rows.isEmpty else {
+            return """
+            \(summaryTable)
+
+            No activity-boundary candidate rows were produced.
+
+            Caveats: \(summary.caveats.map(markdownCell).joined(separator: " · "))
+            """
+        }
+
+        let rows = candidate.rows.map { row -> String in
+            [
+                "\(row.index)",
+                markdownCell(row.label),
+                markdownCell(row.plannedGoalDisplayText),
+                markdownCell(row.mappingStatus),
+                row.activityIndex.map(String.init) ?? "Inferred",
+                row.startOffsetSeconds.map(optionalSeconds) ?? "Unavailable",
+                row.endOffsetSeconds.map(optionalSeconds) ?? "Unavailable",
+                row.distanceMeters.map(optionalMeters) ?? "Unavailable",
+                row.durationSeconds.map(optionalSeconds) ?? "Unavailable",
+                markdownCell(row.candidateConfidence),
+                markdownCell(row.notScoreableReason ?? ""),
+                markdownCell(row.caveats.joined(separator: " "))
+            ].joined(separator: " | ")
+        }.map { "| \($0) |" }.joined(separator: "\n")
+
+        return """
+        \(summaryTable)
+
+        | Row | Label | Goal | Mapping | Activity | Start Offset | End Offset | Distance | Time | Candidate Confidence | Reason If Not Scoreable | Caveats |
+        |---:|---|---|---|---:|---:|---:|---:|---:|---|---|---|
+        \(rows)
+
+        Caveats: \(summary.caveats.map(markdownCell).joined(separator: " · "))
         """
     }
 
@@ -647,6 +717,11 @@ public enum DiagnosticsExport {
         generatedAt: Date
     ) -> RawDebugPayload {
         let plannedSteps = evidence?.workoutPlanAudit?.plannedSteps ?? []
+        let activityCandidate = activityBoundaryCandidate(
+            plannedSteps: plannedSteps,
+            activities: evidence?.activities ?? [],
+            workout: workout
+        )
         return RawDebugPayload(
             generatedAt: generatedAt.ISO8601Format(),
             workout: RawDebugWorkout(
@@ -693,6 +768,8 @@ public enum DiagnosticsExport {
             ),
             workoutKitPlanAudit: evidence?.workoutPlanAudit.map(RawDebugPlanAudit.init(audit:)),
             reconstructedIntervals: reconstructedIntervals?.intervals.map { RawDebugReconstructedInterval(interval: $0, workout: workout) } ?? [],
+            activityBoundaryCandidateSummary: activityCandidate.summary,
+            activityBoundaryCandidateIntervals: activityCandidate.rows,
             boundaryDiagnostics: reconstructedIntervals?.intervals.map { RawDebugIntervalBoundaryDiagnostics(interval: $0, workout: workout) }.filter { $0.hasDiagnostics } ?? [],
             segmentMarkers: segmentMarkers.map(RawDebugSegmentMarker.init(interval:)),
             plannedStepBoundaryComparisons: plannedStepBoundaryComparisons(
@@ -786,6 +863,191 @@ public enum DiagnosticsExport {
                 workout: workout
             )
         }
+    }
+
+    private static func activityBoundaryCandidate(
+        plannedSteps: [PlannedWorkoutStep],
+        activities: [WorkoutEvidenceActivity],
+        workout: CanonicalWorkout
+    ) -> RawDebugActivityBoundaryCandidate {
+        let baseCaveats = [
+            "debug-only, not promoted",
+            "not production interval logic",
+            "not shown in normal workout UI",
+            "FIT and Apple Fitness/manual rows are not runtime inputs"
+        ]
+        let productionWarning = "HKWorkoutActivity boundary rows are debug-only Parity Lab output and are not production UI."
+
+        guard !plannedSteps.isEmpty else {
+            return RawDebugActivityBoundaryCandidate(
+                summary: RawDebugActivityBoundaryCandidateSummary(
+                    mappingStatus: "activity mapping ambiguous",
+                    activityCount: activities.count,
+                    plannedStepCount: 0,
+                    isScoreable: false,
+                    notScoreableReason: "WorkoutKit planned steps are missing.",
+                    candidateConfidence: "activity mapping ambiguous",
+                    caveats: baseCaveats,
+                    productionUIWarning: productionWarning
+                ),
+                rows: []
+            )
+        }
+
+        guard !activities.isEmpty else {
+            return RawDebugActivityBoundaryCandidate(
+                summary: RawDebugActivityBoundaryCandidateSummary(
+                    mappingStatus: "activity missing",
+                    activityCount: 0,
+                    plannedStepCount: plannedSteps.count,
+                    isScoreable: false,
+                    notScoreableReason: "HKWorkoutActivity rows are missing.",
+                    candidateConfidence: "activity missing",
+                    caveats: baseCaveats,
+                    productionUIWarning: productionWarning
+                ),
+                rows: []
+            )
+        }
+
+        guard activities.count == plannedSteps.count else {
+            return RawDebugActivityBoundaryCandidate(
+                summary: RawDebugActivityBoundaryCandidateSummary(
+                    mappingStatus: "activity/planned-step count mismatch",
+                    activityCount: activities.count,
+                    plannedStepCount: plannedSteps.count,
+                    isScoreable: false,
+                    notScoreableReason: "HKWorkoutActivity row count does not match WorkoutKit planned step count.",
+                    candidateConfidence: "activity/planned-step count mismatch",
+                    caveats: baseCaveats,
+                    productionUIWarning: productionWarning
+                ),
+                rows: []
+            )
+        }
+
+        for index in activities.indices {
+            let activity = activities[index]
+            guard let endDate = activity.endDate, endDate > activity.startDate else {
+                return RawDebugActivityBoundaryCandidate(
+                    summary: RawDebugActivityBoundaryCandidateSummary(
+                        mappingStatus: "activity mapping ambiguous",
+                        activityCount: activities.count,
+                        plannedStepCount: plannedSteps.count,
+                        isScoreable: false,
+                        notScoreableReason: "HKWorkoutActivity row \(index + 1) is missing a completed positive-duration end boundary.",
+                        candidateConfidence: "activity mapping ambiguous",
+                        caveats: baseCaveats,
+                        productionUIWarning: productionWarning
+                    ),
+                    rows: []
+                )
+            }
+            if index > 0 {
+                let previous = activities[index - 1]
+                if let previousEnd = previous.endDate, abs(activity.startDate.timeIntervalSince(previousEnd)) > 1 {
+                    return RawDebugActivityBoundaryCandidate(
+                        summary: RawDebugActivityBoundaryCandidateSummary(
+                            mappingStatus: "activity mapping ambiguous",
+                            activityCount: activities.count,
+                            plannedStepCount: plannedSteps.count,
+                            isScoreable: false,
+                            notScoreableReason: "HKWorkoutActivity row \(index + 1) is not contiguous with the prior activity.",
+                            candidateConfidence: "activity mapping ambiguous",
+                            caveats: baseCaveats,
+                            productionUIWarning: productionWarning
+                        ),
+                        rows: []
+                    )
+                }
+            }
+        }
+
+        let plannedRows = zip(plannedSteps, activities).enumerated().map { offset, pair -> RawDebugActivityBoundaryCandidateInterval in
+            let (step, activity) = pair
+            let distance = activityDistanceMeters(activity)
+            let duration = activity.endDate?.timeIntervalSince(activity.startDate) ?? activity.durationSeconds
+            let rowCaveats = baseCaveats + [
+                "Mapped to WorkoutKit planned step order only.",
+                "Uses public HKWorkoutActivity statistics and date windows."
+            ]
+            return RawDebugActivityBoundaryCandidateInterval(
+                index: step.index,
+                label: step.label,
+                stepType: step.stepType.rawValue,
+                plannedGoalType: step.plannedGoalType.rawValue,
+                plannedGoalValue: step.plannedGoalValue,
+                plannedGoalDisplayText: step.plannedGoalDisplayText,
+                activityIndex: offset + 1,
+                mappingStatus: "mappedByPlannedStepOrder",
+                startOffsetSeconds: activity.startDate.timeIntervalSince(workout.startDate),
+                endOffsetSeconds: activity.endDate?.timeIntervalSince(workout.startDate),
+                durationSeconds: duration,
+                distanceMeters: distance,
+                candidateConfidence: distance == nil ? "activity mapping ambiguous" : "activity boundary direct",
+                caveats: distance == nil ? rowCaveats + ["Activity distance statistic is unavailable."] : rowCaveats,
+                notScoreableReason: distance == nil ? "Activity distance statistic is unavailable." : nil,
+                productionUIWarning: productionWarning
+            )
+        }
+
+        let scoreablePlannedRows = plannedRows.allSatisfy { $0.notScoreableReason == nil }
+        let totalActivityDistance = plannedRows.compactMap(\.distanceMeters).reduce(0, +)
+        var rows = plannedRows
+        if let lastActivity = activities.last,
+           let lastActivityEnd = lastActivity.endDate {
+            let remainingSeconds = workout.endDate.timeIntervalSince(lastActivityEnd)
+            let remainingMeters = workout.distanceMeters.map { max(0, $0 - totalActivityDistance) }
+            if remainingSeconds > 0.5 || (remainingMeters ?? 0) > 0.5 {
+                rows.append(
+                    RawDebugActivityBoundaryCandidateInterval(
+                        index: rows.count + 1,
+                        label: "Open / Extra",
+                        stepType: DerivedIntervalLabel.open.rawValue,
+                        plannedGoalType: PlannedWorkoutGoalType.open.rawValue,
+                        plannedGoalValue: nil,
+                        plannedGoalDisplayText: "Open",
+                        activityIndex: nil,
+                        mappingStatus: "inferredOpenTailFromWorkoutEnd",
+                        startOffsetSeconds: lastActivityEnd.timeIntervalSince(workout.startDate),
+                        endOffsetSeconds: workout.endDate.timeIntervalSince(workout.startDate),
+                        durationSeconds: remainingSeconds,
+                        distanceMeters: remainingMeters,
+                        candidateConfidence: "activity boundary inferred tail",
+                        caveats: baseCaveats + [
+                            "Inferred from workout end minus final mapped activity boundary.",
+                            "No separate HKWorkoutActivity row represented this tail."
+                        ],
+                        notScoreableReason: nil,
+                        productionUIWarning: productionWarning
+                    )
+                )
+            }
+        }
+
+        let summaryCaveats = baseCaveats + [
+            "Activities are generic HealthKit activity windows and labels are mapped from WorkoutKit planned step order.",
+            "Missing or ambiguous activity rows must not replace current reconstruction."
+        ]
+        return RawDebugActivityBoundaryCandidate(
+            summary: RawDebugActivityBoundaryCandidateSummary(
+                mappingStatus: "mappedByPlannedStepOrder",
+                activityCount: activities.count,
+                plannedStepCount: plannedSteps.count,
+                isScoreable: scoreablePlannedRows,
+                notScoreableReason: scoreablePlannedRows ? nil : "One or more mapped activity rows lack required distance/time evidence.",
+                candidateConfidence: scoreablePlannedRows ? "activity boundary direct" : "activity mapping ambiguous",
+                caveats: summaryCaveats,
+                productionUIWarning: productionWarning
+            ),
+            rows: rows
+        )
+    }
+
+    private static func activityDistanceMeters(_ activity: WorkoutEvidenceActivity) -> Double? {
+        activity.statistics.first {
+            $0.quantityType == "HKQuantityTypeIdentifierDistanceWalkingRunning"
+        }?.sum
     }
 
     fileprivate static func nearestRawEvent(
@@ -1049,6 +1311,8 @@ private struct RawDebugPayload: Codable {
     var workoutActivities: [RawDebugWorkoutActivity]
     var workoutKitPlanAudit: RawDebugPlanAudit?
     var reconstructedIntervals: [RawDebugReconstructedInterval]
+    var activityBoundaryCandidateSummary: RawDebugActivityBoundaryCandidateSummary
+    var activityBoundaryCandidateIntervals: [RawDebugActivityBoundaryCandidateInterval]
     var boundaryDiagnostics: [RawDebugIntervalBoundaryDiagnostics]
     var segmentMarkers: [RawDebugSegmentMarker]
     var plannedStepBoundaryComparisons: [RawDebugPlannedStepBoundaryComparison]
@@ -1068,6 +1332,8 @@ private struct ParityPacketPayload: Codable {
     var workoutActivities: [RawDebugWorkoutActivity]
     var workoutKitPlanAudit: RawDebugPlanAudit?
     var reconstructedIntervals: [RawDebugReconstructedInterval]
+    var activityBoundaryCandidateSummary: RawDebugActivityBoundaryCandidateSummary
+    var activityBoundaryCandidateIntervals: [RawDebugActivityBoundaryCandidateInterval]
     var plannedStepBoundaryComparisons: [RawDebugPlannedStepBoundaryComparison]
     var boundarySourceWarnings: [String]
     var diagnosticsWarnings: [String]
@@ -1196,6 +1462,48 @@ private struct RawDebugWorkoutEvent: Codable {
             excludedOrFilteredReason = "noDerivedSegmentMarker"
         }
     }
+}
+
+private struct RawDebugActivityBoundaryCandidate {
+    var summary: RawDebugActivityBoundaryCandidateSummary
+    var rows: [RawDebugActivityBoundaryCandidateInterval]
+}
+
+private struct RawDebugActivityBoundaryCandidateSummary: Codable {
+    var strategyID: String = "hkworkoutactivity_boundary"
+    var scope: String = "debug/export-only"
+    var mappingStatus: String
+    var activityCount: Int
+    var plannedStepCount: Int
+    var isScoreable: Bool
+    var notScoreableReason: String?
+    var candidateConfidence: String
+    var caveats: [String]
+    var productionUIWarning: String
+    var productionIntervalBehaviorChanged: Bool = false
+    var normalWorkoutUIChanged: Bool = false
+    var boundaryLogicChanged: Bool = false
+    var usesFITRuntimeTruth: Bool = false
+    var usesAppleFitnessManualRuntimeLogic: Bool = false
+}
+
+private struct RawDebugActivityBoundaryCandidateInterval: Codable {
+    var index: Int
+    var label: String
+    var stepType: String
+    var plannedGoalType: String
+    var plannedGoalValue: Double?
+    var plannedGoalDisplayText: String
+    var activityIndex: Int?
+    var mappingStatus: String
+    var startOffsetSeconds: Double?
+    var endOffsetSeconds: Double?
+    var durationSeconds: Double?
+    var distanceMeters: Double?
+    var candidateConfidence: String
+    var caveats: [String]
+    var notScoreableReason: String?
+    var productionUIWarning: String
 }
 
 private struct RawDebugWorkoutActivity: Codable {

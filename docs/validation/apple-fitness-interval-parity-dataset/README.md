@@ -51,6 +51,8 @@ Raw HealthKit Debug and parity packet exports now include debug-only boundary so
 
 Raw HealthKit Debug and parity packet exports also include a debug-only `HKWorkoutActivity` inventory from public `HKWorkout.workoutActivities` when available. Activity rows include activity type, start/end dates and offsets, duration, metadata keys, nested events, public activity statistics summaries, nearest reconstructed row, nearest planned-step alignment, nearest raw event/segment marker boundaries, and nearest distance-sample boundary references. Regenerated activity exports are archived for the active fixture set.
 
+Future Raw HealthKit Debug and parity packet exports also include a diagnostics/export-only activity-boundary candidate: `activityBoundaryCandidateSummary` and `activityBoundaryCandidateIntervals`. These fields show the `hkworkoutactivity_boundary` prototype beside current `reconstructedIntervals`, including activity/planned-step counts, mapping status, direct activity rows, inferred final Open / Extra tails, confidence labels, caveats, and not-scoreable reasons. They are explicitly not production UI and do not replace current interval reconstruction.
+
 ## Next Validation Phase
 
 - Do not tune June 1 from one workout.
@@ -61,7 +63,7 @@ Raw HealthKit Debug and parity packet exports also include a debug-only `HKWorko
 - June 2 remains a simple fixed-distance Work plus Open / Extra guard, but exact packet values put it in the existing temporary-pass band because the Work time is 2.4 seconds from Apple Fitness.
 - Current scorecard result: next-sample-end improves drift rows but regresses guard rows; tail-shrink-to-expected-Open uses Apple Fitness/manual expected values as an oracle, so it is not production-safe.
 - Current pattern result: packet-visible features such as target distance, tail size, interpolation fraction, overshoot, boundary adjustment, and sample gaps overlap across drift and guard cases.
-- Current collection target: add 5-10 simple Work + Open guard examples, then rerun both scorecards before considering any debug-only prototype or production boundary experiment.
+- Current collection target: regenerate the active fixture exports to archive the new activity-boundary candidate fields, then add 5-10 simple Work + Open guard examples and rerun both scorecards before considering any production boundary experiment.
 - Normal interval UI promotion remains blocked until this is resolved or explicitly accepted.
 
 ## How To Collect Screenshots
@@ -74,7 +76,7 @@ Raw HealthKit Debug and parity packet exports also include a debug-only `HKWorko
 6. Screenshot the normal workout detail.
 7. Open Raw HealthKit Debug.
 8. Screenshot WorkoutKit Plan Audit, WorkoutKit Reconstructed Intervals, and HealthKit Segment Markers.
-9. Save Raw HealthKit Debug markdown into `exports/runsignal-diagnostics/`, including Raw HKWorkoutEvent Inventory, HKWorkoutActivity Inventory, Planned Step Boundary Comparison, Boundary Source Warnings, and the JSON payload.
+9. Save Raw HealthKit Debug markdown into `exports/runsignal-diagnostics/`, including Raw HKWorkoutEvent Inventory, HKWorkoutActivity Inventory, HKWorkoutActivity Boundary Candidate Intervals, Planned Step Boundary Comparison, Boundary Source Warnings, and the JSON payload.
 10. Manually fill `expected_apple_fitness_intervals.md` from Apple Fitness.
 
 ## File Roles
@@ -90,6 +92,7 @@ Raw HealthKit Debug and parity packet exports also include a debug-only `HKWorko
 - `exports/healthfit-fit/`: optional HealthFit FIT exports for docs/debug comparison only. Include only running workouts, such as `Outdoor Running` or `Indoor Running`, and exclude `Strength Training`.
 - `runsignal-parity-packet-YYYY-MM-DD.json`: physical-device force re-enrich parity packet when available.
 - Raw boundary source export fields: debug-only raw HKWorkoutEvent inventory, HKWorkoutActivity inventory, and planned-step comparison data used to compare public event/sample/activity evidence against FIT/Apple boundary timing.
+- Activity-boundary candidate export fields: `activityBoundaryCandidateSummary` and `activityBoundaryCandidateIntervals`, diagnostics/export-only rows for comparing public HKWorkoutActivity windows with current reconstruction.
 - `interval-parity-fixture.json`: cross-workout visible Apple Fitness and RunSignal observed values used by the lightweight validator.
 - `validate_interval_parity.py`: docs-level harness for checking current pass/temporary/blocker status without parsing screenshots.
 - `next-boundary-validation-plan.md`: evidence plan for fixed-distance Work plus real Open tail boundary validation.

@@ -8,6 +8,8 @@ Generated: 2026-06-12
 
 Production behavior remains unchanged. This scorecard is docs/debug-only and does not use FIT or Apple Fitness/manual rows as runtime logic.
 
+Implementation follow-up: Raw HealthKit Debug and parity packet exports now include the same candidate as diagnostics/export-only fields: `activityBoundaryCandidateSummary` and `activityBoundaryCandidateIntervals`. These fields sit beside current `reconstructedIntervals`, report mapping status and count/order reconciliation, include direct activity rows and inferred final Open / Extra tails, and repeat that the rows are not production UI.
+
 ## Activity-Boundary Strategy Definition
 
 - Strategy id: `hkworkoutactivity_boundary`.
@@ -102,6 +104,8 @@ The existing scorecard still blocks previous candidates: `next_sample_end` impro
 Production experiment justified: no. The candidate improved drift fixtures (improved; statuses: pass, temporary pass; improved; statuses: pass, temporary pass; improved; statuses: pass, temporary pass) and preserved/improved June 2, but June 4 regressed from current pass to temporary pass (regressed; statuses: pass, temporary pass). June 3 also has three status/error-score regressions. The safest next step is a debug-only prototype or more guard collection, not production boundary replacement.
 
 Scorecard assessment for `hkworkoutactivity_boundary`: debug-only lead; not production-safe until more guard data and fallback rules are validated.
+
+Export prototype assessment: useful for future physical-device evidence review only. It does not change current reconstruction, fixed-distance boundary logic, normal workout UI, or production approval status.
 
 ## Explicit Risks And Rollback Notes
 
