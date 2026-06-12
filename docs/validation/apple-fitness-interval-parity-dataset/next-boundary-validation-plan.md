@@ -38,6 +38,8 @@ The debug-only candidate scorecard compares strategies side by side against the 
 
 The boundary pattern investigation compares packet-visible drift and guard features. It did not find a production-safe public-API separator; current Work/Open error versus Apple Fitness/manual reference separates the groups offline, but cannot be used as runtime logic.
 
+Use `guard-case-collection-plan.md` for the next bounded collection round. The target is 5-10 additional simple fixed-distance Work + real Open / Extra tail examples, prioritizing guard cases that current RunSignal already matches closely.
+
 ## Future Examples Needed
 
 Collect more fixed-distance Work plus real Open tail examples and pass-case boundary diagnostics as new workouts become available. Each future workout should have:
@@ -59,6 +61,8 @@ Ideal examples:
 - Additional guard examples where current RunSignal already matches Apple Fitness, with parity packets that include boundary diagnostics.
 
 April 28 evidence and the May 26 through June 12 parity packets have been regenerated and saved. Use the complete packet-backed fixture set and current scorecard for future debug-only scoring, not for immediate production boundary changes.
+
+After 5-10 new simple Work + Open examples, rerun the scorer. If no public-API separator emerges, keep the current public reconstruction and document Apple Fitness exact-boundary matching as a limitation for this phase.
 
 ## Older Evidence Reload Track
 

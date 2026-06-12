@@ -6,12 +6,14 @@ Last updated: 2026-06-12
 
 - Review the debug-only candidate boundary scorecard and decide whether more evidence is needed before any boundary logic experiment.
 - Use the boundary pattern investigation as the current evidence summary: no public-API separator is production-safe yet.
+- Collect 5-10 additional simple fixed-distance Work + Open tail examples, prioritizing guard/pass cases similar to June 2 and June 4.
 - Keep WorkoutKit reconstructed intervals gated from normal UI; the current scorecard does not approve a production boundary strategy.
 
 ## Priority 2
 
 - Collect pass-case boundary diagnostics before changing distance-goal boundary behavior.
 - Collect more Work + Open examples that vary target distance, tail distance, and tail duration.
+- Stop this phase after 5-10 new examples and rerun the scorer; if no separator emerges, keep current public reconstruction and document the limitation.
 - Preserve the current production interval reconstruction behavior until packet-backed pass/regression evidence supports a strategy change.
 - Archive completed date-specific validation evidence to `docs/archive/old-validation/` after it is no longer active.
 

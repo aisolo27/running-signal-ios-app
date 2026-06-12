@@ -37,6 +37,8 @@ Debug-only candidate boundary scoring is available in `score_candidate_boundary_
 
 `boundary-pattern-investigation.md` compares drift and guard packet features. Its current conclusion is that no public-API observable feature cleanly separates drift cases from guard cases, so production boundary behavior should remain unchanged.
 
+`guard-case-collection-plan.md` defines the next physical-iPhone collection target: 5-10 more simple fixed-distance Work + real Open / Extra tail examples, with priority on guard/pass cases and a clear stopping point before any production boundary experiment.
+
 ## Next Validation Phase
 
 - Do not tune June 1 from one workout.
@@ -47,6 +49,7 @@ Debug-only candidate boundary scoring is available in `score_candidate_boundary_
 - June 2 remains a simple fixed-distance Work plus Open / Extra guard, but exact packet values put it in the existing temporary-pass band because the Work time is 2.4 seconds from Apple Fitness.
 - Current scorecard result: next-sample-end improves drift rows but regresses guard rows; tail-shrink-to-expected-Open uses Apple Fitness/manual expected values as an oracle, so it is not production-safe.
 - Current pattern result: packet-visible features such as target distance, tail size, interpolation fraction, overshoot, boundary adjustment, and sample gaps overlap across drift and guard cases.
+- Current collection target: add 5-10 simple Work + Open examples, then rerun the scorer. If no public-API separator emerges, keep current public reconstruction and document the limitation.
 - Normal interval UI promotion remains blocked until this is resolved or explicitly accepted.
 
 ## How To Collect Screenshots

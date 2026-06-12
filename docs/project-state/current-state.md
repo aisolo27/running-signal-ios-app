@@ -33,6 +33,7 @@ RunSignal is a native iPhone SwiftUI app focused on Apple Fitness parity for com
 - Physical-device parity packets are archived for the full active validation set: April 28, May 26, June 1, June 2, June 3, June 4, June 5, and June 12.
 - Debug-only candidate boundary scoring is available at `docs/validation/apple-fitness-interval-parity-dataset/score_candidate_boundary_strategies.py`; the generated scorecard does not approve any production boundary strategy.
 - Boundary pattern investigation found no public-API observable separator that explains drift cases without regressing guard cases; production boundary behavior remains unchanged.
+- Guard-case collection now has a bounded plan: collect 5-10 more simple fixed-distance Work + Open tail examples before revisiting production boundary logic.
 - Keep only the latest active parity investigation, latest active evidence review, and current blocker in active validation docs; archive completed date-specific evidence to `docs/archive/old-validation/`.
 - Real HealthKit proof requires a physical iPhone; Simulator checks prove UI/sample-data behavior only.
 
@@ -52,6 +53,7 @@ RunSignal is a native iPhone SwiftUI app focused on Apple Fitness parity for com
 - For parity work, use `docs/validation/apple-fitness-interval-parity-dataset/README.md`, `analysis-summary.md`, and `next-boundary-validation-plan.md`.
 - Review `candidate-boundary-strategy-scorecard.md` before changing boundary logic; the current scorecard says no candidate is production-safe.
 - Use `boundary-pattern-investigation.md` for the current drift-vs-guard feature comparison before proposing any boundary experiment.
+- Use `guard-case-collection-plan.md` for the physical-iPhone evidence checklist and stopping criteria.
 - Keep `docs/project-state/current-state.md` and `docs/project-state/next-work.md` updated when project direction, validation status, known limitations, or next steps change.
 
 ## Read Only When Relevant
