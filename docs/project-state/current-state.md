@@ -31,12 +31,12 @@ RunSignal is a native iPhone SwiftUI app focused on Apple Fitness parity for com
 - Raw HealthKit Debug now has diagnostics-only Parity Lab infrastructure: selected-workout force re-enrich invalidates only that workout's cached evidence, reruns the existing HealthKit/WorkoutKit evidence queries, and can export a stable parity packet JSON with cache status, fresh-query result, counts, plan audit, reconstructed intervals, and warnings.
 - April 28 physical-device force re-enrich recovered rich HealthKit evidence and a WorkoutKit plan; it is now an evidence-recovery / fresh-query validation fixture, not an evidence-unavailable blocker.
 - Physical-device parity packets are archived for the full active validation set: April 28, May 26, June 1, June 2, June 3, June 4, June 5, and June 12.
-- Debug-only candidate boundary scoring is available at `docs/validation/apple-fitness-interval-parity-dataset/score_candidate_boundary_strategies.py`; the generated scorecard does not approve any production boundary strategy.
+- Debug-only candidate boundary scoring is available at `docs/validation/apple-fitness-interval-parity-dataset/score_candidate_boundary_strategies.py`; the generated scorecards do not approve any production boundary strategy.
 - Boundary pattern investigation found no public-API observable separator that explains drift cases without regressing guard cases; production boundary behavior remains unchanged.
 - Guard-case collection now has a bounded plan: collect 5-10 more simple fixed-distance Work + Open tail examples before revisiting production boundary logic.
 - A HealthFit FIT comparison pilot is documented and archived for the same packet-backed running fixtures. FIT exports remain research-only and are not a production import path, HealthFit dependency, or replacement for Apple Fitness visual parity. The pilot found FIT session totals match RunSignal totals, while FIT lap rows and inferred Open tails often align more closely with Apple Fitness/manual row timing. A follow-up source investigation found FIT laps map to planned step order, but not cleanly to existing exported HealthKit segment marker windows or parity packet distance diagnostics.
 - Raw HealthKit Debug and parity packet exports now include debug-only boundary source diagnostics: raw HKWorkoutEvent inventories, metadata keys when available, planned-step boundary comparisons, nearest raw event and segment marker endings, distance sample boundary references, and warnings. Regenerated physical-device exports are archived for the full active fixture set. The new raw events do not prove FIT/Apple lap timing is directly available as a clean public HealthKit/WorkoutKit boundary source.
-- Raw HealthKit Debug and parity packet exports now also include a debug-only `HKWorkout.workoutActivities` inventory when public `HKWorkoutActivity` rows are available. Regenerated physical-device exports are archived for the full active fixture set. `HKWorkoutActivity` boundaries are now the strongest public-API lead: they align closely with FIT/Apple row timing across the packet-backed fixtures, including the May 26, June 1, and June 12 drift cases. This remains a docs/debug lead only; production reconstruction is unchanged until activity-based mapping is scored or prototyped against guard cases and safe fallback rules.
+- Raw HealthKit Debug and parity packet exports now also include a debug-only `HKWorkout.workoutActivities` inventory when public `HKWorkoutActivity` rows are available. Regenerated physical-device exports are archived for the full active fixture set. `HKWorkoutActivity` boundaries are now the strongest public-API lead: the debug scorer improves the May 26, June 1, and June 12 drift cases, but June 4 regresses from preferred pass to temporary pass and June 3 has three special-fixture regressions. This remains docs/debug-only; production reconstruction is unchanged.
 - Keep only the latest active parity investigation, latest active evidence review, and current blocker in active validation docs; archive completed date-specific evidence to `docs/archive/old-validation/`.
 - Real HealthKit proof requires a physical iPhone; Simulator checks prove UI/sample-data behavior only.
 
@@ -46,7 +46,7 @@ RunSignal is a native iPhone SwiftUI app focused on Apple Fitness parity for com
 - Apple Fitness interval row boundaries may use private smoothing or presentation rules that public HealthKit/WorkoutKit APIs do not expose.
 - Fixed-distance Work plus real Open tail drift now has three research examples across 6.45 km and 5.00 km goals; no boundary strategy is approved for production yet.
 - WorkoutKit plan data can be unavailable or throw and must stay optional.
-- Physical-device parity packet collection has succeeded for the active fixture set; candidate boundary scoring remains debug-only and no production boundary strategy is approved.
+- Physical-device parity packet collection has succeeded for the active fixture set; candidate boundary scoring remains debug-only and no production boundary strategy is approved. Activity-boundary scoring needs more guard coverage before any production experiment.
 - Mechanics, trends, and stronger run-type claims remain confidence-gated.
 
 ## Current Next Steps
@@ -54,11 +54,11 @@ RunSignal is a native iPhone SwiftUI app focused on Apple Fitness parity for com
 - Use `docs/project-state/next-work.md` for the short current priority list.
 - Continue Step 7 from `docs/milestones/09-healthkit-evidence-contract.md` only when the task is milestone work.
 - For parity work, use `docs/validation/apple-fitness-interval-parity-dataset/README.md`, `analysis-summary.md`, and `next-boundary-validation-plan.md`.
-- Review `candidate-boundary-strategy-scorecard.md` before changing boundary logic; the current scorecard says no candidate is production-safe.
+- Review `candidate-boundary-strategy-scorecard.md` and `hkworkoutactivity-boundary-scorecard.md` before changing boundary logic; the current scorecards say no candidate is production-safe.
 - Use `boundary-pattern-investigation.md` for the current drift-vs-guard feature comparison before proposing any boundary experiment.
 - Use `guard-case-collection-plan.md` for the physical-iPhone evidence checklist and stopping criteria.
-- Use `fit-comparison-summary.md`, `fit-lap-boundary-source-investigation.md`, and `hkworkoutactivity-boundary-investigation.md` for completed docs/debug boundary-source work. FIT evidence and the new activity export fields can inform investigation, but they do not approve boundary logic or production app changes.
-- Next parity step: build a docs/debug-only activity-boundary scorer or prototype, using `HKWorkoutActivity` only when activities reconcile with WorkoutKit planned-step order and falling back to current reconstruction when they do not.
+- Use `fit-comparison-summary.md`, `fit-lap-boundary-source-investigation.md`, `hkworkoutactivity-boundary-investigation.md`, and `hkworkoutactivity-boundary-scorecard.md` for completed docs/debug boundary-source work. FIT evidence and activity export fields can inform investigation, but they do not approve boundary logic or production app changes.
+- Next parity step: collect more Work + Open guard fixtures and, if needed, build only a debug-only activity-boundary prototype with explicit safe fallback rules.
 - Keep `docs/project-state/current-state.md` and `docs/project-state/next-work.md` updated when project direction, validation status, known limitations, or next steps change.
 
 ## Read Only When Relevant

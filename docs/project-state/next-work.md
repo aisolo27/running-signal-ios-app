@@ -4,20 +4,20 @@ Last updated: 2026-06-12
 
 ## Priority 1
 
-- Review the debug-only candidate boundary scorecard and decide whether more evidence is needed before any boundary logic experiment.
+- Review the debug-only candidate boundary scorecards and decide whether more evidence is needed before any boundary logic experiment.
 - Use the boundary pattern investigation as the current evidence summary: no public-API separator is production-safe yet.
 - Collect 5-10 additional simple fixed-distance Work + Open tail examples, prioritizing guard/pass cases similar to June 2 and June 4.
-- Keep WorkoutKit reconstructed intervals gated from normal UI; the current scorecard does not approve a production boundary strategy.
+- Keep WorkoutKit reconstructed intervals gated from normal UI; the current scorecards do not approve a production boundary strategy.
 - Use the completed docs-only HealthFit FIT comparison summary and lap-boundary source investigation as research evidence only. FIT lap rows are useful for investigation, but they do not approve production boundary logic or a FIT import path.
-- Review `hkworkoutactivity-boundary-investigation.md`: regenerated physical-device Raw HealthKit Debug markdown and parity packet JSON are archived for the active fixture set, and `HKWorkoutActivity` boundaries align closely with FIT/Apple row timing in the current fixtures.
-- Build a docs/debug-only activity-boundary scorer or prototype before any production change. It should use `HKWorkoutActivity` only when activity count/order reconciles with WorkoutKit planned steps, infer final Open / Extra tails from workout end when needed, and fall back to current reconstruction for missing or incompatible activity evidence.
+- Review `hkworkoutactivity-boundary-scorecard.md`: `HKWorkoutActivity` improves the three drift cases and June 2, but June 4 regresses from preferred pass to temporary pass and June 3 has three special-fixture regressions.
+- Collect more guard/pass examples before any production experiment. Any activity-boundary prototype should remain debug-only, use `HKWorkoutActivity` only when activity count/order reconciles with WorkoutKit planned steps, infer final Open / Extra tails from workout end when needed, and fall back to current reconstruction for missing or incompatible activity evidence.
 
 ## Priority 2
 
 - Collect pass-case boundary diagnostics before changing distance-goal boundary behavior.
 - Collect more Work + Open examples that vary target distance, tail distance, and tail duration.
 - Stop this phase after 5-10 new examples and rerun the scorer; if no separator emerges, keep current public reconstruction and document the limitation.
-- Preserve the current production interval reconstruction behavior until packet-backed activity-boundary scoring/prototyping proves pass/regression safety.
+- Preserve the current production interval reconstruction behavior until packet-backed activity-boundary scoring/prototyping proves pass/regression safety across more guard examples.
 - Archive completed date-specific validation evidence to `docs/archive/old-validation/` after it is no longer active.
 
 ## Priority 3

@@ -4,7 +4,7 @@ Status: validation evidence needed before changing June 1 boundary logic or prom
 
 Physical-device parity packet status: archived for April 28, May 26, June 1, June 2, June 3, June 4, June 5, and June 12. The May 26 through June 12 batch included parity packet JSON only; matching raw debug markdown exports were not included in that batch.
 
-Next export status: regenerated packet-backed fixture exports are archived after the raw HKWorkoutEvent boundary source enhancement. Raw HealthKit Debug and parity packet JSON now also include a debug-only `HKWorkoutActivity` inventory from public `HKWorkout.workoutActivities` when available, including nested events and public activity statistics summaries. Regenerate the active fixture exports again before judging whether activity boundaries explain FIT/Apple timing.
+Next export status: regenerated packet-backed fixture exports are archived after the raw HKWorkoutEvent and HKWorkoutActivity boundary source enhancements. Raw HealthKit Debug and parity packet JSON include a debug-only `HKWorkoutActivity` inventory from public `HKWorkout.workoutActivities` when available, including nested events and public activity statistics summaries. The activity-boundary scorer has been run against the current fixture set; it improves drift cases but does not prove guard/special-fixture safety.
 
 ## Current Status
 
@@ -16,7 +16,7 @@ Next export status: regenerated packet-backed fixture exports are archived after
 | 2026-06-12 | blocked | Fixed-distance Work ends about 4 seconds early in RunSignal, so Open / Extra becomes about 5 seconds too long. This repeats the same drift direction across a 5.00 km goal. |
 | 2026-06-02 | temporary pass | Simple fixed-distance Work plus Open tail parity is close; exact packet Work time is 2.4 seconds from Apple Fitness, outside preferred tolerance and inside temporary tolerance. |
 | 2026-06-03 | temporary pass | Planned open cooldown handling was fixed; keep as a regression fixture. |
-| 2026-06-04 | pass | Simple fixed-distance Work plus Open tail parity holds. |
+| 2026-06-04 | pass | Simple fixed-distance Work plus Open tail parity holds under current reconstruction; activity-boundary scoring regresses the Work row from preferred pass to temporary pass. |
 | 2026-06-05 | temporary pass | Warmup/cooldown boundaries remain close but not preferred. |
 | Promotion into normal workout detail UI | blocked | Do not promote until June 1 boundary behavior is resolved or explicitly accepted. |
 
@@ -36,7 +36,7 @@ April 28 is now an evidence-recovery fixture: the physical-device fresh query pa
 
 Use `fixed-distance-boundary-strategy-research.md`, `analyze_fixed_distance_boundaries.py`, and `score_candidate_boundary_strategies.py` for offline strategy comparison only. No candidate strategy is approved for production yet.
 
-The debug-only candidate scorecard compares strategies side by side against the complete packet-backed fixture set without changing production interval behavior. Its current result does not approve any production boundary strategy.
+The debug-only candidate scorecards compare strategies side by side against the complete packet-backed fixture set without changing production interval behavior. The `hkworkoutactivity_boundary` scorecard improves May 26, June 1, and June 12, but it regresses June 4 from pass to temporary pass and has three June 3 special-fixture regressions. Its current result does not approve any production boundary strategy.
 
 The boundary pattern investigation compares packet-visible drift and guard features. It did not find a production-safe public-API separator; current Work/Open error versus Apple Fitness/manual reference separates the groups offline, but cannot be used as runtime logic.
 
@@ -46,7 +46,7 @@ Use `fit-comparison-research-plan.md` only as a docs/debug cross-check against t
 
 The completed FIT pilot is summarized in `fit-comparison-summary.md`. Its current read is that FIT session totals match RunSignal totals, while FIT lap rows and inferred Open tails often match Apple Fitness/manual row timing more closely than RunSignal's public distance-sample crossing boundaries. This is useful research evidence, but it still does not identify a production-safe public API separator or approve boundary logic changes.
 
-The FIT lap boundary source investigation justified debug-only export enhancements, not a runtime strategy. Regenerated exports show raw HKWorkoutEvent windows and segment marker candidates, but they still do not provide a clean public boundary source that explains FIT/Apple row endings across drift and guard cases. The newer HKWorkoutActivity inventory needs a fresh physical-device export pass before it can be evaluated.
+The FIT lap boundary source investigation justified debug-only export enhancements, not a runtime strategy. Regenerated exports show raw HKWorkoutEvent windows and segment marker candidates, but they still do not provide a clean public boundary source that explains FIT/Apple row endings across drift and guard cases. The newer HKWorkoutActivity inventory is the strongest public-API lead so far, but its first scorecard still leaves production blocked.
 
 ## Future Examples Needed
 
@@ -69,7 +69,7 @@ Ideal examples:
 - Any workout where Apple Fitness and RunSignal differ by more than 2 seconds.
 - Additional guard examples where current RunSignal already matches Apple Fitness, with parity packets that include boundary diagnostics.
 
-April 28 evidence and the May 26 through June 12 parity packets have been regenerated and saved for the raw-event pass. Regenerate them again with HKWorkoutActivity inventory before using activity boundaries in future debug-only scoring. Use the complete packet-backed fixture set and current scorecard for research, not for immediate production boundary changes.
+April 28 evidence and the May 26 through June 12 parity packets have been regenerated and saved with HKWorkoutActivity inventory. Use the complete packet-backed fixture set and current scorecards for research, not for immediate production boundary changes.
 
 After 5-10 new simple Work + Open examples, rerun the scorer. If no public-API separator emerges, keep the current public reconstruction and document Apple Fitness exact-boundary matching as a limitation for this phase.
 

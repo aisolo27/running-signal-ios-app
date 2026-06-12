@@ -10,7 +10,7 @@ Regenerated physical-device Raw HealthKit Debug markdown and parity packet JSON 
 
 Across the active packet-backed fixtures, activity end offsets align with FIT lap or Apple Fitness/manual row timing within about half a second for the known planned-step boundaries. This includes the May 26, June 1, and June 12 drift cases where RunSignal's current distance-sample crossing boundary ends several seconds early.
 
-This does not approve a production change yet. The activity rows expose public date windows and statistics, but the exported activity type is still generic (`HKWorkoutActivityType(rawValue: 37)`) and labels must be mapped from WorkoutKit planned-step order. Before changing runtime interval reconstruction, RunSignal needs a docs/debug scorer or prototype that proves activity-based mapping preserves guard cases, handles missing activities, handles extra Open tails, and fails safely when activity rows do not match plan shape.
+This does not approve a production change. The activity rows expose public date windows and statistics, but the exported activity type is still generic (`HKWorkoutActivityType(rawValue: 37)`) and labels must be mapped from WorkoutKit planned-step order. The docs/debug scorer now shows the candidate improves drift cases, but June 4 regresses from preferred pass to temporary pass and June 3 has three special-fixture regressions.
 
 ## Fixture Read
 
@@ -37,9 +37,25 @@ This does not approve a production change yet. The activity rows expose public d
 
 Do not change production interval reconstruction from this note alone.
 
-The next safe step is a docs/debug-only activity-boundary scorer or prototype that:
+The next safe step is more guard-case collection and, if useful, a docs/debug-only activity-boundary prototype that:
 
 - Uses `HKWorkoutActivity` boundaries only when activity count and order can be reconciled with the WorkoutKit planned steps.
 - Infers a final Open / Extra tail only when workout end is later than the last mapped activity end.
 - Falls back to the current reconstruction when activities are missing, unlabeled, out of order, or incompatible with plan shape.
 - Scores the active fixtures and future guard examples before any normal UI or production boundary change.
+
+## Scorer Result
+
+`score_candidate_boundary_strategies.py` now writes `hkworkoutactivity-boundary-scorecard.md` and `hkworkoutactivity-boundary-scorecard.json`.
+
+Current result:
+
+- Drift cases May 26, June 1, and June 12 improve.
+- June 2 improves and remains pass.
+- June 4 remains within temporary tolerance, but it regresses from the current preferred pass on the Work row.
+- June 3 is scoreable as an eight-row structured fixture, but three rows regress by status/error score.
+- June 5 is scoreable, including inferred final Open, and improves all rows.
+- April 28 is scoreable only as evidence-recovery/single-tail reference.
+- The extra June 3 short run remains excluded as nonfixture evidence.
+
+Production assessment: no production experiment is justified yet.
