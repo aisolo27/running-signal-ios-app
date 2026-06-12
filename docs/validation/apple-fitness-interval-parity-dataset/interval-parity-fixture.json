@@ -14,7 +14,7 @@
       "folder": "2026-06-01-easy-run",
       "workoutType": "easy run",
       "expectedStatus": "blocked",
-      "blocker": "RunSignal Work ends about 6 seconds early and Open / Extra becomes about 6 seconds too long. Boundary diagnostics are internally consistent, so June 1 needs more fixed-distance Work + tiny Open tail examples before any deterministic rule change.",
+      "blocker": "RunSignal Work ends about 6 seconds early and Open / Extra becomes about 6 seconds too long. The Apple Fitness Open row is real post-goal running, so the blocker is boundary timing, not the existence of Open. Boundary diagnostics are internally consistent, so June 1 needs more fixed-distance Work + real Open tail examples before any deterministic rule change.",
       "rows": [
         {
           "row": 1,

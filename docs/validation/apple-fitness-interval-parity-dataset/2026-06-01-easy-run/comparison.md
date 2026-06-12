@@ -20,6 +20,8 @@
 
 This workout is usable for parity validation, but it is not a pass. Apple Fitness and RunSignal agree on the planned Work/Open structure and total workout duration, but RunSignal places the Work/Open boundary about 6 seconds earlier than Apple Fitness.
 
+Human context matters here: the Apple Watch workout was `Monday easy 6.45km`, the planned Work goal was 6.45 km, and the runner kept running briefly after the goal completed before stopping the watch. Apple Fitness's Open row is therefore real post-goal running. Do not hide it, merge it into Work, or treat Open / Extra after a fixed-distance Work goal as automatically wrong.
+
 ## Boundary Diagnostics
 
 | Diagnostic | Value |
@@ -40,6 +42,6 @@ This workout is usable for parity validation, but it is not a pass. Apple Fitnes
 | Last HR/power/cadence sample timing | HR 42:46.725; power 42:48.609; cadence 42:48.609 |
 | Remaining tail seconds/meters | 12.654 s / 12.346 m |
 
-Current read: this is a boundary-placement blocker, not a tail-label blocker. RunSignal's 6.45 km crossing is internally consistent: interpolation fraction 0.904, crossing sample end 42:38.318, overshoot only 0.635 m. Apple Fitness's 42:44 Work and 0:07 Open align more closely with the final distance sample at 42:43.464 and workout end at 42:50.972. That suggests a later Apple Fitness-private or sensor-end boundary, not a simple crossing-sample bug.
+Current read: this is a boundary-placement blocker, not a tail-label blocker and not an Open-row blocker. RunSignal's 6.45 km crossing is internally consistent: interpolation fraction 0.904, crossing sample end 42:38.318, overshoot only 0.635 m. Apple Fitness's 42:44 Work and 0:07 Open align more closely with the final distance sample at 42:43.464 and workout end at 42:50.972. That suggests Apple Fitness may be using custom workout step-transition timing, final sample timing, private workout-session timing, sensor-end behavior, smoothing, or display rules unavailable through the current public WorkoutKit/HealthKit samples.
 
-Do not add a deterministic app rule from this workout alone. A final-distance-sample, private-session, sensor-end, or tail-shrink rule would need more fixed-distance Work + tiny Open tail evidence and would need to preserve June 2 and June 4, where simple Work + Open tail parity already passes.
+Do not add a deterministic app rule from this workout alone. A final-distance-sample, private-session, sensor-end, or tail-shrink rule would need more fixed-distance Work + real Open tail evidence and would need to preserve June 2 and June 4, where simple Work + Open tail parity already passes.

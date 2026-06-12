@@ -14,7 +14,12 @@
 - WorkoutKit plan available in RunSignal: yes, `Monday easy 6.45km`.
 - Reconstructed intervals appeared: yes.
 - Raw HealthKit Segment Markers appeared: yes; debug source says they are not used as Apple Fitness interval rows.
+- Human context: this was a custom Apple Watch workout named `Monday easy 6.45km`; the planned Work goal was 6.45 km.
+- Human context: after the 6.45 km Work goal completed, the runner kept running briefly before stopping the watch.
+- Apple Fitness Open is real post-goal running. It should not be hidden, merged into Work, or treated as a reconstruction artifact.
+- Open / Extra after a fixed-distance Work goal is not automatically wrong.
 - Visible mismatch: Work is 42:44 in Apple Fitness vs 42:38 in RunSignal; Open is 0:07 in Apple Fitness vs 0:13 in RunSignal.
+- Apple Fitness total summary: 42:50 workout time, 6.46 km, 6:38/km average pace.
 - Pause, GPS weirdness, treadmill/manual edit, or extra tail behavior: Open tail exists in both; RunSignal tail is about 6 seconds longer.
 
 ## Placement Note
@@ -37,13 +42,15 @@ The RunSignal export was originally misplaced in `screenshots/runsignal-workout-
 - Last HR sample: 42:46.725.
 - Last power/cadence sample: 42:48.609.
 
-The new export provides the missing boundary evidence. RunSignal's current Work boundary is the correct 6.45 km crossing sample end, but Apple Fitness's displayed Work/Open split appears closer to the final distance sample and workout end. Treat this as blocked pending more examples, not as a safe one-workout boundary rule.
+The new export provides the missing boundary evidence. RunSignal's current Work boundary is the exact HealthKit cumulative-distance crossing sample end for 6.45 km and is internally consistent, but Apple Fitness's displayed Work/Open split appears closer to the final distance sample and workout end. The parity issue is Work boundary timing, not the existence of Open.
 
-Do not change June 1 boundary logic unless the same pattern appears across more fixed-distance Work + tiny Open tails and the rule does not regress June 2, June 3, June 4, or June 5.
+Apple Fitness may be using custom workout step-transition timing, final distance sample timing, private workout-session timing, sensor-end behavior, smoothing, or display rules that are unavailable through the current public WorkoutKit/HealthKit evidence. Treat this as blocked pending more examples, not as a safe one-workout boundary rule.
+
+Do not change June 1 boundary logic unless the same pattern appears across more fixed-distance Work + real Open tails and the rule does not regress June 2, June 3, June 4, or June 5.
 
 ## Distance-goal Boundary Drift Research
 
-Status: blocked. June 1 needs more fixed-distance Work + tiny Open tail examples before RunSignal should add or change a deterministic boundary rule.
+Status: blocked. June 1 needs more fixed-distance Work + real Open tail examples before RunSignal should add or change a deterministic boundary rule.
 
 The exact diagnostics are:
 

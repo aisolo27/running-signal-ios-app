@@ -23,6 +23,7 @@ Updated: 2026-06-12
 - 2026-06-02 and 2026-06-04 validate the simple distance-goal Work plus Open tail pattern well.
 - 2026-06-03 validates most interval rows well: Work and Recovery rows are close, recovery times are exact, and recovery distances are within tolerance.
 - 2026-06-01 still has a roughly 6-second boundary mismatch: RunSignal Work ends early and Open / Extra becomes too long. The fresh export now shows the 6.45 km crossing sample end is at 42:38.318, while the final distance sample is at 42:43.464 and the workout ends at 42:50.972.
+- 2026-06-01 human context: the Apple Fitness Open row is real because the runner completed the 6.45 km Work goal and kept running briefly before stopping the watch. Open / Extra after a fixed-distance Work goal is not automatically wrong, and June 1 Open should not be hidden or merged into Work.
 - June 1 should stay blocked. The diagnostics show RunSignal's boundary is internally consistent, so the evidence is not strong enough to define a deterministic boundary rule.
 - 2026-06-03 label/structure blocker is resolved by the targeted open-cooldown rule: if WorkoutKit exposes a final planned `Cooldown` step with goal `open`, RunSignal keeps the planned `Cooldown` label and extends that row to workout end.
 - The June 3 fix is not evidence that post-cooldown activity should always merge into `Cooldown`. Fixed distance/time cooldowns that complete and are followed by continued running should still create `Open / Extra`.
@@ -39,7 +40,7 @@ Updated: 2026-06-12
 
 | Date | Workout Type | Current Status | Blocker | Next Action |
 |---|---|---|---|---|
-| 2026-06-01 | Easy run | blocked | RunSignal Work ends about 5.7 seconds earlier than Apple Fitness, and Open / Extra becomes about 5.7 seconds too long. Fresh diagnostics show Apple Fitness may be using a later private/sensor-end boundary near the final distance sample, not the exact 6.45 km crossing. There is not enough evidence for a deterministic rule. | Do not add a deterministic boundary rule yet. Collect more fixed-distance Work + tiny Open tail examples before considering any final-sample or tail-shrink rule. |
+| 2026-06-01 | Easy run | blocked | RunSignal Work ends about 5.7 seconds earlier than Apple Fitness, and Open / Extra becomes about 5.7 seconds too long. Fresh diagnostics show Apple Fitness may be using a later private/sensor-end boundary near the final distance sample, not the exact 6.45 km crossing. The Apple Fitness Open row is real post-goal running, so the blocker is boundary timing, not the existence of Open. There is not enough evidence for a deterministic rule. | Do not add a deterministic boundary rule yet. Collect more fixed-distance Work + real Open tail examples before considering any final-sample or tail-shrink rule. |
 | 2026-06-02 | Easy run | pass | None. Simple Work + Open tail parity holds. | Keep as a regression fixture. |
 | 2026-06-03 | Interval workout | temporary pass | Label/structure blocker resolved and fresh export confirms the final row is `Cooldown`. Warmup remains about 5 seconds early, and the final planned open cooldown is about 3 seconds longer than Apple Fitness. | Keep as a regression fixture for planned open cooldown behavior. |
 | 2026-06-04 | Easy/recovery run | pass | None. Simple Work + Open tail parity holds. | Keep as a regression fixture. |
@@ -83,7 +84,7 @@ If uncertain, keep `Open / Extra` in debug, add a diagnostic reason, and do not 
 | Last HR/power/cadence sample timing | HR 42:46.725; power 42:48.609; cadence 42:48.609 |
 | Remaining tail seconds/meters | 12.654 s / 12.346 m |
 
-Current interpretation: the issue is not label policy. It is a boundary placement difference on a long distance-goal Work row. Because overshoot is tiny and crossing sample end only adds 0.248 s, RunSignal's current 6.45 km boundary is internally consistent. Apple Fitness's 42:44 Work / 0:07 Open split lines up more closely with the final distance sample timing and workout end than with the exact 6.45 km crossing. That may reflect Apple Fitness-private smoothing, displayed-distance handling, sensor-end behavior, or sample granularity. Do not add a deterministic boundary rule from this single workout unless it preserves June 2 and June 4.
+Current interpretation: the issue is not label policy and not the existence of Open. It is a boundary placement difference on a long distance-goal Work row. Because overshoot is tiny and crossing sample end only adds 0.248 s, RunSignal's current 6.45 km boundary is internally consistent. Apple Fitness's 42:44 Work / 0:07 Open split lines up more closely with the final distance sample timing and workout end than with the exact 6.45 km crossing. That may reflect custom workout step-transition timing, final sample timing, private workout-session timing, sensor-end behavior, smoothing, or sample granularity unavailable through current public WorkoutKit/HealthKit samples. Do not add a deterministic boundary rule from this single workout unless it preserves June 2 and June 4.
 
 ## Distance-goal Boundary Drift Research
 
@@ -115,6 +116,7 @@ Future examples needed:
 - Fixed-distance Work step.
 - Visible Apple Fitness Work row.
 - Visible Apple Fitness Open row.
+- Goal completed and runner continued briefly before stopping.
 - RunSignal Raw HealthKit Debug export with boundary diagnostics.
 - Preferably multiple distances, such as 5K Work, 6.45K Work, 2K Work, or 400 m / 800 m reps with an Open tail.
 
@@ -138,6 +140,6 @@ Before promotion, address or explicitly accept:
 
 - 2026-06-01 distance-goal boundary drift of about 5.7 seconds.
 - 2026-06-05 warmup/cooldown temporary-pass boundaries, especially the cooldown displayed distance delta.
-- Additional fixed-distance Work + tiny Open tail evidence before changing June 1 boundary logic.
+- Additional fixed-distance Work + real Open tail evidence before changing June 1 boundary logic.
 
 The approach is directionally validated, and the June 3 planned-open-cooldown label blocker has a deterministic fix. Promotion should still wait because June 1 remains blocked and June 5 remains only a temporary pass.

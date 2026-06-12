@@ -22,7 +22,15 @@ The purpose is to compare Apple Fitness against RunSignal across multiple real w
 | 2026-06-04 | `2026-06-04-easy-recovery-run/` | Easy, recovery, or zone 2 run | pass |
 | 2026-06-05 | `2026-06-05-tempo-threshold-run/` | Tempo or threshold run | temporary pass |
 
-June 1 remains blocked because the new boundary diagnostics are internally consistent but do not match Apple Fitness timing. It needs more fixed-distance Work + tiny Open tail examples before any deterministic boundary rule can be justified.
+June 1 remains blocked because the new boundary diagnostics are internally consistent but do not match Apple Fitness timing. Its Open row is real post-goal running, so it needs more fixed-distance Work + real Open tail examples before any deterministic boundary rule can be justified.
+
+## Next Validation Phase
+
+- Do not tune June 1 from one workout.
+- June 1's Open row is real post-goal running and should not be hidden or merged into Work.
+- Need 2 to 3 more fixed-distance Work + real Open tail examples.
+- Goal: determine whether June 1 is a one-off edge case or repeatable Apple Fitness boundary behavior.
+- Normal interval UI promotion remains blocked until this is resolved or explicitly accepted.
 
 ## How To Collect Screenshots
 
@@ -49,6 +57,8 @@ June 1 remains blocked because the new boundary diagnostics are internally consi
 - `exports/runsignal-diagnostics/`: RunSignal diagnostics exports for this workout.
 - `interval-parity-fixture.json`: cross-workout visible Apple Fitness and RunSignal observed values used by the lightweight validator.
 - `validate_interval_parity.py`: docs-level harness for checking current pass/temporary/blocker status without parsing screenshots.
+- `next-boundary-validation-plan.md`: evidence plan for fixed-distance Work plus real Open tail boundary validation.
+- `_future-fixed-distance-open-tail-template/`: reusable drop folder for future fixed-distance Work plus real Open tail examples.
 
 ## Do Not Implement Yet
 
