@@ -23,10 +23,11 @@ The purpose is to compare Apple Fitness against RunSignal across multiple real w
 | 2026-06-03 | `2026-06-03-interval-workout/` | Interval workout | temporary pass |
 | 2026-06-04 | `2026-06-04-easy-recovery-run/` | Easy, recovery, or zone 2 run | pass |
 | 2026-06-05 | `2026-06-05-tempo-threshold-run/` | Tempo or threshold run | temporary pass |
+| 2026-06-12 | `2026-06-12-easy-run/` | Easy run boundary research | blocked |
 
-May 26 repeats the same boundary drift direction as June 1: RunSignal's fixed-distance Work boundary ends a few seconds earlier than Apple Fitness, and Open / Extra becomes longer by roughly the same amount.
+May 26 and June 12 repeat the same boundary drift direction as June 1: RunSignal's fixed-distance Work boundary ends a few seconds earlier than Apple Fitness, and Open / Extra becomes longer by roughly the same amount.
 
-June 1 remains blocked because the new boundary diagnostics are internally consistent but do not match Apple Fitness timing. Its Open row is real post-goal running, so it needs more fixed-distance Work + real Open tail examples before any deterministic boundary rule can be justified.
+June 1, May 26, and June 12 remain blocked because the boundary diagnostics are internally consistent but do not match Apple Fitness timing. The Open rows are real post-goal running, so the issue is boundary timing, not Open existence.
 
 April 28 is blocked for a different reason: Apple Fitness shows Work plus Open rows, but the RunSignal export has no WorkoutKit audit, no reconstructed intervals, no boundary diagnostics, and zero sample evidence counts. Do not use April 28 for boundary-rule tuning until export evidence is available.
 
@@ -34,8 +35,8 @@ April 28 is blocked for a different reason: Apple Fitness shows Work plus Open r
 
 - Do not tune June 1 from one workout.
 - June 1's Open row is real post-goal running and should not be hidden or merged into Work.
-- May 26 suggests June 1 is not completely isolated, but more evidence is still needed before changing app logic.
-- Need more fixed-distance Work + real Open tail examples with usable RunSignal boundary diagnostics.
+- May 26 and June 12 show the same drift direction as June 1, across 6.45 km and 5.00 km goals.
+- Need more fixed-distance Work + real Open tail examples and pass-case boundary diagnostics before changing app logic.
 - Goal: determine whether this is repeatable Apple Fitness boundary behavior and whether a deterministic rule can improve it without regressing existing pass/temporary-pass fixtures.
 - Normal interval UI promotion remains blocked until this is resolved or explicitly accepted.
 

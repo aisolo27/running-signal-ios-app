@@ -246,7 +246,7 @@ def main() -> int:
         print(f"- {item}")
 
     print()
-    print("Conclusion: no candidate is approved for production. Next-sample-end improves both scored drift cases but still misses Apple Fitness by about 1-3 seconds and must be checked against pass fixtures with matching boundary diagnostics before any app logic change.")
+    print("Conclusion: no candidate is approved for production. Next-sample-end improves the scored drift cases and brings them within temporary tolerance, but it still misses Apple Fitness on at least one row in each case and must be checked against pass fixtures with matching boundary diagnostics before any app logic change.")
     return 0
 
 

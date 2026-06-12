@@ -35,7 +35,7 @@ RunSignal is a native iPhone SwiftUI app focused on Apple Fitness parity for com
 
 - Some older runs are summary-only because detailed HealthKit series may be unavailable.
 - Apple Fitness interval row boundaries may use private smoothing or presentation rules that public HealthKit/WorkoutKit APIs do not expose.
-- Fixed-distance Work plus real Open tail behavior still needs more examples before changing boundary logic.
+- Fixed-distance Work plus real Open tail drift now has three research examples across 6.45 km and 5.00 km goals; no boundary strategy is approved for production yet.
 - WorkoutKit plan data can be unavailable or throw and must stay optional.
 - Mechanics, trends, and stronger run-type claims remain confidence-gated.
 

@@ -12,6 +12,7 @@ Valid fixed-distance Work plus real Open tail drift examples:
 |---|---|---|---|
 | 2026-06-01 | Work 6.45 km / 42:44; Open 5 m / 0:07 | Work about 42:38; Open / Extra about 0:13 | RunSignal exact crossing is internally consistent, but Apple Fitness appears later. |
 | 2026-05-26 | Work 6.45 km / 42:11; Open 94 m / 0:41 | Work about 42:07; Open / Extra about 0:45 | Same drift direction as June 1. |
+| 2026-06-12 | Work 5.00 km / 32:03; Open 36 m / 0:17 | Work about 31:59; Open / Extra about 0:22 | Same drift direction at a second goal distance. |
 
 The Open rows are real post-goal running. Do not hide or merge Open into Work. The issue is Work boundary timing, not Open existence.
 
@@ -27,6 +28,7 @@ Current status:
 
 - June 1: internally consistent, but about 5-6 seconds earlier than Apple Fitness.
 - May 26: internally consistent, but about 4 seconds earlier than Apple Fitness.
+- June 12: internally consistent, but about 4 seconds earlier than Apple Fitness.
 - June 2 and June 4 already pass with current behavior, so any new rule must avoid regressing them.
 
 ### B. Next-Sample-End Strategy
@@ -37,8 +39,9 @@ Current evidence:
 
 - June 1 moves from about 42:38 to about 42:41, improving but still short of Apple Fitness 42:44.
 - May 26 moves from about 42:07 to about 42:10, improving but still short of Apple Fitness 42:11.
+- June 12 moves from about 31:59 to about 32:01, improving but still short of Apple Fitness 32:03.
 
-This is the strongest simple public-sample candidate so far, but it still does not fully explain Apple Fitness. It also needs pass-case boundary diagnostics before it can be considered safe.
+This is the strongest simple public-sample candidate so far, but it still does not fully explain Apple Fitness and does not get all three drift cases within preferred tolerance. It also needs pass-case boundary diagnostics before it can be considered safe.
 
 ### C. Apple-Visible Open Alignment Strategy
 
@@ -50,7 +53,7 @@ This explains the screenshots by construction, but it is not production-safe bec
 
 If Apple Fitness Open is real and short, use final distance sample timing to infer the Work/Open transition.
 
-This aligns June 1 closely because Apple Fitness's Work boundary appears near the final distance sample. It does not explain May 26: the final distance sample is much later than Apple Fitness's Work row and would make Open too short. This is likely an overfit to June 1.
+This aligns June 1 closely because Apple Fitness's Work boundary appears near the final distance sample. It does not explain May 26 or June 12: the final distance sample is much later than Apple Fitness's Work row and would make Open too short. This is likely an overfit to short-tail cases where Apple Fitness happens to be near the final sample.
 
 ### E. Segment-Marker-Assisted Diagnostic Only
 
@@ -74,8 +77,8 @@ The harness reads `interval-parity-fixture.json` and the Raw HealthKit Debug exp
 
 ## Current Conclusion
 
-Fixed-distance Work plus real Open tail drift now has at least two valid examples. June 1 is no longer isolated.
+Fixed-distance Work plus real Open tail drift now has at least three valid examples across two goal distances: 6.45 km and 5.00 km. June 1 is no longer isolated.
 
-No deterministic rule is approved yet. The next-sample-end strategy improves both scored drift examples but does not fully explain either one, and it could regress existing pass cases if applied globally. A production rule would need either one more valid drift example, fresh boundary diagnostics for the passing Work/Open fixtures, or a narrow gate that preserves June 2, June 3, June 4, and June 5.
+No deterministic rule is approved yet. The next-sample-end strategy improves all three scored drift examples but does not fully explain them, and it could regress existing pass cases if applied globally. A production rule would need fresh boundary diagnostics for the passing Work/Open fixtures, more examples, or a narrow gate that preserves June 2, June 3, June 4, and June 5.
 
 Normal WorkoutKit interval UI promotion remains blocked.

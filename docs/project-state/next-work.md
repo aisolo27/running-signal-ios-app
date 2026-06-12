@@ -8,7 +8,8 @@ Last updated: 2026-06-12
 
 ## Priority 2
 
-- Improve interval parity evidence for fixed-distance Work plus real Open tail cases.
+- Score interval parity evidence for fixed-distance Work plus real Open tail cases, including the June 12 5K sample.
+- Collect pass-case boundary diagnostics before changing distance-goal boundary behavior.
 - Archive completed date-specific validation evidence to `docs/archive/old-validation/` after it is no longer active.
 
 ## Priority 3
@@ -18,6 +19,7 @@ Last updated: 2026-06-12
 ## Blocked
 
 - Apple Fitness interval labeling and boundary behavior remain partly uncertain.
+- April 28 remains blocked by unavailable RunSignal detailed evidence and should be investigated separately from boundary tuning.
 - Normal workout detail interval UI promotion is blocked until boundary evidence is resolved or accepted.
 
 ## Not In Scope

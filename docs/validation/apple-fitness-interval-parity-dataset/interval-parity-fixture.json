@@ -1,7 +1,7 @@
 {
   "version": 1,
   "updated": "2026-06-12",
-  "purpose": "Visible Apple Fitness expected values and current RunSignal reconstructed values for April 28 through June 5 interval parity validation.",
+  "purpose": "Visible Apple Fitness expected values and current RunSignal reconstructed values for April 28 through June 12 interval parity validation.",
   "rules": {
     "plannedStructure": "exact when WorkoutKit plan exists",
     "segmentMarkersUsedAsNormalRows": false,
@@ -109,6 +109,41 @@
           "observedTimeSeconds": 12.6536306142807,
           "preferredTimeToleranceSeconds": 2,
           "temporaryTimeToleranceSeconds": 5,
+          "preferredDistanceToleranceMeters": 10,
+          "temporaryDistanceToleranceMeters": 15
+        }
+      ]
+    },
+    {
+      "date": "2026-06-12",
+      "folder": "2026-06-12-easy-run",
+      "workoutType": "easy run boundary research",
+      "expectedStatus": "blocked",
+      "blocker": "RunSignal Work ends about 4 seconds earlier than Apple Fitness and Open / Extra becomes about 5 seconds too long. This repeats the fixed-distance Work plus real Open tail drift direction across a second goal distance, but it is still research evidence rather than an approved production rule.",
+      "rows": [
+        {
+          "row": 1,
+          "expectedLabel": "Work",
+          "observedLabel": "Work 1",
+          "expectedDistanceMeters": 5000,
+          "observedDistanceMeters": 5001.583504582988,
+          "expectedTimeSeconds": 1923,
+          "observedTimeSeconds": 1918.5470229387283,
+          "preferredTimeToleranceSeconds": 2,
+          "temporaryTimeToleranceSeconds": 3,
+          "preferredDistanceToleranceMeters": 5,
+          "temporaryDistanceToleranceMeters": 15
+        },
+        {
+          "row": 2,
+          "expectedLabel": "Open",
+          "observedLabel": "Open / Extra",
+          "expectedDistanceMeters": 36,
+          "observedDistanceMeters": 43.23277691495605,
+          "expectedTimeSeconds": 17,
+          "observedTimeSeconds": 22.209920048713684,
+          "preferredTimeToleranceSeconds": 2,
+          "temporaryTimeToleranceSeconds": 3,
           "preferredDistanceToleranceMeters": 10,
           "temporaryDistanceToleranceMeters": 15
         }
