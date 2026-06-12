@@ -65,6 +65,8 @@ April 28 is blocked for a different reason: Apple Fitness shows Work plus Open r
 - `interval-parity-fixture.json`: cross-workout visible Apple Fitness and RunSignal observed values used by the lightweight validator.
 - `validate_interval_parity.py`: docs-level harness for checking current pass/temporary/blocker status without parsing screenshots.
 - `next-boundary-validation-plan.md`: evidence plan for fixed-distance Work plus real Open tail boundary validation.
+- `fixed-distance-boundary-strategy-research.md`: research-only comparison of candidate boundary strategies.
+- `analyze_fixed_distance_boundaries.py`: offline docs-level harness for comparing candidate boundary timings from fixture values and Raw HealthKit Debug exports.
 - `_future-fixed-distance-open-tail-template/`: reusable drop folder for future fixed-distance Work plus real Open tail examples.
 
 ## Do Not Implement Yet

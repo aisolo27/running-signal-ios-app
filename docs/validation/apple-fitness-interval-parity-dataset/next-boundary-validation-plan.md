@@ -29,6 +29,8 @@ June 1 and May 26 show the same drift direction, but this is still not enough ev
 
 April 28 must be investigated separately because Apple Fitness shows intervals, but RunSignal cannot currently produce the evidence needed for a parity comparison.
 
+Use `fixed-distance-boundary-strategy-research.md` and `analyze_fixed_distance_boundaries.py` for offline strategy comparison only. No candidate strategy is approved for production yet.
+
 ## Future Examples Needed
 
 Collect fixed-distance Work plus real Open tail examples. Each future workout should have:

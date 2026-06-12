@@ -104,6 +104,8 @@ Current interpretation: the issue is not label policy and not the existence of O
 
 Fixed-distance Work plus real Open tail appears to repeat the same boundary drift direction. Apple Fitness may be using a later step-completion boundary than RunSignal's public HealthKit cumulative-distance crossing. Do not hide or merge Open: these Open rows are real post-goal running. More examples are needed before changing app logic.
 
+The research-only analyzer in `analyze_fixed_distance_boundaries.py` currently shows next-sample-end improves both June 1 and May 26 but does not fully explain Apple Fitness. Apple-visible Open alignment fits by definition and is not production-safe. Final-distance-sample anchoring appears to overfit June 1 and does not explain May 26. Segment markers remain diagnostic-only and are not a production interval source.
+
 ### June 1 Exact Diagnostics
 
 | Diagnostic | Value |

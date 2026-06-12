@@ -1,0 +1,81 @@
+# Fixed-Distance Boundary Strategy Research
+
+Status: research only. Do not change production reconstruction behavior from this note alone.
+
+Normal WorkoutKit Reconstructed Intervals promotion remains blocked.
+
+## Evidence Scope
+
+Valid fixed-distance Work plus real Open tail drift examples:
+
+| Date | Apple Fitness | Current RunSignal | Current read |
+|---|---|---|---|
+| 2026-06-01 | Work 6.45 km / 42:44; Open 5 m / 0:07 | Work about 42:38; Open / Extra about 0:13 | RunSignal exact crossing is internally consistent, but Apple Fitness appears later. |
+| 2026-05-26 | Work 6.45 km / 42:11; Open 94 m / 0:41 | Work about 42:07; Open / Extra about 0:45 | Same drift direction as June 1. |
+
+The Open rows are real post-goal running. Do not hide or merge Open into Work. The issue is Work boundary timing, not Open existence.
+
+April 28 is not included in boundary scoring. Apple Fitness shows Work/Open, but RunSignal currently has no WorkoutKit Plan Audit, no sample evidence, no reconstructed intervals, and no boundary diagnostics for that older workout.
+
+## Candidate Strategies
+
+### A. Current Strategy
+
+Use exact/interpolated crossing, or crossing sample end if within overshoot tolerance.
+
+Current status:
+
+- June 1: internally consistent, but about 5-6 seconds earlier than Apple Fitness.
+- May 26: internally consistent, but about 4 seconds earlier than Apple Fitness.
+- June 2 and June 4 already pass with current behavior, so any new rule must avoid regressing them.
+
+### B. Next-Sample-End Strategy
+
+For fixed-distance Work followed by real Open, end Work at the next distance sample end after the crossing sample.
+
+Current evidence:
+
+- June 1 moves from about 42:38 to about 42:41, improving but still short of Apple Fitness 42:44.
+- May 26 moves from about 42:07 to about 42:10, improving but still short of Apple Fitness 42:11.
+
+This is the strongest simple public-sample candidate so far, but it still does not fully explain Apple Fitness. It also needs pass-case boundary diagnostics before it can be considered safe.
+
+### C. Apple-Visible Open Alignment Strategy
+
+Choose the boundary that makes Open duration closest to the visible Apple Fitness Open row.
+
+This explains the screenshots by construction, but it is not production-safe because it uses Apple Fitness as an external oracle. It can help label target behavior in research docs, not app logic.
+
+### D. Final-Distance-Sample Anchored Strategy
+
+If Apple Fitness Open is real and short, use final distance sample timing to infer the Work/Open transition.
+
+This aligns June 1 closely because Apple Fitness's Work boundary appears near the final distance sample. It does not explain May 26: the final distance sample is much later than Apple Fitness's Work row and would make Open too short. This is likely an overfit to June 1.
+
+### E. Segment-Marker-Assisted Diagnostic Only
+
+Inspect whether any raw HealthKit marker appears near Apple Fitness's visible Work/Open boundary.
+
+This remains diagnostic only:
+
+- HealthKit Segment Markers must not be used as production Apple Fitness interval rows.
+- Segment markers can report whether a raw event window is near Apple Fitness's visible transition.
+- Current exports show raw/overlapping segment markers near the tail, but they do not provide a clean repeatable Apple Fitness Work/Open boundary source.
+
+## Offline Harness
+
+Run:
+
+```bash
+python3 docs/validation/apple-fitness-interval-parity-dataset/analyze_fixed_distance_boundaries.py
+```
+
+The harness reads `interval-parity-fixture.json` and the Raw HealthKit Debug exports, then compares current, next-sample-end, Apple-visible Open alignment, and final-distance-sample anchored timings.
+
+## Current Conclusion
+
+Fixed-distance Work plus real Open tail drift now has at least two valid examples. June 1 is no longer isolated.
+
+No deterministic rule is approved yet. The next-sample-end strategy improves both scored drift examples but does not fully explain either one, and it could regress existing pass cases if applied globally. A production rule would need either one more valid drift example, fresh boundary diagnostics for the passing Work/Open fixtures, or a narrow gate that preserves June 2, June 3, June 4, and June 5.
+
+Normal WorkoutKit interval UI promotion remains blocked.
