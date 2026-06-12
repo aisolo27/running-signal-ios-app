@@ -1,14 +1,365 @@
+# RunSignal Raw HealthKit Debug Export
+
+Generated: 2026-06-12T19:48:21Z
+
+## Workout
+
+| Field | Value |
+|---|---|
+| Workout ID | F6D47A51-9510-4C7A-9186-6BAFE3C128C9 |
+| Source | Adriel’s Apple Watch |
+| Source ID | F6D47A51-9510-4C7A-9186-6BAFE3C128C9 |
+| Device | Apple Watch Apple Inc. Watch |
+| Start | Jun 3, 2026 |
+| End | Jun 3, 2026 |
+| Duration | 38:57 |
+| Elapsed | 38:57 |
+| Distance | 6.67 km |
+| Avg pace | 5:50 /km |
+| Avg HR | 150 bpm |
+| Max HR | 185 bpm |
+| Cadence | 167 spm |
+| Power | 204 W |
+
+## Evidence Counts
+
+| Metric | Count |
+|---|---:|
+| Heart rate | 466 |
+| Speed | 903 |
+| Distance | 905 |
+| Active energy | 908 |
+| Power | 900 |
+| Cadence | 903 |
+| Step count | 903 |
+| Stride length | 334 |
+| Vertical oscillation | 338 |
+| Ground contact | 333 |
+| Route points | 2333 |
+| Events | 13 |
+
+## WorkoutKit Plan Audit
+
+- Status: Available
+- Plan type: Custom workout
+- Plan ID: 77EBFFFA-254C-4E57-B567-DF975A19415A
+- Display name: Wednesday Interval (7.5km)
+- Activity: HKWorkoutActivityType(rawValue: 37)
+- Warmup: goal 2 km, alert pace range 6:00-6:30 /km, speed 2.56 m/s-2.78 m/s, metric current
+- Block 1: 3x, 2 step(s)
+- Block 1 step 1: Work - goal 1 km, alert pace 4:00 /km, speed 4.17 m/s, metric current
+- Block 1 step 2: Recovery - goal 150 s, alert none
+- Cooldown: goal open, alert pace range 6:00-6:30 /km, speed 2.56 m/s-2.78 m/s, metric current
+
+## Raw HKWorkoutEvent Inventory
+
+Debug-only inventory of public `HKWorkoutEvent` date windows and metadata keys. These rows are not Apple Fitness interval truth.
+
+| Row | Event Type | Label | Start Offset | End Offset | Duration | Metadata Keys | Rendered Marker Window | Marker Distance | Marker Kind | Used By Segment Rendering | Excluded / Filtered Reason | Debug-Only Reason |
+|---:|---|---|---:|---:|---:|---|---:|---:|---|---|---|---|
+| 1 | HKWorkoutEventType(rawValue: 7) | Unavailable | 0:00 | 6:20 | 379.9 s | Unavailable | 0:00-6:20 | 1.01 km | Split marker | Yes |  | HealthKit segment markers are raw/debug-only and not Apple Fitness interval truth. |
+| 2 | HKWorkoutEventType(rawValue: 7) | Unavailable | 0:00 | 10:15 | 614.9 s | Unavailable | 0:00-10:15 | 1.62 km | Overlapping segment marker | Yes |  | HealthKit segment markers are raw/debug-only and not Apple Fitness interval truth. |
+| 3 | HKWorkoutEventType(rawValue: 7) | Unavailable | 6:20 | 12:44 | 384.3 s | Unavailable | 6:20-12:44 | 1.00 km | Overlapping segment marker | Yes |  | HealthKit segment markers are raw/debug-only and not Apple Fitness interval truth. |
+| 4 | HKWorkoutEventType(rawValue: 7) | Unavailable | 10:15 | 19:25 | 550.4 s | Unavailable | 10:15-19:25 | 1.61 km | Overlapping segment marker | Yes |  | HealthKit segment markers are raw/debug-only and not Apple Fitness interval truth. |
+| 5 | HKWorkoutEventType(rawValue: 7) | Unavailable | 12:44 | 16:56 | 251.8 s | Unavailable | 12:44-16:56 | 1.00 km | Overlapping segment marker | Yes |  | HealthKit segment markers are raw/debug-only and not Apple Fitness interval truth. |
+| 6 | HKWorkoutEventType(rawValue: 7) | Unavailable | 16:56 | 22:40 | 343.4 s | Unavailable | 16:56-22:40 | 1.00 km | Split marker | Yes |  | HealthKit segment markers are raw/debug-only and not Apple Fitness interval truth. |
+| 7 | HKWorkoutEventType(rawValue: 7) | Unavailable | 19:25 | 27:41 | 495.4 s | Unavailable | 19:25-27:41 | 1.62 km | Overlapping segment marker | Yes |  | HealthKit segment markers are raw/debug-only and not Apple Fitness interval truth. |
+| 8 | HKWorkoutEventType(rawValue: 7) | Unavailable | 22:40 | 28:22 | 342.6 s | Unavailable | 22:40-28:22 | 1.00 km | Overlapping segment marker | Yes |  | HealthKit segment markers are raw/debug-only and not Apple Fitness interval truth. |
+| 9 | HKWorkoutEventType(rawValue: 7) | Unavailable | 27:41 | 37:33 | 591.9 s | Unavailable | 27:41-37:33 | 1.61 km | Overlapping segment marker | Yes |  | HealthKit segment markers are raw/debug-only and not Apple Fitness interval truth. |
+| 10 | HKWorkoutEventType(rawValue: 7) | Unavailable | 28:22 | 34:53 | 390.9 s | Unavailable | 28:22-34:53 | 1.00 km | Overlapping segment marker | Yes |  | HealthKit segment markers are raw/debug-only and not Apple Fitness interval truth. |
+| 11 | HKWorkoutEventType(rawValue: 7) | Unavailable | 34:53 | 38:54 | 241.2 s | Unavailable | 34:53-38:54 | 0.66 km | Raw segment marker | Yes |  | HealthKit segment markers are raw/debug-only and not Apple Fitness interval truth. |
+| 12 | HKWorkoutEventType(rawValue: 7) | Unavailable | 37:33 | 38:54 | 81.6 s | Unavailable | 37:33-38:54 | 0.22 km | Overlapping segment marker | Yes |  | HealthKit segment markers are raw/debug-only and not Apple Fitness interval truth. |
+| 13 | HKWorkoutEventType(rawValue: 1) | Unavailable | 38:57 | 38:57 | 0.0 s | Unavailable | Unavailable | Unavailable | Unavailable | No | Excluded from segment rendering: zero or negative duration. | No rendered segment marker candidate. |
+
+## WorkoutKit Reconstructed Intervals
+
+Planned structure source: WorkoutKit when available. Measured stats source: HealthKit samples.
+
+| Row | Label | Goal | Target | Distance | Time | Pace | Avg HR | Max HR | Power | Start Offset | End Offset | Boundary Strategy | Boundary Adjustment | Overshoot | Confidence | Notes |
+|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---|---|
+| 1 | Warmup | 2 km | pace range 6:00-6:30 /km, speed 2.56 m/s-2.78 m/s, metric current | 2.00 km | 12:42 | 6:21 /km | 126 bpm | 144 bpm | 190 W | 0:00 | 12:42 | crossing sample end | 0.6 s | 1.5 m | High | Distance-goal boundary: crossing sample end, adjustment +0.6s, overshoot 1.5 m |
+| 2 | Work 1 | 1 km | pace 4:00 /km, speed 4.17 m/s, metric current | 1.00 km | 4:12 | 4:12 /km | 166 bpm | 174 bpm | 285 W | 12:42 | 16:54 | crossing sample end | 0.5 s | 1.9 m | High | Distance-goal boundary: crossing sample end, adjustment +0.5s, overshoot 1.9 m |
+| 3 | Recovery 1 | 150 s | Target unavailable | 0.22 km | 2:30 | 11:28 /km | 147 bpm | 174 bpm | 94 W | 16:54 | 19:24 |  |  |  | High | Time-goal window reconstructed from WorkoutKit duration; TODO pause-adjusted active duration |
+| 4 | Work 2 | 1 km | pace 4:00 /km, speed 4.17 m/s, metric current | 1.00 km | 4:06 | 4:06 /km | 167 bpm | 180 bpm | 290 W | 19:24 | 23:31 | crossing sample end | 0.4 s | 1.7 m | High | Distance-goal boundary: crossing sample end, adjustment +0.4s, overshoot 1.7 m |
+| 5 | Recovery 2 | 150 s | Target unavailable | 0.21 km | 2:30 | 11:54 /km | 154 bpm | 180 bpm | 94 W | 23:31 | 26:01 |  |  |  | High | Time-goal window reconstructed from WorkoutKit duration; TODO pause-adjusted active duration |
+| 6 | Work 3 | 1 km | pace 4:00 /km, speed 4.17 m/s, metric current | 1.00 km | 4:01 | 4:00 /km | 172 bpm | 185 bpm | 295 W | 26:01 | 30:02 | crossing sample end | 0.9 s | 4.0 m | High | Distance-goal boundary: crossing sample end, adjustment +0.9s, overshoot 4.0 m |
+| 7 | Recovery 3 | 150 s | Target unavailable | 0.20 km | 2:30 | 12:33 /km | 161 bpm | 185 bpm | 98 W | 30:02 | 32:32 |  |  |  | High | Time-goal window reconstructed from WorkoutKit duration; TODO pause-adjusted active duration |
+| 8 | Cooldown | Open | pace range 6:00-6:30 /km, speed 2.56 m/s-2.78 m/s, metric current | 1.03 km | 6:25 | 6:13 /km | 156 bpm | 166 bpm | 194 W | 32:32 | 38:57 |  |  |  | Medium | Planned open cooldown extended to workout end |
+
+Notes: Plan source: WorkoutKit · Window source: Plan-derived from HealthKit distance/time samples · Stats source: HealthKit samples · HealthKit segment markers: not used
+
+## WorkoutKit Boundary Diagnostics
+
+### Row 1: Warmup
+
+| Field | Value |
+|---|---:|
+| Target distance | 2000.0 m |
+| Start offset | 0:00 |
+| End offset | 12:42 |
+| Boundary strategy | crossing sample end |
+| Boundary adjustment | 0.6 s |
+| Overshoot | 1.5 m |
+| Cumulative distance at start | 0.0 m |
+| Cumulative distance at end | 2001.5 m |
+| Interpolation fraction | 0.747 |
+
+| Boundary sample | Start offset | End offset | Start cumulative | End cumulative |
+|---|---:|---:|---:|---:|
+| Previous | 12:37 | 12:40 | 1988.5 m | 1995.6 m |
+| Crossing | 12:40 | 12:42 | 1995.6 m | 2001.5 m |
+| Next | 12:42 | 12:45 | 2001.5 m | 2009.2 m |
+
+### Row 2: Work 1
+
+| Field | Value |
+|---|---:|
+| Target distance | 1000.0 m |
+| Start offset | 12:42 |
+| End offset | 16:54 |
+| Boundary strategy | crossing sample end |
+| Boundary adjustment | 0.5 s |
+| Overshoot | 1.9 m |
+| Cumulative distance at start | 2001.5 m |
+| Cumulative distance at end | 3003.4 m |
+| Interpolation fraction | 0.793 |
+
+| Boundary sample | Start offset | End offset | Start cumulative | End cumulative |
+|---|---:|---:|---:|---:|
+| Previous | 16:49 | 16:52 | 2984.3 m | 2994.1 m |
+| Crossing | 16:52 | 16:54 | 2994.1 m | 3003.4 m |
+| Next | 16:54 | 16:57 | 3003.4 m | 3016.1 m |
+
+### Row 4: Work 2
+
+| Field | Value |
+|---|---:|
+| Target distance | 1000.0 m |
+| Start offset | 19:24 |
+| End offset | 23:31 |
+| Boundary strategy | crossing sample end |
+| Boundary adjustment | 0.4 s |
+| Overshoot | 1.7 m |
+| Cumulative distance at start | 3221.5 m |
+| Cumulative distance at end | 4223.1 m |
+| Interpolation fraction | 0.843 |
+
+| Boundary sample | Start offset | End offset | Start cumulative | End cumulative |
+|---|---:|---:|---:|---:|
+| Previous | 23:25 | 23:28 | 4202.0 m | 4212.5 m |
+| Crossing | 23:28 | 23:31 | 4212.5 m | 4223.1 m |
+| Next | 23:31 | 23:33 | 4223.1 m | 4235.2 m |
+
+### Row 6: Work 3
+
+| Field | Value |
+|---|---:|
+| Target distance | 1000.0 m |
+| Start offset | 26:01 |
+| End offset | 30:02 |
+| Boundary strategy | crossing sample end |
+| Boundary adjustment | 0.9 s |
+| Overshoot | 4.0 m |
+| Cumulative distance at start | 4433.3 m |
+| Cumulative distance at end | 5437.3 m |
+| Interpolation fraction | 0.638 |
+
+| Boundary sample | Start offset | End offset | Start cumulative | End cumulative |
+|---|---:|---:|---:|---:|
+| Previous | 29:57 | 29:59 | 5414.2 m | 5426.2 m |
+| Crossing | 29:59 | 30:02 | 5426.2 m | 5437.3 m |
+| Next | 30:02 | 30:04 | 5437.3 m | 5449.5 m |
+
+## HealthKit Segment Markers
+
+Raw debug only. HealthKit Segment Markers must not be promoted as Apple Fitness interval rows.
+
+| Row | Label | Marker Kind | Source | Distance | Time | Pace | Avg HR | Start Offset | End Offset | Confidence | Caveats |
+|---:|---|---|---|---:|---:|---:|---:|---:|---:|---|---|
+| 1 | Unknown | Split marker | HealthKit segment pattern | 1.01 km | 6:20 | 6:17 /km | 119 bpm | 0:00 | 6:20 | Limited | HealthKit did not expose an Apple Fitness interval label for this event. This event window matches a split-like distance marker, not an Apple Fitness interval row. |
+| 2 | Unknown | Overlapping segment marker | HealthKit segment pattern | 1.62 km | 10:15 | 6:21 /km | 124 bpm | 0:00 | 10:15 | Limited | HealthKit did not expose an Apple Fitness interval label for this event. This event overlaps another segment window, so it should stay raw/debug-only. |
+| 3 | Unknown | Overlapping segment marker | HealthKit segment pattern | 1.00 km | 6:24 | 6:24 /km | 134 bpm | 6:20 | 12:44 | Limited | HealthKit did not expose an Apple Fitness interval label for this event. This event overlaps another segment window, so it should stay raw/debug-only. |
+| 4 | Unknown | Overlapping segment marker | HealthKit segment pattern | 1.61 km | 9:10 | 5:42 /km | 154 bpm | 10:15 | 19:25 | Limited | HealthKit did not expose an Apple Fitness interval label for this event. This event overlaps another segment window, so it should stay raw/debug-only. |
+| 5 | Unknown | Overlapping segment marker | HealthKit segment pattern | 1.00 km | 4:12 | 4:11 /km | 166 bpm | 12:44 | 16:56 | Limited | HealthKit did not expose an Apple Fitness interval label for this event. This event overlaps another segment window, so it should stay raw/debug-only. |
+| 6 | Unknown | Split marker | HealthKit segment pattern | 1.00 km | 5:43 | 5:44 /km | 157 bpm | 16:56 | 22:40 | Limited | HealthKit did not expose an Apple Fitness interval label for this event. This event window matches a split-like distance marker, not an Apple Fitness interval row. |
+| 7 | Unknown | Overlapping segment marker | HealthKit segment pattern | 1.62 km | 8:15 | 5:07 /km | 162 bpm | 19:25 | 27:41 | Limited | HealthKit did not expose an Apple Fitness interval label for this event. This event overlaps another segment window, so it should stay raw/debug-only. |
+| 8 | Unknown | Overlapping segment marker | HealthKit segment pattern | 1.00 km | 5:43 | 5:42 /km | 162 bpm | 22:40 | 28:22 | Limited | HealthKit did not expose an Apple Fitness interval label for this event. This event overlaps another segment window, so it should stay raw/debug-only. |
+| 9 | Unknown | Overlapping segment marker | HealthKit segment pattern | 1.61 km | 9:52 | 6:09 /km | 162 bpm | 27:41 | 37:33 | Limited | HealthKit did not expose an Apple Fitness interval label for this event. This event overlaps another segment window, so it should stay raw/debug-only. |
+| 10 | Unknown | Overlapping segment marker | HealthKit segment pattern | 1.00 km | 6:31 | 6:32 /km | 161 bpm | 28:22 | 34:53 | Limited | HealthKit did not expose an Apple Fitness interval label for this event. This event overlaps another segment window, so it should stay raw/debug-only. |
+| 11 | Unknown | Raw segment marker | HealthKit segment pattern | 0.66 km | 4:01 | 6:05 /km | 161 bpm | 34:53 | 38:54 | Limited | HealthKit did not expose an Apple Fitness interval label for this event. This event is a raw HealthKit marker until interval parity is proven. |
+| 12 | Unknown | Overlapping segment marker | HealthKit segment pattern | 0.22 km | 1:22 | 6:05 /km | 164 bpm | 37:33 | 38:54 | Limited | HealthKit did not expose an Apple Fitness interval label for this event. This event overlaps another segment window, so it should stay raw/debug-only. |
+
+## Planned Step Boundary Comparison
+
+Debug-only comparison helper for FIT/Apple boundary investigation. The FIT lap end offset is intentionally a manual placeholder; RunSignal does not read FIT at runtime.
+
+| Row | Planned Step | Goal | RunSignal End | FIT Lap End | Nearest Raw Event End | Event Delta | Nearest Segment End | Segment Delta | Previous Sample End | Crossing Sample End | Next Sample End | Warning |
+|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 1 | Warmup | 2 km | 762.4 s | Manual FIT placeholder | 764.3 s | 1.9 s | 764.3 s | 1.9 s | 759.8 s | 762.4 s | 764.9 s |  |
+| 2 | Work 1 | 1 km | 1014.5 s | Manual FIT placeholder | 1016.1 s | 1.6 s | 1016.1 s | 1.6 s | 1011.9 s | 1014.5 s | 1017.0 s |  |
+| 3 | Recovery 1 | 150 s | 1164.5 s | Manual FIT placeholder | 1165.4 s | 0.9 s | 1165.4 s | 0.9 s | Unavailable | Unavailable | Unavailable |  |
+| 4 | Work 2 | 1 km | 1410.6 s | Manual FIT placeholder | 1359.5 s | -51.1 s | 1359.5 s | -51.1 s | 1408.1 s | 1410.6 s | 1413.2 s | Nearest raw HKWorkoutEvent end is more than 3 seconds from the reconstructed row end. |
+| 5 | Recovery 2 | 150 s | 1560.6 s | Manual FIT placeholder | 1660.7 s | 100.1 s | 1660.7 s | 100.1 s | Unavailable | Unavailable | Unavailable | Nearest raw HKWorkoutEvent end is more than 3 seconds from the reconstructed row end. |
+| 6 | Work 3 | 1 km | 1801.7 s | Manual FIT placeholder | 1702.1 s | -99.6 s | 1702.1 s | -99.6 s | 1799.1 s | 1801.7 s | 1804.2 s | Nearest raw HKWorkoutEvent end is more than 3 seconds from the reconstructed row end. |
+| 7 | Recovery 3 | 150 s | 1951.7 s | Manual FIT placeholder | 2093.0 s | 141.4 s | 2093.0 s | 141.4 s | Unavailable | Unavailable | Unavailable | Nearest raw HKWorkoutEvent end is more than 3 seconds from the reconstructed row end. |
+| 8 | Cooldown | Open | 2336.7 s | Manual FIT placeholder | 2334.2 s | -2.5 s | 2334.2 s | -2.5 s | Unavailable | Unavailable | Unavailable |  |
+
+## Boundary Source Warnings
+
+- One or more raw HKWorkoutEvent records have unavailable metadata keys.
+- FIT lap end offsets are not read by RunSignal; compare them manually after physical-device export.
+
+## Evidence Caveats
+
+- None
+
+## JSON Payload
+
+```json
 {
+  "boundaryDiagnostics" : [
+    {
+      "distanceBoundary" : {
+        "crossingSample" : {
+          "endCumulativeDistanceMeters" : 2001.4803571118973,
+          "endDate" : "2026-06-03T11:57:51Z",
+          "endOffsetSeconds" : 762.3678689002991,
+          "startCumulativeDistanceMeters" : 1995.6178373540752,
+          "startDate" : "2026-06-03T11:57:48Z",
+          "startOffsetSeconds" : 759.7953763008118
+        },
+        "cumulativeDistanceAtEndMeters" : 2001.4803571118973,
+        "cumulativeDistanceAtStartMeters" : 0,
+        "interpolationFraction" : 0.7474879108216002,
+        "nextSample" : {
+          "endCumulativeDistanceMeters" : 2009.2362459553406,
+          "endDate" : "2026-06-03T11:57:53Z",
+          "endOffsetSeconds" : 764.9403622150421,
+          "startCumulativeDistanceMeters" : 2001.4803571118973,
+          "startDate" : "2026-06-03T11:57:51Z",
+          "startOffsetSeconds" : 762.3678689002991
+        },
+        "previousSample" : {
+          "endCumulativeDistanceMeters" : 1995.6178373540752,
+          "endDate" : "2026-06-03T11:57:48Z",
+          "endOffsetSeconds" : 759.7953763008118,
+          "startCumulativeDistanceMeters" : 1988.46186853759,
+          "startDate" : "2026-06-03T11:57:45Z",
+          "startOffsetSeconds" : 757.2228845357895
+        },
+        "targetDistanceMeters" : 2000
+      },
+      "index" : 1,
+      "label" : "Warmup"
+    },
+    {
+      "distanceBoundary" : {
+        "crossingSample" : {
+          "endCumulativeDistanceMeters" : 3003.3969073158223,
+          "endDate" : "2026-06-03T12:02:03Z",
+          "endOffsetSeconds" : 1014.4723151922226,
+          "startCumulativeDistanceMeters" : 2994.1328706021886,
+          "startDate" : "2026-06-03T12:02:00Z",
+          "startOffsetSeconds" : 1011.8998090028763
+        },
+        "cumulativeDistanceAtEndMeters" : 3003.3969073158223,
+        "cumulativeDistanceAtStartMeters" : 2001.4803571118973,
+        "interpolationFraction" : 0.7931193211805333,
+        "nextSample" : {
+          "endCumulativeDistanceMeters" : 3016.1272426524665,
+          "endDate" : "2026-06-03T12:02:05Z",
+          "endOffsetSeconds" : 1017.0448224544525,
+          "startCumulativeDistanceMeters" : 3003.3969073158223,
+          "startDate" : "2026-06-03T12:02:03Z",
+          "startOffsetSeconds" : 1014.4723151922226
+        },
+        "previousSample" : {
+          "endCumulativeDistanceMeters" : 2994.1328706021886,
+          "endDate" : "2026-06-03T12:02:00Z",
+          "endOffsetSeconds" : 1011.8998090028763,
+          "startCumulativeDistanceMeters" : 2984.2827832160983,
+          "startDate" : "2026-06-03T12:01:58Z",
+          "startOffsetSeconds" : 1009.3273077011108
+        },
+        "targetDistanceMeters" : 1000
+      },
+      "index" : 2,
+      "label" : "Work 1"
+    },
+    {
+      "distanceBoundary" : {
+        "crossingSample" : {
+          "endCumulativeDistanceMeters" : 4223.137398585677,
+          "endDate" : "2026-06-03T12:08:39Z",
+          "endOffsetSeconds" : 1410.6429206132889,
+          "startCumulativeDistanceMeters" : 4212.537871825043,
+          "startDate" : "2026-06-03T12:08:36Z",
+          "startOffsetSeconds" : 1408.070372581482
+        },
+        "cumulativeDistanceAtEndMeters" : 4223.137398585677,
+        "cumulativeDistanceAtStartMeters" : 3221.474886546045,
+        "interpolationFraction" : 0.843152239040852,
+        "nextSample" : {
+          "endCumulativeDistanceMeters" : 4235.193161340198,
+          "endDate" : "2026-06-03T12:08:41Z",
+          "endOffsetSeconds" : 1413.2154661417007,
+          "startCumulativeDistanceMeters" : 4223.137398585677,
+          "startDate" : "2026-06-03T12:08:39Z",
+          "startOffsetSeconds" : 1410.6429206132889
+        },
+        "previousSample" : {
+          "endCumulativeDistanceMeters" : 4212.537871825043,
+          "endDate" : "2026-06-03T12:08:36Z",
+          "endOffsetSeconds" : 1408.070372581482,
+          "startCumulativeDistanceMeters" : 4202.032815427519,
+          "startDate" : "2026-06-03T12:08:34Z",
+          "startOffsetSeconds" : 1405.4978235960007
+        },
+        "targetDistanceMeters" : 1000
+      },
+      "index" : 4,
+      "label" : "Work 2"
+    },
+    {
+      "distanceBoundary" : {
+        "crossingSample" : {
+          "endCumulativeDistanceMeters" : 5437.282878906932,
+          "endDate" : "2026-06-03T12:15:10Z",
+          "endOffsetSeconds" : 1801.6756726503372,
+          "startCumulativeDistanceMeters" : 5426.2463395795785,
+          "startDate" : "2026-06-03T12:15:07Z",
+          "startOffsetSeconds" : 1799.1030902862549
+        },
+        "cumulativeDistanceAtEndMeters" : 5437.282878906932,
+        "cumulativeDistanceAtStartMeters" : 4433.290152249623,
+        "interpolationFraction" : 0.6382265727615432,
+        "nextSample" : {
+          "endCumulativeDistanceMeters" : 5449.459950007498,
+          "endDate" : "2026-06-03T12:15:13Z",
+          "endOffsetSeconds" : 1804.2482550144196,
+          "startCumulativeDistanceMeters" : 5437.282878906932,
+          "startDate" : "2026-06-03T12:15:10Z",
+          "startOffsetSeconds" : 1801.6756726503372
+        },
+        "previousSample" : {
+          "endCumulativeDistanceMeters" : 5426.2463395795785,
+          "endDate" : "2026-06-03T12:15:07Z",
+          "endOffsetSeconds" : 1799.1030902862549,
+          "startCumulativeDistanceMeters" : 5414.2246238014195,
+          "startDate" : "2026-06-03T12:15:05Z",
+          "startOffsetSeconds" : 1796.5305081605911
+        },
+        "targetDistanceMeters" : 1000
+      },
+      "index" : 6,
+      "label" : "Work 3"
+    }
+  ],
   "boundarySourceWarnings" : [
     "One or more raw HKWorkoutEvent records have unavailable metadata keys.",
     "FIT lap end offsets are not read by RunSignal; compare them manually after physical-device export."
   ],
-  "cacheStatus" : {
-    "evidenceLoadedAt" : "2026-06-12T19:48:06Z",
-    "evidenceSource" : "freshQuery",
-    "hasCachedEvidence" : true
-  },
-  "diagnosticsWarnings" : [
+  "caveats" : [
 
   ],
   "evidenceCounts" : {
@@ -25,35 +376,7 @@
     "strideLength" : 334,
     "verticalOscillation" : 338
   },
-  "forceReenrichResult" : {
-    "authorizationState" : "authorized",
-    "cacheWasPresent" : true,
-    "completedAt" : "2026-06-12T19:48:14Z",
-    "diagnosticsWarnings" : [
-
-    ],
-    "evidenceCounts" : {
-      "activeEnergy" : 908,
-      "cadence" : 903,
-      "distance" : 905,
-      "events" : 12,
-      "groundContact" : 333,
-      "heartRate" : 466,
-      "power" : 900,
-      "routePoints" : 2333,
-      "speed" : 903,
-      "stepCount" : 903,
-      "strideLength" : 334,
-      "verticalOscillation" : 338
-    },
-    "freshQueryReturnedWorkout" : true,
-    "invalidatedCache" : true,
-    "message" : "Enriched 1 HealthKit running workouts.",
-    "requestedAt" : "2026-06-12T19:47:58Z",
-    "workoutID" : "F6D47A51-9510-4C7A-9186-6BAFE3C128C9"
-  },
   "generatedAt" : "2026-06-12T19:48:21Z",
-  "packetVersion" : 1,
   "plannedStepBoundaryComparisons" : [
     {
       "crossingDistanceSampleEndOffsetSeconds" : 762.3678689002991,
@@ -719,6 +1042,212 @@
       "stepType" : "cooldown"
     }
   ],
+  "segmentMarkers" : [
+    {
+      "averageHeartRateBpm" : 119.2987012987013,
+      "caveats" : [
+        "HealthKit did not expose an Apple Fitness interval label for this event.",
+        "This event window matches a split-like distance marker, not an Apple Fitness interval row."
+      ],
+      "confidence" : "limited",
+      "distanceMeters" : 1006.55604171569,
+      "durationSeconds" : 379.9435975551605,
+      "endOffsetSeconds" : 379.9435975551605,
+      "index" : 1,
+      "label" : "unknown",
+      "markerKind" : "splitMarker",
+      "paceSecondsPerKm" : 377.4688957283897,
+      "source" : "healthKitSegmentPattern",
+      "startOffsetSeconds" : 0
+    },
+    {
+      "averageHeartRateBpm" : 123.67479674796748,
+      "caveats" : [
+        "HealthKit did not expose an Apple Fitness interval label for this event.",
+        "This event overlaps another segment window, so it should stay raw\/debug-only."
+      ],
+      "confidence" : "limited",
+      "distanceMeters" : 1615.06681563449,
+      "durationSeconds" : 614.9445925951004,
+      "endOffsetSeconds" : 614.9445925951004,
+      "index" : 2,
+      "label" : "unknown",
+      "markerKind" : "overlappingSegmentMarker",
+      "paceSecondsPerKm" : 380.7548930125935,
+      "source" : "healthKitSegmentPattern",
+      "startOffsetSeconds" : 0
+    },
+    {
+      "averageHeartRateBpm" : 133.88,
+      "caveats" : [
+        "HealthKit did not expose an Apple Fitness interval label for this event.",
+        "This event overlaps another segment window, so it should stay raw\/debug-only."
+      ],
+      "confidence" : "limited",
+      "distanceMeters" : 1000.7217487151096,
+      "durationSeconds" : 384.3471790552139,
+      "endOffsetSeconds" : 764.2907766103745,
+      "index" : 3,
+      "label" : "unknown",
+      "markerKind" : "overlappingSegmentMarker",
+      "paceSecondsPerKm" : 384.0699770427711,
+      "source" : "healthKitSegmentPattern",
+      "startOffsetSeconds" : 379.9435975551605
+    },
+    {
+      "averageHeartRateBpm" : 153.54545454545453,
+      "caveats" : [
+        "HealthKit did not expose an Apple Fitness interval label for this event.",
+        "This event overlaps another segment window, so it should stay raw\/debug-only."
+      ],
+      "confidence" : "limited",
+      "distanceMeters" : 1607.8343176178269,
+      "durationSeconds" : 550.4202084541321,
+      "endOffsetSeconds" : 1165.3648010492325,
+      "index" : 4,
+      "label" : "unknown",
+      "markerKind" : "overlappingSegmentMarker",
+      "paceSecondsPerKm" : 342.3363977388147,
+      "source" : "healthKitSegmentPattern",
+      "startOffsetSeconds" : 614.9445925951004
+    },
+    {
+      "averageHeartRateBpm" : 166.23529411764707,
+      "caveats" : [
+        "HealthKit did not expose an Apple Fitness interval label for this event.",
+        "This event overlaps another segment window, so it should stay raw\/debug-only."
+      ],
+      "confidence" : "limited",
+      "distanceMeters" : 1004.1815338972874,
+      "durationSeconds" : 251.8107671737671,
+      "endOffsetSeconds" : 1016.1015437841415,
+      "index" : 5,
+      "label" : "unknown",
+      "markerKind" : "overlappingSegmentMarker",
+      "paceSecondsPerKm" : 250.76219654874026,
+      "source" : "healthKitSegmentPattern",
+      "startOffsetSeconds" : 764.2907766103745
+    },
+    {
+      "averageHeartRateBpm" : 156.66666666666666,
+      "caveats" : [
+        "HealthKit did not expose an Apple Fitness interval label for this event.",
+        "This event window matches a split-like distance marker, not an Apple Fitness interval row."
+      ],
+      "confidence" : "limited",
+      "distanceMeters" : 998.4019999002603,
+      "durationSeconds" : 343.43529987335205,
+      "endOffsetSeconds" : 1359.5368436574936,
+      "index" : 6,
+      "label" : "unknown",
+      "markerKind" : "splitMarker",
+      "paceSecondsPerKm" : 343.98498791835453,
+      "source" : "healthKitSegmentPattern",
+      "startOffsetSeconds" : 1016.1015437841415
+    },
+    {
+      "averageHeartRateBpm" : 161.6060606060606,
+      "caveats" : [
+        "HealthKit did not expose an Apple Fitness interval label for this event.",
+        "This event overlaps another segment window, so it should stay raw\/debug-only."
+      ],
+      "confidence" : "limited",
+      "distanceMeters" : 1616.2196370192896,
+      "durationSeconds" : 495.3720905780792,
+      "endOffsetSeconds" : 1660.7368916273117,
+      "index" : 7,
+      "label" : "unknown",
+      "markerKind" : "overlappingSegmentMarker",
+      "paceSecondsPerKm" : 306.50047755369957,
+      "source" : "healthKitSegmentPattern",
+      "startOffsetSeconds" : 1165.3648010492325
+    },
+    {
+      "averageHeartRateBpm" : 162.05882352941177,
+      "caveats" : [
+        "HealthKit did not expose an Apple Fitness interval label for this event.",
+        "This event overlaps another segment window, so it should stay raw\/debug-only."
+      ],
+      "confidence" : "limited",
+      "distanceMeters" : 1001.2390912663413,
+      "durationSeconds" : 342.5812921524048,
+      "endOffsetSeconds" : 1702.1181358098984,
+      "index" : 8,
+      "label" : "unknown",
+      "markerKind" : "overlappingSegmentMarker",
+      "paceSecondsPerKm" : 342.15732799557077,
+      "source" : "healthKitSegmentPattern",
+      "startOffsetSeconds" : 1359.5368436574936
+    },
+    {
+      "averageHeartRateBpm" : 161.92307692307693,
+      "caveats" : [
+        "HealthKit did not expose an Apple Fitness interval label for this event.",
+        "This event overlaps another segment window, so it should stay raw\/debug-only."
+      ],
+      "confidence" : "limited",
+      "distanceMeters" : 1605.1676232716436,
+      "durationSeconds" : 591.8765020370483,
+      "endOffsetSeconds" : 2252.61339366436,
+      "index" : 9,
+      "label" : "unknown",
+      "markerKind" : "overlappingSegmentMarker",
+      "paceSecondsPerKm" : 368.73189656709434,
+      "source" : "healthKitSegmentPattern",
+      "startOffsetSeconds" : 1660.7368916273117
+    },
+    {
+      "averageHeartRateBpm" : 161.0909090909091,
+      "caveats" : [
+        "HealthKit did not expose an Apple Fitness interval label for this event.",
+        "This event overlaps another segment window, so it should stay raw\/debug-only."
+      ],
+      "confidence" : "limited",
+      "distanceMeters" : 996.8050733037735,
+      "durationSeconds" : 390.93000519275665,
+      "endOffsetSeconds" : 2093.048141002655,
+      "index" : 10,
+      "label" : "unknown",
+      "markerKind" : "overlappingSegmentMarker",
+      "paceSecondsPerKm" : 392.1830011328823,
+      "source" : "healthKitSegmentPattern",
+      "startOffsetSeconds" : 1702.1181358098984
+    },
+    {
+      "averageHeartRateBpm" : 161,
+      "caveats" : [
+        "HealthKit did not expose an Apple Fitness interval label for this event.",
+        "This event is a raw HealthKit marker until interval parity is proven."
+      ],
+      "confidence" : "limited",
+      "distanceMeters" : 660.1533391635658,
+      "durationSeconds" : 241.16491448879242,
+      "endOffsetSeconds" : 2334.2130554914474,
+      "index" : 11,
+      "label" : "unknown",
+      "markerKind" : "rawSegmentMarker",
+      "paceSecondsPerKm" : 365.3165108493667,
+      "source" : "healthKitSegmentPattern",
+      "startOffsetSeconds" : 2093.048141002655
+    },
+    {
+      "averageHeartRateBpm" : 163.64705882352942,
+      "caveats" : [
+        "HealthKit did not expose an Apple Fitness interval label for this event.",
+        "This event overlaps another segment window, so it should stay raw\/debug-only."
+      ],
+      "confidence" : "limited",
+      "distanceMeters" : 223.77043441877777,
+      "durationSeconds" : 81.5996618270874,
+      "endOffsetSeconds" : 2334.2130554914474,
+      "index" : 12,
+      "label" : "unknown",
+      "markerKind" : "overlappingSegmentMarker",
+      "paceSecondsPerKm" : 364.65792292460213,
+      "source" : "healthKitSegmentPattern",
+      "startOffsetSeconds" : 2252.61339366436
+    }
+  ],
   "sourceNotes" : [
     "Plan source: WorkoutKit",
     "Window source: Plan-derived from HealthKit distance\/time samples",
@@ -838,3 +1367,4 @@
     ]
   }
 }
+```

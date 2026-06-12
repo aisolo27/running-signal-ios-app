@@ -35,6 +35,7 @@ RunSignal is a native iPhone SwiftUI app focused on Apple Fitness parity for com
 - Boundary pattern investigation found no public-API observable separator that explains drift cases without regressing guard cases; production boundary behavior remains unchanged.
 - Guard-case collection now has a bounded plan: collect 5-10 more simple fixed-distance Work + Open tail examples before revisiting production boundary logic.
 - A HealthFit FIT comparison pilot is documented and archived for the same packet-backed running fixtures. FIT exports remain research-only and are not a production import path, HealthFit dependency, or replacement for Apple Fitness visual parity. The pilot found FIT session totals match RunSignal totals, while FIT lap rows and inferred Open tails often align more closely with Apple Fitness/manual row timing. A follow-up source investigation found FIT laps map to planned step order, but not cleanly to existing exported HealthKit segment marker windows or parity packet distance diagnostics.
+- Raw HealthKit Debug and parity packet exports now include debug-only boundary source diagnostics: raw HKWorkoutEvent inventories, metadata keys when available, planned-step boundary comparisons, nearest raw event and segment marker endings, distance sample boundary references, and warnings. Regenerated physical-device exports are archived for the full active fixture set. The new raw events do not prove FIT/Apple lap timing is directly available as a clean public HealthKit/WorkoutKit boundary source.
 - Keep only the latest active parity investigation, latest active evidence review, and current blocker in active validation docs; archive completed date-specific evidence to `docs/archive/old-validation/`.
 - Real HealthKit proof requires a physical iPhone; Simulator checks prove UI/sample-data behavior only.
 
@@ -55,7 +56,7 @@ RunSignal is a native iPhone SwiftUI app focused on Apple Fitness parity for com
 - Review `candidate-boundary-strategy-scorecard.md` before changing boundary logic; the current scorecard says no candidate is production-safe.
 - Use `boundary-pattern-investigation.md` for the current drift-vs-guard feature comparison before proposing any boundary experiment.
 - Use `guard-case-collection-plan.md` for the physical-iPhone evidence checklist and stopping criteria.
-- Use `fit-comparison-summary.md` and `fit-lap-boundary-source-investigation.md` for completed docs/debug FIT cross-check work. FIT evidence can inform investigation, but it does not approve boundary logic or production app changes.
+- Use `fit-comparison-summary.md` and `fit-lap-boundary-source-investigation.md` for completed docs/debug FIT cross-check work. FIT evidence and the new debug export fields can inform investigation, but they do not approve boundary logic or production app changes.
 - Keep `docs/project-state/current-state.md` and `docs/project-state/next-work.md` updated when project direction, validation status, known limitations, or next steps change.
 
 ## Read Only When Relevant

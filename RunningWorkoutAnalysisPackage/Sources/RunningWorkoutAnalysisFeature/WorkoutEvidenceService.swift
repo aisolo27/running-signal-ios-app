@@ -275,7 +275,10 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
                 startDate: event.dateInterval.start,
                 endDate: event.dateInterval.end,
                 type: eventTypeLabel(event.type),
-                label: eventLabel(event)
+                label: eventLabel(event),
+                metadataKeys: event.metadata.map { metadata in
+                    metadata.keys.map { String(describing: $0) }.sorted()
+                }
             )
         }
     }

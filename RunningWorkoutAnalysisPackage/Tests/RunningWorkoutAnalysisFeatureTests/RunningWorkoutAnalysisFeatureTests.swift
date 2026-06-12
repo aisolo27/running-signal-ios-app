@@ -1249,7 +1249,12 @@ import Testing
             )
         ],
         events: [
-            WorkoutEvidenceEvent(startDate: start, endDate: start.addingTimeInterval(750), type: "HKWorkoutEventTypeSegment")
+            WorkoutEvidenceEvent(
+                startDate: start,
+                endDate: start.addingTimeInterval(750),
+                type: "HKWorkoutEventTypeSegment",
+                metadataKeys: ["HKMetadataKeyIndoorWorkout"]
+            )
         ],
         workoutPlanAudit: WorkoutPlanAudit(
             status: .available,
@@ -1275,6 +1280,11 @@ import Testing
     #expect(markdown.contains("| 1 | Warmup | 2 km"))
     #expect(markdown.contains("Boundary Strategy"))
     #expect(markdown.contains("## WorkoutKit Boundary Diagnostics"))
+    #expect(markdown.contains("## Raw HKWorkoutEvent Inventory"))
+    #expect(markdown.contains("HKMetadataKeyIndoorWorkout"))
+    #expect(markdown.contains("## Planned Step Boundary Comparison"))
+    #expect(markdown.contains("Manual FIT placeholder"))
+    #expect(markdown.contains("## Boundary Source Warnings"))
     #expect(markdown.contains("Target distance"))
     #expect(markdown.contains("Boundary sample"))
     #expect(markdown.contains("Row 2: Open / Extra Tail"))
@@ -1285,6 +1295,9 @@ import Testing
     #expect(markdown.contains("\"boundaryDiagnostics\""))
     #expect(markdown.contains("\"tailDiagnostics\""))
     #expect(markdown.contains("\"segmentMarkers\""))
+    #expect(markdown.contains("\"rawWorkoutEvents\""))
+    #expect(markdown.contains("\"plannedStepBoundaryComparisons\""))
+    #expect(markdown.contains("\"boundarySourceWarnings\""))
     #expect(markdown.contains("\"workoutKitPlanAudit\""))
 }
 
@@ -1306,6 +1319,14 @@ import Testing
                 metric: .distance,
                 unit: "m",
                 points: [WorkoutEvidencePoint(date: start.addingTimeInterval(300), value: 1_000)]
+            )
+        ],
+        events: [
+            WorkoutEvidenceEvent(
+                startDate: start,
+                endDate: start.addingTimeInterval(300),
+                type: "HKWorkoutEventTypeSegment",
+                metadataKeys: ["source"]
             )
         ],
         workoutPlanAudit: WorkoutPlanAudit(
@@ -1340,6 +1361,10 @@ import Testing
     #expect(json.contains("\"evidenceCounts\""))
     #expect(json.contains("\"workoutKitPlanAudit\""))
     #expect(json.contains("\"reconstructedIntervals\""))
+    #expect(json.contains("\"rawWorkoutEvents\""))
+    #expect(json.contains("\"metadataKeys\""))
+    #expect(json.contains("\"plannedStepBoundaryComparisons\""))
+    #expect(json.contains("\"boundarySourceWarnings\""))
     #expect(json.contains("\"diagnosticsWarnings\""))
 }
 

@@ -69,12 +69,20 @@ public struct WorkoutEvidenceEvent: Codable, Equatable, Sendable {
     public var endDate: Date
     public var type: String
     public var label: String?
+    public var metadataKeys: [String]?
 
-    public init(startDate: Date, endDate: Date, type: String, label: String? = nil) {
+    public init(
+        startDate: Date,
+        endDate: Date,
+        type: String,
+        label: String? = nil,
+        metadataKeys: [String]? = nil
+    ) {
         self.startDate = startDate
         self.endDate = endDate
         self.type = type
         self.label = label
+        self.metadataKeys = metadataKeys
     }
 
     public var displayLabel: String {
