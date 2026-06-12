@@ -32,9 +32,9 @@ June 1, May 26, and June 12 show the same drift direction across 6.45 km and 5.0
 
 April 28 is now an evidence-recovery fixture: the physical-device fresh query path retrieves the evidence needed for comparison. It should still stay separate from production boundary tuning because it validates cache invalidation/fresh-query coverage more than it validates a repeated boundary strategy.
 
-Use `fixed-distance-boundary-strategy-research.md` and `analyze_fixed_distance_boundaries.py` for offline strategy comparison only. No candidate strategy is approved for production yet.
+Use `fixed-distance-boundary-strategy-research.md`, `analyze_fixed_distance_boundaries.py`, and `score_candidate_boundary_strategies.py` for offline strategy comparison only. No candidate strategy is approved for production yet.
 
-The next implementation step should be a debug-only candidate boundary scorer that compares strategies side by side against the complete packet-backed fixture set without changing production interval behavior.
+The debug-only candidate scorecard compares strategies side by side against the complete packet-backed fixture set without changing production interval behavior. Its current result does not approve any production boundary strategy.
 
 ## Future Examples Needed
 
@@ -55,7 +55,7 @@ Ideal examples:
 - 400 m or 800 m repeated Work steps with possible Open tail.
 - Any workout where Apple Fitness and RunSignal differ by more than 2 seconds.
 
-April 28 evidence and the May 26 through June 12 parity packets have been regenerated and saved. Use the complete packet-backed fixture set for future debug-only scoring, not for immediate production boundary changes.
+April 28 evidence and the May 26 through June 12 parity packets have been regenerated and saved. Use the complete packet-backed fixture set and current scorecard for future debug-only scoring, not for immediate production boundary changes.
 
 ## Older Evidence Reload Track
 

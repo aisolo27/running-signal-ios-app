@@ -18,7 +18,7 @@ The Open rows are real post-goal running. Do not hide or merge Open into Work. T
 
 April 28 is not included in boundary scoring. Physical-device force re-enrich recovered WorkoutKit plan data, rich HealthKit samples, reconstructed intervals, and boundary diagnostics, but this workout is being kept as an evidence-recovery and fresh-query/cache-invalidation validation fixture rather than a main drift-tuning fixture.
 
-Physical-device parity packets are now archived for May 26, June 1, June 2, June 3, June 4, June 5, and June 12. These packets should feed a future debug-only candidate boundary scorer; this research note still does not approve production behavior changes.
+Physical-device parity packets are now archived for May 26, June 1, June 2, June 3, June 4, June 5, and June 12. These packets feed the debug-only candidate scorer in `score_candidate_boundary_strategies.py`; this research note still does not approve production behavior changes.
 
 ## Candidate Strategies
 
@@ -73,14 +73,17 @@ Run:
 
 ```bash
 python3 docs/validation/apple-fitness-interval-parity-dataset/analyze_fixed_distance_boundaries.py
+python3 docs/validation/apple-fitness-interval-parity-dataset/score_candidate_boundary_strategies.py
 ```
 
-The harness reads `interval-parity-fixture.json` and the Raw HealthKit Debug exports, then compares current, next-sample-end, Apple-visible Open alignment, and final-distance-sample anchored timings.
+The older harness reads `interval-parity-fixture.json` and Raw HealthKit Debug exports, then compares current, next-sample-end, Apple-visible Open alignment, and final-distance-sample anchored timings.
+
+The scorer reads `interval-parity-fixture.json` plus archived parity packet JSON, then writes `candidate-boundary-strategy-scorecard.md` and `candidate-boundary-strategy-scorecard.json`. It scores current baseline, interpolated crossing, previous sample end, next sample end, final distance sample anchored, tail-shrink-to-expected-Open, and pause-adjusted. Unsupported strategies are marked not scoreable with reasons.
 
 ## Current Conclusion
 
 Fixed-distance Work plus real Open tail drift now has at least three valid examples across two goal distances: 6.45 km and 5.00 km. June 1 is no longer isolated.
 
-No deterministic rule is approved yet. The next-sample-end strategy improves all three scored drift examples but does not fully explain them, and it could regress existing pass/temporary-pass guards if applied globally. A production rule would need fresh boundary diagnostics for the passing Work/Open fixtures, more examples, or a narrow gate that preserves June 2, June 3, June 4, and June 5.
+No deterministic rule is approved yet. The next-sample-end strategy improves drift rows but regresses June 2/June 4 guard rows in the scorecard. Tail-shrink-to-expected-Open improves rows only by using Apple Fitness/manual expected Open as an oracle, so it is not production-safe. A production rule would need fresh boundary diagnostics for the passing Work/Open fixtures, more examples, or a narrow gate that preserves June 2, June 3, June 4, and June 5.
 
 Normal WorkoutKit interval UI promotion remains blocked.

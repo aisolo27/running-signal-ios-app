@@ -33,15 +33,17 @@ April 28 is no longer evidence unavailable. A physical-device force re-enrich on
 
 Physical-device parity packets are now archived for the full active fixture set: April 28, May 26, June 1, June 2, June 3, June 4, June 5, and June 12. The May 26 through June 12 batch contains parity packet JSON only; no matching raw debug markdown exports were included in that batch.
 
+Debug-only candidate boundary scoring is available in `score_candidate_boundary_strategies.py`. It writes `candidate-boundary-strategy-scorecard.md` and `candidate-boundary-strategy-scorecard.json`; neither file changes app behavior or approves production boundary logic.
+
 ## Next Validation Phase
 
 - Do not tune June 1 from one workout.
 - June 1's Open row is real post-goal running and should not be hidden or merged into Work.
 - May 26 and June 12 show the same drift direction as June 1, across 6.45 km and 5.00 km goals.
-- Use the archived parity packets to compare candidate boundary strategies in a future debug-only scorer before changing app logic.
+- Use the archived parity packets and candidate scorecard before changing app logic.
 - April 28 now proves the physical-device fresh query path can recover the previously missing evidence, but it does not approve a boundary-rule change.
 - June 2 remains a simple fixed-distance Work plus Open / Extra guard, but exact packet values put it in the existing temporary-pass band because the Work time is 2.4 seconds from Apple Fitness.
-- Goal: determine whether this is repeatable Apple Fitness boundary behavior and whether a deterministic rule can improve it without regressing existing pass/temporary-pass fixtures.
+- Current scorecard result: next-sample-end improves drift rows but regresses guard rows; tail-shrink-to-expected-Open uses Apple Fitness/manual expected values as an oracle, so it is not production-safe.
 - Normal interval UI promotion remains blocked until this is resolved or explicitly accepted.
 
 ## How To Collect Screenshots
