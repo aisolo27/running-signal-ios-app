@@ -34,6 +34,7 @@ Updated: 2026-06-12
 - June 1, May 26, and June 12 should stay blocked. The diagnostics show RunSignal's boundary is internally consistent in all three usable drift cases, so the evidence supports research scoring but still does not approve a deterministic production rule.
 - Debug-only candidate boundary scoring is now available in `score_candidate_boundary_strategies.py`; the generated scorecard does not approve any production boundary behavior change.
 - Scorecard result: next-sample-end improves the drift cases but regresses June 2/June 4 guard rows; tail-shrink-to-expected-Open improves rows only by using Apple Fitness/manual expected Open as an oracle, so it is not production-safe.
+- Boundary pattern investigation found no public-API observable separator between drift and guard cases. The clearest separator is the Apple Fitness/manual delta itself, which is valid for offline research but not production runtime logic.
 - 2026-06-03 label/structure blocker is resolved by the targeted open-cooldown rule: if WorkoutKit exposes a final planned `Cooldown` step with goal `open`, RunSignal keeps the planned `Cooldown` label and extends that row to workout end.
 - The June 3 fix is not evidence that post-cooldown activity should always merge into `Cooldown`. Fixed distance/time cooldowns that complete and are followed by continued running should still create `Open / Extra`.
 - 2026-06-05 is close overall, but warmup/cooldown boundaries are still temporary passes rather than preferred passes. The displayed cooldown distance differs by roughly 18 m.

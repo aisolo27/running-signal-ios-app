@@ -35,6 +35,8 @@ Physical-device parity packets are now archived for the full active fixture set:
 
 Debug-only candidate boundary scoring is available in `score_candidate_boundary_strategies.py`. It writes `candidate-boundary-strategy-scorecard.md` and `candidate-boundary-strategy-scorecard.json`; neither file changes app behavior or approves production boundary logic.
 
+`boundary-pattern-investigation.md` compares drift and guard packet features. Its current conclusion is that no public-API observable feature cleanly separates drift cases from guard cases, so production boundary behavior should remain unchanged.
+
 ## Next Validation Phase
 
 - Do not tune June 1 from one workout.
@@ -44,6 +46,7 @@ Debug-only candidate boundary scoring is available in `score_candidate_boundary_
 - April 28 now proves the physical-device fresh query path can recover the previously missing evidence, but it does not approve a boundary-rule change.
 - June 2 remains a simple fixed-distance Work plus Open / Extra guard, but exact packet values put it in the existing temporary-pass band because the Work time is 2.4 seconds from Apple Fitness.
 - Current scorecard result: next-sample-end improves drift rows but regresses guard rows; tail-shrink-to-expected-Open uses Apple Fitness/manual expected values as an oracle, so it is not production-safe.
+- Current pattern result: packet-visible features such as target distance, tail size, interpolation fraction, overshoot, boundary adjustment, and sample gaps overlap across drift and guard cases.
 - Normal interval UI promotion remains blocked until this is resolved or explicitly accepted.
 
 ## How To Collect Screenshots

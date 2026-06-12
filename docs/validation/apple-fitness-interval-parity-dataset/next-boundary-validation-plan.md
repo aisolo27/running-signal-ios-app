@@ -36,6 +36,8 @@ Use `fixed-distance-boundary-strategy-research.md`, `analyze_fixed_distance_boun
 
 The debug-only candidate scorecard compares strategies side by side against the complete packet-backed fixture set without changing production interval behavior. Its current result does not approve any production boundary strategy.
 
+The boundary pattern investigation compares packet-visible drift and guard features. It did not find a production-safe public-API separator; current Work/Open error versus Apple Fitness/manual reference separates the groups offline, but cannot be used as runtime logic.
+
 ## Future Examples Needed
 
 Collect more fixed-distance Work plus real Open tail examples and pass-case boundary diagnostics as new workouts become available. Each future workout should have:
@@ -54,6 +56,7 @@ Ideal examples:
 - 2K Work plus short Open tail.
 - 400 m or 800 m repeated Work steps with possible Open tail.
 - Any workout where Apple Fitness and RunSignal differ by more than 2 seconds.
+- Additional guard examples where current RunSignal already matches Apple Fitness, with parity packets that include boundary diagnostics.
 
 April 28 evidence and the May 26 through June 12 parity packets have been regenerated and saved. Use the complete packet-backed fixture set and current scorecard for future debug-only scoring, not for immediate production boundary changes.
 
