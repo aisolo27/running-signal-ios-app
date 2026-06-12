@@ -169,6 +169,62 @@ public enum DiagnosticsExport {
         """
     }
 
+    public static func parityPacketJSON(
+        workout: CanonicalWorkout,
+        forceReenrichResult: ParityForceReenrichResult?,
+        generatedAt: Date = Date()
+    ) -> String {
+        let evidence = workout.evidence
+        let coverage = evidence.map(WorkoutEvidenceAnalyzer.coverage(for:))
+        let reconstructedIntervals = evidence
+            .flatMap { WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: $0) }
+        let payload = ParityPacketPayload(
+            packetVersion: 1,
+            generatedAt: generatedAt.ISO8601Format(),
+            workout: RawDebugWorkout(
+                id: workout.id,
+                sourceName: workout.sourceName,
+                sourceID: workout.sourceID,
+                deviceName: workout.deviceName,
+                startDate: workout.startDate.ISO8601Format(),
+                endDate: workout.endDate.ISO8601Format(),
+                durationSeconds: workout.durationSeconds,
+                elapsedSeconds: workout.elapsedSeconds,
+                distanceMeters: workout.distanceMeters,
+                paceSecondsPerKm: workout.paceSecondsPerKm,
+                averageHeartRate: workout.averageHeartRate,
+                maxHeartRate: workout.maxHeartRate,
+                cadenceSpm: workout.fullStepCadence,
+                averagePower: workout.averagePower
+            ),
+            cacheStatus: ParityPacketCacheStatus(
+                hasCachedEvidence: evidence != nil,
+                evidenceLoadedAt: evidence?.loadedAt.ISO8601Format(),
+                evidenceSource: forceReenrichResult?.freshQueryReturnedWorkout == true ? "freshQuery" : (evidence == nil ? "missing" : "cachedState")
+            ),
+            forceReenrichResult: forceReenrichResult.map(ParityPacketForceReenrichResult.init(result:)),
+            evidenceCounts: RawDebugEvidenceCounts(
+                heartRate: workout.heartRateSampleCount,
+                speed: workout.runningSpeedSampleCount,
+                distance: workout.distanceSampleCount,
+                activeEnergy: workout.activeEnergySampleCount,
+                power: workout.runningPowerSampleCount,
+                cadence: workout.cadenceSampleCount,
+                stepCount: workout.stepCountSampleCount,
+                strideLength: workout.strideLengthSampleCount,
+                verticalOscillation: workout.verticalOscillationSampleCount,
+                groundContact: workout.groundContactTimeSampleCount,
+                routePoints: evidence?.route.count ?? workout.routePointCount,
+                events: evidence?.events.count ?? workout.intervalCount
+            ),
+            workoutKitPlanAudit: evidence?.workoutPlanAudit.map(RawDebugPlanAudit.init(audit:)),
+            reconstructedIntervals: reconstructedIntervals?.intervals.map { RawDebugReconstructedInterval(interval: $0, workout: workout) } ?? [],
+            diagnosticsWarnings: (coverage?.caveats ?? []) + (evidence?.diagnostics?.warnings ?? []),
+            sourceNotes: reconstructedIntervals?.notes ?? []
+        )
+        return jsonPayload(payload)
+    }
+
     private static func evidenceCountRows(workout: CanonicalWorkout, evidence: WorkoutEvidence?) -> String {
         let rows = [
             ("Heart rate", workout.heartRateSampleCount),
@@ -395,7 +451,7 @@ public enum DiagnosticsExport {
         )
     }
 
-    private static func jsonPayload(_ payload: RawDebugPayload) -> String {
+    private static func jsonPayload<T: Encodable>(_ payload: T) -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? encoder.encode(payload),
@@ -425,6 +481,73 @@ public enum DiagnosticsExport {
     }
 }
 
+public struct ParityEvidenceCounts: Codable, Equatable, Sendable {
+    public var heartRate: Int
+    public var speed: Int
+    public var distance: Int
+    public var activeEnergy: Int
+    public var power: Int
+    public var cadence: Int
+    public var stepCount: Int
+    public var strideLength: Int
+    public var verticalOscillation: Int
+    public var groundContact: Int
+    public var routePoints: Int
+    public var events: Int
+
+    public init(workout: CanonicalWorkout) {
+        heartRate = workout.heartRateSampleCount
+        speed = workout.runningSpeedSampleCount
+        distance = workout.distanceSampleCount
+        activeEnergy = workout.activeEnergySampleCount
+        power = workout.runningPowerSampleCount
+        cadence = workout.cadenceSampleCount
+        stepCount = workout.stepCountSampleCount
+        strideLength = workout.strideLengthSampleCount
+        verticalOscillation = workout.verticalOscillationSampleCount
+        groundContact = workout.groundContactTimeSampleCount
+        routePoints = workout.routePointCount
+        events = workout.intervalCount
+    }
+}
+
+public struct ParityForceReenrichResult: Equatable, Sendable {
+    public var workoutID: String
+    public var requestedAt: Date
+    public var completedAt: Date?
+    public var cacheWasPresent: Bool
+    public var invalidatedCache: Bool
+    public var freshQueryReturnedWorkout: Bool
+    public var authorizationState: AuthorizationState
+    public var message: String?
+    public var evidenceCounts: ParityEvidenceCounts?
+    public var diagnosticsWarnings: [String]
+
+    public init(
+        workoutID: String,
+        requestedAt: Date,
+        completedAt: Date? = nil,
+        cacheWasPresent: Bool,
+        invalidatedCache: Bool,
+        freshQueryReturnedWorkout: Bool,
+        authorizationState: AuthorizationState,
+        message: String? = nil,
+        evidenceCounts: ParityEvidenceCounts? = nil,
+        diagnosticsWarnings: [String] = []
+    ) {
+        self.workoutID = workoutID
+        self.requestedAt = requestedAt
+        self.completedAt = completedAt
+        self.cacheWasPresent = cacheWasPresent
+        self.invalidatedCache = invalidatedCache
+        self.freshQueryReturnedWorkout = freshQueryReturnedWorkout
+        self.authorizationState = authorizationState
+        self.message = message
+        self.evidenceCounts = evidenceCounts
+        self.diagnosticsWarnings = diagnosticsWarnings
+    }
+}
+
 private extension String {
     func withMarkdownTablePipes() -> String {
         "| \(self) |"
@@ -441,6 +564,51 @@ private struct RawDebugPayload: Codable {
     var segmentMarkers: [RawDebugSegmentMarker]
     var sourceNotes: [String]
     var caveats: [String]
+}
+
+private struct ParityPacketPayload: Codable {
+    var packetVersion: Int
+    var generatedAt: String
+    var workout: RawDebugWorkout
+    var cacheStatus: ParityPacketCacheStatus
+    var forceReenrichResult: ParityPacketForceReenrichResult?
+    var evidenceCounts: RawDebugEvidenceCounts
+    var workoutKitPlanAudit: RawDebugPlanAudit?
+    var reconstructedIntervals: [RawDebugReconstructedInterval]
+    var diagnosticsWarnings: [String]
+    var sourceNotes: [String]
+}
+
+private struct ParityPacketCacheStatus: Codable {
+    var hasCachedEvidence: Bool
+    var evidenceLoadedAt: String?
+    var evidenceSource: String
+}
+
+private struct ParityPacketForceReenrichResult: Codable {
+    var workoutID: String
+    var requestedAt: String
+    var completedAt: String?
+    var cacheWasPresent: Bool
+    var invalidatedCache: Bool
+    var freshQueryReturnedWorkout: Bool
+    var authorizationState: String
+    var message: String?
+    var evidenceCounts: ParityEvidenceCounts?
+    var diagnosticsWarnings: [String]
+
+    init(result: ParityForceReenrichResult) {
+        workoutID = result.workoutID
+        requestedAt = result.requestedAt.ISO8601Format()
+        completedAt = result.completedAt?.ISO8601Format()
+        cacheWasPresent = result.cacheWasPresent
+        invalidatedCache = result.invalidatedCache
+        freshQueryReturnedWorkout = result.freshQueryReturnedWorkout
+        authorizationState = result.authorizationState.rawValue
+        message = result.message
+        evidenceCounts = result.evidenceCounts
+        diagnosticsWarnings = result.diagnosticsWarnings
+    }
 }
 
 private struct RawDebugWorkout: Codable {

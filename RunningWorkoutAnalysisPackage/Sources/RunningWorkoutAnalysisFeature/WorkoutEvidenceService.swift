@@ -44,21 +44,30 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
             vertical,
             ground
         ]
+        let routeResult = await route
+        let planAuditResult = await planAudit
 
         let series = Dictionary(
-            uniqueKeysWithValues: loadedSeries.compactMap { metricSeries -> (WorkoutEvidenceMetric, WorkoutMetricSeries)? in
-                guard let metricSeries, !metricSeries.points.isEmpty else { return nil }
+            uniqueKeysWithValues: loadedSeries.compactMap { result -> (WorkoutEvidenceMetric, WorkoutMetricSeries)? in
+                guard let metricSeries = result.series, !metricSeries.points.isEmpty else { return nil }
                 return (metricSeries.metric, metricSeries)
             }
         )
+        let diagnostics = WorkoutEvidenceDiagnostics(
+            queryDiagnostics: loadedSeries.map(\.diagnostic) + [
+                routeResult.diagnostic,
+                planAuditResult.diagnostic
+            ]
+        )
 
-        return await WorkoutEvidence(
+        return WorkoutEvidence(
             workoutID: workout.uuid.uuidString,
             loadedAt: Date(),
             series: series,
-            route: route,
+            route: routeResult.points,
             events: evidenceEvents(for: workout),
-            workoutPlanAudit: planAudit
+            workoutPlanAudit: planAuditResult.audit,
+            diagnostics: diagnostics
         )
     }
 
@@ -68,16 +77,27 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
         metric: WorkoutEvidenceMetric,
         unitLabel: String,
         workout: HKWorkout
-    ) async -> WorkoutMetricSeries? {
+    ) async -> MetricLoadResult {
         guard let type = HKObjectType.quantityType(forIdentifier: identifier) else {
-            return nil
+            return MetricLoadResult(
+                series: nil,
+                diagnostic: WorkoutEvidenceQueryDiagnostic(
+                    name: metric.rawValue,
+                    status: .unavailable,
+                    count: 0,
+                    message: "HealthKit quantity type is unavailable."
+                )
+            )
         }
 
         let predicate = HKQuery.predicateForObjects(from: workout)
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
         let associated = await quantitySamples(type: type, predicate: predicate, sort: sort, unit: unit)
         if !associated.isEmpty {
-            return WorkoutMetricSeries(metric: metric, unit: unitLabel, points: associated)
+            return MetricLoadResult(
+                series: WorkoutMetricSeries(metric: metric, unit: unitLabel, points: associated.points),
+                diagnostic: WorkoutEvidenceQueryDiagnostic(name: metric.rawValue, status: .loaded, count: associated.points.count)
+            )
         }
 
         let datePredicate = HKQuery.predicateForSamples(
@@ -87,7 +107,24 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
         let sourcePredicate = HKQuery.predicateForObjects(from: workout.sourceRevision.source)
         let fallbackPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [datePredicate, sourcePredicate])
         let fallback = await quantitySamples(type: type, predicate: fallbackPredicate, sort: sort, unit: unit)
-        return WorkoutMetricSeries(metric: metric, unit: unitLabel, points: fallback)
+        let errors = [associated.errorMessage, fallback.errorMessage].compactMap { $0 }.joined(separator: " ")
+        let message: String?
+        if !fallback.points.isEmpty {
+            message = nil
+        } else if !errors.isEmpty {
+            message = errors
+        } else {
+            message = "No associated or source/date fallback samples returned."
+        }
+        return MetricLoadResult(
+            series: WorkoutMetricSeries(metric: metric, unit: unitLabel, points: fallback.points),
+            diagnostic: WorkoutEvidenceQueryDiagnostic(
+                name: metric.rawValue,
+                status: fallback.points.isEmpty ? (errors.isEmpty ? .unavailable : .failed) : .loaded,
+                count: fallback.points.count,
+                message: message
+            )
+        )
     }
 
     private func quantitySamples(
@@ -95,32 +132,43 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
         predicate: NSPredicate,
         sort: NSSortDescriptor,
         unit: HKUnit
-    ) async -> [WorkoutEvidencePoint] {
+    ) async -> SampleQueryResult {
         await withCheckedContinuation { continuation in
             let query = HKSampleQuery(
                 sampleType: type,
                 predicate: predicate,
                 limit: HKObjectQueryNoLimit,
                 sortDescriptors: [sort]
-            ) { _, samples, _ in
+            ) { _, samples, error in
                 let points = (samples as? [HKQuantitySample] ?? []).map {
                     WorkoutEvidencePoint(date: $0.startDate, value: $0.quantity.doubleValue(for: unit))
                 }
-                continuation.resume(returning: points)
+                continuation.resume(returning: SampleQueryResult(points: points, errorMessage: error.map { String(describing: $0) }))
             }
             store.execute(query)
         }
     }
 
-    private func stepCadenceSeries(for workout: HKWorkout) async -> WorkoutMetricSeries? {
+    private func stepCadenceSeries(for workout: HKWorkout) async -> MetricLoadResult {
         guard let type = HKObjectType.quantityType(forIdentifier: .stepCount) else {
-            return nil
+            return MetricLoadResult(
+                series: nil,
+                diagnostic: WorkoutEvidenceQueryDiagnostic(
+                    name: WorkoutEvidenceMetric.cadence.rawValue,
+                    status: .unavailable,
+                    count: 0,
+                    message: "Step count type is unavailable for cadence derivation."
+                )
+            )
         }
 
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
         let associated = await stepCadencePoints(type: type, predicate: HKQuery.predicateForObjects(from: workout), sort: sort)
         if !associated.isEmpty {
-            return WorkoutMetricSeries(metric: .cadence, unit: "spm", points: associated)
+            return MetricLoadResult(
+                series: WorkoutMetricSeries(metric: .cadence, unit: "spm", points: associated.points),
+                diagnostic: WorkoutEvidenceQueryDiagnostic(name: WorkoutEvidenceMetric.cadence.rawValue, status: .loaded, count: associated.points.count)
+            )
         }
 
         let datePredicate = HKQuery.predicateForSamples(
@@ -130,54 +178,82 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
         let sourcePredicate = HKQuery.predicateForObjects(from: workout.sourceRevision.source)
         let fallbackPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [datePredicate, sourcePredicate])
         let fallback = await stepCadencePoints(type: type, predicate: fallbackPredicate, sort: sort)
-        return WorkoutMetricSeries(metric: .cadence, unit: "spm", points: fallback)
+        let errors = [associated.errorMessage, fallback.errorMessage].compactMap { $0 }.joined(separator: " ")
+        return MetricLoadResult(
+            series: WorkoutMetricSeries(metric: .cadence, unit: "spm", points: fallback.points),
+            diagnostic: WorkoutEvidenceQueryDiagnostic(
+                name: WorkoutEvidenceMetric.cadence.rawValue,
+                status: fallback.points.isEmpty ? (errors.isEmpty ? .unavailable : .failed) : .loaded,
+                count: fallback.points.count,
+                message: fallback.points.isEmpty ? (errors.isEmpty ? "No step samples returned for cadence derivation." : errors) : nil
+            )
+        )
     }
 
     private func stepCadencePoints(
         type: HKQuantityType,
         predicate: NSPredicate,
         sort: NSSortDescriptor
-    ) async -> [WorkoutEvidencePoint] {
+    ) async -> SampleQueryResult {
         await withCheckedContinuation { continuation in
             let query = HKSampleQuery(
                 sampleType: type,
                 predicate: predicate,
                 limit: HKObjectQueryNoLimit,
                 sortDescriptors: [sort]
-            ) { _, samples, _ in
+            ) { _, samples, error in
                 let points = (samples as? [HKQuantitySample] ?? []).compactMap { sample -> WorkoutEvidencePoint? in
                     let minutes = sample.endDate.timeIntervalSince(sample.startDate) / 60
                     guard minutes > 0 else { return nil }
                     let steps = sample.quantity.doubleValue(for: .count())
                     return WorkoutEvidencePoint(date: sample.startDate, value: steps / minutes)
                 }
-                continuation.resume(returning: points)
+                continuation.resume(returning: SampleQueryResult(points: points, errorMessage: error.map { String(describing: $0) }))
             }
             store.execute(query)
         }
     }
 
-    private func routePoints(for workout: HKWorkout) async -> [WorkoutRoutePoint] {
+    private func routePoints(for workout: HKWorkout) async -> RouteLoadResult {
         let routeType = HKSeriesType.workoutRoute()
         let predicate = HKQuery.predicateForObjects(from: workout)
 
-        let routes = await withCheckedContinuation { continuation in
+        let routeQueryResult: RouteQueryResult = await withCheckedContinuation { continuation in
             let query = HKSampleQuery(
                 sampleType: routeType,
                 predicate: predicate,
                 limit: HKObjectQueryNoLimit,
                 sortDescriptors: nil
-            ) { _, samples, _ in
-                continuation.resume(returning: samples as? [HKWorkoutRoute] ?? [])
+            ) { _, samples, error in
+                continuation.resume(returning: RouteQueryResult(routes: samples as? [HKWorkoutRoute] ?? [], errorMessage: error.map { String(describing: $0) }))
             }
             store.execute(query)
         }
 
         var points: [WorkoutRoutePoint] = []
-        for route in routes {
+        for route in routeQueryResult.routes {
             points.append(contentsOf: await locations(for: route))
         }
-        return points.sorted { $0.date < $1.date }
+        let sorted = points.sorted { $0.date < $1.date }
+        let message: String?
+        if let error = routeQueryResult.errorMessage {
+            message = error
+        } else if routeQueryResult.routes.isEmpty {
+            message = "No workout routes returned."
+        } else if sorted.isEmpty {
+            message = "Workout route objects returned no locations."
+        } else {
+            message = nil
+        }
+        return RouteLoadResult(
+            points: sorted,
+            diagnostic: WorkoutEvidenceQueryDiagnostic(
+                name: "route",
+                status: sorted.isEmpty ? (routeQueryResult.errorMessage == nil ? .unavailable : .failed) : .loaded,
+                count: sorted.count,
+                message: message
+            )
+        )
     }
 
     private func locations(for route: HKWorkoutRoute) async -> [WorkoutRoutePoint] {
@@ -231,32 +307,77 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
         }.first
     }
 
-    private func workoutPlanAudit(for workout: HKWorkout) async -> WorkoutPlanAudit {
+    private func workoutPlanAudit(for workout: HKWorkout) async -> PlanAuditLoadResult {
         #if canImport(WorkoutKit)
         if #available(iOS 17.0, macOS 15.0, macCatalyst 18.0, watchOS 10.0, *) {
             do {
                 guard let plan = try await workout.workoutPlan else {
-                    return WorkoutPlanAudit(
+                    let audit = WorkoutPlanAudit(
                         status: .unavailable,
                         summaryLines: ["WorkoutKit returned no workout plan for this completed workout."]
                     )
+                    return PlanAuditLoadResult(
+                        audit: audit,
+                        diagnostic: WorkoutEvidenceQueryDiagnostic(name: "workoutKitPlan", status: .unavailable, count: 0, message: audit.summaryLines.first)
+                    )
                 }
-                return WorkoutKitPlanAuditFormatter.audit(plan)
+                let audit = WorkoutKitPlanAuditFormatter.audit(plan)
+                return PlanAuditLoadResult(
+                    audit: audit,
+                    diagnostic: WorkoutEvidenceQueryDiagnostic(name: "workoutKitPlan", status: .loaded, count: audit.plannedSteps.count)
+                )
             } catch {
-                return WorkoutPlanAudit(
+                let audit = WorkoutPlanAudit(
                     status: .failed,
                     summaryLines: ["WorkoutKit lookup failed; keep interval UI gated."],
                     errorMessage: String(describing: error)
+                )
+                return PlanAuditLoadResult(
+                    audit: audit,
+                    diagnostic: WorkoutEvidenceQueryDiagnostic(name: "workoutKitPlan", status: .failed, count: 0, message: audit.errorMessage)
                 )
             }
         }
         #endif
 
-        return WorkoutPlanAudit(
+        let audit = WorkoutPlanAudit(
             status: .unsupported,
             summaryLines: ["WorkoutKit workout plan lookup is not available on this OS or SDK."]
         )
+        return PlanAuditLoadResult(
+            audit: audit,
+            diagnostic: WorkoutEvidenceQueryDiagnostic(name: "workoutKitPlan", status: .unavailable, count: 0, message: audit.summaryLines.first)
+        )
     }
+}
+
+private struct MetricLoadResult {
+    var series: WorkoutMetricSeries?
+    var diagnostic: WorkoutEvidenceQueryDiagnostic
+}
+
+private struct SampleQueryResult {
+    var points: [WorkoutEvidencePoint]
+    var errorMessage: String?
+
+    var isEmpty: Bool {
+        points.isEmpty
+    }
+}
+
+private struct RouteQueryResult {
+    var routes: [HKWorkoutRoute]
+    var errorMessage: String?
+}
+
+private struct RouteLoadResult {
+    var points: [WorkoutRoutePoint]
+    var diagnostic: WorkoutEvidenceQueryDiagnostic
+}
+
+private struct PlanAuditLoadResult {
+    var audit: WorkoutPlanAudit
+    var diagnostic: WorkoutEvidenceQueryDiagnostic
 }
 
 #if canImport(WorkoutKit)

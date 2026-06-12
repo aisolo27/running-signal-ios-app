@@ -28,6 +28,8 @@ RunSignal is a native iPhone SwiftUI app focused on Apple Fitness parity for com
 - Apple Fitness interval parity remains the active validation focus.
 - Preserve the Jun 10, 2026 interval validation docs and the current parity dataset.
 - The normal workout detail interval UI should not be promoted until the current boundary-validation blockers are resolved or explicitly accepted.
+- Raw HealthKit Debug now has diagnostics-only Parity Lab infrastructure: selected-workout force re-enrich invalidates only that workout's cached evidence, reruns the existing HealthKit/WorkoutKit evidence queries, and can export a stable parity packet JSON with cache status, fresh-query result, counts, plan audit, reconstructed intervals, and warnings.
+- April 28 physical-device force re-enrich recovered rich HealthKit evidence and a WorkoutKit plan; it is now an evidence-recovery / fresh-query validation fixture, not an evidence-unavailable blocker.
 - Keep only the latest active parity investigation, latest active evidence review, and current blocker in active validation docs; archive completed date-specific evidence to `docs/archive/old-validation/`.
 - Real HealthKit proof requires a physical iPhone; Simulator checks prove UI/sample-data behavior only.
 
@@ -37,6 +39,7 @@ RunSignal is a native iPhone SwiftUI app focused on Apple Fitness parity for com
 - Apple Fitness interval row boundaries may use private smoothing or presentation rules that public HealthKit/WorkoutKit APIs do not expose.
 - Fixed-distance Work plus real Open tail drift now has three research examples across 6.45 km and 5.00 km goals; no boundary strategy is approved for production yet.
 - WorkoutKit plan data can be unavailable or throw and must stay optional.
+- Physical-device validation has succeeded for the April 28 force re-enrich/parity packet path; more packet exports are still needed for the active fixed-distance boundary set before scoring strategies.
 - Mechanics, trends, and stronger run-type claims remain confidence-gated.
 
 ## Current Next Steps

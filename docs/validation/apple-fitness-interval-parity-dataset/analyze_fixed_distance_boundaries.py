@@ -63,6 +63,7 @@ def extract_payload(path: Path) -> dict | None:
 def payload_for_folder(folder: str) -> dict | None:
     folder_path = ROOT / folder
     candidates = list((folder_path / "exports" / "runsignal-diagnostics").glob("*.txt"))
+    candidates += list((folder_path / "exports" / "runsignal-diagnostics").glob("*.md"))
     candidates += list((folder_path / "screenshots" / "runsignal-raw-healthkit-debug").glob("*.txt"))
     best_payload = None
     for candidate in candidates:
@@ -86,6 +87,9 @@ def fixed_distance_cases() -> tuple[list[Case], list[str]]:
             continue
         expected_labels = [rows[0]["expectedLabel"].lower(), rows[1]["expectedLabel"].lower()]
         if expected_labels != ["work", "open"]:
+            continue
+        if "evidence recovered" in workout["workoutType"].lower():
+            skipped.append(f"{workout['date']}: evidence recovery fixture; keep out of drift tuning score")
             continue
 
         payload = payload_for_folder(workout["folder"])

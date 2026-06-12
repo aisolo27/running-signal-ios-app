@@ -4,15 +4,23 @@
 
 | Row | Label | Apple Distance | RunSignal Distance | Distance Delta | Apple Time | RunSignal Time | Time Delta | Pass? | Notes |
 |---:|---|---:|---:|---:|---:|---:|---:|---|---|
-| 1 | Work | 7.25 km | unavailable | unavailable | 46:12 | unavailable | unavailable | No | Apple Fitness shows the row, but RunSignal has no reconstructed interval or boundary diagnostics. |
-| 2 | Open | 46 m | unavailable | unavailable | 0:20 | unavailable | unavailable | No | Apple Fitness shows the row, but RunSignal has no reconstructed interval or boundary diagnostics. |
+| 1 | Work | 7.25 km | 7.26 km | +6.3 m | 46:12 | 46:09 | -3.2 s | Temporary | Fresh physical-device query recovered WorkoutKit plan and distance boundary diagnostics. |
+| 2 | Open | 46 m | 48.3 m | +2.3 m | 0:20 | 0:23 | +3.0 s | Temporary | Open / Extra is real post-goal tail evidence; do not hide or merge from this fixture alone. |
 
 ## Finding
 
-This is not a usable boundary-parity case yet. Apple Fitness visually confirms Work plus Open, but RunSignal has no WorkoutKit audit and no usable sample evidence in the export.
+April 28 is no longer evidence unavailable. The physical-device force re-enrich recovered the WorkoutKit plan, rich HealthKit samples, route data, reconstructed Work/Open rows, and boundary diagnostics.
 
-Treat April 28 as an evidence-coverage issue. Do not tune interval reconstruction from this workout until a usable Raw HealthKit Debug export is available.
+Treat April 28 as an evidence-recovery and fresh-query validation fixture. It is a temporary pass candidate under the current fixture tolerances, but it is not a main repeated-interval boundary tuning fixture.
 
-## Evidence Coverage Issue
+## Force Re-Enrich Result
 
-Investigate whether the missing evidence comes from old workout data availability, HealthKit query coverage, filtering, sample association, WorkoutKit plan availability, app-side export behavior, or another limitation.
+- Workout UUID: `9AD88333-024B-4476-B81F-7D15A8E0FC89`
+- Authorization: authorized.
+- Cache invalidated: true.
+- Cache present before refresh: false.
+- Fresh query returned workout: true.
+- Evidence source after export: freshQuery.
+- Diagnostics warnings: none.
+
+The previous failure was likely cache/enrichment/query-path related, but stale cache is not proven because `cacheWasPresent` was false during force re-enrich.

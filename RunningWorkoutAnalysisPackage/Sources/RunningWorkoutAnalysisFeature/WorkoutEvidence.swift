@@ -187,6 +187,7 @@ public struct WorkoutEvidence: Codable, Equatable, Sendable {
     public var route: [WorkoutRoutePoint]
     public var events: [WorkoutEvidenceEvent]
     public var workoutPlanAudit: WorkoutPlanAudit?
+    public var diagnostics: WorkoutEvidenceDiagnostics?
 
     public init(
         workoutID: String,
@@ -194,7 +195,8 @@ public struct WorkoutEvidence: Codable, Equatable, Sendable {
         series: [WorkoutEvidenceMetric: WorkoutMetricSeries] = [:],
         route: [WorkoutRoutePoint] = [],
         events: [WorkoutEvidenceEvent] = [],
-        workoutPlanAudit: WorkoutPlanAudit? = nil
+        workoutPlanAudit: WorkoutPlanAudit? = nil,
+        diagnostics: WorkoutEvidenceDiagnostics? = nil
     ) {
         self.workoutID = workoutID
         self.loadedAt = loadedAt
@@ -202,6 +204,7 @@ public struct WorkoutEvidence: Codable, Equatable, Sendable {
         self.route = route
         self.events = events.sorted { $0.startDate < $1.startDate }
         self.workoutPlanAudit = workoutPlanAudit
+        self.diagnostics = diagnostics
     }
 
     public func hasSeries(_ metric: WorkoutEvidenceMetric) -> Bool {
@@ -239,6 +242,44 @@ public struct WorkoutEvidence: Codable, Equatable, Sendable {
         guard let points = series[metric]?.points, !points.isEmpty else { return nil }
         return points.map(\.value).reduce(0, +)
     }
+}
+
+public struct WorkoutEvidenceDiagnostics: Codable, Equatable, Sendable {
+    public var queryDiagnostics: [WorkoutEvidenceQueryDiagnostic]
+
+    public init(queryDiagnostics: [WorkoutEvidenceQueryDiagnostic] = []) {
+        self.queryDiagnostics = queryDiagnostics
+    }
+
+    public var warnings: [String] {
+        queryDiagnostics.compactMap { diagnostic in
+            guard diagnostic.status != .loaded else { return nil }
+            if let message = diagnostic.message, !message.isEmpty {
+                return "\(diagnostic.name): \(message)"
+            }
+            return "\(diagnostic.name): \(diagnostic.status.rawValue)"
+        }
+    }
+}
+
+public struct WorkoutEvidenceQueryDiagnostic: Codable, Equatable, Sendable {
+    public var name: String
+    public var status: WorkoutEvidenceQueryStatus
+    public var count: Int
+    public var message: String?
+
+    public init(name: String, status: WorkoutEvidenceQueryStatus, count: Int, message: String? = nil) {
+        self.name = name
+        self.status = status
+        self.count = count
+        self.message = message
+    }
+}
+
+public enum WorkoutEvidenceQueryStatus: String, Codable, Equatable, Sendable {
+    case loaded
+    case unavailable
+    case failed
 }
 
 public struct WorkoutEvidenceCoverage: Equatable, Sendable {

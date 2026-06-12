@@ -16,7 +16,7 @@ The purpose is to compare Apple Fitness against RunSignal across multiple real w
 
 | Date | Workout folder | Intended type | Current status |
 |---|---|---|---|
-| 2026-04-28 | `2026-04-28-easy-run/` | Easy run evidence coverage | blocked |
+| 2026-04-28 | `2026-04-28-easy-run/` | Easy run evidence recovery | temporary pass |
 | 2026-05-26 | `2026-05-26-easy-run/` | Easy run boundary research | blocked |
 | 2026-06-01 | `2026-06-01-easy-run/` | Easy run | blocked |
 | 2026-06-02 | `2026-06-02-easy-run/` | Easy run | pass |
@@ -29,7 +29,7 @@ May 26 and June 12 repeat the same boundary drift direction as June 1: RunSignal
 
 June 1, May 26, and June 12 remain blocked because the boundary diagnostics are internally consistent but do not match Apple Fitness timing. The Open rows are real post-goal running, so the issue is boundary timing, not Open existence.
 
-April 28 is blocked for a different reason: Apple Fitness shows Work plus Open rows, but the RunSignal export has no WorkoutKit audit, no reconstructed intervals, no boundary diagnostics, and zero sample evidence counts. Do not use April 28 for boundary-rule tuning until export evidence is available.
+April 28 is no longer evidence unavailable. A physical-device force re-enrich on 2026-06-12 recovered rich HealthKit evidence, route data, a WorkoutKit plan, reconstructed Work/Open rows, and boundary diagnostics. Keep April 28 as an evidence-recovery and fresh-query/cache-invalidation validation fixture; do not use it as a main repeated-interval boundary tuning fixture.
 
 ## Next Validation Phase
 
@@ -37,6 +37,7 @@ April 28 is blocked for a different reason: Apple Fitness shows Work plus Open r
 - June 1's Open row is real post-goal running and should not be hidden or merged into Work.
 - May 26 and June 12 show the same drift direction as June 1, across 6.45 km and 5.00 km goals.
 - Need more fixed-distance Work + real Open tail examples and pass-case boundary diagnostics before changing app logic.
+- April 28 now proves the physical-device fresh query path can recover the previously missing evidence, but it does not approve a boundary-rule change.
 - Goal: determine whether this is repeatable Apple Fitness boundary behavior and whether a deterministic rule can improve it without regressing existing pass/temporary-pass fixtures.
 - Normal interval UI promotion remains blocked until this is resolved or explicitly accepted.
 

@@ -16,7 +16,7 @@ Valid fixed-distance Work plus real Open tail drift examples:
 
 The Open rows are real post-goal running. Do not hide or merge Open into Work. The issue is Work boundary timing, not Open existence.
 
-April 28 is not included in boundary scoring. Apple Fitness shows Work/Open, but RunSignal currently has no WorkoutKit Plan Audit, no sample evidence, no reconstructed intervals, and no boundary diagnostics for that older workout.
+April 28 is not included in boundary scoring. Physical-device force re-enrich recovered WorkoutKit plan data, rich HealthKit samples, reconstructed intervals, and boundary diagnostics, but this workout is being kept as an evidence-recovery and fresh-query/cache-invalidation validation fixture rather than a main drift-tuning fixture.
 
 ## Candidate Strategies
 

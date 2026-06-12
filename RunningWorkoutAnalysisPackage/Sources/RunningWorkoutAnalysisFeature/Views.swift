@@ -1287,7 +1287,7 @@ struct WorkoutDetailView: View {
                     )
 
                     NavigationLink {
-                        RawHealthKitWorkoutDebugView(workout: workout)
+                        RawHealthKitWorkoutDebugView(store: store, workout: workout)
                     } label: {
                         Label("Open Raw HealthKit Debug", systemImage: "stethoscope")
                             .frame(maxWidth: .infinity)
@@ -1530,12 +1530,38 @@ struct SplitsAndEventsPanel: View {
 }
 
 struct RawHealthKitWorkoutDebugView: View {
+    var store: RunningAnalysisStore
     let workout: CanonicalWorkout
 
     var body: some View {
+        let workout = currentWorkout
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HeaderBlock(title: "Raw HealthKit Debug", subtitle: "Per-workout fields and evidence counts.")
+
+                Button {
+                    Task {
+                        await store.forceReenrichEvidenceForParity(workoutID: workout.id)
+                    }
+                } label: {
+                    Label("Force re-enrich selected workout", systemImage: "arrow.clockwise")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(store.isEnrichingAudit)
+
+                if let result = store.parityForceReenrichResults[workout.id] {
+                    NoticeCard(
+                        title: "Last force re-enrich",
+                        message: forceReenrichSummary(result)
+                    )
+                }
+
+                ShareLink(item: parityPacketJSON) {
+                    Label("Share parity packet JSON", systemImage: "shippingbox")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
 
                 ShareLink(item: rawDebugExportMarkdown) {
                     Label("Share raw debug export", systemImage: "doc.text.magnifyingglass")
@@ -1641,41 +1667,63 @@ struct RawHealthKitWorkoutDebugView: View {
     }
 
     private var derivedIntervalCandidates: [DerivedWorkoutInterval] {
-        guard let evidence = workout.evidence else { return [] }
-        return DerivedAnalyticsEngine.intervalCandidates(workout: workout, evidence: evidence)
+        guard let evidence = currentWorkout.evidence else { return [] }
+        return DerivedAnalyticsEngine.intervalCandidates(workout: currentWorkout, evidence: evidence)
     }
 
     private var reconstructedIntervals: WorkoutIntervalReconstructionResult? {
-        guard let evidence = workout.evidence else { return nil }
-        return WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: evidence)
+        guard let evidence = currentWorkout.evidence else { return nil }
+        return WorkoutIntervalReconstructionEngine.reconstruct(workout: currentWorkout, evidence: evidence)
     }
 
     private var rawDebugExportMarkdown: String {
-        DiagnosticsExport.rawHealthKitDebugMarkdown(workout: workout)
+        DiagnosticsExport.rawHealthKitDebugMarkdown(workout: currentWorkout)
+    }
+
+    private var parityPacketJSON: String {
+        store.parityPacketJSON(for: currentWorkout)
+    }
+
+    private var currentWorkout: CanonicalWorkout {
+        store.workouts.first { $0.id == workout.id } ?? workout
     }
 
     private var intervalDetail: String {
-        if let summary = workout.intervalLabelsSummary { return summary }
-        if workout.intervalCount > 0 { return "Events found; labels unavailable" }
+        if let summary = currentWorkout.intervalLabelsSummary { return summary }
+        if currentWorkout.intervalCount > 0 { return "Events found; labels unavailable" }
         return "Unavailable"
     }
 
     private var cadenceProvenance: String {
-        if workout.cadenceSampleCount > 0 {
+        if currentWorkout.cadenceSampleCount > 0 {
             return "Direct cadence samples; displayed as full steps/min"
         }
-        if workout.stepCountSampleCount > 0 {
+        if currentWorkout.stepCountSampleCount > 0 {
             return "Calculated from step samples as full steps/min"
         }
-        if workout.fullStepCadence != nil {
+        if currentWorkout.fullStepCadence != nil {
             return "Summary value normalized to full steps/min"
         }
         return "Unavailable"
     }
 
+    private func forceReenrichSummary(_ result: ParityForceReenrichResult) -> String {
+        let status = result.freshQueryReturnedWorkout ? "Fresh HealthKit query returned this workout." : "Fresh HealthKit query did not return this workout."
+        let counts = result.evidenceCounts.map {
+            "Counts: distance \($0.distance), heart rate \($0.heartRate), route \($0.routePoints), events \($0.events)."
+        } ?? "Counts unavailable."
+        return [
+            "Cache present before refresh: \(result.cacheWasPresent ? "yes" : "no").",
+            "Cache invalidated: \(result.invalidatedCache ? "yes" : "no").",
+            status,
+            counts,
+            result.message
+        ].compactMap { $0 }.joined(separator: " ")
+    }
+
     @ViewBuilder
     private var workoutPlanAuditView: some View {
-        if let audit = workout.evidence?.workoutPlanAudit {
+        if let audit = currentWorkout.evidence?.workoutPlanAudit {
             VStack(alignment: .leading, spacing: 8) {
                 MetricGrid(items: [
                     MetricItem(title: "Status", value: audit.status.label, detail: "WorkoutKit"),

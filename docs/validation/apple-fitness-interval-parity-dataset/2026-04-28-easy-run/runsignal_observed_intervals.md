@@ -1,24 +1,31 @@
 # RunSignal Observed Intervals
 
-Values from `exports/runsignal-diagnostics/text-5DF517D06F26-1.txt`.
+Current values from `exports/runsignal-diagnostics/runsignal-raw-healthkit-debug-2026-04-28.md` and `exports/runsignal-diagnostics/runsignal-parity-packet-2026-04-28.json`.
 
-RunSignal summary exists:
+RunSignal summary:
 
 - Duration: 46:32.
 - Distance: 7.30 km.
 - Avg pace: 6:22/km.
 - Avg HR: 133 bpm.
+- Max HR: 145 bpm.
 - Power: 192 W.
-- Events: 13.
+- Top-level evidence events: 14.
 
-RunSignal interval evidence is unavailable:
+Physical-device force re-enrich result:
 
-- WorkoutKit Plan Audit: not audited.
-- WorkoutKit Reconstructed Intervals: unavailable.
-- Boundary Diagnostics: unavailable.
-- Evidence counts for heart rate, speed, distance, active energy, power, cadence, steps, stride length, vertical oscillation, ground contact, and route points are all zero.
+- `authorizationState`: authorized.
+- `invalidatedCache`: true.
+- `freshQueryReturnedWorkout`: true.
+- `cacheWasPresent`: false.
+- `evidenceSource`: freshQuery.
+- `diagnosticsWarnings`: none.
 
 | Row | Label | Goal | Target | RunSignal Distance | RunSignal Time | RunSignal Pace | RunSignal Avg HR | Source | Notes |
 |---:|---|---|---|---:|---:|---:|---:|---|---|
-| 1 | Unavailable | 7.25 km |  | 0 km | 0:00 | unavailable | unavailable | Raw HealthKit Debug | Summary exists, but no WorkoutKit audit, reconstructed interval, or distance/time evidence is available. |
-| 2 | Unavailable | Open |  | 0 km | 0:00 | unavailable | unavailable | Raw HealthKit Debug | Do not use for boundary-rule tuning until export evidence works. |
+| 1 | Work 1 | 7.25 km | pace range 6:00-6:30/km | 7.26 km / 7256.3 m | 46:09 / 2768.8 s | 6:22/km | 133 bpm | WorkoutKit + HealthKit reconstructed | Crossing sample end, +2.2 s adjustment, 6.3 m overshoot, high confidence. |
+| 2 | Open / Extra | Open | Target unavailable | 0.05 km / 48.3 m | 0:23 / 23.0 s | 7:56/km | 139 bpm | WorkoutKit + HealthKit reconstructed | Extra tail after planned WorkoutKit steps, medium confidence. |
+
+## Event Count Note
+
+The raw evidence count reports 14 events. The force re-enrich result reports 13 events because that result uses the summarized `CanonicalWorkout.intervalCount`, which is built from HealthKit segment/lap events. The raw segment marker table also renders 13 rows because `DerivedAnalyticsEngine.intervalCandidates` filters raw events to valid in-workout event windows before displaying marker rows. This is expected diagnostic counting, not a production interval behavior change.

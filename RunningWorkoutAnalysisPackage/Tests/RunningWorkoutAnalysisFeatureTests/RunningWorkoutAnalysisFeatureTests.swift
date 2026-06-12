@@ -1288,6 +1288,61 @@ import Testing
     #expect(markdown.contains("\"workoutKitPlanAudit\""))
 }
 
+@Test func parityPacketExportIncludesStableDebugOnlyRefreshFields() {
+    let start = Date(timeIntervalSince1970: 10_275)
+    var workout = testWorkout(
+        id: "parity-packet-export",
+        start: start,
+        distanceMeters: 1_000,
+        durationSeconds: 300
+    )
+    workout.distanceSampleCount = 1
+    workout.heartRateSampleCount = 1
+    workout.evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .distance: WorkoutMetricSeries(
+                metric: .distance,
+                unit: "m",
+                points: [WorkoutEvidencePoint(date: start.addingTimeInterval(300), value: 1_000)]
+            )
+        ],
+        workoutPlanAudit: WorkoutPlanAudit(
+            status: .unavailable,
+            summaryLines: ["WorkoutKit returned no workout plan for this completed workout."]
+        ),
+        diagnostics: WorkoutEvidenceDiagnostics(queryDiagnostics: [
+            WorkoutEvidenceQueryDiagnostic(name: "distance", status: .loaded, count: 1),
+            WorkoutEvidenceQueryDiagnostic(name: "workoutKitPlan", status: .unavailable, count: 0, message: "No plan")
+        ])
+    )
+    let forceResult = ParityForceReenrichResult(
+        workoutID: workout.id,
+        requestedAt: start,
+        completedAt: start.addingTimeInterval(2),
+        cacheWasPresent: true,
+        invalidatedCache: true,
+        freshQueryReturnedWorkout: true,
+        authorizationState: .authorized,
+        message: "Enriched 1 HealthKit running workouts.",
+        evidenceCounts: ParityEvidenceCounts(workout: workout),
+        diagnosticsWarnings: ["workoutKitPlan: No plan"]
+    )
+
+    let json = DiagnosticsExport.parityPacketJSON(workout: workout, forceReenrichResult: forceResult, generatedAt: start)
+
+    #expect(json.contains("\"packetVersion\" : 1"))
+    #expect(json.contains("\"cacheStatus\""))
+    #expect(json.contains("\"evidenceSource\" : \"freshQuery\""))
+    #expect(json.contains("\"forceReenrichResult\""))
+    #expect(json.contains("\"invalidatedCache\" : true"))
+    #expect(json.contains("\"evidenceCounts\""))
+    #expect(json.contains("\"workoutKitPlanAudit\""))
+    #expect(json.contains("\"reconstructedIntervals\""))
+    #expect(json.contains("\"diagnosticsWarnings\""))
+}
+
 @Test func jun10WorkoutKitReconstructionMatchesAppleFitnessFixtureTolerances() throws {
     let start = Date(timeIntervalSince1970: 10_300)
     let workout = testWorkout(

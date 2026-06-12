@@ -76,6 +76,20 @@ public enum PersistenceService {
         try? context.save()
     }
 
+    public static func deleteEvidence(ids: Set<String>, context: ModelContext) {
+        guard !ids.isEmpty else { return }
+        for record in fetchPersistedEvidence(context: context) where ids.contains(record.workoutID) {
+            context.delete(record)
+        }
+        for record in fetchEnrichmentStates(context: context) where ids.contains(record.workoutID) {
+            context.delete(record)
+        }
+        for record in fetchPersistedDerivedAnalyses(context: context) where ids.contains(record.workoutID) {
+            context.delete(record)
+        }
+        try? context.save()
+    }
+
     public static func fetchEvidence(workoutID: String, context: ModelContext) -> WorkoutEvidence? {
         fetchPersistedEvidence(context: context)
             .first { $0.workoutID == workoutID }?

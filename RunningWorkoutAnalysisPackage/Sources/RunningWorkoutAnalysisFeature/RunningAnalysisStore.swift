@@ -18,6 +18,7 @@ public final class RunningAnalysisStore {
     public private(set) var syncState = HealthKitSyncState.empty
     public private(set) var evidenceQueueSummary = EvidenceEnrichmentQueueSummary.empty
     public private(set) var derivedAnalysesByWorkoutID: [String: DerivedWorkoutAnalysis] = [:]
+    public private(set) var parityForceReenrichResults: [String: ParityForceReenrichResult] = [:]
 
     private let healthKitService: HealthKitService
     private let syncService: HealthKitWorkoutSyncService
@@ -205,6 +206,88 @@ public final class RunningAnalysisStore {
         recompute()
     }
 
+    public func forceReenrichEvidenceForParity(workoutID: String) async {
+        guard workouts.contains(where: { $0.id == workoutID }) else {
+            parityForceReenrichResults[workoutID] = ParityForceReenrichResult(
+                workoutID: workoutID,
+                requestedAt: Date(),
+                completedAt: Date(),
+                cacheWasPresent: false,
+                invalidatedCache: false,
+                freshQueryReturnedWorkout: false,
+                authorizationState: .error,
+                message: "Workout is not loaded in the current RunSignal store."
+            )
+            return
+        }
+
+        isEnrichingAudit = true
+        defer { isEnrichingAudit = false }
+
+        let cacheWasPresent = workouts.first(where: { $0.id == workoutID })?.evidence != nil
+            || (modelContext.map { PersistenceService.fetchEvidence(workoutID: workoutID, context: $0) } ?? nil) != nil
+        let requestedAt = Date()
+        if let modelContext {
+            PersistenceService.deleteEvidence(ids: [workoutID], context: modelContext)
+        }
+        workouts = workouts.map { workout in
+            guard workout.id == workoutID else { return workout }
+            var invalidated = workout
+            invalidated.evidence = nil
+            invalidated.routePointCount = 0
+            invalidated.seriesSampleCount = 0
+            invalidated.heartRateSampleCount = 0
+            invalidated.runningSpeedSampleCount = 0
+            invalidated.distanceSampleCount = 0
+            invalidated.activeEnergySampleCount = 0
+            invalidated.runningPowerSampleCount = 0
+            invalidated.cadenceSampleCount = 0
+            invalidated.stepCountSampleCount = 0
+            invalidated.strideLengthSampleCount = 0
+            invalidated.verticalOscillationSampleCount = 0
+            invalidated.groundContactTimeSampleCount = 0
+            invalidated.intervalCount = 0
+            invalidated.intervalLabelsSummary = nil
+            return invalidated
+        }
+        recompute()
+
+        let result = await healthKitService.enrichRunningWorkouts(ids: [workoutID])
+        updateHealthKitStatus(
+            authorizationState: result.authorizationState,
+            message: result.message ?? "Parity force re-enrich finished."
+        )
+
+        let returnedWorkout = result.workouts.first { $0.id == workoutID }
+        if result.authorizationState == .authorized || result.authorizationState == .partial, !result.workouts.isEmpty {
+            workouts = removeSampleWorkoutsIfRealDataExists(mergeSyncedWorkouts(changes: result.workouts, current: workouts))
+            deletePersistedSampleWorkoutsIfNeeded()
+            applyReviewedRunTypes()
+            persistCurrent()
+            markEvidenceQueueAttempt(
+                ids: [workoutID],
+                status: returnedWorkout == nil ? .failed : .enriched,
+                message: result.message
+            )
+        } else {
+            markEvidenceQueueAttempt(ids: [workoutID], status: .failed, message: result.message)
+        }
+
+        parityForceReenrichResults[workoutID] = ParityForceReenrichResult(
+            workoutID: workoutID,
+            requestedAt: requestedAt,
+            completedAt: Date(),
+            cacheWasPresent: cacheWasPresent,
+            invalidatedCache: true,
+            freshQueryReturnedWorkout: returnedWorkout != nil,
+            authorizationState: result.authorizationState,
+            message: result.message,
+            evidenceCounts: returnedWorkout.map(ParityEvidenceCounts.init(workout:)),
+            diagnosticsWarnings: returnedWorkout?.evidence?.diagnostics?.warnings ?? []
+        )
+        recompute()
+    }
+
     public func update(workoutID: String, manualRunType: RunType?, notes: String) {
         guard let index = workouts.firstIndex(where: { $0.id == workoutID }) else { return }
         workouts[index].manualRunType = manualRunType
@@ -286,6 +369,13 @@ public final class RunningAnalysisStore {
 
     public var healthKitPermissionReviewMarkdown: String {
         HealthKitPermissionCatalog.markdown()
+    }
+
+    public func parityPacketJSON(for workout: CanonicalWorkout) -> String {
+        DiagnosticsExport.parityPacketJSON(
+            workout: workout,
+            forceReenrichResult: parityForceReenrichResults[workout.id]
+        )
     }
 
     private func mergeManualFields(incoming: [CanonicalWorkout], current: [CanonicalWorkout]) -> [CanonicalWorkout] {
