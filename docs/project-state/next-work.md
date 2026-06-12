@@ -8,6 +8,7 @@ Last updated: 2026-06-12
 - Use the boundary pattern investigation as the current evidence summary: no public-API separator is production-safe yet.
 - Collect 5-10 additional simple fixed-distance Work + Open tail examples, prioritizing guard/pass cases similar to June 2 and June 4.
 - Keep WorkoutKit reconstructed intervals gated from normal UI; the current scorecard does not approve a production boundary strategy.
+- Optionally run the docs-only HealthFit FIT comparison pilot for the existing packet-backed running fixtures, using FIT as research evidence only and excluding strength workouts.
 
 ## Priority 2
 
@@ -37,3 +38,4 @@ Last updated: 2026-06-12
 - Recovery scoring.
 - Race prediction.
 - FIT import, FIT backup, HealthFit export, or file-based workout ingestion.
+- HealthFit as a production dependency or FIT as runtime truth.

@@ -39,6 +39,8 @@ Debug-only candidate boundary scoring is available in `score_candidate_boundary_
 
 `guard-case-collection-plan.md` defines the next physical-iPhone collection target: 5-10 more simple fixed-distance Work + real Open / Extra tail examples, with priority on guard/pass cases and a clear stopping point before any production boundary experiment.
 
+`fit-comparison-research-plan.md` defines a docs/debug-only HealthFit FIT comparison pilot for the same packet-backed running fixtures. FIT exports can be used as a research cross-check, but not as production truth, a HealthFit dependency, or a replacement for Apple Fitness visual parity.
+
 ## Next Validation Phase
 
 - Do not tune June 1 from one workout.
@@ -75,17 +77,20 @@ Debug-only candidate boundary scoring is available in `score_candidate_boundary_
 - `screenshots/runsignal-workout-detail/`: RunSignal normal workout detail screenshots.
 - `screenshots/runsignal-raw-healthkit-debug/`: RunSignal Raw HealthKit Debug screenshots.
 - `exports/runsignal-diagnostics/`: RunSignal diagnostics exports for this workout.
+- `exports/healthfit-fit/`: optional HealthFit FIT exports for docs/debug comparison only. Include only running workouts, such as `Outdoor Running` or `Indoor Running`, and exclude `Strength Training`.
 - `runsignal-parity-packet-YYYY-MM-DD.json`: physical-device force re-enrich parity packet when available.
 - `interval-parity-fixture.json`: cross-workout visible Apple Fitness and RunSignal observed values used by the lightweight validator.
 - `validate_interval_parity.py`: docs-level harness for checking current pass/temporary/blocker status without parsing screenshots.
 - `next-boundary-validation-plan.md`: evidence plan for fixed-distance Work plus real Open tail boundary validation.
 - `fixed-distance-boundary-strategy-research.md`: research-only comparison of candidate boundary strategies.
 - `analyze_fixed_distance_boundaries.py`: offline docs-level harness for comparing candidate boundary timings from fixture values and Raw HealthKit Debug exports.
+- `fit-comparison-research-plan.md`: docs-only pilot plan for comparing RunSignal parity packets, Apple Fitness/manual rows, and HealthFit FIT exports.
 - `_future-fixed-distance-open-tail-template/`: reusable drop folder for future fixed-distance Work plus real Open tail examples.
 
 ## Do Not Implement Yet
 
 - Do not promote WorkoutKit Reconstructed Intervals into the normal workout detail UI until this validation set is populated and reviewed.
 - Do not change distance-goal boundary logic from the June 1 case alone.
+- Do not build production FIT import, add a HealthFit dependency, or use FIT as runtime interval truth.
 - Do not add coaching, readiness, VDOT, training load, recovery, race prediction, workout recommendations, or auto-categorization.
 - This remains v1 Apple Fitness parity validation only.

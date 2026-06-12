@@ -40,6 +40,8 @@ The boundary pattern investigation compares packet-visible drift and guard featu
 
 Use `guard-case-collection-plan.md` for the next bounded collection round. The target is 5-10 additional simple fixed-distance Work + real Open / Extra tail examples, prioritizing guard cases that current RunSignal already matches closely.
 
+Use `fit-comparison-research-plan.md` only as a docs/debug cross-check against the existing packet-backed running fixtures. HealthFit FIT exports may help inspect laps, splits, events, totals, or transformed evidence, but they do not approve a production boundary strategy and do not replace Apple Fitness as the visual parity reference.
+
 ## Future Examples Needed
 
 Collect more fixed-distance Work plus real Open tail examples and pass-case boundary diagnostics as new workouts become available. Each future workout should have:
@@ -77,3 +79,5 @@ Use the expanded examples to determine whether the June 1, May 26, and June 12 d
 If the pattern repeats, find a deterministic rule that improves all fixed-distance Work plus real Open tail examples without regressing June 2, June 3, June 4, or June 5.
 
 If the pattern does not repeat, keep the current reconstruction and document June 1 as a limitation rather than changing app logic.
+
+FIT findings can inform this decision only as research evidence. If FIT agrees with RunSignal while Apple Fitness differs, treat that as support for public-API reconstruction and possible Apple Fitness presentation/private logic. If FIT agrees with Apple Fitness while RunSignal differs, investigate RunSignal math or evidence handling. If FIT disagrees with both, classify it as a HealthFit/FIT export transformation or inconclusive unless more evidence proves otherwise.

@@ -34,6 +34,7 @@ RunSignal is a native iPhone SwiftUI app focused on Apple Fitness parity for com
 - Debug-only candidate boundary scoring is available at `docs/validation/apple-fitness-interval-parity-dataset/score_candidate_boundary_strategies.py`; the generated scorecard does not approve any production boundary strategy.
 - Boundary pattern investigation found no public-API observable separator that explains drift cases without regressing guard cases; production boundary behavior remains unchanged.
 - Guard-case collection now has a bounded plan: collect 5-10 more simple fixed-distance Work + Open tail examples before revisiting production boundary logic.
+- A HealthFit FIT comparison pilot is documented as a docs/debug microscope for the same packet-backed running fixtures. FIT exports remain research-only and are not a production import path, HealthFit dependency, or replacement for Apple Fitness visual parity.
 - Keep only the latest active parity investigation, latest active evidence review, and current blocker in active validation docs; archive completed date-specific evidence to `docs/archive/old-validation/`.
 - Real HealthKit proof requires a physical iPhone; Simulator checks prove UI/sample-data behavior only.
 
@@ -54,6 +55,7 @@ RunSignal is a native iPhone SwiftUI app focused on Apple Fitness parity for com
 - Review `candidate-boundary-strategy-scorecard.md` before changing boundary logic; the current scorecard says no candidate is production-safe.
 - Use `boundary-pattern-investigation.md` for the current drift-vs-guard feature comparison before proposing any boundary experiment.
 - Use `guard-case-collection-plan.md` for the physical-iPhone evidence checklist and stopping criteria.
+- Use `fit-comparison-research-plan.md` only for docs/debug FIT cross-check work, filtered to running FIT files and excluding strength workouts.
 - Keep `docs/project-state/current-state.md` and `docs/project-state/next-work.md` updated when project direction, validation status, known limitations, or next steps change.
 
 ## Read Only When Relevant
