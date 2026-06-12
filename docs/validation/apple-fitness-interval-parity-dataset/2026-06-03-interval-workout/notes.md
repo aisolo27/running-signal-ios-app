@@ -25,3 +25,14 @@
 5. The prior statement was not a screenshot interpretation mistake. It should be narrowed to this workout's open planned cooldown behavior.
 
 The label/structure blocker is resolved by the targeted app rule and confirmed by the fresh export. This workout is now a temporary pass pending only the remaining warmup/final-row timing tolerance review. Do not automatically merge post-completed-cooldown activity into Cooldown in other workouts.
+
+## Physical-Device Parity Packet
+
+- Packet: `exports/runsignal-diagnostics/runsignal-parity-packet-2026-06-03.json`
+- Raw debug markdown export: not included in this batch.
+- Packet source: freshQuery.
+- Force re-enrich returned workout: true.
+- Diagnostics warnings: none.
+- Event count split: top-level evidence events 13, force-result segment/lap events 12. This matches the known diagnostics counting split documented for April 28.
+- Classification: temporary/pass regression fixture for planned open cooldown handling; repeated interval structure.
+- Current packet structure: Warmup, three 1 km Work rows, three 150 s Recovery rows, and planned open Cooldown extended to workout end.

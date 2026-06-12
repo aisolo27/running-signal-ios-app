@@ -1,0 +1,453 @@
+{
+  "cacheStatus" : {
+    "evidenceLoadedAt" : "2026-06-12T16:54:07Z",
+    "evidenceSource" : "freshQuery",
+    "hasCachedEvidence" : true
+  },
+  "diagnosticsWarnings" : [
+
+  ],
+  "evidenceCounts" : {
+    "activeEnergy" : 908,
+    "cadence" : 903,
+    "distance" : 905,
+    "events" : 13,
+    "groundContact" : 333,
+    "heartRate" : 466,
+    "power" : 900,
+    "routePoints" : 2333,
+    "speed" : 903,
+    "stepCount" : 903,
+    "strideLength" : 334,
+    "verticalOscillation" : 338
+  },
+  "forceReenrichResult" : {
+    "authorizationState" : "authorized",
+    "cacheWasPresent" : true,
+    "completedAt" : "2026-06-12T16:54:15Z",
+    "diagnosticsWarnings" : [
+
+    ],
+    "evidenceCounts" : {
+      "activeEnergy" : 908,
+      "cadence" : 903,
+      "distance" : 905,
+      "events" : 12,
+      "groundContact" : 333,
+      "heartRate" : 466,
+      "power" : 900,
+      "routePoints" : 2333,
+      "speed" : 903,
+      "stepCount" : 903,
+      "strideLength" : 334,
+      "verticalOscillation" : 338
+    },
+    "freshQueryReturnedWorkout" : true,
+    "invalidatedCache" : true,
+    "message" : "Enriched 1 HealthKit running workouts.",
+    "requestedAt" : "2026-06-12T16:53:59Z",
+    "workoutID" : "F6D47A51-9510-4C7A-9186-6BAFE3C128C9"
+  },
+  "generatedAt" : "2026-06-12T16:54:22Z",
+  "packetVersion" : 1,
+  "reconstructedIntervals" : [
+    {
+      "averageHeartRateBpm" : 126.49342105263158,
+      "averagePower" : 190.22108843537416,
+      "boundaryAdjustmentSeconds" : 0.649585485458374,
+      "boundaryDiagnostics" : {
+        "crossingSample" : {
+          "endCumulativeDistanceMeters" : 2001.4803571118973,
+          "endDate" : "2026-06-03T11:57:51Z",
+          "endOffsetSeconds" : 762.3678689002991,
+          "startCumulativeDistanceMeters" : 1995.6178373540752,
+          "startDate" : "2026-06-03T11:57:48Z",
+          "startOffsetSeconds" : 759.7953763008118
+        },
+        "cumulativeDistanceAtEndMeters" : 2001.4803571118973,
+        "cumulativeDistanceAtStartMeters" : 0,
+        "interpolationFraction" : 0.7474879108216002,
+        "nextSample" : {
+          "endCumulativeDistanceMeters" : 2009.2362459553406,
+          "endDate" : "2026-06-03T11:57:53Z",
+          "endOffsetSeconds" : 764.9403622150421,
+          "startCumulativeDistanceMeters" : 2001.4803571118973,
+          "startDate" : "2026-06-03T11:57:51Z",
+          "startOffsetSeconds" : 762.3678689002991
+        },
+        "previousSample" : {
+          "endCumulativeDistanceMeters" : 1995.6178373540752,
+          "endDate" : "2026-06-03T11:57:48Z",
+          "endOffsetSeconds" : 759.7953763008118,
+          "startCumulativeDistanceMeters" : 1988.46186853759,
+          "startDate" : "2026-06-03T11:57:45Z",
+          "startOffsetSeconds" : 757.2228845357895
+        },
+        "targetDistanceMeters" : 2000
+      },
+      "boundaryOvershootMeters" : 1.4803571118973196,
+      "boundaryStrategy" : "crossingSampleEnd",
+      "confidence" : "high",
+      "distanceMeters" : 2001.4803571118973,
+      "durationSeconds" : 762.3678689002991,
+      "endOffsetSeconds" : 762.3678689002991,
+      "index" : 1,
+      "label" : "Warmup",
+      "maxHeartRateBpm" : 144,
+      "paceSecondsPerKm" : 380.9019989586024,
+      "plannedGoalDisplayText" : "2 km",
+      "plannedGoalType" : "distance",
+      "plannedGoalValue" : 2000,
+      "plannedTargetDisplayText" : "pace range 6:00-6:30 \/km, speed 2.56 m\/s-2.78 m\/s, metric current",
+      "sourceNote" : "Distance-goal boundary: crossing sample end, adjustment +0.6s, overshoot 1.5 m",
+      "startOffsetSeconds" : 0,
+      "stepType" : "warmup"
+    },
+    {
+      "averageHeartRateBpm" : 166.23529411764707,
+      "averagePower" : 284.83838383838383,
+      "boundaryAdjustmentSeconds" : 0.532201886177063,
+      "boundaryDiagnostics" : {
+        "crossingSample" : {
+          "endCumulativeDistanceMeters" : 3003.3969073158223,
+          "endDate" : "2026-06-03T12:02:03Z",
+          "endOffsetSeconds" : 1014.4723151922226,
+          "startCumulativeDistanceMeters" : 2994.1328706021886,
+          "startDate" : "2026-06-03T12:02:00Z",
+          "startOffsetSeconds" : 1011.8998090028763
+        },
+        "cumulativeDistanceAtEndMeters" : 3003.3969073158223,
+        "cumulativeDistanceAtStartMeters" : 2001.4803571118973,
+        "interpolationFraction" : 0.7931193211805333,
+        "nextSample" : {
+          "endCumulativeDistanceMeters" : 3016.1272426524665,
+          "endDate" : "2026-06-03T12:02:05Z",
+          "endOffsetSeconds" : 1017.0448224544525,
+          "startCumulativeDistanceMeters" : 3003.3969073158223,
+          "startDate" : "2026-06-03T12:02:03Z",
+          "startOffsetSeconds" : 1014.4723151922226
+        },
+        "previousSample" : {
+          "endCumulativeDistanceMeters" : 2994.1328706021886,
+          "endDate" : "2026-06-03T12:02:00Z",
+          "endOffsetSeconds" : 1011.8998090028763,
+          "startCumulativeDistanceMeters" : 2984.2827832160983,
+          "startDate" : "2026-06-03T12:01:58Z",
+          "startOffsetSeconds" : 1009.3273077011108
+        },
+        "targetDistanceMeters" : 1000
+      },
+      "boundaryOvershootMeters" : 1.9165502039249986,
+      "boundaryStrategy" : "crossingSampleEnd",
+      "confidence" : "high",
+      "distanceMeters" : 1001.916550203925,
+      "durationSeconds" : 252.10444629192352,
+      "endOffsetSeconds" : 1014.4723151922226,
+      "index" : 2,
+      "label" : "Work 1",
+      "maxHeartRateBpm" : 174,
+      "paceSecondsPerKm" : 251.6221997137501,
+      "plannedGoalDisplayText" : "1 km",
+      "plannedGoalType" : "distance",
+      "plannedGoalValue" : 1000,
+      "plannedTargetDisplayText" : "pace 4:00 \/km, speed 4.17 m\/s, metric current",
+      "sourceNote" : "Distance-goal boundary: crossing sample end, adjustment +0.5s, overshoot 1.9 m",
+      "startOffsetSeconds" : 762.3678689002991,
+      "stepType" : "work"
+    },
+    {
+      "averageHeartRateBpm" : 146.56666666666666,
+      "averagePower" : 93.83050847457628,
+      "confidence" : "high",
+      "distanceMeters" : 218.0779792302228,
+      "durationSeconds" : 150,
+      "endOffsetSeconds" : 1164.4723151922226,
+      "index" : 3,
+      "label" : "Recovery 1",
+      "maxHeartRateBpm" : 174,
+      "paceSecondsPerKm" : 687.827356661474,
+      "plannedGoalDisplayText" : "150 s",
+      "plannedGoalType" : "time",
+      "plannedGoalValue" : 150,
+      "sourceNote" : "Time-goal window reconstructed from WorkoutKit duration; TODO pause-adjusted active duration",
+      "startOffsetSeconds" : 1014.4723151922226,
+      "stepType" : "recovery"
+    },
+    {
+      "averageHeartRateBpm" : 167.44897959183675,
+      "averagePower" : 289.6914893617021,
+      "boundaryAdjustmentSeconds" : 0.40349841117858887,
+      "boundaryDiagnostics" : {
+        "crossingSample" : {
+          "endCumulativeDistanceMeters" : 4223.137398585677,
+          "endDate" : "2026-06-03T12:08:39Z",
+          "endOffsetSeconds" : 1410.6429206132889,
+          "startCumulativeDistanceMeters" : 4212.537871825043,
+          "startDate" : "2026-06-03T12:08:36Z",
+          "startOffsetSeconds" : 1408.070372581482
+        },
+        "cumulativeDistanceAtEndMeters" : 4223.137398585677,
+        "cumulativeDistanceAtStartMeters" : 3221.474886546045,
+        "interpolationFraction" : 0.843152239040852,
+        "nextSample" : {
+          "endCumulativeDistanceMeters" : 4235.193161340198,
+          "endDate" : "2026-06-03T12:08:41Z",
+          "endOffsetSeconds" : 1413.2154661417007,
+          "startCumulativeDistanceMeters" : 4223.137398585677,
+          "startDate" : "2026-06-03T12:08:39Z",
+          "startOffsetSeconds" : 1410.6429206132889
+        },
+        "previousSample" : {
+          "endCumulativeDistanceMeters" : 4212.537871825043,
+          "endDate" : "2026-06-03T12:08:36Z",
+          "endOffsetSeconds" : 1408.070372581482,
+          "startCumulativeDistanceMeters" : 4202.032815427519,
+          "startDate" : "2026-06-03T12:08:34Z",
+          "startOffsetSeconds" : 1405.4978235960007
+        },
+        "targetDistanceMeters" : 1000
+      },
+      "boundaryOvershootMeters" : 1.6625120396320199,
+      "boundaryStrategy" : "crossingSampleEnd",
+      "confidence" : "high",
+      "distanceMeters" : 1001.662512039632,
+      "durationSeconds" : 246.17060542106628,
+      "endOffsetSeconds" : 1410.6429206132889,
+      "index" : 4,
+      "label" : "Work 2",
+      "maxHeartRateBpm" : 180,
+      "paceSecondsPerKm" : 245.76202309878022,
+      "plannedGoalDisplayText" : "1 km",
+      "plannedGoalType" : "distance",
+      "plannedGoalValue" : 1000,
+      "plannedTargetDisplayText" : "pace 4:00 \/km, speed 4.17 m\/s, metric current",
+      "sourceNote" : "Distance-goal boundary: crossing sample end, adjustment +0.4s, overshoot 1.7 m",
+      "startOffsetSeconds" : 1164.4723151922226,
+      "stepType" : "work"
+    },
+    {
+      "averageHeartRateBpm" : 153.86666666666667,
+      "averagePower" : 94.32203389830508,
+      "confidence" : "high",
+      "distanceMeters" : 210.152753663946,
+      "durationSeconds" : 150,
+      "endOffsetSeconds" : 1560.6429206132889,
+      "index" : 5,
+      "label" : "Recovery 2",
+      "maxHeartRateBpm" : 180,
+      "paceSecondsPerKm" : 713.7665216600687,
+      "plannedGoalDisplayText" : "150 s",
+      "plannedGoalType" : "time",
+      "plannedGoalValue" : 150,
+      "sourceNote" : "Time-goal window reconstructed from WorkoutKit duration; TODO pause-adjusted active duration",
+      "startOffsetSeconds" : 1410.6429206132889,
+      "stepType" : "recovery"
+    },
+    {
+      "averageHeartRateBpm" : 172.0212765957447,
+      "averagePower" : 294.5425531914894,
+      "boundaryAdjustmentSeconds" : 0.9306919574737549,
+      "boundaryDiagnostics" : {
+        "crossingSample" : {
+          "endCumulativeDistanceMeters" : 5437.282878906932,
+          "endDate" : "2026-06-03T12:15:10Z",
+          "endOffsetSeconds" : 1801.6756726503372,
+          "startCumulativeDistanceMeters" : 5426.2463395795785,
+          "startDate" : "2026-06-03T12:15:07Z",
+          "startOffsetSeconds" : 1799.1030902862549
+        },
+        "cumulativeDistanceAtEndMeters" : 5437.282878906932,
+        "cumulativeDistanceAtStartMeters" : 4433.290152249623,
+        "interpolationFraction" : 0.6382265727615432,
+        "nextSample" : {
+          "endCumulativeDistanceMeters" : 5449.459950007498,
+          "endDate" : "2026-06-03T12:15:13Z",
+          "endOffsetSeconds" : 1804.2482550144196,
+          "startCumulativeDistanceMeters" : 5437.282878906932,
+          "startDate" : "2026-06-03T12:15:10Z",
+          "startOffsetSeconds" : 1801.6756726503372
+        },
+        "previousSample" : {
+          "endCumulativeDistanceMeters" : 5426.2463395795785,
+          "endDate" : "2026-06-03T12:15:07Z",
+          "endOffsetSeconds" : 1799.1030902862549,
+          "startCumulativeDistanceMeters" : 5414.2246238014195,
+          "startDate" : "2026-06-03T12:15:05Z",
+          "startOffsetSeconds" : 1796.5305081605911
+        },
+        "targetDistanceMeters" : 1000
+      },
+      "boundaryOvershootMeters" : 3.9927266573085944,
+      "boundaryStrategy" : "crossingSampleEnd",
+      "confidence" : "high",
+      "distanceMeters" : 1003.9927266573086,
+      "durationSeconds" : 241.03275203704834,
+      "endOffsetSeconds" : 1801.6756726503372,
+      "index" : 6,
+      "label" : "Work 3",
+      "maxHeartRateBpm" : 185,
+      "paceSecondsPerKm" : 240.07420137349234,
+      "plannedGoalDisplayText" : "1 km",
+      "plannedGoalType" : "distance",
+      "plannedGoalValue" : 1000,
+      "plannedTargetDisplayText" : "pace 4:00 \/km, speed 4.17 m\/s, metric current",
+      "sourceNote" : "Distance-goal boundary: crossing sample end, adjustment +0.9s, overshoot 4.0 m",
+      "startOffsetSeconds" : 1560.6429206132889,
+      "stepType" : "work"
+    },
+    {
+      "averageHeartRateBpm" : 160.56666666666666,
+      "averagePower" : 98.34545454545454,
+      "confidence" : "high",
+      "distanceMeters" : 199.11763657189385,
+      "durationSeconds" : 150,
+      "endOffsetSeconds" : 1951.6756726503372,
+      "index" : 7,
+      "label" : "Recovery 3",
+      "maxHeartRateBpm" : 185,
+      "paceSecondsPerKm" : 753.323525642796,
+      "plannedGoalDisplayText" : "150 s",
+      "plannedGoalType" : "time",
+      "plannedGoalValue" : 150,
+      "sourceNote" : "Time-goal window reconstructed from WorkoutKit duration; TODO pause-adjusted active duration",
+      "startOffsetSeconds" : 1801.6756726503372,
+      "stepType" : "recovery"
+    },
+    {
+      "averageHeartRateBpm" : 155.88311688311688,
+      "averagePower" : 194.28859060402684,
+      "confidence" : "medium",
+      "distanceMeters" : 1031.6583124832023,
+      "durationSeconds" : 385.0490332841873,
+      "endOffsetSeconds" : 2336.7247059345245,
+      "index" : 8,
+      "label" : "Cooldown",
+      "maxHeartRateBpm" : 166,
+      "paceSecondsPerKm" : 373.2331030778727,
+      "plannedGoalDisplayText" : "Open",
+      "plannedGoalType" : "open",
+      "plannedTargetDisplayText" : "pace range 6:00-6:30 \/km, speed 2.56 m\/s-2.78 m\/s, metric current",
+      "sourceNote" : "Planned open cooldown extended to workout end",
+      "startOffsetSeconds" : 1951.6756726503372,
+      "stepType" : "cooldown"
+    }
+  ],
+  "sourceNotes" : [
+    "Plan source: WorkoutKit",
+    "Window source: Plan-derived from HealthKit distance\/time samples",
+    "Stats source: HealthKit samples",
+    "HealthKit segment markers: not used"
+  ],
+  "workout" : {
+    "averageHeartRate" : 149.99652484267872,
+    "averagePower" : 204.13222222222223,
+    "cadenceSpm" : 166.72247990323976,
+    "deviceName" : "Apple Watch Apple Inc. Watch",
+    "distanceMeters" : 6668.058827962028,
+    "durationSeconds" : 2336.7247059345245,
+    "elapsedSeconds" : 2336.7247059345245,
+    "endDate" : "2026-06-03T12:24:05Z",
+    "id" : "F6D47A51-9510-4C7A-9186-6BAFE3C128C9",
+    "maxHeartRate" : 185,
+    "paceSecondsPerKm" : 350.4355264737072,
+    "sourceID" : "F6D47A51-9510-4C7A-9186-6BAFE3C128C9",
+    "sourceName" : "Adriel’s Apple Watch",
+    "startDate" : "2026-06-03T11:45:08Z"
+  },
+  "workoutKitPlanAudit" : {
+    "displayName" : "Wednesday Interval (7.5km)",
+    "planID" : "77EBFFFA-254C-4E57-B567-DF975A19415A",
+    "planType" : "Custom workout",
+    "plannedSteps" : [
+      {
+        "index" : 1,
+        "label" : "Warmup",
+        "plannedGoalDisplayText" : "2 km",
+        "plannedGoalType" : "distance",
+        "plannedGoalValue" : 2000,
+        "plannedTargetDisplayText" : "pace range 6:00-6:30 \/km, speed 2.56 m\/s-2.78 m\/s, metric current",
+        "stepType" : "warmup"
+      },
+      {
+        "index" : 2,
+        "label" : "Work 1",
+        "plannedGoalDisplayText" : "1 km",
+        "plannedGoalType" : "distance",
+        "plannedGoalValue" : 1000,
+        "plannedTargetDisplayText" : "pace 4:00 \/km, speed 4.17 m\/s, metric current",
+        "repeatBlockIndex" : 1,
+        "repeatIndex" : 1,
+        "stepType" : "work"
+      },
+      {
+        "index" : 3,
+        "label" : "Recovery 1",
+        "plannedGoalDisplayText" : "150 s",
+        "plannedGoalType" : "time",
+        "plannedGoalValue" : 150,
+        "repeatBlockIndex" : 1,
+        "repeatIndex" : 1,
+        "stepType" : "recovery"
+      },
+      {
+        "index" : 4,
+        "label" : "Work 2",
+        "plannedGoalDisplayText" : "1 km",
+        "plannedGoalType" : "distance",
+        "plannedGoalValue" : 1000,
+        "plannedTargetDisplayText" : "pace 4:00 \/km, speed 4.17 m\/s, metric current",
+        "repeatBlockIndex" : 1,
+        "repeatIndex" : 2,
+        "stepType" : "work"
+      },
+      {
+        "index" : 5,
+        "label" : "Recovery 2",
+        "plannedGoalDisplayText" : "150 s",
+        "plannedGoalType" : "time",
+        "plannedGoalValue" : 150,
+        "repeatBlockIndex" : 1,
+        "repeatIndex" : 2,
+        "stepType" : "recovery"
+      },
+      {
+        "index" : 6,
+        "label" : "Work 3",
+        "plannedGoalDisplayText" : "1 km",
+        "plannedGoalType" : "distance",
+        "plannedGoalValue" : 1000,
+        "plannedTargetDisplayText" : "pace 4:00 \/km, speed 4.17 m\/s, metric current",
+        "repeatBlockIndex" : 1,
+        "repeatIndex" : 3,
+        "stepType" : "work"
+      },
+      {
+        "index" : 7,
+        "label" : "Recovery 3",
+        "plannedGoalDisplayText" : "150 s",
+        "plannedGoalType" : "time",
+        "plannedGoalValue" : 150,
+        "repeatBlockIndex" : 1,
+        "repeatIndex" : 3,
+        "stepType" : "recovery"
+      },
+      {
+        "index" : 8,
+        "label" : "Cooldown",
+        "plannedGoalDisplayText" : "Open",
+        "plannedGoalType" : "open",
+        "plannedTargetDisplayText" : "pace range 6:00-6:30 \/km, speed 2.56 m\/s-2.78 m\/s, metric current",
+        "stepType" : "cooldown"
+      }
+    ],
+    "status" : "available",
+    "summaryLines" : [
+      "Activity: HKWorkoutActivityType(rawValue: 37)",
+      "Warmup: goal 2 km, alert pace range 6:00-6:30 \/km, speed 2.56 m\/s-2.78 m\/s, metric current",
+      "Block 1: 3x, 2 step(s)",
+      "Block 1 step 1: Work - goal 1 km, alert pace 4:00 \/km, speed 4.17 m\/s, metric current",
+      "Block 1 step 2: Recovery - goal 150 s, alert none",
+      "Cooldown: goal open, alert pace range 6:00-6:30 \/km, speed 2.56 m\/s-2.78 m\/s, metric current"
+    ]
+  }
+}

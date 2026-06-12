@@ -155,7 +155,7 @@ def rows_for_case(case: Case) -> list[dict]:
             "next sample end after crossing",
             float(distance["nextSample"]["endOffsetSeconds"]),
             workout_end - float(distance["nextSample"]["endOffsetSeconds"]),
-            "Risk if applied globally: pass fixtures June 2 and June 4 already match Apple Fitness closely.",
+            "Risk if applied globally: June 2 and June 4 are simple Work/Open guard fixtures that already match Apple Fitness closely.",
         ),
         (
             "Apple-visible Open alignment",
@@ -250,7 +250,7 @@ def main() -> int:
         print(f"- {item}")
 
     print()
-    print("Conclusion: no candidate is approved for production. Next-sample-end improves the scored drift cases and brings them within temporary tolerance, but it still misses Apple Fitness on at least one row in each case and must be checked against pass fixtures with matching boundary diagnostics before any app logic change.")
+    print("Conclusion: no candidate is approved for production. Next-sample-end improves the scored drift cases and brings them within temporary tolerance, but it still misses Apple Fitness on at least one row in each case and must be checked against pass/temporary-pass guard fixtures with matching boundary diagnostics before any app logic change.")
     return 0
 
 

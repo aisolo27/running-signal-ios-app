@@ -1,0 +1,184 @@
+{
+  "cacheStatus" : {
+    "evidenceLoadedAt" : "2026-06-12T16:50:51Z",
+    "evidenceSource" : "freshQuery",
+    "hasCachedEvidence" : true
+  },
+  "diagnosticsWarnings" : [
+
+  ],
+  "evidenceCounts" : {
+    "activeEnergy" : 998,
+    "cadence" : 1000,
+    "distance" : 998,
+    "events" : 13,
+    "groundContact" : 466,
+    "heartRate" : 515,
+    "power" : 994,
+    "routePoints" : 2574,
+    "speed" : 998,
+    "stepCount" : 1000,
+    "strideLength" : 467,
+    "verticalOscillation" : 470
+  },
+  "forceReenrichResult" : {
+    "authorizationState" : "authorized",
+    "cacheWasPresent" : true,
+    "completedAt" : "2026-06-12T16:50:59Z",
+    "diagnosticsWarnings" : [
+
+    ],
+    "evidenceCounts" : {
+      "activeEnergy" : 998,
+      "cadence" : 1000,
+      "distance" : 998,
+      "events" : 12,
+      "groundContact" : 466,
+      "heartRate" : 515,
+      "power" : 994,
+      "routePoints" : 2574,
+      "speed" : 998,
+      "stepCount" : 1000,
+      "strideLength" : 467,
+      "verticalOscillation" : 470
+    },
+    "freshQueryReturnedWorkout" : true,
+    "invalidatedCache" : true,
+    "message" : "Enriched 1 HealthKit running workouts.",
+    "requestedAt" : "2026-06-12T16:50:42Z",
+    "workoutID" : "7D4AA638-AFA0-4875-88B2-C87EDF5EC600"
+  },
+  "generatedAt" : "2026-06-12T16:51:06Z",
+  "packetVersion" : 1,
+  "reconstructedIntervals" : [
+    {
+      "averageHeartRateBpm" : 131.36561264822134,
+      "averagePower" : 185.95398773006136,
+      "boundaryAdjustmentSeconds" : 1.4732215404510498,
+      "boundaryDiagnostics" : {
+        "crossingSample" : {
+          "endCumulativeDistanceMeters" : 6454.226661636261,
+          "endDate" : "2026-05-26T12:18:29Z",
+          "endOffsetSeconds" : 2527.4671412706375,
+          "startCumulativeDistanceMeters" : 6446.845679937396,
+          "startDate" : "2026-05-26T12:18:26Z",
+          "startOffsetSeconds" : 2524.89446747303
+        },
+        "cumulativeDistanceAtEndMeters" : 6454.226661636261,
+        "cumulativeDistanceAtStartMeters" : 0,
+        "interpolationFraction" : 0.4273577948430386,
+        "nextSample" : {
+          "endCumulativeDistanceMeters" : 6460.80771300965,
+          "endDate" : "2026-05-26T12:18:31Z",
+          "endOffsetSeconds" : 2530.039816737175,
+          "startCumulativeDistanceMeters" : 6454.226661636261,
+          "startDate" : "2026-05-26T12:18:29Z",
+          "startOffsetSeconds" : 2527.4671412706375
+        },
+        "previousSample" : {
+          "endCumulativeDistanceMeters" : 6446.845679937396,
+          "endDate" : "2026-05-26T12:18:26Z",
+          "endOffsetSeconds" : 2524.89446747303,
+          "startCumulativeDistanceMeters" : 6441.022717263084,
+          "startDate" : "2026-05-26T12:18:23Z",
+          "startOffsetSeconds" : 2522.3217935562134
+        },
+        "targetDistanceMeters" : 6450
+      },
+      "boundaryOvershootMeters" : 4.2266616362612695,
+      "boundaryStrategy" : "crossingSampleEnd",
+      "confidence" : "high",
+      "distanceMeters" : 6454.226661636261,
+      "durationSeconds" : 2527.4671412706375,
+      "endOffsetSeconds" : 2527.4671412706375,
+      "index" : 1,
+      "label" : "Work 1",
+      "maxHeartRateBpm" : 142,
+      "paceSecondsPerKm" : 391.5987574923313,
+      "plannedGoalDisplayText" : "6.45 km",
+      "plannedGoalType" : "distance",
+      "plannedGoalValue" : 6450,
+      "plannedTargetDisplayText" : "heart rate zone 2",
+      "sourceNote" : "Distance-goal boundary: crossing sample end, adjustment +1.5s, overshoot 4.2 m",
+      "startOffsetSeconds" : 0,
+      "stepType" : "work"
+    },
+    {
+      "averageHeartRateBpm" : 136.66666666666666,
+      "averagePower" : 185.8125,
+      "confidence" : "medium",
+      "distanceMeters" : 97.22817968856543,
+      "durationSeconds" : 45.21510171890259,
+      "endOffsetSeconds" : 2572.68224298954,
+      "index" : 2,
+      "label" : "Open \/ Extra",
+      "maxHeartRateBpm" : 137,
+      "paceSecondsPerKm" : 465.0411214498972,
+      "plannedGoalDisplayText" : "Open",
+      "plannedGoalType" : "open",
+      "sourceNote" : "Extra tail after planned WorkoutKit steps",
+      "startOffsetSeconds" : 2527.4671412706375,
+      "stepType" : "open",
+      "tailDiagnostics" : {
+        "creationReason" : "Remaining workout time or distance exceeded Open \/ Extra threshold after planned WorkoutKit steps.",
+        "finalDistanceSampleCumulativeDistanceMeters" : 6551.454841324827,
+        "finalDistanceSampleOffsetSeconds" : 2566.0574145317078,
+        "lastCadenceSampleOffsetSeconds" : 2571.202758550644,
+        "lastHeartRateSampleOffsetSeconds" : 2569.37559902668,
+        "lastPowerSampleOffsetSeconds" : 2568.630085349083,
+        "plannedFinalStepEndOffsetSeconds" : 2527.4671412706375,
+        "remainingMeters" : 97.22817968856543,
+        "remainingSeconds" : 45.21510171890259,
+        "workoutEndOffsetSeconds" : 2572.68224298954
+      }
+    }
+  ],
+  "sourceNotes" : [
+    "Plan source: WorkoutKit",
+    "Window source: Plan-derived from HealthKit distance\/time samples",
+    "Stats source: HealthKit samples",
+    "HealthKit segment markers: not used"
+  ],
+  "workout" : {
+    "averageHeartRate" : 131.50480023852114,
+    "averagePower" : 185.95171026156945,
+    "cadenceSpm" : 176.05975670237308,
+    "deviceName" : "Apple Watch Apple Inc. Watch",
+    "distanceMeters" : 6551.454841324827,
+    "durationSeconds" : 2572.68224298954,
+    "elapsedSeconds" : 2572.68224298954,
+    "endDate" : "2026-05-26T12:19:14Z",
+    "id" : "7D4AA638-AFA0-4875-88B2-C87EDF5EC600",
+    "maxHeartRate" : 142,
+    "paceSecondsPerKm" : 392.68869362599406,
+    "sourceID" : "7D4AA638-AFA0-4875-88B2-C87EDF5EC600",
+    "sourceName" : "Adriel’s Apple Watch",
+    "startDate" : "2026-05-26T11:36:21Z"
+  },
+  "workoutKitPlanAudit" : {
+    "displayName" : "Tuesday Easy 6.45km",
+    "planID" : "64073E58-E063-455E-B866-76A369213980",
+    "planType" : "Custom workout",
+    "plannedSteps" : [
+      {
+        "index" : 1,
+        "label" : "Work 1",
+        "plannedGoalDisplayText" : "6.45 km",
+        "plannedGoalType" : "distance",
+        "plannedGoalValue" : 6450,
+        "plannedTargetDisplayText" : "heart rate zone 2",
+        "repeatBlockIndex" : 1,
+        "repeatIndex" : 1,
+        "stepType" : "work"
+      }
+    ],
+    "status" : "available",
+    "summaryLines" : [
+      "Activity: HKWorkoutActivityType(rawValue: 37)",
+      "Warmup: none",
+      "Block 1: 1x, 1 step(s)",
+      "Block 1 step 1: Work - goal 6.45 km, alert heart rate zone 2",
+      "Cooldown: none"
+    ]
+  }
+}

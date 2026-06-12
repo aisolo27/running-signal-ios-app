@@ -2,6 +2,8 @@
 
 Status: validation evidence needed before changing June 1 boundary logic or promoting WorkoutKit Reconstructed Intervals into the normal workout detail UI.
 
+Physical-device parity packet status: archived for April 28, May 26, June 1, June 2, June 3, June 4, June 5, and June 12. The May 26 through June 12 batch included parity packet JSON only; matching raw debug markdown exports were not included in that batch.
+
 ## Current Status
 
 | Date | Status | Current read |
@@ -10,7 +12,7 @@ Status: validation evidence needed before changing June 1 boundary logic or prom
 | 2026-05-26 | blocked | Fixed-distance Work ends about 4 seconds early in RunSignal, so Open / Extra becomes about 4 seconds too long. This repeats the same drift direction as June 1. |
 | 2026-06-01 | blocked | Fixed-distance Work ends about 5.7 seconds early in RunSignal, so Open / Extra becomes about 5.7 seconds too long. Apple Fitness Open is real post-goal running and should not be hidden or merged into Work. |
 | 2026-06-12 | blocked | Fixed-distance Work ends about 4 seconds early in RunSignal, so Open / Extra becomes about 5 seconds too long. This repeats the same drift direction across a 5.00 km goal. |
-| 2026-06-02 | pass | Simple fixed-distance Work plus Open tail parity holds. |
+| 2026-06-02 | temporary pass | Simple fixed-distance Work plus Open tail parity is close; exact packet Work time is 2.4 seconds from Apple Fitness, outside preferred tolerance and inside temporary tolerance. |
 | 2026-06-03 | temporary pass | Planned open cooldown handling was fixed; keep as a regression fixture. |
 | 2026-06-04 | pass | Simple fixed-distance Work plus Open tail parity holds. |
 | 2026-06-05 | temporary pass | Warmup/cooldown boundaries remain close but not preferred. |
@@ -32,9 +34,11 @@ April 28 is now an evidence-recovery fixture: the physical-device fresh query pa
 
 Use `fixed-distance-boundary-strategy-research.md` and `analyze_fixed_distance_boundaries.py` for offline strategy comparison only. No candidate strategy is approved for production yet.
 
+The next implementation step should be a debug-only candidate boundary scorer that compares strategies side by side against the complete packet-backed fixture set without changing production interval behavior.
+
 ## Future Examples Needed
 
-Collect more fixed-distance Work plus real Open tail examples and pass-case boundary diagnostics. Each future workout should have:
+Collect more fixed-distance Work plus real Open tail examples and pass-case boundary diagnostics as new workouts become available. Each future workout should have:
 
 - Apple Fitness screenshots showing the Work and Open rows.
 - RunSignal Raw HealthKit Debug export with boundary diagnostics.
@@ -51,7 +55,7 @@ Ideal examples:
 - 400 m or 800 m repeated Work steps with possible Open tail.
 - Any workout where Apple Fitness and RunSignal differ by more than 2 seconds.
 
-April 28 evidence has been regenerated and saved. Use it to validate the force re-enrich path, not to approve production boundary changes.
+April 28 evidence and the May 26 through June 12 parity packets have been regenerated and saved. Use the complete packet-backed fixture set for future debug-only scoring, not for immediate production boundary changes.
 
 ## Older Evidence Reload Track
 

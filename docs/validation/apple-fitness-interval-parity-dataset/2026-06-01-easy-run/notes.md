@@ -65,7 +65,7 @@ RunSignal's interpolation/crossing logic appears internally valid because the 6.
 
 Apple Fitness may be using final distance sample timing, private workout-session timing, sensor-end behavior, smoothing, or display rules that are not exposed in the public WorkoutKit/HealthKit evidence. Its visible Work/Open timing aligns more closely with the final distance sample and workout end than with the exact 6.45 km crossing.
 
-Do not tune from this single workout. A June 1-specific final-sample or tail-shrink rule could regress June 2 and June 4, which already pass for simple fixed-distance Work + Open tail workouts.
+Do not tune from this single workout. A June 1-specific final-sample or tail-shrink rule could regress June 2 and June 4, which are the simple fixed-distance Work + Open tail guard workouts.
 
 Future examples needed:
 
@@ -74,3 +74,14 @@ Future examples needed:
 - Visible Apple Fitness Open row.
 - RunSignal Raw HealthKit Debug export with boundary diagnostics.
 - Preferably multiple distances, such as 5K Work, 6.45K Work, 2K Work, or 400 m / 800 m reps with an Open tail.
+
+## Physical-Device Parity Packet
+
+- Packet: `exports/runsignal-diagnostics/runsignal-parity-packet-2026-06-01.json`
+- Raw debug markdown export: not included in this batch.
+- Packet source: freshQuery.
+- Force re-enrich returned workout: true.
+- Diagnostics warnings: none.
+- Event count split: top-level evidence events 13, force-result segment/lap events 12. This matches the known diagnostics counting split documented for April 28.
+- Classification: drift case, fixed-distance Work plus real Open / Extra tail.
+- Current packet rows: Work 1 6450.635445654858 m / 2558.318410396576 s; Open / Extra 12.345910287927836 m / 12.6536306142807 s.

@@ -4,8 +4,8 @@ Last updated: 2026-06-12
 
 ## Priority 1
 
-- Use Raw HealthKit Debug's Parity Lab force re-enrich and parity packet export on the physical iPhone for the remaining validation workouts.
-- Verify WorkoutKit planned intervals against Apple Fitness with packet evidence before any normal UI promotion.
+- Build a debug-only candidate boundary scorer against the complete packet-backed fixture set.
+- Keep WorkoutKit reconstructed intervals gated from normal UI until scorer output is reviewed.
 
 ## Priority 2
 
@@ -17,7 +17,7 @@ Last updated: 2026-06-12
 ## Priority 3
 
 - Run physical-device validation only when the task needs real HealthKit proof.
-- Capture and save parity packets from the physical device before claiming that force re-enrich resolved an evidence gap.
+- Capture and save additional parity packets only for new validation workouts or re-checks.
 
 ## Blocked
 

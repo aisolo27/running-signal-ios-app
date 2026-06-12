@@ -19,7 +19,7 @@ The purpose is to compare Apple Fitness against RunSignal across multiple real w
 | 2026-04-28 | `2026-04-28-easy-run/` | Easy run evidence recovery | temporary pass |
 | 2026-05-26 | `2026-05-26-easy-run/` | Easy run boundary research | blocked |
 | 2026-06-01 | `2026-06-01-easy-run/` | Easy run | blocked |
-| 2026-06-02 | `2026-06-02-easy-run/` | Easy run | pass |
+| 2026-06-02 | `2026-06-02-easy-run/` | Easy run | temporary pass |
 | 2026-06-03 | `2026-06-03-interval-workout/` | Interval workout | temporary pass |
 | 2026-06-04 | `2026-06-04-easy-recovery-run/` | Easy, recovery, or zone 2 run | pass |
 | 2026-06-05 | `2026-06-05-tempo-threshold-run/` | Tempo or threshold run | temporary pass |
@@ -31,13 +31,16 @@ June 1, May 26, and June 12 remain blocked because the boundary diagnostics are 
 
 April 28 is no longer evidence unavailable. A physical-device force re-enrich on 2026-06-12 recovered rich HealthKit evidence, route data, a WorkoutKit plan, reconstructed Work/Open rows, and boundary diagnostics. Keep April 28 as an evidence-recovery and fresh-query/cache-invalidation validation fixture; do not use it as a main repeated-interval boundary tuning fixture.
 
+Physical-device parity packets are now archived for the full active fixture set: April 28, May 26, June 1, June 2, June 3, June 4, June 5, and June 12. The May 26 through June 12 batch contains parity packet JSON only; no matching raw debug markdown exports were included in that batch.
+
 ## Next Validation Phase
 
 - Do not tune June 1 from one workout.
 - June 1's Open row is real post-goal running and should not be hidden or merged into Work.
 - May 26 and June 12 show the same drift direction as June 1, across 6.45 km and 5.00 km goals.
-- Need more fixed-distance Work + real Open tail examples and pass-case boundary diagnostics before changing app logic.
+- Use the archived parity packets to compare candidate boundary strategies in a future debug-only scorer before changing app logic.
 - April 28 now proves the physical-device fresh query path can recover the previously missing evidence, but it does not approve a boundary-rule change.
+- June 2 remains a simple fixed-distance Work plus Open / Extra guard, but exact packet values put it in the existing temporary-pass band because the Work time is 2.4 seconds from Apple Fitness.
 - Goal: determine whether this is repeatable Apple Fitness boundary behavior and whether a deterministic rule can improve it without regressing existing pass/temporary-pass fixtures.
 - Normal interval UI promotion remains blocked until this is resolved or explicitly accepted.
 
@@ -64,6 +67,7 @@ April 28 is no longer evidence unavailable. A physical-device force re-enrich on
 - `screenshots/runsignal-workout-detail/`: RunSignal normal workout detail screenshots.
 - `screenshots/runsignal-raw-healthkit-debug/`: RunSignal Raw HealthKit Debug screenshots.
 - `exports/runsignal-diagnostics/`: RunSignal diagnostics exports for this workout.
+- `runsignal-parity-packet-YYYY-MM-DD.json`: physical-device force re-enrich parity packet when available.
 - `interval-parity-fixture.json`: cross-workout visible Apple Fitness and RunSignal observed values used by the lightweight validator.
 - `validate_interval_parity.py`: docs-level harness for checking current pass/temporary/blocker status without parsing screenshots.
 - `next-boundary-validation-plan.md`: evidence plan for fixed-distance Work plus real Open tail boundary validation.

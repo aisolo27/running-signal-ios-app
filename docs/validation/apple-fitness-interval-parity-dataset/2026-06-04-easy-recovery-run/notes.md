@@ -14,3 +14,14 @@
 - Raw HealthKit Segment Markers appeared: yes; debug source says they are not used as Apple Fitness interval rows.
 - Visible mismatch: Work is 36:36 in Apple Fitness vs 36:34 in RunSignal; Open is 0:21 in Apple Fitness vs 0:22 in RunSignal.
 - Pause, GPS weirdness, treadmill/manual edit, or extra tail behavior: Open tail exists in both and is close.
+
+## Physical-Device Parity Packet
+
+- Packet: `exports/runsignal-diagnostics/runsignal-parity-packet-2026-06-04.json`
+- Raw debug markdown export: not included in this batch.
+- Packet source: freshQuery.
+- Force re-enrich returned workout: true.
+- Diagnostics warnings: none.
+- Event count split: top-level evidence events 11, force-result segment/lap events 10. This matches the known diagnostics counting split documented for April 28.
+- Classification: pass case, single fixed-distance Work plus Open / Extra tail.
+- Current packet rows: Work 1 5652.928887475199 m / 2194.2983305454254 s; Open / Extra 41.95090820151381 m / 22.246679425239563 s.

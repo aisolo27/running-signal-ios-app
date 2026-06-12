@@ -18,6 +18,8 @@ The Open rows are real post-goal running. Do not hide or merge Open into Work. T
 
 April 28 is not included in boundary scoring. Physical-device force re-enrich recovered WorkoutKit plan data, rich HealthKit samples, reconstructed intervals, and boundary diagnostics, but this workout is being kept as an evidence-recovery and fresh-query/cache-invalidation validation fixture rather than a main drift-tuning fixture.
 
+Physical-device parity packets are now archived for May 26, June 1, June 2, June 3, June 4, June 5, and June 12. These packets should feed a future debug-only candidate boundary scorer; this research note still does not approve production behavior changes.
+
 ## Candidate Strategies
 
 ### A. Current Strategy
@@ -29,7 +31,7 @@ Current status:
 - June 1: internally consistent, but about 5-6 seconds earlier than Apple Fitness.
 - May 26: internally consistent, but about 4 seconds earlier than Apple Fitness.
 - June 12: internally consistent, but about 4 seconds earlier than Apple Fitness.
-- June 2 and June 4 already pass with current behavior, so any new rule must avoid regressing them.
+- June 2 is a temporary-pass simple Work/Open guard and June 4 passes with current behavior, so any new rule must avoid regressing them.
 
 ### B. Next-Sample-End Strategy
 
@@ -79,6 +81,6 @@ The harness reads `interval-parity-fixture.json` and the Raw HealthKit Debug exp
 
 Fixed-distance Work plus real Open tail drift now has at least three valid examples across two goal distances: 6.45 km and 5.00 km. June 1 is no longer isolated.
 
-No deterministic rule is approved yet. The next-sample-end strategy improves all three scored drift examples but does not fully explain them, and it could regress existing pass cases if applied globally. A production rule would need fresh boundary diagnostics for the passing Work/Open fixtures, more examples, or a narrow gate that preserves June 2, June 3, June 4, and June 5.
+No deterministic rule is approved yet. The next-sample-end strategy improves all three scored drift examples but does not fully explain them, and it could regress existing pass/temporary-pass guards if applied globally. A production rule would need fresh boundary diagnostics for the passing Work/Open fixtures, more examples, or a narrow gate that preserves June 2, June 3, June 4, and June 5.
 
 Normal WorkoutKit interval UI promotion remains blocked.

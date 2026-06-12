@@ -24,3 +24,14 @@ May 26 repeats the June 1 drift direction. RunSignal's public HealthKit cumulati
 This supports treating June 1 as not completely isolated. It still is not enough evidence to change app logic. More fixed-distance Work plus real Open tail examples are needed before defining a deterministic boundary rule.
 
 Do not hide or merge Open. The Open row is real post-goal running.
+
+## Physical-Device Parity Packet
+
+- Packet: `exports/runsignal-diagnostics/runsignal-parity-packet-2026-05-26.json`
+- Raw debug markdown export: not included in this batch.
+- Packet source: freshQuery.
+- Force re-enrich returned workout: true.
+- Diagnostics warnings: none.
+- Event count split: top-level evidence events 13, force-result segment/lap events 12. This matches the known diagnostics counting split documented for April 28.
+- Classification: drift case, fixed-distance Work plus real Open / Extra tail.
+- Current packet rows: Work 1 6454.226661636261 m / 2527.4671412706375 s; Open / Extra 97.22817968856543 m / 45.21510171890259 s.

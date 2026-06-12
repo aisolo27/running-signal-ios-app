@@ -8,23 +8,24 @@ Updated: 2026-06-12
 | Date | Workout | Apple Fitness evidence | RunSignal evidence | Validation usefulness |
 |---|---|---|---|---|
 | 2026-04-28 | Easy run | `IMG_6982.PNG`, `IMG_6983.PNG` | `exports/runsignal-diagnostics/runsignal-raw-healthkit-debug-2026-04-28.md`, `exports/runsignal-diagnostics/runsignal-parity-packet-2026-04-28.json` | Fresh physical-device evidence recovered; temporary pass candidate |
-| 2026-05-26 | Easy run | `IMG_6980.PNG`, `IMG_6981.PNG` | `exports/runsignal-diagnostics/text-6D5CCBA82A13-1.txt` | Useful boundary-research sample, blocked |
-| 2026-06-01 | Easy run | `IMG_6968.PNG`, `IMG_6969.PNG` | `exports/runsignal-diagnostics/new text-795E821D968D-1.txt` plus older copied export | Useful, but blocked |
-| 2026-06-02 | Easy run | `IMG_6970.PNG`, `IMG_6971.PNG` | `screenshots/runsignal-raw-healthkit-debug/text-B1E5770683EF-1.txt` | Pass |
-| 2026-06-03 | Interval workout | `IMG_6972.PNG`, `IMG_6973.PNG` | `exports/runsignal-diagnostics/text-340B7765A007-1.txt` plus older screenshot export | Strongest structured sample, temporary pass after targeted code refinement |
-| 2026-06-04 | Easy/recovery run | `IMG_6974.PNG`, `IMG_6975.PNG` | `screenshots/runsignal-raw-healthkit-debug/text-43A9773F2CFB-1.txt` | Pass |
-| 2026-06-05 | Tempo/threshold run | `IMG_6976.PNG`, `IMG_6977.PNG` | `screenshots/runsignal-raw-healthkit-debug/text-CF0A7AF3AD53-1.txt` | Useful, temporary pass |
-| 2026-06-12 | Easy run | `IMG_6999.PNG` | `exports/runsignal-diagnostics/text-973BFDCDC777-1.txt` | Useful boundary-research sample, blocked |
+| 2026-05-26 | Easy run | `IMG_6980.PNG`, `IMG_6981.PNG` | `exports/runsignal-diagnostics/text-6D5CCBA82A13-1.txt`, `exports/runsignal-diagnostics/runsignal-parity-packet-2026-05-26.json` | Drift case, blocked |
+| 2026-06-01 | Easy run | `IMG_6968.PNG`, `IMG_6969.PNG` | `exports/runsignal-diagnostics/new text-795E821D968D-1.txt` plus older copied export, `exports/runsignal-diagnostics/runsignal-parity-packet-2026-06-01.json` | Drift case, blocked |
+| 2026-06-02 | Easy run | `IMG_6970.PNG`, `IMG_6971.PNG` | `screenshots/runsignal-raw-healthkit-debug/text-B1E5770683EF-1.txt`, `exports/runsignal-diagnostics/runsignal-parity-packet-2026-06-02.json` | Temporary pass |
+| 2026-06-03 | Interval workout | `IMG_6972.PNG`, `IMG_6973.PNG` | `exports/runsignal-diagnostics/text-340B7765A007-1.txt` plus older screenshot export, `exports/runsignal-diagnostics/runsignal-parity-packet-2026-06-03.json` | Planned open cooldown regression fixture, temporary pass |
+| 2026-06-04 | Easy/recovery run | `IMG_6974.PNG`, `IMG_6975.PNG` | `screenshots/runsignal-raw-healthkit-debug/text-43A9773F2CFB-1.txt`, `exports/runsignal-diagnostics/runsignal-parity-packet-2026-06-04.json` | Pass |
+| 2026-06-05 | Tempo/threshold run | `IMG_6976.PNG`, `IMG_6977.PNG` | `screenshots/runsignal-raw-healthkit-debug/text-CF0A7AF3AD53-1.txt`, `exports/runsignal-diagnostics/runsignal-parity-packet-2026-06-05.json` | Useful, temporary pass |
+| 2026-06-12 | Easy run | `IMG_6999.PNG` | `exports/runsignal-diagnostics/text-973BFDCDC777-1.txt`, `exports/runsignal-diagnostics/runsignal-parity-packet-2026-06-12.json` | Drift case, blocked |
 
 ## Main Findings
 
 - The screenshots are enough to validate visible Apple Fitness interval rows for the reviewed workouts. No manual typing is needed for this pass.
 - Most RunSignal raw debug export files are parseable and contain the needed WorkoutKit reconstructed interval rows.
+- Physical-device parity packets are archived for all active fixture workouts. The May 26 through June 12 packet batch included JSON packets only, not matching raw debug markdown exports.
 - 2026-04-28 is no longer evidence unavailable. Physical-device force re-enrich recovered the WorkoutKit plan `Tuesday Easy 7.25km`, rich HealthKit samples, route data, reconstructed Work/Open rows, and boundary diagnostics.
 - HealthKit Segment Markers are present in the exports, but the debug source states they are not used as Apple Fitness interval rows.
 - Apple documentation confirms the public WorkoutKit and HealthKit model shape, but does not confirm Apple Fitness's exact row-boundary or row-label rendering algorithm.
 - Current evidence contract: WorkoutKit is the planned structure source, HealthKit samples are the measured stats source, Apple Fitness screenshots are the visual parity reference, RunSignal Raw HealthKit Debug exports are RunSignal evidence, and HealthKit Segment Markers remain raw/debug-only.
-- 2026-06-02 and 2026-06-04 validate the simple distance-goal Work plus Open tail pattern well.
+- 2026-06-02 and 2026-06-04 validate the simple distance-goal Work plus Open tail pattern well. With exact packet values, June 2 is a temporary pass because Work time is 2.4 seconds from Apple Fitness.
 - 2026-06-03 validates most interval rows well: Work and Recovery rows are close, recovery times are exact, and recovery distances are within tolerance.
 - 2026-06-01 still has a roughly 6-second boundary mismatch: RunSignal Work ends early and Open / Extra becomes too long. The fresh export now shows the 6.45 km crossing sample end is at 42:38.318, while the final distance sample is at 42:43.464 and the workout ends at 42:50.972.
 - 2026-05-26 repeats the same drift direction as June 1: Apple Fitness Work is 42:11, RunSignal Work is 42:07, and Open / Extra becomes about 4 seconds too long.
@@ -34,6 +35,28 @@ Updated: 2026-06-12
 - 2026-06-03 label/structure blocker is resolved by the targeted open-cooldown rule: if WorkoutKit exposes a final planned `Cooldown` step with goal `open`, RunSignal keeps the planned `Cooldown` label and extends that row to workout end.
 - The June 3 fix is not evidence that post-cooldown activity should always merge into `Cooldown`. Fixed distance/time cooldowns that complete and are followed by continued running should still create `Open / Extra`.
 - 2026-06-05 is close overall, but warmup/cooldown boundaries are still temporary passes rather than preferred passes. The displayed cooldown distance differs by roughly 18 m.
+- Across the May 26 through June 12 parity packet batch, top-level evidence event counts are consistently one higher than force-result segment/lap event counts. This matches the April 28 diagnostics counting split and is expected; it does not change interval reconstruction behavior.
+
+## Physical-Device Packet Deltas
+
+| Date | Classification | Row | Apple Fitness | RunSignal packet | Delta |
+|---|---|---|---|---|---|
+| 2026-05-26 | Drift case | Work | 6.45 km / 42:11 | 6454.2 m / 42:07.5 | +4.2 m / -3.5 s |
+| 2026-05-26 | Drift case | Open | 94 m / 0:41 | 97.2 m / 0:45.2 | +3.2 m / +4.2 s |
+| 2026-06-01 | Drift case | Work | 6.45 km / 42:44 | 6450.6 m / 42:38.3 | +0.6 m / -5.7 s |
+| 2026-06-01 | Drift case | Open | 5 m / 0:07 | 12.3 m / 0:12.7 | +7.3 m / +5.7 s |
+| 2026-06-12 | Drift case | Work | 5.00 km / 32:03 | 5001.6 m / 31:58.5 | +1.6 m / -4.5 s |
+| 2026-06-12 | Drift case | Open | 36 m / 0:17 | 43.2 m / 0:22.2 | +7.2 m / +5.2 s |
+| 2026-06-02 | Temporary pass guard | Work | 5.65 km / 36:15 | 5651.9 m / 36:12.6 | +1.9 m / -2.4 s |
+| 2026-06-02 | Temporary pass guard | Open | 57 m / 0:28 | 57.0 m / 0:30.1 | +0.0 m / +2.1 s |
+| 2026-06-04 | Pass case | Work | 5.65 km / 36:36 | 5652.9 m / 36:34.3 | +2.9 m / -1.7 s |
+| 2026-06-04 | Pass case | Open | 44 m / 0:21 | 42.0 m / 0:22.2 | -2.0 m / +1.2 s |
+| 2026-06-03 | Planned open cooldown fixture | Warmup | 2.00 km / 12:47 | 2001.5 m / 12:42.4 | +1.5 m / -4.6 s |
+| 2026-06-03 | Planned open cooldown fixture | Final Cooldown | 1.03 km / 6:22 | 1031.7 m / 6:25.0 | +1.7 m / +3.0 s |
+| 2026-06-05 | Temporary pass | Warmup | 2.00 km / 12:30 | 2005.5 m / 12:26.6 | +5.5 m / -3.4 s |
+| 2026-06-05 | Temporary pass | Work | 2.00 km / 8:30 | 2008.6 m / 8:31.9 | +8.6 m / +1.9 s |
+| 2026-06-05 | Temporary pass | Cooldown | 2.49 km / 14:36 | 2507.7 m / 14:39.8 | +17.7 m / +3.8 s |
+| 2026-06-05 | Temporary pass | Open | 453 m / 2:40 | 440.0 m / 2:37.8 | -13.0 m / -2.2 s |
 
 ## Missing Or Misplaced Items
 
@@ -42,6 +65,7 @@ Updated: 2026-06-12
 - 2026-04-28 retains the older zero-evidence export for history, but the current physical-device raw debug export and parity packet contain usable WorkoutKit, sample, interval, route, and boundary evidence.
 - The 2026-06-01 RunSignal export was originally misplaced under `screenshots/runsignal-workout-detail/`. It has now been copied into `exports/runsignal-diagnostics/` for a consistent dataset layout; the original remains in place.
 - The exported text files are easier to analyze than screenshots and should remain the preferred RunSignal evidence format.
+- The May 26 through June 12 physical-device batch provided parity packet JSON only; raw debug markdown exports were not included in this batch.
 
 ## Blocker Table
 
@@ -50,7 +74,7 @@ Updated: 2026-06-12
 | 2026-04-28 | Easy run | temporary pass | Physical-device force re-enrich recovered rich HealthKit evidence and WorkoutKit plan data. RunSignal Work is about 3.2 seconds earlier than Apple Fitness, and Open / Extra is about 3.0 seconds longer. | Keep as evidence-recovery and fresh-query/cache-invalidation fixture. Do not use as a main repeated-interval boundary tuning fixture. |
 | 2026-05-26 | Easy run | blocked | RunSignal Work ends about 4 seconds earlier than Apple Fitness, and Open / Extra becomes about 4 seconds too long. This repeats the June 1 drift direction for fixed-distance Work plus real Open tail. | Keep as boundary-research evidence. Do not add a deterministic rule yet; collect more examples and protect existing pass/temporary-pass fixtures. |
 | 2026-06-01 | Easy run | blocked | RunSignal Work ends about 5.7 seconds earlier than Apple Fitness, and Open / Extra becomes about 5.7 seconds too long. Fresh diagnostics show Apple Fitness may be using a later private/sensor-end boundary near the final distance sample, not the exact 6.45 km crossing. The Apple Fitness Open row is real post-goal running, so the blocker is boundary timing, not the existence of Open. There is not enough evidence for a deterministic rule. | Do not add a deterministic boundary rule yet. Collect more fixed-distance Work + real Open tail examples before considering any final-sample or tail-shrink rule. |
-| 2026-06-02 | Easy run | pass | None. Simple Work + Open tail parity holds. | Keep as a regression fixture. |
+| 2026-06-02 | Easy run | temporary pass | Simple Work + Open tail parity is close, but exact packet Work time is 2.4 seconds from Apple Fitness, outside the 2-second preferred tolerance and inside the 5-second temporary tolerance. | Keep as a simple Work + Open regression guard. |
 | 2026-06-03 | Interval workout | temporary pass | Label/structure blocker resolved and fresh export confirms the final row is `Cooldown`. Warmup remains about 5 seconds early, and the final planned open cooldown is about 3 seconds longer than Apple Fitness. | Keep as a regression fixture for planned open cooldown behavior. |
 | 2026-06-04 | Easy/recovery run | pass | None. Simple Work + Open tail parity holds. | Keep as a regression fixture. |
 | 2026-06-05 | Tempo/threshold run | temporary pass | Warmup/cooldown are close but not preferred; cooldown displayed distance differs by about 18 m. | Preserve as a temporary pass and investigate whether the difference is rounding, boundary strategy, display formatting, sample granularity, or unavailable Apple Fitness-private handling. |
@@ -131,7 +155,7 @@ RunSignal's interpolation/crossing logic appears internally valid for this worko
 
 Apple Fitness appears to place the visible Work/Open split later than the public distance crossing. Its 42:44 Work row is closer to the final distance sample at 42:43.464, while the 0:07 Open row is closer to the remaining time from that area to the 42:50.972 workout end. This may mean Apple Fitness uses private workout-session timing, final distance sample timing, sensor-end behavior, smoothing, or display rules that are not exposed directly through public WorkoutKit or HealthKit samples.
 
-Do not tune RunSignal from this one workout. A final-sample, sensor-end, or tail-shrink rule could make June 1 look better while regressing June 2 and June 4, which already pass for simple fixed-distance Work + Open tail workouts. June 1 should remain a blocked research case until repeated examples show the same drift pattern and the rule can be tested against the rest of the fixture.
+Do not tune RunSignal from this one workout. A final-sample, sensor-end, or tail-shrink rule could make June 1 look better while regressing June 2 and June 4, the simple fixed-distance Work + Open tail guard workouts. June 1 should remain a blocked research case until repeated examples show the same drift pattern and the rule can be tested against the rest of the fixture.
 
 Future examples needed:
 

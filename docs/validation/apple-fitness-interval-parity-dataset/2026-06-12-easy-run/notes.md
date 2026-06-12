@@ -24,3 +24,14 @@ June 12 repeats the May 26 and June 1 drift direction at a 5.00 km goal distance
 This means the pattern is no longer isolated to one 6.45 km workout or one goal distance. It still does not approve a production boundary rule. Candidate strategies should be scored with June 12 included, and existing pass/temporary-pass fixtures must remain protected.
 
 Do not hide or merge Open. The Open row is real post-goal running.
+
+## Physical-Device Parity Packet
+
+- Packet: `exports/runsignal-diagnostics/runsignal-parity-packet-2026-06-12.json`
+- Raw debug markdown export: not included in this batch.
+- Packet source: freshQuery.
+- Force re-enrich returned workout: true.
+- Diagnostics warnings: none.
+- Event count split: top-level evidence events 11, force-result segment/lap events 10. This matches the known diagnostics counting split documented for April 28.
+- Classification: drift case, fixed-distance Work plus real Open / Extra tail.
+- Current packet rows: Work 1 5001.583504582988 m / 1918.5470229387283 s; Open / Extra 43.23277691495605 m / 22.209920048713684 s.
