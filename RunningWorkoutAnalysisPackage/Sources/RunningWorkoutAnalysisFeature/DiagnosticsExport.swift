@@ -98,6 +98,7 @@ public enum DiagnosticsExport {
         let segmentMarkers = evidence.map {
             DerivedAnalyticsEngine.intervalCandidates(workout: workout, evidence: $0)
         } ?? []
+        let plannedSteps = evidence?.workoutPlanAudit?.plannedSteps ?? []
         let payload = rawDebugPayload(
             workout: workout,
             evidence: evidence,
@@ -147,6 +148,19 @@ public enum DiagnosticsExport {
 
         \(rawEventInventoryMarkdown(evidence?.events ?? [], workout: workout, segmentMarkers: segmentMarkers))
 
+        ## HKWorkoutActivity Inventory
+
+        Debug-only inventory of public `HKWorkout.workoutActivities` rows. These rows are not used for production interval reconstruction.
+
+        \(workoutActivityInventoryMarkdown(
+            evidence?.activities ?? [],
+            plannedSteps: plannedSteps,
+            reconstructedIntervals: reconstructedIntervals,
+            events: evidence?.events ?? [],
+            segmentMarkers: segmentMarkers,
+            workout: workout
+        ))
+
         ## WorkoutKit Reconstructed Intervals
 
         Planned structure source: WorkoutKit when available. Measured stats source: HealthKit samples.
@@ -169,8 +183,9 @@ public enum DiagnosticsExport {
 
         \(plannedStepBoundaryComparisonMarkdown(
             reconstructedIntervals: reconstructedIntervals,
-            plannedSteps: evidence?.workoutPlanAudit?.plannedSteps ?? [],
+            plannedSteps: plannedSteps,
             events: evidence?.events ?? [],
+            activities: evidence?.activities ?? [],
             segmentMarkers: segmentMarkers,
             workout: workout
         ))
@@ -179,6 +194,7 @@ public enum DiagnosticsExport {
 
         \(boundarySourceWarnings(
             events: evidence?.events ?? [],
+            activities: evidence?.activities ?? [],
             reconstructedIntervals: reconstructedIntervals,
             segmentMarkers: segmentMarkers
         ).map { "- \($0)" }.joined(separator: "\n"))
@@ -207,6 +223,7 @@ public enum DiagnosticsExport {
         let segmentMarkers = evidence.map {
             DerivedAnalyticsEngine.intervalCandidates(workout: workout, evidence: $0)
         } ?? []
+        let plannedSteps = evidence?.workoutPlanAudit?.plannedSteps ?? []
         let payload = ParityPacketPayload(
             packetVersion: 1,
             generatedAt: generatedAt.ISO8601Format(),
@@ -244,22 +261,33 @@ public enum DiagnosticsExport {
                 verticalOscillation: workout.verticalOscillationSampleCount,
                 groundContact: workout.groundContactTimeSampleCount,
                 routePoints: evidence?.route.count ?? workout.routePointCount,
-                events: evidence?.events.count ?? workout.intervalCount
+                events: evidence?.events.count ?? workout.intervalCount,
+                activities: evidence?.activities.count ?? 0
             ),
             rawWorkoutEvents: (evidence?.events ?? []).enumerated().map { offset, event in
                 RawDebugWorkoutEvent(index: offset + 1, event: event, workout: workout, segmentMarkers: segmentMarkers)
             },
+            workoutActivities: rawWorkoutActivities(
+                evidence?.activities ?? [],
+                plannedSteps: plannedSteps,
+                reconstructedIntervals: reconstructedIntervals,
+                events: evidence?.events ?? [],
+                segmentMarkers: segmentMarkers,
+                workout: workout
+            ),
             workoutKitPlanAudit: evidence?.workoutPlanAudit.map(RawDebugPlanAudit.init(audit:)),
             reconstructedIntervals: reconstructedIntervals?.intervals.map { RawDebugReconstructedInterval(interval: $0, workout: workout) } ?? [],
             plannedStepBoundaryComparisons: plannedStepBoundaryComparisons(
                 reconstructedIntervals: reconstructedIntervals,
-                plannedSteps: evidence?.workoutPlanAudit?.plannedSteps ?? [],
+                plannedSteps: plannedSteps,
                 events: evidence?.events ?? [],
+                activities: evidence?.activities ?? [],
                 segmentMarkers: segmentMarkers,
                 workout: workout
             ),
             boundarySourceWarnings: boundarySourceWarnings(
                 events: evidence?.events ?? [],
+                activities: evidence?.activities ?? [],
                 reconstructedIntervals: reconstructedIntervals,
                 segmentMarkers: segmentMarkers
             ),
@@ -282,7 +310,8 @@ public enum DiagnosticsExport {
             ("Vertical oscillation", workout.verticalOscillationSampleCount),
             ("Ground contact", workout.groundContactTimeSampleCount),
             ("Route points", evidence?.route.count ?? workout.routePointCount),
-            ("Events", evidence?.events.count ?? workout.intervalCount)
+            ("Events", evidence?.events.count ?? workout.intervalCount),
+            ("Workout activities", evidence?.activities.count ?? 0)
         ]
         return rows.map { "| \($0.0) | \($0.1) |" }.joined(separator: "\n")
     }
@@ -428,10 +457,71 @@ public enum DiagnosticsExport {
         """
     }
 
+    private static func workoutActivityInventoryMarkdown(
+        _ activities: [WorkoutEvidenceActivity],
+        plannedSteps: [PlannedWorkoutStep],
+        reconstructedIntervals: WorkoutIntervalReconstructionResult?,
+        events: [WorkoutEvidenceEvent],
+        segmentMarkers: [DerivedWorkoutInterval],
+        workout: CanonicalWorkout
+    ) -> String {
+        let rawActivities = rawWorkoutActivities(
+            activities,
+            plannedSteps: plannedSteps,
+            reconstructedIntervals: reconstructedIntervals,
+            events: events,
+            segmentMarkers: segmentMarkers,
+            workout: workout
+        )
+        guard !rawActivities.isEmpty else {
+            return "Unavailable. No public `HKWorkoutActivity` records were captured for this workout."
+        }
+
+        let rows = rawActivities.map { activity -> String in
+            let cells: [String] = [
+                "\(activity.index)",
+                markdownCell(activity.activityType),
+                markdownCell(activity.startDate),
+                markdownCell(activity.endDate ?? "Unavailable"),
+                optionalSeconds(activity.startOffsetSeconds),
+                activity.endOffsetSeconds.map(optionalSeconds) ?? "Unavailable",
+                optionalSeconds(activity.durationSeconds),
+                markdownCell(emptyToNil(activity.metadataKeys.joined(separator: ", ")) ?? "Unavailable"),
+                markdownCell(activity.eventsSummary),
+                markdownCell(activity.statisticsSummary),
+                activity.alignsWithPlannedStep ? "Yes" : "No",
+                markdownCell(activity.alignedPlannedStepLabel ?? "Unavailable"),
+                markdownCell(activity.nearestReconstructedIntervalLabel ?? "Unavailable"),
+                activity.nearestReconstructedIntervalEndDeltaSeconds.map(optionalSeconds) ?? "",
+                markdownCell(activity.appleFitnessManualRowReference),
+                markdownCell(activity.fitLapReference),
+                activity.nearestRawEventStartOffsetSeconds.map(optionalSeconds) ?? "Unavailable",
+                activity.nearestRawEventStartDeltaSeconds.map(optionalSeconds) ?? "",
+                activity.nearestRawEventEndOffsetSeconds.map(optionalSeconds) ?? "Unavailable",
+                activity.nearestRawEventEndDeltaSeconds.map(optionalSeconds) ?? "",
+                activity.nearestSegmentMarkerStartOffsetSeconds.map(optionalSeconds) ?? "Unavailable",
+                activity.nearestSegmentMarkerStartDeltaSeconds.map(optionalSeconds) ?? "",
+                activity.nearestSegmentMarkerEndOffsetSeconds.map(optionalSeconds) ?? "Unavailable",
+                activity.nearestSegmentMarkerEndDeltaSeconds.map(optionalSeconds) ?? "",
+                activity.previousDistanceSampleEndOffsetSeconds.map(optionalSeconds) ?? "Unavailable",
+                activity.crossingDistanceSampleEndOffsetSeconds.map(optionalSeconds) ?? "Unavailable",
+                activity.nextDistanceSampleEndOffsetSeconds.map(optionalSeconds) ?? "Unavailable"
+            ]
+            return cells.joined(separator: " | ")
+        }.map { "| \($0) |" }.joined(separator: "\n")
+
+        return """
+        | Activity | Type | Start Date | End Date | Start Offset | End Offset | Duration | Metadata Keys | Nested Events | Statistics | Aligns Planned Step | Aligned Planned Step | Nearest Reconstructed Row | Row End Delta | Apple Fitness/manual | FIT Lap | Raw Event Start | Raw Start Delta | Raw Event End | Raw End Delta | Segment Start | Segment Start Delta | Segment End | Segment End Delta | Previous Sample End | Crossing Sample End | Next Sample End |
+        |---:|---|---|---|---:|---:|---:|---|---|---|---|---|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+        \(rows)
+        """
+    }
+
     private static func plannedStepBoundaryComparisonMarkdown(
         reconstructedIntervals: WorkoutIntervalReconstructionResult?,
         plannedSteps: [PlannedWorkoutStep],
         events: [WorkoutEvidenceEvent],
+        activities: [WorkoutEvidenceActivity],
         segmentMarkers: [DerivedWorkoutInterval],
         workout: CanonicalWorkout
     ) -> String {
@@ -439,6 +529,7 @@ public enum DiagnosticsExport {
             reconstructedIntervals: reconstructedIntervals,
             plannedSteps: plannedSteps,
             events: events,
+            activities: activities,
             segmentMarkers: segmentMarkers,
             workout: workout
         )
@@ -455,6 +546,9 @@ public enum DiagnosticsExport {
                 comparison.fitLapEndOffsetSeconds.map(optionalSeconds) ?? "Manual FIT placeholder",
                 comparison.nearestRawEventEndOffsetSeconds.map(optionalSeconds) ?? "Unavailable",
                 comparison.nearestRawEventEndDeltaSeconds.map(optionalSeconds) ?? "",
+                comparison.nearestWorkoutActivityEndOffsetSeconds.map(optionalSeconds) ?? "Unavailable",
+                comparison.nearestWorkoutActivityEndDeltaSeconds.map(optionalSeconds) ?? "",
+                markdownCell(comparison.nearestWorkoutActivityType ?? "Unavailable"),
                 comparison.nearestSegmentMarkerEndOffsetSeconds.map(optionalSeconds) ?? "Unavailable",
                 comparison.nearestSegmentMarkerEndDeltaSeconds.map(optionalSeconds) ?? "",
                 comparison.previousDistanceSampleEndOffsetSeconds.map(optionalSeconds) ?? "Unavailable",
@@ -466,8 +560,8 @@ public enum DiagnosticsExport {
         }.map { "| \($0) |" }.joined(separator: "\n")
 
         return """
-        | Row | Planned Step | Goal | RunSignal End | FIT Lap End | Nearest Raw Event End | Event Delta | Nearest Segment End | Segment Delta | Previous Sample End | Crossing Sample End | Next Sample End | Warning |
-        |---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+        | Row | Planned Step | Goal | RunSignal End | FIT Lap End | Nearest Raw Event End | Event Delta | Nearest Activity End | Activity Delta | Activity Type | Nearest Segment End | Segment Delta | Previous Sample End | Crossing Sample End | Next Sample End | Warning |
+        |---:|---|---|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---|
         \(rows)
         """
     }
@@ -552,7 +646,8 @@ public enum DiagnosticsExport {
         segmentMarkers: [DerivedWorkoutInterval],
         generatedAt: Date
     ) -> RawDebugPayload {
-        RawDebugPayload(
+        let plannedSteps = evidence?.workoutPlanAudit?.plannedSteps ?? []
+        return RawDebugPayload(
             generatedAt: generatedAt.ISO8601Format(),
             workout: RawDebugWorkout(
                 id: workout.id,
@@ -582,24 +677,35 @@ public enum DiagnosticsExport {
                 verticalOscillation: workout.verticalOscillationSampleCount,
                 groundContact: workout.groundContactTimeSampleCount,
                 routePoints: evidence?.route.count ?? workout.routePointCount,
-                events: evidence?.events.count ?? workout.intervalCount
+                events: evidence?.events.count ?? workout.intervalCount,
+                activities: evidence?.activities.count ?? 0
             ),
             rawWorkoutEvents: (evidence?.events ?? []).enumerated().map { offset, event in
                 RawDebugWorkoutEvent(index: offset + 1, event: event, workout: workout, segmentMarkers: segmentMarkers)
             },
+            workoutActivities: rawWorkoutActivities(
+                evidence?.activities ?? [],
+                plannedSteps: plannedSteps,
+                reconstructedIntervals: reconstructedIntervals,
+                events: evidence?.events ?? [],
+                segmentMarkers: segmentMarkers,
+                workout: workout
+            ),
             workoutKitPlanAudit: evidence?.workoutPlanAudit.map(RawDebugPlanAudit.init(audit:)),
             reconstructedIntervals: reconstructedIntervals?.intervals.map { RawDebugReconstructedInterval(interval: $0, workout: workout) } ?? [],
             boundaryDiagnostics: reconstructedIntervals?.intervals.map { RawDebugIntervalBoundaryDiagnostics(interval: $0, workout: workout) }.filter { $0.hasDiagnostics } ?? [],
             segmentMarkers: segmentMarkers.map(RawDebugSegmentMarker.init(interval:)),
             plannedStepBoundaryComparisons: plannedStepBoundaryComparisons(
                 reconstructedIntervals: reconstructedIntervals,
-                plannedSteps: evidence?.workoutPlanAudit?.plannedSteps ?? [],
+                plannedSteps: plannedSteps,
                 events: evidence?.events ?? [],
+                activities: evidence?.activities ?? [],
                 segmentMarkers: segmentMarkers,
                 workout: workout
             ),
             boundarySourceWarnings: boundarySourceWarnings(
                 events: evidence?.events ?? [],
+                activities: evidence?.activities ?? [],
                 reconstructedIntervals: reconstructedIntervals,
                 segmentMarkers: segmentMarkers
             ),
@@ -612,6 +718,7 @@ public enum DiagnosticsExport {
         reconstructedIntervals: WorkoutIntervalReconstructionResult?,
         plannedSteps: [PlannedWorkoutStep],
         events: [WorkoutEvidenceEvent],
+        activities: [WorkoutEvidenceActivity],
         segmentMarkers: [DerivedWorkoutInterval],
         workout: CanonicalWorkout
     ) -> [RawDebugPlannedStepBoundaryComparison] {
@@ -619,6 +726,7 @@ public enum DiagnosticsExport {
         return intervals.map { interval in
             let rowEndOffset = interval.actualEndDate.timeIntervalSince(workout.startDate)
             let nearestEvent = nearestRawEvent(to: interval.actualEndDate, events: events, workout: workout)
+            let nearestActivity = nearestWorkoutActivityEnd(to: interval.actualEndDate, activities: activities, workout: workout)
             let nearestMarker = nearestSegmentMarker(to: interval.actualEndDate, segmentMarkers: segmentMarkers)
             let plannedStep = plannedSteps.first { $0.index == interval.index }
             let warning: String?
@@ -643,6 +751,10 @@ public enum DiagnosticsExport {
                 nearestRawEventEndOffsetSeconds: nearestEvent?.event.endDate.timeIntervalSince(workout.startDate),
                 nearestRawEventEndDeltaSeconds: nearestEvent?.deltaSeconds,
                 nearestRawEventType: nearestEvent?.event.type,
+                nearestWorkoutActivityStartOffsetSeconds: nearestActivity?.activity.startDate.timeIntervalSince(workout.startDate),
+                nearestWorkoutActivityEndOffsetSeconds: nearestActivity?.activity.endDate?.timeIntervalSince(workout.startDate),
+                nearestWorkoutActivityEndDeltaSeconds: nearestActivity?.deltaSeconds,
+                nearestWorkoutActivityType: nearestActivity?.activity.activityType,
                 nearestSegmentMarkerStartOffsetSeconds: nearestMarker?.marker.startOffsetSeconds,
                 nearestSegmentMarkerEndOffsetSeconds: nearestMarker?.marker.endOffsetSeconds,
                 nearestSegmentMarkerEndDeltaSeconds: nearestMarker?.deltaSeconds,
@@ -655,7 +767,28 @@ public enum DiagnosticsExport {
         }
     }
 
-    private static func nearestRawEvent(
+    private static func rawWorkoutActivities(
+        _ activities: [WorkoutEvidenceActivity],
+        plannedSteps: [PlannedWorkoutStep],
+        reconstructedIntervals: WorkoutIntervalReconstructionResult?,
+        events: [WorkoutEvidenceEvent],
+        segmentMarkers: [DerivedWorkoutInterval],
+        workout: CanonicalWorkout
+    ) -> [RawDebugWorkoutActivity] {
+        activities.enumerated().map { offset, activity in
+            RawDebugWorkoutActivity(
+                index: offset + 1,
+                activity: activity,
+                plannedSteps: plannedSteps,
+                reconstructedIntervals: reconstructedIntervals,
+                events: events,
+                segmentMarkers: segmentMarkers,
+                workout: workout
+            )
+        }
+    }
+
+    fileprivate static func nearestRawEvent(
         to date: Date,
         events: [WorkoutEvidenceEvent],
         workout: CanonicalWorkout
@@ -671,7 +804,52 @@ public enum DiagnosticsExport {
         return (event, event.endDate.timeIntervalSince(date))
     }
 
-    private static func nearestSegmentMarker(
+    fileprivate static func nearestRawEventStart(
+        to date: Date,
+        events: [WorkoutEvidenceEvent],
+        workout: CanonicalWorkout
+    ) -> (event: WorkoutEvidenceEvent, deltaSeconds: Double)? {
+        let boundedEvents = events.filter {
+            $0.startDate >= workout.startDate
+                && $0.startDate <= workout.endDate.addingTimeInterval(1)
+        }
+        guard let event = boundedEvents.min(by: {
+            abs($0.startDate.timeIntervalSince(date)) < abs($1.startDate.timeIntervalSince(date))
+        }) else { return nil }
+        return (event, event.startDate.timeIntervalSince(date))
+    }
+
+    fileprivate static func nearestWorkoutActivityEnd(
+        to date: Date,
+        activities: [WorkoutEvidenceActivity],
+        workout: CanonicalWorkout
+    ) -> (activity: WorkoutEvidenceActivity, deltaSeconds: Double)? {
+        let boundedActivities = activities.filter { activity in
+            guard let endDate = activity.endDate else { return false }
+            return activity.startDate >= workout.startDate
+                && endDate <= workout.endDate.addingTimeInterval(1)
+                && endDate > activity.startDate
+        }
+        guard let activity = boundedActivities.min(by: { first, second in
+            guard let firstEnd = first.endDate, let secondEnd = second.endDate else { return false }
+            return abs(firstEnd.timeIntervalSince(date)) < abs(secondEnd.timeIntervalSince(date))
+        }), let endDate = activity.endDate else { return nil }
+        return (activity, endDate.timeIntervalSince(date))
+    }
+
+    fileprivate static func nearestReconstructedInterval(
+        to date: Date,
+        reconstructedIntervals: WorkoutIntervalReconstructionResult?
+    ) -> (interval: ReconstructedWorkoutInterval, deltaSeconds: Double)? {
+        guard let intervals = reconstructedIntervals?.intervals, !intervals.isEmpty else { return nil }
+        let interval = intervals.min {
+            abs($0.actualEndDate.timeIntervalSince(date)) < abs($1.actualEndDate.timeIntervalSince(date))
+        }
+        guard let interval else { return nil }
+        return (interval, interval.actualEndDate.timeIntervalSince(date))
+    }
+
+    fileprivate static func nearestSegmentMarker(
         to date: Date,
         segmentMarkers: [DerivedWorkoutInterval]
     ) -> (marker: DerivedWorkoutInterval, deltaSeconds: Double)? {
@@ -679,6 +857,16 @@ public enum DiagnosticsExport {
             abs($0.endDate.timeIntervalSince(date)) < abs($1.endDate.timeIntervalSince(date))
         }) else { return nil }
         return (marker, marker.endDate.timeIntervalSince(date))
+    }
+
+    fileprivate static func nearestSegmentMarkerStart(
+        to date: Date,
+        segmentMarkers: [DerivedWorkoutInterval]
+    ) -> (marker: DerivedWorkoutInterval, deltaSeconds: Double)? {
+        guard let marker = segmentMarkers.min(by: {
+            abs($0.startDate.timeIntervalSince(date)) < abs($1.startDate.timeIntervalSince(date))
+        }) else { return nil }
+        return (marker, marker.startDate.timeIntervalSince(date))
     }
 
     private static func exactSegmentMarker(
@@ -693,6 +881,7 @@ public enum DiagnosticsExport {
 
     private static func boundarySourceWarnings(
         events: [WorkoutEvidenceEvent],
+        activities: [WorkoutEvidenceActivity],
         reconstructedIntervals: WorkoutIntervalReconstructionResult?,
         segmentMarkers: [DerivedWorkoutInterval]
     ) -> [String] {
@@ -703,13 +892,36 @@ public enum DiagnosticsExport {
         if events.contains(where: { ($0.metadataKeys ?? []).isEmpty }) {
             warnings.append("One or more raw HKWorkoutEvent records have unavailable metadata keys.")
         }
+        if activities.isEmpty {
+            warnings.append("No HKWorkoutActivity records exist for this workout.")
+        }
+        if activities.contains(where: { ($0.metadataKeys ?? []).isEmpty }) {
+            warnings.append("One or more HKWorkoutActivity records have unavailable metadata keys.")
+        }
+        if activities.contains(where: { $0.statistics.isEmpty }) {
+            warnings.append("One or more HKWorkoutActivity records have no public allStatistics entries.")
+        }
         if reconstructedIntervals?.intervals.isEmpty != false {
             warnings.append("No reconstructed WorkoutKit rows are available for planned-step comparison.")
+        }
+        if !activities.isEmpty, let intervals = reconstructedIntervals?.intervals, !intervals.isEmpty {
+            let activityEndDeltas = activities.compactMap { activity -> Double? in
+                guard let endDate = activity.endDate else { return nil }
+                return nearestReconstructedInterval(to: endDate, reconstructedIntervals: reconstructedIntervals)?.deltaSeconds
+            }
+            if activityEndDeltas.isEmpty {
+                warnings.append("HKWorkoutActivity records exist, but none expose a completed end boundary for planned-step comparison.")
+            } else if activityEndDeltas.allSatisfy({ abs($0) > 3 }) {
+                warnings.append("HKWorkoutActivity end boundaries do not align within 3 seconds of reconstructed planned-step row ends.")
+            } else if activityEndDeltas.contains(where: { abs($0) > 3 }) {
+                warnings.append("One or more HKWorkoutActivity end boundaries are more than 3 seconds from reconstructed planned-step row ends.")
+            }
         }
         if !events.isEmpty && segmentMarkers.isEmpty {
             warnings.append("Raw events exist, but none produced segment marker candidates.")
         }
         warnings.append("FIT lap end offsets are not read by RunSignal; compare them manually after physical-device export.")
+        warnings.append("Apple Fitness/manual row offsets are not read by RunSignal; compare HKWorkoutActivity timing manually after physical-device export.")
         return uniquePreservingOrder(warnings)
     }
 
@@ -834,6 +1046,7 @@ private struct RawDebugPayload: Codable {
     var workout: RawDebugWorkout
     var evidenceCounts: RawDebugEvidenceCounts
     var rawWorkoutEvents: [RawDebugWorkoutEvent]
+    var workoutActivities: [RawDebugWorkoutActivity]
     var workoutKitPlanAudit: RawDebugPlanAudit?
     var reconstructedIntervals: [RawDebugReconstructedInterval]
     var boundaryDiagnostics: [RawDebugIntervalBoundaryDiagnostics]
@@ -852,6 +1065,7 @@ private struct ParityPacketPayload: Codable {
     var forceReenrichResult: ParityPacketForceReenrichResult?
     var evidenceCounts: RawDebugEvidenceCounts
     var rawWorkoutEvents: [RawDebugWorkoutEvent]
+    var workoutActivities: [RawDebugWorkoutActivity]
     var workoutKitPlanAudit: RawDebugPlanAudit?
     var reconstructedIntervals: [RawDebugReconstructedInterval]
     var plannedStepBoundaryComparisons: [RawDebugPlannedStepBoundaryComparison]
@@ -922,6 +1136,7 @@ private struct RawDebugEvidenceCounts: Codable {
     var groundContact: Int
     var routePoints: Int
     var events: Int
+    var activities: Int
 }
 
 private struct RawDebugWorkoutEvent: Codable {
@@ -980,6 +1195,171 @@ private struct RawDebugWorkoutEvent: Codable {
         } else {
             excludedOrFilteredReason = "noDerivedSegmentMarker"
         }
+    }
+}
+
+private struct RawDebugWorkoutActivity: Codable {
+    var index: Int
+    var id: String
+    var activityType: String
+    var locationType: String?
+    var startDate: String
+    var endDate: String?
+    var startOffsetSeconds: Double
+    var endOffsetSeconds: Double?
+    var durationSeconds: Double
+    var metadataKeys: [String]
+    var events: [RawDebugWorkoutEvent]
+    var eventsSummary: String
+    var statistics: [RawDebugWorkoutActivityStatistic]
+    var statisticsSummary: String
+    var alignsWithPlannedStep: Bool
+    var alignedPlannedStepIndex: Int?
+    var alignedPlannedStepLabel: String?
+    var nearestReconstructedIntervalIndex: Int?
+    var nearestReconstructedIntervalLabel: String?
+    var nearestReconstructedIntervalEndOffsetSeconds: Double?
+    var nearestReconstructedIntervalEndDeltaSeconds: Double?
+    var appleFitnessManualRowReference: String
+    var nearestAppleFitnessManualRowEndOffsetSeconds: Double?
+    var fitLapReference: String
+    var nearestFITLapEndOffsetSeconds: Double?
+    var nearestRawEventStartOffsetSeconds: Double?
+    var nearestRawEventStartDeltaSeconds: Double?
+    var nearestRawEventEndOffsetSeconds: Double?
+    var nearestRawEventEndDeltaSeconds: Double?
+    var nearestRawEventType: String?
+    var nearestSegmentMarkerStartOffsetSeconds: Double?
+    var nearestSegmentMarkerStartDeltaSeconds: Double?
+    var nearestSegmentMarkerEndOffsetSeconds: Double?
+    var nearestSegmentMarkerEndDeltaSeconds: Double?
+    var nearestSegmentMarkerKind: String?
+    var previousDistanceSampleEndOffsetSeconds: Double?
+    var crossingDistanceSampleEndOffsetSeconds: Double?
+    var nextDistanceSampleEndOffsetSeconds: Double?
+
+    init(
+        index: Int,
+        activity: WorkoutEvidenceActivity,
+        plannedSteps: [PlannedWorkoutStep],
+        reconstructedIntervals: WorkoutIntervalReconstructionResult?,
+        events: [WorkoutEvidenceEvent],
+        segmentMarkers: [DerivedWorkoutInterval],
+        workout: CanonicalWorkout
+    ) {
+        self.index = index
+        id = activity.id
+        activityType = activity.activityType
+        locationType = activity.locationType
+        startDate = activity.startDate.ISO8601Format()
+        endDate = activity.endDate?.ISO8601Format()
+        startOffsetSeconds = activity.startDate.timeIntervalSince(workout.startDate)
+        endOffsetSeconds = activity.endDate?.timeIntervalSince(workout.startDate)
+        durationSeconds = activity.durationSeconds
+        metadataKeys = activity.metadataKeys ?? []
+        self.events = activity.events.enumerated().map { offset, event in
+            RawDebugWorkoutEvent(index: offset + 1, event: event, workout: workout, segmentMarkers: segmentMarkers)
+        }
+        eventsSummary = Self.eventsSummary(activity.events)
+        statistics = activity.statistics.map(RawDebugWorkoutActivityStatistic.init(statistic:))
+        statisticsSummary = Self.statisticsSummary(statistics)
+
+        let nearestInterval = activity.endDate.flatMap {
+            DiagnosticsExport.nearestReconstructedInterval(to: $0, reconstructedIntervals: reconstructedIntervals)
+        }
+        let plannedStep = nearestInterval.flatMap { nearest in
+            plannedSteps.first { $0.index == nearest.interval.index }
+        }
+        let alignsWithRow = nearestInterval.map { abs($0.deltaSeconds) <= 3 } ?? false
+        alignsWithPlannedStep = alignsWithRow && plannedStep != nil
+        alignedPlannedStepIndex = alignsWithPlannedStep ? plannedStep?.index : nil
+        alignedPlannedStepLabel = alignsWithPlannedStep ? plannedStep?.label : nil
+        nearestReconstructedIntervalIndex = nearestInterval?.interval.index
+        nearestReconstructedIntervalLabel = nearestInterval?.interval.label
+        nearestReconstructedIntervalEndOffsetSeconds = nearestInterval?.interval.actualEndDate.timeIntervalSince(workout.startDate)
+        nearestReconstructedIntervalEndDeltaSeconds = nearestInterval?.deltaSeconds
+
+        appleFitnessManualRowReference = "Unavailable in runtime export; compare manual fixture after export."
+        nearestAppleFitnessManualRowEndOffsetSeconds = nil
+        fitLapReference = "Manual FIT placeholder; FIT is not runtime truth."
+        nearestFITLapEndOffsetSeconds = nil
+
+        let nearestEventStart = DiagnosticsExport.nearestRawEventStart(to: activity.startDate, events: events, workout: workout)
+        let nearestEventEnd = activity.endDate.flatMap {
+            DiagnosticsExport.nearestRawEvent(to: $0, events: events, workout: workout)
+        }
+        nearestRawEventStartOffsetSeconds = nearestEventStart?.event.startDate.timeIntervalSince(workout.startDate)
+        nearestRawEventStartDeltaSeconds = nearestEventStart?.deltaSeconds
+        nearestRawEventEndOffsetSeconds = nearestEventEnd?.event.endDate.timeIntervalSince(workout.startDate)
+        nearestRawEventEndDeltaSeconds = nearestEventEnd?.deltaSeconds
+        nearestRawEventType = nearestEventEnd?.event.type ?? nearestEventStart?.event.type
+
+        let nearestMarkerStart = DiagnosticsExport.nearestSegmentMarkerStart(to: activity.startDate, segmentMarkers: segmentMarkers)
+        let nearestMarkerEnd = activity.endDate.flatMap {
+            DiagnosticsExport.nearestSegmentMarker(to: $0, segmentMarkers: segmentMarkers)
+        }
+        nearestSegmentMarkerStartOffsetSeconds = nearestMarkerStart?.marker.startOffsetSeconds
+        nearestSegmentMarkerStartDeltaSeconds = nearestMarkerStart?.deltaSeconds
+        nearestSegmentMarkerEndOffsetSeconds = nearestMarkerEnd?.marker.endOffsetSeconds
+        nearestSegmentMarkerEndDeltaSeconds = nearestMarkerEnd?.deltaSeconds
+        nearestSegmentMarkerKind = nearestMarkerEnd?.marker.markerKind.rawValue ?? nearestMarkerStart?.marker.markerKind.rawValue
+
+        previousDistanceSampleEndOffsetSeconds = nearestInterval?.interval.boundaryDiagnostics?.previousSample?.endDate.timeIntervalSince(workout.startDate)
+        crossingDistanceSampleEndOffsetSeconds = nearestInterval?.interval.boundaryDiagnostics?.crossingSample?.endDate.timeIntervalSince(workout.startDate)
+        nextDistanceSampleEndOffsetSeconds = nearestInterval?.interval.boundaryDiagnostics?.nextSample?.endDate.timeIntervalSince(workout.startDate)
+    }
+
+    private static func eventsSummary(_ events: [WorkoutEvidenceEvent]) -> String {
+        guard !events.isEmpty else { return "No nested events" }
+        let types = events.map(\.type)
+        let uniqueTypes = Array(Set(types)).sorted().prefix(4).joined(separator: ", ")
+        return "\(events.count) event(s): \(uniqueTypes)"
+    }
+
+    private static func statisticsSummary(_ statistics: [RawDebugWorkoutActivityStatistic]) -> String {
+        guard !statistics.isEmpty else { return "Unavailable" }
+        return statistics.prefix(4).map(\.summary).joined(separator: "; ")
+    }
+}
+
+private struct RawDebugWorkoutActivityStatistic: Codable {
+    var quantityType: String
+    var unit: String?
+    var startDate: String
+    var endDate: String
+    var sourceCount: Int
+    var sum: Double?
+    var average: Double?
+    var minimum: Double?
+    var maximum: Double?
+    var durationSeconds: Double?
+    var summary: String
+
+    init(statistic: WorkoutEvidenceActivityStatistic) {
+        quantityType = statistic.quantityType
+        unit = statistic.unit
+        startDate = statistic.startDate.ISO8601Format()
+        endDate = statistic.endDate.ISO8601Format()
+        sourceCount = statistic.sourceCount
+        sum = statistic.sum
+        average = statistic.average
+        minimum = statistic.minimum
+        maximum = statistic.maximum
+        durationSeconds = statistic.durationSeconds
+        summary = Self.summary(for: statistic)
+    }
+
+    private static func summary(for statistic: WorkoutEvidenceActivityStatistic) -> String {
+        let label = statistic.quantityType.replacingOccurrences(of: "HKQuantityTypeIdentifier", with: "")
+        let unit = statistic.unit.map { " \($0)" } ?? ""
+        let values: [String] = [
+            statistic.sum.map { "sum \(String(format: "%.1f", $0))\(unit)" },
+            statistic.average.map { "avg \(String(format: "%.1f", $0))\(unit)" },
+            statistic.minimum.map { "min \(String(format: "%.1f", $0))\(unit)" },
+            statistic.maximum.map { "max \(String(format: "%.1f", $0))\(unit)" },
+            statistic.durationSeconds.map { "duration \(String(format: "%.1f", $0))s" }
+        ].compactMap { $0 }
+        return values.isEmpty ? "\(label): available" : "\(label): \(values.joined(separator: ", "))"
     }
 }
 
@@ -1200,6 +1580,10 @@ private struct RawDebugPlannedStepBoundaryComparison: Codable {
     var nearestRawEventEndOffsetSeconds: Double?
     var nearestRawEventEndDeltaSeconds: Double?
     var nearestRawEventType: String?
+    var nearestWorkoutActivityStartOffsetSeconds: Double?
+    var nearestWorkoutActivityEndOffsetSeconds: Double?
+    var nearestWorkoutActivityEndDeltaSeconds: Double?
+    var nearestWorkoutActivityType: String?
     var nearestSegmentMarkerStartOffsetSeconds: Double?
     var nearestSegmentMarkerEndOffsetSeconds: Double?
     var nearestSegmentMarkerEndDeltaSeconds: Double?

@@ -31,6 +31,7 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
         async let route = routePoints(for: workout)
         async let planAudit = workoutPlanAudit(for: workout)
 
+        let activityResult = evidenceActivities(for: workout)
         let loadedSeries = await [
             heartRate,
             speed,
@@ -56,7 +57,8 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
         let diagnostics = WorkoutEvidenceDiagnostics(
             queryDiagnostics: loadedSeries.map(\.diagnostic) + [
                 routeResult.diagnostic,
-                planAuditResult.diagnostic
+                planAuditResult.diagnostic,
+                activityResult.diagnostic
             ]
         )
 
@@ -66,6 +68,7 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
             series: series,
             route: routeResult.points,
             events: evidenceEvents(for: workout),
+            activities: activityResult.activities,
             workoutPlanAudit: planAuditResult.audit,
             diagnostics: diagnostics
         )
@@ -271,15 +274,104 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
 
     private func evidenceEvents(for workout: HKWorkout) -> [WorkoutEvidenceEvent] {
         (workout.workoutEvents ?? []).map { event in
-            WorkoutEvidenceEvent(
-                startDate: event.dateInterval.start,
-                endDate: event.dateInterval.end,
-                type: eventTypeLabel(event.type),
-                label: eventLabel(event),
-                metadataKeys: event.metadata.map { metadata in
-                    metadata.keys.map { String(describing: $0) }.sorted()
-                }
+            evidenceEvent(from: event)
+        }
+    }
+
+    private func evidenceEvent(from event: HKWorkoutEvent) -> WorkoutEvidenceEvent {
+        WorkoutEvidenceEvent(
+            startDate: event.dateInterval.start,
+            endDate: event.dateInterval.end,
+            type: eventTypeLabel(event.type),
+            label: eventLabel(event),
+            metadataKeys: event.metadata.map { metadata in
+                metadata.keys.map { String(describing: $0) }.sorted()
+            }
+        )
+    }
+
+    private func evidenceActivities(for workout: HKWorkout) -> ActivityLoadResult {
+        if #available(iOS 16.0, macOS 13.0, macCatalyst 16.0, watchOS 9.0, *) {
+            let activities = workout.workoutActivities.map { activity in
+                WorkoutEvidenceActivity(
+                    id: activity.uuid.uuidString,
+                    activityType: String(describing: activity.workoutConfiguration.activityType),
+                    locationType: String(describing: activity.workoutConfiguration.locationType),
+                    startDate: activity.startDate,
+                    endDate: activity.endDate,
+                    durationSeconds: activity.duration,
+                    metadataKeys: activity.metadata.map { metadata in
+                        metadata.keys.map { String(describing: $0) }.sorted()
+                    },
+                    events: activity.workoutEvents.map(evidenceEvent(from:)),
+                    statistics: activityStatistics(activity.allStatistics)
+                )
+            }
+            return ActivityLoadResult(
+                activities: activities,
+                diagnostic: WorkoutEvidenceQueryDiagnostic(
+                    name: "workoutActivities",
+                    status: .loaded,
+                    count: activities.count,
+                    message: activities.isEmpty ? "No HKWorkoutActivity records returned." : nil
+                )
             )
+        }
+
+        return ActivityLoadResult(
+            activities: [],
+            diagnostic: WorkoutEvidenceQueryDiagnostic(
+                name: "workoutActivities",
+                status: .unavailable,
+                count: 0,
+                message: "HKWorkout.workoutActivities is unavailable on this OS."
+            )
+        )
+    }
+
+    @available(iOS 16.0, macOS 13.0, macCatalyst 16.0, watchOS 9.0, *)
+    private func activityStatistics(_ statistics: [HKQuantityType: HKStatistics]) -> [WorkoutEvidenceActivityStatistic] {
+        statistics
+            .sorted { $0.key.identifier < $1.key.identifier }
+            .map { quantityType, statistic in
+                let displayUnit = activityStatisticUnit(for: quantityType.identifier)
+                return WorkoutEvidenceActivityStatistic(
+                    quantityType: quantityType.identifier,
+                    unit: displayUnit?.label,
+                    startDate: statistic.startDate,
+                    endDate: statistic.endDate,
+                    sourceCount: statistic.sources?.count ?? 0,
+                    sum: displayUnit.flatMap { statistic.sumQuantity()?.doubleValue(for: $0.unit) },
+                    average: displayUnit.flatMap { statistic.averageQuantity()?.doubleValue(for: $0.unit) },
+                    minimum: displayUnit.flatMap { statistic.minimumQuantity()?.doubleValue(for: $0.unit) },
+                    maximum: displayUnit.flatMap { statistic.maximumQuantity()?.doubleValue(for: $0.unit) },
+                    durationSeconds: statistic.duration()?.doubleValue(for: .second())
+                )
+            }
+    }
+
+    private func activityStatisticUnit(for identifier: String) -> (unit: HKUnit, label: String)? {
+        switch HKQuantityTypeIdentifier(rawValue: identifier) {
+        case .heartRate:
+            (HKUnit.count().unitDivided(by: .minute()), "bpm")
+        case .runningSpeed:
+            (HKUnit.meter().unitDivided(by: .second()), "m/s")
+        case .distanceWalkingRunning, .distanceCycling, .distanceSwimming, .distanceDownhillSnowSports:
+            (.meter(), "m")
+        case .activeEnergyBurned, .basalEnergyBurned:
+            (.kilocalorie(), "kcal")
+        case .runningPower:
+            (.watt(), "W")
+        case .stepCount:
+            (.count(), "count")
+        case .runningStrideLength:
+            (.meter(), "m")
+        case .runningVerticalOscillation:
+            (HKUnit.meterUnit(with: .centi), "cm")
+        case .runningGroundContactTime:
+            (HKUnit.secondUnit(with: .milli), "ms")
+        default:
+            nil
         }
     }
 
@@ -380,6 +472,11 @@ private struct RouteLoadResult {
 
 private struct PlanAuditLoadResult {
     var audit: WorkoutPlanAudit
+    var diagnostic: WorkoutEvidenceQueryDiagnostic
+}
+
+private struct ActivityLoadResult {
+    var activities: [WorkoutEvidenceActivity]
     var diagnostic: WorkoutEvidenceQueryDiagnostic
 }
 

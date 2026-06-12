@@ -4,7 +4,7 @@ Status: validation evidence needed before changing June 1 boundary logic or prom
 
 Physical-device parity packet status: archived for April 28, May 26, June 1, June 2, June 3, June 4, June 5, and June 12. The May 26 through June 12 batch included parity packet JSON only; matching raw debug markdown exports were not included in that batch.
 
-Next export status: regenerated packet-backed fixture exports are archived after the debug-only boundary source enhancement. Raw HealthKit Debug and parity packet JSON now include raw HKWorkoutEvent inventory, event metadata keys when available, planned-step boundary comparisons, nearest event/segment marker endings, distance sample references, and boundary source warnings.
+Next export status: regenerated packet-backed fixture exports are archived after the raw HKWorkoutEvent boundary source enhancement. Raw HealthKit Debug and parity packet JSON now also include a debug-only `HKWorkoutActivity` inventory from public `HKWorkout.workoutActivities` when available, including nested events and public activity statistics summaries. Regenerate the active fixture exports again before judging whether activity boundaries explain FIT/Apple timing.
 
 ## Current Status
 
@@ -46,15 +46,15 @@ Use `fit-comparison-research-plan.md` only as a docs/debug cross-check against t
 
 The completed FIT pilot is summarized in `fit-comparison-summary.md`. Its current read is that FIT session totals match RunSignal totals, while FIT lap rows and inferred Open tails often match Apple Fitness/manual row timing more closely than RunSignal's public distance-sample crossing boundaries. This is useful research evidence, but it still does not identify a production-safe public API separator or approve boundary logic changes.
 
-The FIT lap boundary source investigation justified a debug-only export enhancement, not a runtime strategy. Regenerated exports show raw HKWorkoutEvent windows and segment marker candidates, but they still do not provide a clean public boundary source that explains FIT/Apple row endings across drift and guard cases.
+The FIT lap boundary source investigation justified debug-only export enhancements, not a runtime strategy. Regenerated exports show raw HKWorkoutEvent windows and segment marker candidates, but they still do not provide a clean public boundary source that explains FIT/Apple row endings across drift and guard cases. The newer HKWorkoutActivity inventory needs a fresh physical-device export pass before it can be evaluated.
 
 ## Future Examples Needed
 
 Collect more fixed-distance Work plus real Open tail examples and pass-case boundary diagnostics as new workouts become available. Each future workout should have:
 
 - Apple Fitness screenshots showing the Work and Open rows.
-- RunSignal Raw HealthKit Debug export with boundary diagnostics.
-- RunSignal parity packet JSON after force re-enrich, with raw event inventory and planned-step boundary comparison fields.
+- RunSignal Raw HealthKit Debug export with boundary diagnostics, raw event inventory, and HKWorkoutActivity inventory.
+- RunSignal parity packet JSON after force re-enrich, with raw event inventory, HKWorkoutActivity inventory, and planned-step boundary comparison fields.
 - A planned Work goal that is distance-based.
 - The Work goal completed.
 - Brief continued running before stopping the workout.
@@ -69,7 +69,7 @@ Ideal examples:
 - Any workout where Apple Fitness and RunSignal differ by more than 2 seconds.
 - Additional guard examples where current RunSignal already matches Apple Fitness, with parity packets that include boundary diagnostics.
 
-April 28 evidence and the May 26 through June 12 parity packets have been regenerated and saved. Use the complete packet-backed fixture set and current scorecard for future debug-only scoring, not for immediate production boundary changes.
+April 28 evidence and the May 26 through June 12 parity packets have been regenerated and saved for the raw-event pass. Regenerate them again with HKWorkoutActivity inventory before using activity boundaries in future debug-only scoring. Use the complete packet-backed fixture set and current scorecard for research, not for immediate production boundary changes.
 
 After 5-10 new simple Work + Open examples, rerun the scorer. If no public-API separator emerges, keep the current public reconstruction and document Apple Fitness exact-boundary matching as a limitation for this phase.
 
@@ -77,7 +77,7 @@ After 5-10 new simple Work + Open examples, rerun the scorer. If no public-API s
 
 April 28 and similar older runs with zero detailed evidence should stay separate from boundary tuning. The April 28 physical-device force re-enrich recovered evidence, but stale cache is not proven because `cacheWasPresent` was false. For any remaining zero-evidence workouts, use the targeted `Force re-enrich this workout` action and save a parity packet before diagnosing old-data availability or query coverage.
 
-Implemented diagnostic-only path: Raw HealthKit Debug can invalidate cached evidence for one selected workout, rerun HealthKit sample/event/WorkoutKit plan queries, and export a parity packet with explicit evidence counts and failure reasons when available. The export now also records raw HKWorkoutEvent inventory and planned-step boundary source comparisons. This does not change production interval behavior.
+Implemented diagnostic-only path: Raw HealthKit Debug can invalidate cached evidence for one selected workout, rerun HealthKit sample/event/WorkoutKit plan queries, and export a parity packet with explicit evidence counts and failure reasons when available. The export now also records raw HKWorkoutEvent inventory, HKWorkoutActivity inventory, and planned-step boundary source comparisons. This does not change production interval behavior.
 
 ## Decision Goal
 

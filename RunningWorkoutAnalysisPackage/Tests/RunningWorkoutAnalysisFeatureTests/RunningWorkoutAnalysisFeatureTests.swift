@@ -1256,6 +1256,37 @@ import Testing
                 metadataKeys: ["HKMetadataKeyIndoorWorkout"]
             )
         ],
+        activities: [
+            WorkoutEvidenceActivity(
+                id: "activity-1",
+                activityType: "HKWorkoutActivityTypeRunning",
+                locationType: "outdoor",
+                startDate: start,
+                endDate: start.addingTimeInterval(750),
+                durationSeconds: 750,
+                metadataKeys: ["HKMetadataKeyWorkoutBrandName"],
+                events: [
+                    WorkoutEvidenceEvent(
+                        startDate: start,
+                        endDate: start.addingTimeInterval(750),
+                        type: "HKWorkoutEventTypeSegment",
+                        label: "Activity segment",
+                        metadataKeys: ["ActivityEventKey"]
+                    )
+                ],
+                statistics: [
+                    WorkoutEvidenceActivityStatistic(
+                        quantityType: "HKQuantityTypeIdentifierDistanceWalkingRunning",
+                        unit: "m",
+                        startDate: start,
+                        endDate: start.addingTimeInterval(750),
+                        sourceCount: 1,
+                        sum: 2_000,
+                        durationSeconds: 750
+                    )
+                ]
+            )
+        ],
         workoutPlanAudit: WorkoutPlanAudit(
             status: .available,
             planType: "Custom workout",
@@ -1282,8 +1313,14 @@ import Testing
     #expect(markdown.contains("## WorkoutKit Boundary Diagnostics"))
     #expect(markdown.contains("## Raw HKWorkoutEvent Inventory"))
     #expect(markdown.contains("HKMetadataKeyIndoorWorkout"))
+    #expect(markdown.contains("## HKWorkoutActivity Inventory"))
+    #expect(markdown.contains("HKWorkoutActivityTypeRunning"))
+    #expect(markdown.contains("HKMetadataKeyWorkoutBrandName"))
+    #expect(markdown.contains("Activity segment"))
+    #expect(markdown.contains("DistanceWalkingRunning"))
     #expect(markdown.contains("## Planned Step Boundary Comparison"))
     #expect(markdown.contains("Manual FIT placeholder"))
+    #expect(markdown.contains("Nearest Activity End"))
     #expect(markdown.contains("## Boundary Source Warnings"))
     #expect(markdown.contains("Target distance"))
     #expect(markdown.contains("Boundary sample"))
@@ -1296,6 +1333,9 @@ import Testing
     #expect(markdown.contains("\"tailDiagnostics\""))
     #expect(markdown.contains("\"segmentMarkers\""))
     #expect(markdown.contains("\"rawWorkoutEvents\""))
+    #expect(markdown.contains("\"workoutActivities\""))
+    #expect(markdown.contains("\"alignsWithPlannedStep\""))
+    #expect(markdown.contains("\"nearestWorkoutActivityEndOffsetSeconds\""))
     #expect(markdown.contains("\"plannedStepBoundaryComparisons\""))
     #expect(markdown.contains("\"boundarySourceWarnings\""))
     #expect(markdown.contains("\"workoutKitPlanAudit\""))
@@ -1362,10 +1402,32 @@ import Testing
     #expect(json.contains("\"workoutKitPlanAudit\""))
     #expect(json.contains("\"reconstructedIntervals\""))
     #expect(json.contains("\"rawWorkoutEvents\""))
+    #expect(json.contains("\"workoutActivities\""))
+    #expect(json.contains("\"activities\" : 0"))
     #expect(json.contains("\"metadataKeys\""))
     #expect(json.contains("\"plannedStepBoundaryComparisons\""))
     #expect(json.contains("\"boundarySourceWarnings\""))
+    #expect(json.contains("No HKWorkoutActivity records exist for this workout."))
     #expect(json.contains("\"diagnosticsWarnings\""))
+}
+
+@Test func workoutEvidenceDecodesMissingWorkoutActivitiesAsEmpty() throws {
+    let encoded = try JSONEncoder().encode(
+        WorkoutEvidence(
+            workoutID: "legacy-evidence",
+            loadedAt: Date(timeIntervalSince1970: 0),
+            series: [:],
+            route: [],
+            events: []
+        )
+    )
+    var object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    object.removeValue(forKey: "activities")
+    let json = try JSONSerialization.data(withJSONObject: object)
+
+    let evidence = try JSONDecoder().decode(WorkoutEvidence.self, from: json)
+
+    #expect(evidence.activities.isEmpty)
 }
 
 @Test func jun10WorkoutKitReconstructionMatchesAppleFitnessFixtureTolerances() throws {

@@ -121,6 +121,77 @@ public struct WorkoutEvidenceEvent: Codable, Equatable, Sendable {
     }
 }
 
+public struct WorkoutEvidenceActivityStatistic: Codable, Equatable, Sendable {
+    public var quantityType: String
+    public var unit: String?
+    public var startDate: Date
+    public var endDate: Date
+    public var sourceCount: Int
+    public var sum: Double?
+    public var average: Double?
+    public var minimum: Double?
+    public var maximum: Double?
+    public var durationSeconds: Double?
+
+    public init(
+        quantityType: String,
+        unit: String? = nil,
+        startDate: Date,
+        endDate: Date,
+        sourceCount: Int = 0,
+        sum: Double? = nil,
+        average: Double? = nil,
+        minimum: Double? = nil,
+        maximum: Double? = nil,
+        durationSeconds: Double? = nil
+    ) {
+        self.quantityType = quantityType
+        self.unit = unit
+        self.startDate = startDate
+        self.endDate = endDate
+        self.sourceCount = sourceCount
+        self.sum = sum
+        self.average = average
+        self.minimum = minimum
+        self.maximum = maximum
+        self.durationSeconds = durationSeconds
+    }
+}
+
+public struct WorkoutEvidenceActivity: Codable, Equatable, Sendable {
+    public var id: String
+    public var activityType: String
+    public var locationType: String?
+    public var startDate: Date
+    public var endDate: Date?
+    public var durationSeconds: Double
+    public var metadataKeys: [String]?
+    public var events: [WorkoutEvidenceEvent]
+    public var statistics: [WorkoutEvidenceActivityStatistic]
+
+    public init(
+        id: String,
+        activityType: String,
+        locationType: String? = nil,
+        startDate: Date,
+        endDate: Date? = nil,
+        durationSeconds: Double,
+        metadataKeys: [String]? = nil,
+        events: [WorkoutEvidenceEvent] = [],
+        statistics: [WorkoutEvidenceActivityStatistic] = []
+    ) {
+        self.id = id
+        self.activityType = activityType
+        self.locationType = locationType
+        self.startDate = startDate
+        self.endDate = endDate
+        self.durationSeconds = durationSeconds
+        self.metadataKeys = metadataKeys
+        self.events = events.sorted { $0.startDate < $1.startDate }
+        self.statistics = statistics.sorted { $0.quantityType < $1.quantityType }
+    }
+}
+
 public enum WorkoutPlanAuditStatus: String, Codable, Equatable, Sendable {
     case available
     case unavailable
@@ -194,8 +265,20 @@ public struct WorkoutEvidence: Codable, Equatable, Sendable {
     public var series: [WorkoutEvidenceMetric: WorkoutMetricSeries]
     public var route: [WorkoutRoutePoint]
     public var events: [WorkoutEvidenceEvent]
+    public var activities: [WorkoutEvidenceActivity]
     public var workoutPlanAudit: WorkoutPlanAudit?
     public var diagnostics: WorkoutEvidenceDiagnostics?
+
+    private enum CodingKeys: String, CodingKey {
+        case workoutID
+        case loadedAt
+        case series
+        case route
+        case events
+        case activities
+        case workoutPlanAudit
+        case diagnostics
+    }
 
     public init(
         workoutID: String,
@@ -203,6 +286,7 @@ public struct WorkoutEvidence: Codable, Equatable, Sendable {
         series: [WorkoutEvidenceMetric: WorkoutMetricSeries] = [:],
         route: [WorkoutRoutePoint] = [],
         events: [WorkoutEvidenceEvent] = [],
+        activities: [WorkoutEvidenceActivity] = [],
         workoutPlanAudit: WorkoutPlanAudit? = nil,
         diagnostics: WorkoutEvidenceDiagnostics? = nil
     ) {
@@ -211,8 +295,21 @@ public struct WorkoutEvidence: Codable, Equatable, Sendable {
         self.series = series
         self.route = route
         self.events = events.sorted { $0.startDate < $1.startDate }
+        self.activities = activities.sorted { $0.startDate < $1.startDate }
         self.workoutPlanAudit = workoutPlanAudit
         self.diagnostics = diagnostics
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        workoutID = try container.decode(String.self, forKey: .workoutID)
+        loadedAt = try container.decode(Date.self, forKey: .loadedAt)
+        series = try container.decode([WorkoutEvidenceMetric: WorkoutMetricSeries].self, forKey: .series)
+        route = try container.decode([WorkoutRoutePoint].self, forKey: .route)
+        events = try container.decode([WorkoutEvidenceEvent].self, forKey: .events).sorted { $0.startDate < $1.startDate }
+        activities = try container.decodeIfPresent([WorkoutEvidenceActivity].self, forKey: .activities)?.sorted { $0.startDate < $1.startDate } ?? []
+        workoutPlanAudit = try container.decodeIfPresent(WorkoutPlanAudit.self, forKey: .workoutPlanAudit)
+        diagnostics = try container.decodeIfPresent(WorkoutEvidenceDiagnostics.self, forKey: .diagnostics)
     }
 
     public func hasSeries(_ metric: WorkoutEvidenceMetric) -> Bool {

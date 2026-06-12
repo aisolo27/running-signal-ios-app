@@ -10,6 +10,7 @@ Last updated: 2026-06-12
 - Keep WorkoutKit reconstructed intervals gated from normal UI; the current scorecard does not approve a production boundary strategy.
 - Use the completed docs-only HealthFit FIT comparison summary and lap-boundary source investigation as research evidence only. FIT lap rows are useful for investigation, but they do not approve production boundary logic or a FIT import path.
 - Review the regenerated physical-device Raw HealthKit Debug exports and parity packet JSON for the packet-backed fixture set. The new raw event inventory is archived, but it still does not prove a clean public boundary source for FIT/Apple row timing.
+- Regenerate physical-device Raw HealthKit Debug markdown and parity packet JSON for the active fixture set with the new debug-only `HKWorkoutActivity` inventory. Use those exports to check whether activity boundaries align with planned steps, FIT laps, or Apple Fitness/manual rows better than current distance-sample boundaries.
 
 ## Priority 2
 
@@ -22,7 +23,7 @@ Last updated: 2026-06-12
 ## Priority 3
 
 - Run physical-device validation only when the task needs real HealthKit proof.
-- Capture and save additional parity packets only for new validation workouts or re-checks; also save Raw HealthKit Debug markdown so raw HKWorkoutEvent rows and planned-step comparison tables are preserved.
+- Capture and save additional parity packets only for new validation workouts or re-checks; also save Raw HealthKit Debug markdown so raw HKWorkoutEvent rows, HKWorkoutActivity inventory rows, and planned-step comparison tables are preserved.
 
 ## Blocked
 

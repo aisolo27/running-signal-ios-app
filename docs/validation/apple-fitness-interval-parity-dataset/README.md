@@ -45,7 +45,9 @@ Debug-only candidate boundary scoring is available in `score_candidate_boundary_
 
 `fit-lap-boundary-source-investigation.md` checks whether FIT lap boundaries can be traced to public HealthKit/WorkoutKit evidence. Current read: FIT laps map to planned step order, but not cleanly to exported HealthKit segment marker windows or parity packet distance diagnostics; the source remains inconclusive and production behavior stays unchanged.
 
-Raw HealthKit Debug and parity packet exports now include debug-only boundary source fields: raw HKWorkoutEvent inventory rows, event metadata keys when available, segment-marker rendering use/exclusion reasons, planned-step boundary comparisons, nearest raw event and segment marker endings, distance sample boundary references, warnings, and a manual placeholder for later FIT lap end offsets. Regenerated exports for the full active fixture set are archived. These fields are for investigation only and must not be used as production interval truth.
+Raw HealthKit Debug and parity packet exports now include debug-only boundary source fields: raw HKWorkoutEvent inventory rows, event metadata keys when available, segment-marker rendering use/exclusion reasons, planned-step boundary comparisons, nearest raw event and segment marker endings, distance sample boundary references, warnings, and a manual placeholder for later FIT lap end offsets. Regenerated raw-event exports for the full active fixture set are archived. These fields are for investigation only and must not be used as production interval truth.
+
+Raw HealthKit Debug and parity packet exports also include a debug-only `HKWorkoutActivity` inventory from public `HKWorkout.workoutActivities` when available. Activity rows include activity type, start/end dates and offsets, duration, metadata keys, nested events, public activity statistics summaries, nearest reconstructed row, nearest planned-step alignment, nearest raw event/segment marker boundaries, and nearest distance-sample boundary references. The active fixture exports need to be regenerated again before this activity lead can be evaluated against FIT lap and Apple Fitness/manual timing.
 
 ## Next Validation Phase
 
@@ -70,7 +72,7 @@ Raw HealthKit Debug and parity packet exports now include debug-only boundary so
 6. Screenshot the normal workout detail.
 7. Open Raw HealthKit Debug.
 8. Screenshot WorkoutKit Plan Audit, WorkoutKit Reconstructed Intervals, and HealthKit Segment Markers.
-9. Save Raw HealthKit Debug markdown into `exports/runsignal-diagnostics/`, including Raw HKWorkoutEvent Inventory, Planned Step Boundary Comparison, Boundary Source Warnings, and the JSON payload.
+9. Save Raw HealthKit Debug markdown into `exports/runsignal-diagnostics/`, including Raw HKWorkoutEvent Inventory, HKWorkoutActivity Inventory, Planned Step Boundary Comparison, Boundary Source Warnings, and the JSON payload.
 10. Manually fill `expected_apple_fitness_intervals.md` from Apple Fitness.
 
 ## File Roles
@@ -85,7 +87,7 @@ Raw HealthKit Debug and parity packet exports now include debug-only boundary so
 - `exports/runsignal-diagnostics/`: RunSignal diagnostics exports for this workout.
 - `exports/healthfit-fit/`: optional HealthFit FIT exports for docs/debug comparison only. Include only running workouts, such as `Outdoor Running` or `Indoor Running`, and exclude `Strength Training`.
 - `runsignal-parity-packet-YYYY-MM-DD.json`: physical-device force re-enrich parity packet when available.
-- Raw boundary source export fields: debug-only raw HKWorkoutEvent inventory and planned-step comparison data used to compare public event/sample evidence against FIT/Apple boundary timing.
+- Raw boundary source export fields: debug-only raw HKWorkoutEvent inventory, HKWorkoutActivity inventory, and planned-step comparison data used to compare public event/sample/activity evidence against FIT/Apple boundary timing.
 - `interval-parity-fixture.json`: cross-workout visible Apple Fitness and RunSignal observed values used by the lightweight validator.
 - `validate_interval_parity.py`: docs-level harness for checking current pass/temporary/blocker status without parsing screenshots.
 - `next-boundary-validation-plan.md`: evidence plan for fixed-distance Work plus real Open tail boundary validation.
