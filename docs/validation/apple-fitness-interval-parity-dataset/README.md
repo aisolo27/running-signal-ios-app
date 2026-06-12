@@ -14,13 +14,15 @@ The purpose is to compare Apple Fitness against RunSignal across multiple real w
 
 ## Validation Week
 
-| Date | Workout folder | Intended type |
-|---|---|---|
-| 2026-06-01 | `2026-06-01-easy-run/` | Easy run |
-| 2026-06-02 | `2026-06-02-easy-run/` | Easy run |
-| 2026-06-03 | `2026-06-03-interval-workout/` | Interval workout |
-| 2026-06-04 | `2026-06-04-easy-recovery-run/` | Easy, recovery, or zone 2 run |
-| 2026-06-05 | `2026-06-05-tempo-threshold-run/` | Tempo or threshold run |
+| Date | Workout folder | Intended type | Current status |
+|---|---|---|---|
+| 2026-06-01 | `2026-06-01-easy-run/` | Easy run | blocked |
+| 2026-06-02 | `2026-06-02-easy-run/` | Easy run | pass |
+| 2026-06-03 | `2026-06-03-interval-workout/` | Interval workout | temporary pass |
+| 2026-06-04 | `2026-06-04-easy-recovery-run/` | Easy, recovery, or zone 2 run | pass |
+| 2026-06-05 | `2026-06-05-tempo-threshold-run/` | Tempo or threshold run | temporary pass |
+
+June 1 remains blocked because the new boundary diagnostics are internally consistent but do not match Apple Fitness timing. It needs more fixed-distance Work + tiny Open tail examples before any deterministic boundary rule can be justified.
 
 ## How To Collect Screenshots
 
@@ -51,5 +53,6 @@ The purpose is to compare Apple Fitness against RunSignal across multiple real w
 ## Do Not Implement Yet
 
 - Do not promote WorkoutKit Reconstructed Intervals into the normal workout detail UI until this validation set is populated and reviewed.
+- Do not change distance-goal boundary logic from the June 1 case alone.
 - Do not add coaching, readiness, VDOT, training load, recovery, race prediction, workout recommendations, or auto-categorization.
 - This remains v1 Apple Fitness parity validation only.

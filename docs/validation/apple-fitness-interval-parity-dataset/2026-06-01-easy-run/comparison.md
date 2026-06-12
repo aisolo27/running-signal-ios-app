@@ -42,4 +42,4 @@ This workout is usable for parity validation, but it is not a pass. Apple Fitnes
 
 Current read: this is a boundary-placement blocker, not a tail-label blocker. RunSignal's 6.45 km crossing is internally consistent: interpolation fraction 0.904, crossing sample end 42:38.318, overshoot only 0.635 m. Apple Fitness's 42:44 Work and 0:07 Open align more closely with the final distance sample at 42:43.464 and workout end at 42:50.972. That suggests a later Apple Fitness-private or sensor-end boundary, not a simple crossing-sample bug.
 
-Do not add a deterministic app rule from this workout alone. A final-distance-sample or tail-shrink rule would need to preserve June 2 and June 4, where simple Work + Open tail parity already passes.
+Do not add a deterministic app rule from this workout alone. A final-distance-sample, private-session, sensor-end, or tail-shrink rule would need more fixed-distance Work + tiny Open tail evidence and would need to preserve June 2 and June 4, where simple Work + Open tail parity already passes.

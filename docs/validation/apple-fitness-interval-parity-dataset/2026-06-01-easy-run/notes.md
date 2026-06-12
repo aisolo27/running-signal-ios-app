@@ -40,3 +40,30 @@ The RunSignal export was originally misplaced in `screenshots/runsignal-workout-
 The new export provides the missing boundary evidence. RunSignal's current Work boundary is the correct 6.45 km crossing sample end, but Apple Fitness's displayed Work/Open split appears closer to the final distance sample and workout end. Treat this as blocked pending more examples, not as a safe one-workout boundary rule.
 
 Do not change June 1 boundary logic unless the same pattern appears across more fixed-distance Work + tiny Open tails and the rule does not regress June 2, June 3, June 4, or June 5.
+
+## Distance-goal Boundary Drift Research
+
+Status: blocked. June 1 needs more fixed-distance Work + tiny Open tail examples before RunSignal should add or change a deterministic boundary rule.
+
+The exact diagnostics are:
+
+- 6.45 km Work boundary: 42:38.318.
+- Boundary strategy: crossing sample end.
+- Boundary adjustment: +0.248 s from interpolated crossing.
+- Boundary overshoot: 0.635 m.
+- Final distance sample: 42:43.464, 6463.0 m cumulative.
+- Workout end: 42:50.972.
+
+RunSignal's interpolation/crossing logic appears internally valid because the 6.45 km target falls inside the crossing distance sample and the chosen crossing sample end overshoots by less than 1 m. This does not look like a simple crossing bug.
+
+Apple Fitness may be using final distance sample timing, private workout-session timing, sensor-end behavior, smoothing, or display rules that are not exposed in the public WorkoutKit/HealthKit evidence. Its visible Work/Open timing aligns more closely with the final distance sample and workout end than with the exact 6.45 km crossing.
+
+Do not tune from this single workout. A June 1-specific final-sample or tail-shrink rule could regress June 2 and June 4, which already pass for simple fixed-distance Work + Open tail workouts.
+
+Future examples needed:
+
+- Fixed-distance Work step.
+- Visible Apple Fitness Work row.
+- Visible Apple Fitness Open row.
+- RunSignal Raw HealthKit Debug export with boundary diagnostics.
+- Preferably multiple distances, such as 5K Work, 6.45K Work, 2K Work, or 400 m / 800 m reps with an Open tail.
