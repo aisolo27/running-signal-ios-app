@@ -12,24 +12,31 @@ Goal type determines tail interpretation. A final planned `Cooldown` with an `op
 
 The purpose is to compare Apple Fitness against RunSignal across multiple real workouts before promoting the interval section into the normal workout detail UI.
 
-## Validation Week
+## Validation Set
 
 | Date | Workout folder | Intended type | Current status |
 |---|---|---|---|
+| 2026-04-28 | `2026-04-28-easy-run/` | Easy run evidence coverage | blocked |
+| 2026-05-26 | `2026-05-26-easy-run/` | Easy run boundary research | blocked |
 | 2026-06-01 | `2026-06-01-easy-run/` | Easy run | blocked |
 | 2026-06-02 | `2026-06-02-easy-run/` | Easy run | pass |
 | 2026-06-03 | `2026-06-03-interval-workout/` | Interval workout | temporary pass |
 | 2026-06-04 | `2026-06-04-easy-recovery-run/` | Easy, recovery, or zone 2 run | pass |
 | 2026-06-05 | `2026-06-05-tempo-threshold-run/` | Tempo or threshold run | temporary pass |
 
+May 26 repeats the same boundary drift direction as June 1: RunSignal's fixed-distance Work boundary ends a few seconds earlier than Apple Fitness, and Open / Extra becomes longer by roughly the same amount.
+
 June 1 remains blocked because the new boundary diagnostics are internally consistent but do not match Apple Fitness timing. Its Open row is real post-goal running, so it needs more fixed-distance Work + real Open tail examples before any deterministic boundary rule can be justified.
+
+April 28 is blocked for a different reason: Apple Fitness shows Work plus Open rows, but the RunSignal export has no WorkoutKit audit, no reconstructed intervals, no boundary diagnostics, and zero sample evidence counts. Do not use April 28 for boundary-rule tuning until export evidence is available.
 
 ## Next Validation Phase
 
 - Do not tune June 1 from one workout.
 - June 1's Open row is real post-goal running and should not be hidden or merged into Work.
-- Need 2 to 3 more fixed-distance Work + real Open tail examples.
-- Goal: determine whether June 1 is a one-off edge case or repeatable Apple Fitness boundary behavior.
+- May 26 suggests June 1 is not completely isolated, but more evidence is still needed before changing app logic.
+- Need more fixed-distance Work + real Open tail examples with usable RunSignal boundary diagnostics.
+- Goal: determine whether this is repeatable Apple Fitness boundary behavior and whether a deterministic rule can improve it without regressing existing pass/temporary-pass fixtures.
 - Normal interval UI promotion remains blocked until this is resolved or explicitly accepted.
 
 ## How To Collect Screenshots

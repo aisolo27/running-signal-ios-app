@@ -13,30 +13,16 @@ RunSignal is a native iPhone SwiftUI app for Apple Fitness parity work over runn
 
 Current verification focus: Jun 10, 2026 `Wednesday Interval (6kmm)` custom running workout. See `docs/validation/apple-fitness-interval-model-research.md` and `docs/validation/2026-06-10-apple-fitness-parity.md`.
 
-## AI Assistant Rules Files
+## Codex Project Context
 
-This template includes **opinionated rules files** for popular AI coding assistants. These files establish coding standards, architectural patterns, and best practices for modern iOS development using the latest APIs and Swift features.
+For current project direction and assistant rules, start with:
 
-### Included Rules Files
-- **Claude Code**: `CLAUDE.md` - Claude Code rules
-- **Cursor**: `.cursor/*.mdc` - Cursor-specific rules
-- **GitHub Copilot**: `.github/copilot-instructions.md` - GitHub Copilot rules
+- `AGENTS.md`
+- `docs/project-state/current-state.md`
+- `docs/project-state/next-work.md`
+- `docs/project-state/documentation-index.md`
 
-### Customization Options
-These rules files are **starting points** - feel free to:
-- ✅ **Edit them** to match your team's coding standards
-- ✅ **Delete them** if you prefer different approaches
-- ✅ **Add your own** rules for other AI tools
-- ✅ **Update them** as new iOS APIs become available
-
-### What Makes These Rules Opinionated
-- **No ViewModels**: Embraces pure SwiftUI state management patterns
-- **Swift 6+ Concurrency**: Enforces modern async/await over legacy patterns
-- **Latest APIs**: Recommends iOS 18+ features with optional iOS 26 guidelines
-- **Testing First**: Promotes Swift Testing framework over XCTest
-- **Performance Focus**: Emphasizes @Observable over @Published for better performance
-
-**Note for AI assistants**: You MUST read the relevant rules files before making changes to ensure consistency with project standards.
+Archived template-era assistant rules live under `docs/archive/` and should only be opened for historical context.
 
 ## Project Architecture
 

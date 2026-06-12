@@ -1,7 +1,7 @@
 {
   "version": 1,
   "updated": "2026-06-12",
-  "purpose": "Visible Apple Fitness expected values and current RunSignal reconstructed values for June 1-5 interval parity validation.",
+  "purpose": "Visible Apple Fitness expected values and current RunSignal reconstructed values for April 28 through June 5 interval parity validation.",
   "rules": {
     "plannedStructure": "exact when WorkoutKit plan exists",
     "segmentMarkersUsedAsNormalRows": false,
@@ -9,6 +9,76 @@
     "promotionAllowed": false
   },
   "workouts": [
+    {
+      "date": "2026-04-28",
+      "folder": "2026-04-28-easy-run",
+      "workoutType": "easy run evidence unavailable",
+      "expectedStatus": "blocked",
+      "blocker": "Apple Fitness shows Work plus Open rows, but RunSignal has no WorkoutKit audit, no reconstructed intervals, no boundary diagnostics, and zero sample evidence counts. Treat as an evidence-coverage issue, not boundary-rule evidence.",
+      "rows": [
+        {
+          "row": 1,
+          "expectedLabel": "Work",
+          "observedLabel": "Unavailable",
+          "expectedDistanceMeters": 7250,
+          "observedDistanceMeters": 0,
+          "expectedTimeSeconds": 2772,
+          "observedTimeSeconds": 0,
+          "preferredTimeToleranceSeconds": 2,
+          "temporaryTimeToleranceSeconds": 5,
+          "preferredDistanceToleranceMeters": 5,
+          "temporaryDistanceToleranceMeters": 15
+        },
+        {
+          "row": 2,
+          "expectedLabel": "Open",
+          "observedLabel": "Unavailable",
+          "expectedDistanceMeters": 46,
+          "observedDistanceMeters": 0,
+          "expectedTimeSeconds": 20,
+          "observedTimeSeconds": 0,
+          "preferredTimeToleranceSeconds": 2,
+          "temporaryTimeToleranceSeconds": 5,
+          "preferredDistanceToleranceMeters": 10,
+          "temporaryDistanceToleranceMeters": 15
+        }
+      ]
+    },
+    {
+      "date": "2026-05-26",
+      "folder": "2026-05-26-easy-run",
+      "workoutType": "easy run boundary research",
+      "expectedStatus": "blocked",
+      "blocker": "RunSignal Work ends about 4 seconds earlier than Apple Fitness and Open / Extra becomes about 4 seconds too long. This repeats the same fixed-distance Work plus real Open tail drift direction as June 1, but it is still not enough evidence for a deterministic boundary rule.",
+      "rows": [
+        {
+          "row": 1,
+          "expectedLabel": "Work",
+          "observedLabel": "Work 1",
+          "expectedDistanceMeters": 6450,
+          "observedDistanceMeters": 6454.226661636261,
+          "expectedTimeSeconds": 2531,
+          "observedTimeSeconds": 2527.4671412706375,
+          "preferredTimeToleranceSeconds": 2,
+          "temporaryTimeToleranceSeconds": 3,
+          "preferredDistanceToleranceMeters": 5,
+          "temporaryDistanceToleranceMeters": 15
+        },
+        {
+          "row": 2,
+          "expectedLabel": "Open",
+          "observedLabel": "Open / Extra",
+          "expectedDistanceMeters": 94,
+          "observedDistanceMeters": 97.22817968856543,
+          "expectedTimeSeconds": 41,
+          "observedTimeSeconds": 45.21510171890259,
+          "preferredTimeToleranceSeconds": 2,
+          "temporaryTimeToleranceSeconds": 3,
+          "preferredDistanceToleranceMeters": 10,
+          "temporaryDistanceToleranceMeters": 15
+        }
+      ]
+    },
     {
       "date": "2026-06-01",
       "folder": "2026-06-01-easy-run",

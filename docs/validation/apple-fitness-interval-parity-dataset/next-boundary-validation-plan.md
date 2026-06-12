@@ -6,6 +6,8 @@ Status: validation evidence needed before changing June 1 boundary logic or prom
 
 | Date | Status | Current read |
 |---|---|---|
+| 2026-04-28 | blocked | Apple Fitness shows fixed-distance Work plus Open, but RunSignal evidence is unavailable: no WorkoutKit audit, no reconstructed intervals, no boundary diagnostics, and zero sample evidence counts. |
+| 2026-05-26 | blocked | Fixed-distance Work ends about 4 seconds early in RunSignal, so Open / Extra becomes about 4 seconds too long. This repeats the same drift direction as June 1. |
 | 2026-06-01 | blocked | Fixed-distance Work ends about 5.7 seconds early in RunSignal, so Open / Extra becomes about 5.7 seconds too long. Apple Fitness Open is real post-goal running and should not be hidden or merged into Work. |
 | 2026-06-02 | pass | Simple fixed-distance Work plus Open tail parity holds. |
 | 2026-06-03 | temporary pass | Planned open cooldown handling was fixed; keep as a regression fixture. |
@@ -23,7 +25,9 @@ The architecture is validated directionally:
 - Raw HealthKit Debug exports are the RunSignal evidence source.
 - HealthKit Segment Markers remain raw/debug-only.
 
-June 1 is not enough evidence to safely change distance-goal boundary behavior. RunSignal's exact 6.45 km crossing boundary is internally consistent, but it does not match Apple Fitness's visible Work boundary. Apple Fitness may be using custom workout step-transition timing, final distance sample timing, private workout-session timing, sensor-end behavior, smoothing, or display rules unavailable through current public WorkoutKit/HealthKit samples.
+June 1 and May 26 show the same drift direction, but this is still not enough evidence to safely change distance-goal boundary behavior. RunSignal's exact crossing boundary is internally consistent, but it does not match Apple Fitness's visible Work boundary. Apple Fitness may be using custom workout step-transition timing, final distance sample timing, private workout-session timing, sensor-end behavior, smoothing, or display rules unavailable through current public WorkoutKit/HealthKit samples.
+
+April 28 must be investigated separately because Apple Fitness shows intervals, but RunSignal cannot currently produce the evidence needed for a parity comparison.
 
 ## Future Examples Needed
 
@@ -44,9 +48,11 @@ Ideal examples:
 - 400 m or 800 m repeated Work steps with possible Open tail.
 - Any workout where Apple Fitness and RunSignal differ by more than 2 seconds.
 
+Also collect or regenerate evidence for April 28 if possible: a RunSignal export with WorkoutKit plan audit, reconstructed intervals, distance/time evidence, and boundary diagnostics.
+
 ## Decision Goal
 
-Use the next examples to determine whether June 1 is a one-off edge case or repeatable Apple Fitness boundary behavior.
+Use the next examples to determine whether the June 1 and May 26 drift is repeatable Apple Fitness boundary behavior.
 
 If the pattern repeats, find a deterministic rule that improves all fixed-distance Work plus real Open tail examples without regressing June 2, June 3, June 4, or June 5.
 

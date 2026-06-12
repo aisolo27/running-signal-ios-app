@@ -4,7 +4,7 @@ Use this folder as the canonical local HealthKit reference pack for the running 
 
 ## Token-Saving Rule
 
-Do not read the whole folder by default. Do not open `COMBINED-HEALTHKIT-CODEX-REFERENCE.md` unless the user explicitly asks for the full combined reference.
+Do not read the whole folder by default. Do not open the archived combined pack at `docs/archive/old-research/COMBINED-HEALTHKIT-CODEX-REFERENCE.md` unless the user explicitly asks for the full combined reference.
 
 Default flow:
 1. Read `13-codex-rules-for-healthkit.md`.

@@ -15,9 +15,11 @@
 - `11-data-quality-source-reconciliation.md`
 - `12-running-app-implementation-patterns.md`
 - `13-codex-rules-for-healthkit.md`
-- `COMBINED-HEALTHKIT-CODEX-REFERENCE.md`
 - `README.md`
-- `prompts/codex-healthkit-reference-prompt.md`
 - `references/api-symbol-index.md`
 - `references/apple-healthkit-links.md`
 - `references/claude-drive-folder-index.md`
+
+Archived generated files:
+- `../archive/old-research/COMBINED-HEALTHKIT-CODEX-REFERENCE.md`
+- `../archive/old-research/codex-healthkit-reference-prompt.md`

@@ -7,6 +7,8 @@ Updated: 2026-06-12
 
 | Date | Workout | Apple Fitness evidence | RunSignal evidence | Validation usefulness |
 |---|---|---|---|---|
+| 2026-04-28 | Easy run | `IMG_6982.PNG`, `IMG_6983.PNG` | `exports/runsignal-diagnostics/text-5DF517D06F26-1.txt` | Blocked; evidence coverage issue |
+| 2026-05-26 | Easy run | `IMG_6980.PNG`, `IMG_6981.PNG` | `exports/runsignal-diagnostics/text-6D5CCBA82A13-1.txt` | Useful boundary-research sample, blocked |
 | 2026-06-01 | Easy run | `IMG_6968.PNG`, `IMG_6969.PNG` | `exports/runsignal-diagnostics/new text-795E821D968D-1.txt` plus older copied export | Useful, but blocked |
 | 2026-06-02 | Easy run | `IMG_6970.PNG`, `IMG_6971.PNG` | `screenshots/runsignal-raw-healthkit-debug/text-B1E5770683EF-1.txt` | Pass |
 | 2026-06-03 | Interval workout | `IMG_6972.PNG`, `IMG_6973.PNG` | `exports/runsignal-diagnostics/text-340B7765A007-1.txt` plus older screenshot export | Strongest structured sample, temporary pass after targeted code refinement |
@@ -15,16 +17,18 @@ Updated: 2026-06-12
 
 ## Main Findings
 
-- The screenshots are enough to validate visible Apple Fitness interval rows for all five workouts. No manual typing is needed for this pass.
-- The RunSignal raw debug export files are parseable and contain the needed WorkoutKit reconstructed interval rows.
+- The screenshots are enough to validate visible Apple Fitness interval rows for the reviewed workouts. No manual typing is needed for this pass.
+- Most RunSignal raw debug export files are parseable and contain the needed WorkoutKit reconstructed interval rows.
+- 2026-04-28 is the exception: Apple Fitness shows Work plus Open, but RunSignal has no WorkoutKit audit, no reconstructed intervals, no boundary diagnostics, and zero sample evidence counts. Treat it as an evidence-coverage issue, not boundary-rule evidence.
 - HealthKit Segment Markers are present in the exports, but the debug source states they are not used as Apple Fitness interval rows.
 - Apple documentation confirms the public WorkoutKit and HealthKit model shape, but does not confirm Apple Fitness's exact row-boundary or row-label rendering algorithm.
 - Current evidence contract: WorkoutKit is the planned structure source, HealthKit samples are the measured stats source, Apple Fitness screenshots are the visual parity reference, RunSignal Raw HealthKit Debug exports are RunSignal evidence, and HealthKit Segment Markers remain raw/debug-only.
 - 2026-06-02 and 2026-06-04 validate the simple distance-goal Work plus Open tail pattern well.
 - 2026-06-03 validates most interval rows well: Work and Recovery rows are close, recovery times are exact, and recovery distances are within tolerance.
 - 2026-06-01 still has a roughly 6-second boundary mismatch: RunSignal Work ends early and Open / Extra becomes too long. The fresh export now shows the 6.45 km crossing sample end is at 42:38.318, while the final distance sample is at 42:43.464 and the workout ends at 42:50.972.
+- 2026-05-26 repeats the same drift direction as June 1: Apple Fitness Work is 42:11, RunSignal Work is 42:07, and Open / Extra becomes about 4 seconds too long.
 - 2026-06-01 human context: the Apple Fitness Open row is real because the runner completed the 6.45 km Work goal and kept running briefly before stopping the watch. Open / Extra after a fixed-distance Work goal is not automatically wrong, and June 1 Open should not be hidden or merged into Work.
-- June 1 should stay blocked. The diagnostics show RunSignal's boundary is internally consistent, so the evidence is not strong enough to define a deterministic boundary rule.
+- June 1 and May 26 should stay blocked. The diagnostics show RunSignal's boundary is internally consistent in both usable drift cases, so the evidence is still not strong enough to define a deterministic boundary rule.
 - 2026-06-03 label/structure blocker is resolved by the targeted open-cooldown rule: if WorkoutKit exposes a final planned `Cooldown` step with goal `open`, RunSignal keeps the planned `Cooldown` label and extends that row to workout end.
 - The June 3 fix is not evidence that post-cooldown activity should always merge into `Cooldown`. Fixed distance/time cooldowns that complete and are followed by continued running should still create `Open / Extra`.
 - 2026-06-05 is close overall, but warmup/cooldown boundaries are still temporary passes rather than preferred passes. The displayed cooldown distance differs by roughly 18 m.
@@ -33,6 +37,7 @@ Updated: 2026-06-12
 
 - No Apple Fitness screenshots are missing for this set.
 - No RunSignal exports are missing for this set.
+- 2026-04-28 has a RunSignal export, but the export lacks usable WorkoutKit, sample, interval, and boundary evidence.
 - The 2026-06-01 RunSignal export was originally misplaced under `screenshots/runsignal-workout-detail/`. It has now been copied into `exports/runsignal-diagnostics/` for a consistent dataset layout; the original remains in place.
 - The exported text files are easier to analyze than screenshots and should remain the preferred RunSignal evidence format.
 
@@ -40,6 +45,8 @@ Updated: 2026-06-12
 
 | Date | Workout Type | Current Status | Blocker | Next Action |
 |---|---|---|---|---|
+| 2026-04-28 | Easy run | blocked | Apple Fitness shows Work 7.25 km / 46:12 and Open 46 m / 0:20, but RunSignal has no WorkoutKit audit, no reconstructed intervals, no boundary diagnostics, and zero sample evidence counts. | Investigate evidence coverage separately. Determine whether this is old workout data availability, HealthKit query coverage, filtering, sample association, WorkoutKit plan availability, app-side export behavior, or another limitation. |
+| 2026-05-26 | Easy run | blocked | RunSignal Work ends about 4 seconds earlier than Apple Fitness, and Open / Extra becomes about 4 seconds too long. This repeats the June 1 drift direction for fixed-distance Work plus real Open tail. | Keep as boundary-research evidence. Do not add a deterministic rule yet; collect more examples and protect existing pass/temporary-pass fixtures. |
 | 2026-06-01 | Easy run | blocked | RunSignal Work ends about 5.7 seconds earlier than Apple Fitness, and Open / Extra becomes about 5.7 seconds too long. Fresh diagnostics show Apple Fitness may be using a later private/sensor-end boundary near the final distance sample, not the exact 6.45 km crossing. The Apple Fitness Open row is real post-goal running, so the blocker is boundary timing, not the existence of Open. There is not enough evidence for a deterministic rule. | Do not add a deterministic boundary rule yet. Collect more fixed-distance Work + real Open tail examples before considering any final-sample or tail-shrink rule. |
 | 2026-06-02 | Easy run | pass | None. Simple Work + Open tail parity holds. | Keep as a regression fixture. |
 | 2026-06-03 | Interval workout | temporary pass | Label/structure blocker resolved and fresh export confirms the final row is `Cooldown`. Warmup remains about 5 seconds early, and the final planned open cooldown is about 3 seconds longer than Apple Fitness. | Keep as a regression fixture for planned open cooldown behavior. |
@@ -88,6 +95,15 @@ Current interpretation: the issue is not label policy and not the existence of O
 
 ## Distance-goal Boundary Drift Research
 
+### Current Drift Samples
+
+| Date | Apple Work | RunSignal Work | Drift | Current read |
+|---|---:|---:|---:|---|
+| 2026-06-01 | 42:44 | about 42:38 | about 5-6s | Blocked; RunSignal exact crossing is internally consistent but earlier than Apple Fitness. |
+| 2026-05-26 | 42:11 | 42:07 | about 4s | Blocked; repeats the same drift direction as June 1. |
+
+Fixed-distance Work plus real Open tail appears to repeat the same boundary drift direction. Apple Fitness may be using a later step-completion boundary than RunSignal's public HealthKit cumulative-distance crossing. Do not hide or merge Open: these Open rows are real post-goal running. More examples are needed before changing app logic.
+
 ### June 1 Exact Diagnostics
 
 | Diagnostic | Value |
@@ -120,6 +136,29 @@ Future examples needed:
 - RunSignal Raw HealthKit Debug export with boundary diagnostics.
 - Preferably multiple distances, such as 5K Work, 6.45K Work, 2K Work, or 400 m / 800 m reps with an Open tail.
 
+### May 26 Exact Diagnostics
+
+| Diagnostic | Value |
+|---|---|
+| Planned Work goal | 6.45 km |
+| RunSignal boundary | 42:07.467 |
+| RunSignal boundary strategy | crossing sample end |
+| RunSignal boundary adjustment | +1.5 s |
+| RunSignal overshoot | 4.2 m |
+| Apple Fitness Work row | 42:11 / 6.45 km |
+| Apple Fitness Open row | 0:41 / 94 m |
+| RunSignal Open / Extra row | 45.215 s / 97.228 m |
+| Final distance sample | 42:46.057 / 6551.5 m cumulative |
+| Workout end | 42:52.682 |
+
+May 26 supports the boundary drift research because it repeats the same direction as June 1. It still should not drive a rule by itself.
+
+### April 28 Evidence Coverage Issue
+
+Apple Fitness shows Work 7.25 km / 46:12 and Open 46 m / 0:20, but RunSignal cannot currently produce a parity comparison. The export summary exists, but evidence counts are zero, WorkoutKit Plan Audit is not audited, reconstructed intervals are unavailable, and boundary diagnostics are unavailable.
+
+Investigate this separately before using April 28 for boundary-rule tuning. Possible causes include old workout data availability, HealthKit query coverage, filtering, sample association, WorkoutKit plan availability, app-side export behavior, or another limitation.
+
 ### 2026-06-05 Warmup/Cooldown Investigation
 
 | Diagnostic | Current evidence |
@@ -139,7 +178,9 @@ Do not promote WorkoutKit Reconstructed Intervals into the normal workout detail
 Before promotion, address or explicitly accept:
 
 - 2026-06-01 distance-goal boundary drift of about 5.7 seconds.
+- 2026-05-26 distance-goal boundary drift of about 4 seconds.
+- 2026-04-28 missing RunSignal evidence coverage for an Apple Fitness Work/Open custom workout.
 - 2026-06-05 warmup/cooldown temporary-pass boundaries, especially the cooldown displayed distance delta.
 - Additional fixed-distance Work + real Open tail evidence before changing June 1 boundary logic.
 
-The approach is directionally validated, and the June 3 planned-open-cooldown label blocker has a deterministic fix. Promotion should still wait because June 1 remains blocked and June 5 remains only a temporary pass.
+The approach is directionally validated, and the June 3 planned-open-cooldown label blocker has a deterministic fix. Promotion should still wait because April 28, May 26, and June 1 remain blocked and June 5 remains only a temporary pass.

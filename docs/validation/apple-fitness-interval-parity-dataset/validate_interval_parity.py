@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the June 1-5 Apple Fitness interval parity fixture.
+"""Validate the Apple Fitness interval parity fixture.
 
 This harness intentionally allows known blocked workouts to remain in the
 fixture. It fails only when the fixture no longer reproduces the expected
