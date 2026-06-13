@@ -40,6 +40,7 @@ Keep active validation lean. Once a date-specific parity investigation is comple
 - `docs/validation/apple-fitness-interval-parity-dataset/may-1-open-tail-pause-evidence-2026-05-01.md`: focused May 1 evidence report showing paired HealthKit pause intervals and matching FIT timer-vs-elapsed deltas support active-time row comparison plus Open/Extra tail classification.
 - `docs/validation/apple-fitness-interval-parity-dataset/score_candidate_reconstruction_rules.py`: docs/debug script that scores candidate reconstruction rules against screenshot-confirmed rows, Gate B row-level FIT evidence, and pause evidence.
 - `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-candidate-reconstruction-rule-scorecard-2026-03-to-2026-06.md`: generated docs/debug scorecard for active/timer duration, pause subtraction, repeat expansion, and Open/Extra tail rules across all screenshot-confirmed fixtures.
+- `docs/validation/apple-fitness-interval-parity-dataset/fresh-iphone-parity-lab-export-review-2026-06-13.md`: latest-debug-build iPhone export review confirming selected parity packets and May monthly diagnostics match the docs/debug candidate reconstruction scorecard.
 
 ## Reference Docs To Read Selectively
 
