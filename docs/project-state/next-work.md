@@ -21,9 +21,11 @@ Last updated: 2026-06-13
 
 - Review `docs/validation/apple-fitness-interval-parity-dataset/gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.md` before any Gate B implementation discussion.
 - Review `docs/validation/apple-fitness-interval-parity-dataset/gate-b-phase-3-readiness-review.md` before any Phase 3 prototype discussion.
+- Review `docs/validation/apple-fitness-interval-parity-dataset/gate-b-agent-findings-2026-03-to-2026-06.md` and the derived repeat-block, Open/Extra tail, and narrow candidate scorecards before any further Gate B rule work.
 - Use `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-reconstruction-rules.md` and `custom-workout-swift-gap-analysis.md` before any custom workout Swift design.
 - Define Gate B evidence rules for structured intervals: repeat-block expansion, work/recovery mapping, activity count, planned step count, FIT lap count, FIT workout step count, and material row shifts.
 - Define Gate B evidence rules for warmup/work/cooldown specials: Warmup, Work, Recovery, Cooldown, Open/Extra labels and Open tail handling after cooldown.
+- Add elapsed-vs-timer and pause-event debug output before reconsidering timer-drift outliers such as `2026-05-29T11:49:28Z` or the high-error repeat-block rows.
 - Continue `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-implementation-plan.md` with Phase 3 only after a later task explicitly approves prototype work.
 - Preserve the current production reconstruction while Gate B is incomplete.
 - Archive completed date-specific validation evidence to `docs/archive/old-validation/` after it is no longer active.
@@ -39,7 +41,7 @@ Last updated: 2026-06-13
 - Broad production promotion of `HKWorkoutActivity` boundary rows is not approved.
 - Structured intervals are not approved through Gate A.
 - Warmup/work/cooldown specials are not approved through Gate A.
-- No Gate B subclass is approved for production. A narrow warmup/work/cooldown candidate subclass may be considered only after reviewing row-level outliers and tail handling; no Swift prototype is recommended now.
+- No Gate B subclass is approved for production. A narrow no-tail warmup/work/open-cooldown candidate subclass has 2 supported rows and may be discussed later as debug-only only; no Swift prototype is recommended now.
 - Normal workout detail interval UI promotion remains blocked until the relevant gate is approved or the limitation is explicitly accepted.
 
 ## Not In Scope

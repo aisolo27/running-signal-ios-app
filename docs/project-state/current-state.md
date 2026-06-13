@@ -35,7 +35,9 @@ RunSignal is a native iPhone SwiftUI app focused on evidence-grounded completed 
 - The FIT-backed two-gate plan is documented in `docs/validation/apple-fitness-interval-parity-dataset/fit-backed-two-gate-validation-plan-2026-03-to-2026-06.md`.
 - Gate A: FIT supports a narrow feature-flagged `HKWorkoutActivity` prototype for simple fixed-distance Work + Open only, but that prototype is intentionally not being implemented yet.
 - Gate B: `docs/validation/apple-fitness-interval-parity-dataset/gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.md` adds row-level FIT lap/workout_step extraction. It found 2 warmup/work/cooldown cases with candidate row-level support, 17 repeat-block rule cases, 4 Open/Extra tail rule cases, and 2 inconclusive rows. Structured intervals remain blocked; no broad custom workout promotion or Swift prototype is approved.
+- Gate B agent findings are consolidated in `docs/validation/apple-fitness-interval-parity-dataset/gate-b-agent-findings-2026-03-to-2026-06.md`. Derived docs-only scorecards now cover repeat-block evidence, Open/Extra tail evidence, and the narrow warmup/work/open-cooldown candidate class. Phase 3 remains blocked, but the exact no-tail `Warmup(2 km) > one fixed Work step > Cooldown(Open)` class has 2 supported rows worth a later debug-only discussion.
 - Custom workout rule/spec work is documented in `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-reconstruction-rules.md`, `custom-workout-swift-gap-analysis.md`, and `custom-workout-implementation-plan.md`. Phase 1 internal expanded-step model types and Phase 2 debug comparison model types now exist for validation/debug use only; they do not change production interval behavior or normal workout UI.
+- Phase 2 debug comparison remains fallback-first: repeat blocks stay `repeat-block-needs-rule` unless an explicit repeat rule is approved, missing evidence wins over support/equivalence, and Open/Extra tail ambiguity blocks support.
 - Duplicate, no-plan, and drift/guard-unknown workouts remain excluded from approval scoring.
 
 ## Current Known Limitations
@@ -54,6 +56,7 @@ RunSignal is a native iPhone SwiftUI app focused on evidence-grounded completed 
 - Review `candidate-boundary-strategy-scorecard.md`, `hkworkoutactivity-boundary-scorecard.md`, and `fit-backed-two-gate-validation-plan-2026-03-to-2026-06.md` before changing boundary logic.
 - Next implementation requires explicit approval before any Phase 3 prototype or production interval behavior change.
 - Continue Gate B work by reviewing row-level outliers and defining repeat-block plus Open/Extra tail rules before changing structured interval or warmup/work/cooldown behavior. Gate A simple Work/Open remains validated but parked.
+- Next Gate B debug work should add elapsed-vs-timer and pause-event diagnostics before reconsidering timer-drift outliers.
 - Keep `docs/project-state/current-state.md` and `docs/project-state/next-work.md` updated when project direction, validation status, known limitations, or next steps change.
 
 ## Read Only When Relevant

@@ -1,0 +1,83 @@
+{
+  "generatedAt": "2026-06-13T13:33:41.060735Z",
+  "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+  "runtimeSource": "HealthKit/WorkoutKit only",
+  "validationOracle": "FIT offline reference only",
+  "fitRuntimeUseAllowed": false,
+  "productionBehaviorChanged": false,
+  "summary": {
+    "exactShapeRows": 4,
+    "supportedRows": 2,
+    "excludedRows": 2
+  },
+  "requiredChecks": [
+    "Warmup fixed 2 km, one Work step fixed time or fixed distance, final Cooldown open.",
+    "Exactly 3 planned rows, 3 current rows, 3 activity candidate rows, 3 FIT laps, and 3 FIT workout_step rows.",
+    "No recovery rows and no fixed-cooldown tail.",
+    "Candidate labels map from expanded WorkoutKit order with zero mismatches.",
+    "Candidate timing error <= 5 s and distance error <= 10 m for every row.",
+    "Fallback first: missing evidence, ambiguous tail, repeat rows, or row-level drift excludes the workout."
+  ],
+  "rows": [
+    {
+      "startDate": "2026-03-05T14:37:43Z",
+      "shape": "Warmup(2 km) > Work 1(900 s) > Cooldown(Open)",
+      "rowsCurrentCandidateFitPlanFitStep": "3/3/3/3/3",
+      "exactThreeByThreeCounts": true,
+      "noRecoveryRows": true,
+      "openCooldownThroughWorkoutEnd": true,
+      "candidateWithinTolerance": true,
+      "currentWithinTolerance": true,
+      "maxCandidateTimingErrorSeconds": 0.0,
+      "maxCandidateDistanceErrorMeters": 7.5,
+      "labelMismatches": 0,
+      "tailClassification": "open_cooldown_absorbs_tail_residual",
+      "decision": "narrow_debug_candidate_supported"
+    },
+    {
+      "startDate": "2026-03-19T16:51:00Z",
+      "shape": "Warmup(2 km) > Work 1(1500 s) > Cooldown(Open)",
+      "rowsCurrentCandidateFitPlanFitStep": "3/3/3/3/3",
+      "exactThreeByThreeCounts": true,
+      "noRecoveryRows": true,
+      "openCooldownThroughWorkoutEnd": true,
+      "candidateWithinTolerance": false,
+      "currentWithinTolerance": false,
+      "maxCandidateTimingErrorSeconds": 0.0,
+      "maxCandidateDistanceErrorMeters": 24.0,
+      "labelMismatches": 0,
+      "tailClassification": "no_tail_evidence",
+      "decision": "excluded_from_narrow_candidate"
+    },
+    {
+      "startDate": "2026-04-24T12:02:30Z",
+      "shape": "Warmup(2 km) > Work 1(4 km) > Cooldown(Open)",
+      "rowsCurrentCandidateFitPlanFitStep": "3/3/3/3/3",
+      "exactThreeByThreeCounts": true,
+      "noRecoveryRows": true,
+      "openCooldownThroughWorkoutEnd": true,
+      "candidateWithinTolerance": true,
+      "currentWithinTolerance": true,
+      "maxCandidateTimingErrorSeconds": 0.0,
+      "maxCandidateDistanceErrorMeters": 6.7,
+      "labelMismatches": 0,
+      "tailClassification": "open_cooldown_absorbs_tail_residual",
+      "decision": "narrow_debug_candidate_supported"
+    },
+    {
+      "startDate": "2026-05-29T11:49:28Z",
+      "shape": "Warmup(2 km) > Work 1(3 km) > Cooldown(Open)",
+      "rowsCurrentCandidateFitPlanFitStep": "3/3/3/3/3",
+      "exactThreeByThreeCounts": true,
+      "noRecoveryRows": true,
+      "openCooldownThroughWorkoutEnd": true,
+      "candidateWithinTolerance": false,
+      "currentWithinTolerance": false,
+      "maxCandidateTimingErrorSeconds": 158.9,
+      "maxCandidateDistanceErrorMeters": 6.6,
+      "labelMismatches": 0,
+      "tailClassification": "open_cooldown_absorbs_tail_residual",
+      "decision": "excluded_from_narrow_candidate"
+    }
+  ]
+}
