@@ -34,6 +34,7 @@ Keep active validation lean. Once a date-specific parity investigation is comple
 - `docs/validation/apple-fitness-interval-parity-dataset/gate-b-timer-drift-evidence-2026-03-to-2026-06.md`: generated docs/debug elapsed-vs-timer and pause-event evidence for Gate B outliers.
 - `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-shape-coverage-audit-2026-03-to-2026-06.md`: generated docs/debug custom-workout shape inventory across easy, tempo, interval, tail, and pause/timer cases.
 - `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-balanced-evidence-collection-plan.md`: docs-only balanced collection plan for easy, tempo, interval, tail, paused, and clean no-pause custom workout evidence.
+- `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-evidence-collection-tracker.md`: active docs-only tracker for target templates, completed evidence, screenshots, FIT exports, diagnostics refreshes, and parity packet exports in the next custom workout validation cycle.
 
 ## Reference Docs To Read Selectively
 
