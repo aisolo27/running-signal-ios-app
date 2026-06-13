@@ -1316,6 +1316,9 @@ import Testing
     #expect(markdown.contains("activity boundary inferred tail"))
     #expect(markdown.contains("Open / Extra"))
     #expect(markdown.contains("Boundary Strategy"))
+    #expect(markdown.contains("## Custom Workout Candidate Rule Scorer"))
+    #expect(markdown.contains("Debug-only Parity Lab scorer for active-time duration"))
+    #expect(markdown.contains("active-duration-minus-paired-pause-overlap"))
     #expect(markdown.contains("## WorkoutKit Boundary Diagnostics"))
     #expect(markdown.contains("## Raw HKWorkoutEvent Inventory"))
     #expect(markdown.contains("HKMetadataKeyIndoorWorkout"))
@@ -1337,6 +1340,9 @@ import Testing
     #expect(markdown.contains("\"reconstructedIntervals\""))
     #expect(markdown.contains("\"activityBoundaryCandidateSummary\""))
     #expect(markdown.contains("\"activityBoundaryCandidateIntervals\""))
+    #expect(markdown.contains("\"customWorkoutCandidateRuleSummary\""))
+    #expect(markdown.contains("\"customWorkoutCandidateRuleRows\""))
+    #expect(markdown.contains("\"strategyID\" : \"custom_workout_candidate_rule_active_time\""))
     #expect(markdown.contains("\"strategyID\" : \"hkworkoutactivity_boundary\""))
     #expect(markdown.contains("\"productionIntervalBehaviorChanged\" : false"))
     #expect(markdown.contains("\"normalWorkoutUIChanged\" : false"))
@@ -1418,6 +1424,9 @@ import Testing
     #expect(json.contains("\"activityBoundaryCandidateSummary\""))
     #expect(json.contains("\"activityBoundaryCandidateIntervals\""))
     #expect(json.contains("\"strategyID\" : \"hkworkoutactivity_boundary\""))
+    #expect(json.contains("\"customWorkoutCandidateRuleSummary\""))
+    #expect(json.contains("\"customWorkoutCandidateRuleRows\""))
+    #expect(json.contains("\"strategyID\" : \"custom_workout_candidate_rule_active_time\""))
     #expect(json.contains("\"scope\" : \"debug\\/export-only\""))
     #expect(json.contains("\"productionIntervalBehaviorChanged\" : false"))
     #expect(json.contains("\"normalWorkoutUIChanged\" : false"))
@@ -1433,6 +1442,87 @@ import Testing
     #expect(json.contains("\"boundarySourceWarnings\""))
     #expect(json.contains("No HKWorkoutActivity records exist for this workout."))
     #expect(json.contains("\"diagnosticsWarnings\""))
+}
+
+@Test func parityPacketExportIncludesDebugOnlyActiveTimeRuleScorer() throws {
+    let start = Date(timeIntervalSince1970: 1_797_000_000)
+    var workout = testWorkout(
+        id: "active-time-rule",
+        start: start,
+        distanceMeters: 1_200,
+        durationSeconds: 240
+    )
+    workout.evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        events: [
+            WorkoutEvidenceEvent(
+                startDate: start.addingTimeInterval(100),
+                endDate: start.addingTimeInterval(100),
+                type: "HKWorkoutEventType(rawValue: 1)"
+            ),
+            WorkoutEvidenceEvent(
+                startDate: start.addingTimeInterval(160),
+                endDate: start.addingTimeInterval(160),
+                type: "HKWorkoutEventType(rawValue: 2)"
+            )
+        ],
+        activities: [
+            WorkoutEvidenceActivity(
+                id: "activity-1",
+                activityType: "HKWorkoutActivityTypeRunning",
+                startDate: start,
+                endDate: start.addingTimeInterval(300),
+                durationSeconds: 300,
+                statistics: [
+                    WorkoutEvidenceActivityStatistic(
+                        quantityType: "HKQuantityTypeIdentifierDistanceWalkingRunning",
+                        unit: "m",
+                        startDate: start,
+                        endDate: start.addingTimeInterval(300),
+                        sourceCount: 1,
+                        sum: 1_200,
+                        durationSeconds: 300
+                    )
+                ]
+            )
+        ],
+        workoutPlanAudit: WorkoutPlanAudit(
+            status: .available,
+            planType: "Custom workout",
+            displayName: "Active Time Rule Test",
+            plannedSteps: [
+                PlannedWorkoutStep(
+                    index: 1,
+                    label: "Work",
+                    stepType: .work,
+                    plannedGoalType: .distance,
+                    plannedGoalValue: 1_200,
+                    plannedGoalDisplayText: "1.2 km"
+                )
+            ]
+        )
+    )
+
+    let json = DiagnosticsExport.parityPacketJSON(workout: workout, forceReenrichResult: nil, generatedAt: start)
+    let data = try #require(json.data(using: .utf8))
+    let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let summary = try #require(object["customWorkoutCandidateRuleSummary"] as? [String: Any])
+    let rows = try #require(object["customWorkoutCandidateRuleRows"] as? [[String: Any]])
+    let row = try #require(rows.first)
+
+    #expect(summary["strategyID"] as? String == "custom_workout_candidate_rule_active_time")
+    #expect(summary["scope"] as? String == "debug/export-only")
+    #expect(summary["pairedPauseCount"] as? Int == 1)
+    #expect(summary["totalPairedPauseSeconds"] as? Double == 60)
+    #expect(summary["productionIntervalBehaviorChanged"] as? Bool == false)
+    #expect(summary["normalWorkoutUIChanged"] as? Bool == false)
+    #expect(summary["usesFITRuntimeTruth"] as? Bool == false)
+    #expect(summary["usesAppleFitnessManualRuntimeLogic"] as? Bool == false)
+    #expect(row["elapsedDurationSeconds"] as? Double == 300)
+    #expect(row["pauseOverlapSeconds"] as? Double == 60)
+    #expect(row["activeDurationSeconds"] as? Double == 240)
+    #expect(row["durationRule"] as? String == "active-duration-minus-paired-pause-overlap")
 }
 
 @Test func workoutEvidenceDecodesMissingWorkoutActivitiesAsEmpty() throws {

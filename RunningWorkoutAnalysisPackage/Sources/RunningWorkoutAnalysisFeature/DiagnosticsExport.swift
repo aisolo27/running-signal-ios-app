@@ -179,6 +179,22 @@ public enum DiagnosticsExport {
             )
         ))
 
+        ## Custom Workout Candidate Rule Scorer
+
+        Debug-only Parity Lab scorer for active-time duration, pause overlap, and Open / Extra tail rows. These rows are not production interval logic and are not shown in the normal workout UI.
+
+        \(customWorkoutCandidateRuleMarkdown(
+            customWorkoutCandidateRuleScore(
+                activityCandidate: activityBoundaryCandidate(
+                    plannedSteps: plannedSteps,
+                    activities: evidence?.activities ?? [],
+                    workout: workout
+                ),
+                events: evidence?.events ?? [],
+                workout: workout
+            )
+        ))
+
         ## WorkoutKit Boundary Diagnostics
 
         \(boundaryDiagnosticsMarkdown(reconstructedIntervals, workout: workout))
@@ -241,6 +257,11 @@ public enum DiagnosticsExport {
             activities: evidence?.activities ?? [],
             workout: workout
         )
+        let candidateRuleScore = customWorkoutCandidateRuleScore(
+            activityCandidate: activityCandidate,
+            events: evidence?.events ?? [],
+            workout: workout
+        )
         let payload = ParityPacketPayload(
             packetVersion: 1,
             generatedAt: generatedAt.ISO8601Format(),
@@ -296,6 +317,8 @@ public enum DiagnosticsExport {
             reconstructedIntervals: reconstructedIntervals?.intervals.map { RawDebugReconstructedInterval(interval: $0, workout: workout) } ?? [],
             activityBoundaryCandidateSummary: activityCandidate.summary,
             activityBoundaryCandidateIntervals: activityCandidate.rows,
+            customWorkoutCandidateRuleSummary: candidateRuleScore.summary,
+            customWorkoutCandidateRuleRows: candidateRuleScore.rows,
             plannedStepBoundaryComparisons: plannedStepBoundaryComparisons(
                 reconstructedIntervals: reconstructedIntervals,
                 plannedSteps: plannedSteps,
@@ -438,6 +461,58 @@ public enum DiagnosticsExport {
 
         | Row | Label | Goal | Mapping | Activity | Start Offset | End Offset | Distance | Time | Candidate Confidence | Reason If Not Scoreable | Caveats |
         |---:|---|---|---|---:|---:|---:|---:|---:|---|---|---|
+        \(rows)
+
+        Caveats: \(summary.caveats.map(markdownCell).joined(separator: " · "))
+        """
+    }
+
+    private static func customWorkoutCandidateRuleMarkdown(_ score: RawDebugCustomWorkoutCandidateRuleScore) -> String {
+        let summary = score.summary
+        let summaryTable = """
+        | Field | Value |
+        |---|---|
+        | Strategy | \(markdownCell(summary.strategyID)) |
+        | Rule status | \(markdownCell(summary.ruleStatus)) |
+        | Candidate row count | \(summary.candidateRowCount) |
+        | Open tail row count | \(summary.openTailRowCount) |
+        | Paired pause count | \(summary.pairedPauseCount) |
+        | Total paired pause | \(optionalSeconds(summary.totalPairedPauseSeconds)) |
+        | Scoreable | \(summary.isScoreable ? "Yes" : "No") |
+        | Not scoreable reason | \(markdownCell(summary.notScoreableReason ?? "n/a")) |
+        | Production UI warning | \(markdownCell(summary.productionUIWarning)) |
+        """
+
+        guard !score.rows.isEmpty else {
+            return """
+            \(summaryTable)
+
+            No custom-workout candidate rule rows were produced.
+
+            Caveats: \(summary.caveats.map(markdownCell).joined(separator: " · "))
+            """
+        }
+
+        let rows = score.rows.map { row -> String in
+            [
+                "\(row.index)",
+                markdownCell(row.label),
+                markdownCell(row.mappingStatus),
+                row.elapsedDurationSeconds.map(optionalSeconds) ?? "Unavailable",
+                optionalSeconds(row.pauseOverlapSeconds),
+                row.activeDurationSeconds.map(optionalSeconds) ?? "Unavailable",
+                row.distanceMeters.map(optionalMeters) ?? "Unavailable",
+                markdownCell(row.durationRule),
+                markdownCell(row.candidateConfidence),
+                markdownCell(row.caveats.joined(separator: " "))
+            ].joined(separator: " | ")
+        }.map { "| \($0) |" }.joined(separator: "\n")
+
+        return """
+        \(summaryTable)
+
+        | Row | Label | Mapping | Elapsed | Pause overlap | Active time | Distance | Duration rule | Confidence | Caveats |
+        |---:|---|---|---:|---:|---:|---:|---|---|---|
         \(rows)
 
         Caveats: \(summary.caveats.map(markdownCell).joined(separator: " · "))
@@ -722,6 +797,11 @@ public enum DiagnosticsExport {
             activities: evidence?.activities ?? [],
             workout: workout
         )
+        let candidateRuleScore = customWorkoutCandidateRuleScore(
+            activityCandidate: activityCandidate,
+            events: evidence?.events ?? [],
+            workout: workout
+        )
         return RawDebugPayload(
             generatedAt: generatedAt.ISO8601Format(),
             workout: RawDebugWorkout(
@@ -770,6 +850,8 @@ public enum DiagnosticsExport {
             reconstructedIntervals: reconstructedIntervals?.intervals.map { RawDebugReconstructedInterval(interval: $0, workout: workout) } ?? [],
             activityBoundaryCandidateSummary: activityCandidate.summary,
             activityBoundaryCandidateIntervals: activityCandidate.rows,
+            customWorkoutCandidateRuleSummary: candidateRuleScore.summary,
+            customWorkoutCandidateRuleRows: candidateRuleScore.rows,
             boundaryDiagnostics: reconstructedIntervals?.intervals.map { RawDebugIntervalBoundaryDiagnostics(interval: $0, workout: workout) }.filter { $0.hasDiagnostics } ?? [],
             segmentMarkers: segmentMarkers.map(RawDebugSegmentMarker.init(interval:)),
             plannedStepBoundaryComparisons: plannedStepBoundaryComparisons(
@@ -1042,6 +1124,113 @@ public enum DiagnosticsExport {
             ),
             rows: rows
         )
+    }
+
+    private static func customWorkoutCandidateRuleScore(
+        activityCandidate: RawDebugActivityBoundaryCandidate,
+        events: [WorkoutEvidenceEvent],
+        workout: CanonicalWorkout
+    ) -> RawDebugCustomWorkoutCandidateRuleScore {
+        let productionWarning = "Custom workout candidate rule rows are debug-only Parity Lab output and are not production UI."
+        let baseCaveats = [
+            "debug-only, not promoted",
+            "not production interval logic",
+            "not shown in normal workout UI",
+            "FIT and Apple Fitness/manual rows are not runtime inputs",
+            "Active duration subtracts paired HealthKit pause/resume overlap when available."
+        ]
+        let pairedPauses = pairedPauseIntervals(events, workout: workout)
+        let rows = activityCandidate.rows.map { row -> RawDebugCustomWorkoutCandidateRuleRow in
+            let pauseOverlap = pauseOverlapSeconds(
+                rowStartOffset: row.startOffsetSeconds,
+                rowEndOffset: row.endOffsetSeconds,
+                pauses: pairedPauses
+            )
+            let elapsedDuration = row.durationSeconds
+            let activeDuration = elapsedDuration.map { max(0, $0 - pauseOverlap) }
+            let isOpenTail = normalizedDebugLabel(row.label) == "open"
+            let durationRule = isOpenTail
+                ? "open-tail-measured-duration"
+                : "active-duration-minus-paired-pause-overlap"
+            return RawDebugCustomWorkoutCandidateRuleRow(
+                index: row.index,
+                label: row.label,
+                stepType: row.stepType,
+                mappingStatus: row.mappingStatus,
+                elapsedDurationSeconds: elapsedDuration,
+                pauseOverlapSeconds: pauseOverlap,
+                activeDurationSeconds: activeDuration,
+                distanceMeters: row.distanceMeters,
+                durationRule: durationRule,
+                isOpenTail: isOpenTail,
+                candidateConfidence: row.candidateConfidence,
+                caveats: baseCaveats + row.caveats,
+                productionUIWarning: productionWarning
+            )
+        }
+
+        let openTailCount = rows.filter(\.isOpenTail).count
+        let totalPairedPause = pairedPauses.map(\.durationSeconds).reduce(0, +)
+        let isScoreable = activityCandidate.summary.isScoreable && !rows.isEmpty
+        return RawDebugCustomWorkoutCandidateRuleScore(
+            summary: RawDebugCustomWorkoutCandidateRuleSummary(
+                ruleStatus: isScoreable ? "candidate-rule-scoreable" : "candidate-rule-not-scoreable",
+                candidateRowCount: rows.count,
+                openTailRowCount: openTailCount,
+                pairedPauseCount: pairedPauses.count,
+                totalPairedPauseSeconds: totalPairedPause,
+                isScoreable: isScoreable,
+                notScoreableReason: isScoreable ? nil : activityCandidate.summary.notScoreableReason ?? "Activity-boundary candidate rows are unavailable.",
+                caveats: baseCaveats,
+                productionUIWarning: productionWarning
+            ),
+            rows: rows
+        )
+    }
+
+    private static func pairedPauseIntervals(
+        _ events: [WorkoutEvidenceEvent],
+        workout: CanonicalWorkout
+    ) -> [RawDebugPauseInterval] {
+        var pendingPause: Double?
+        var intervals: [RawDebugPauseInterval] = []
+        for event in events.sorted(by: { $0.startDate < $1.startDate }) {
+            let label = event.displayLabel.lowercased()
+            let offset = event.startDate.timeIntervalSince(workout.startDate)
+            if label.contains("pause") && !label.contains("resume") {
+                pendingPause = offset
+            } else if label.contains("resume"), let start = pendingPause {
+                let duration = max(0, offset - start)
+                intervals.append(
+                    RawDebugPauseInterval(
+                        startOffsetSeconds: start,
+                        endOffsetSeconds: offset,
+                        durationSeconds: duration
+                    )
+                )
+                pendingPause = nil
+            }
+        }
+        return intervals
+    }
+
+    private static func pauseOverlapSeconds(
+        rowStartOffset: Double?,
+        rowEndOffset: Double?,
+        pauses: [RawDebugPauseInterval]
+    ) -> Double {
+        guard let rowStartOffset, let rowEndOffset, rowEndOffset > rowStartOffset else { return 0 }
+        return pauses.reduce(0) { total, pause in
+            let overlapStart = max(rowStartOffset, pause.startOffsetSeconds)
+            let overlapEnd = min(rowEndOffset, pause.endOffsetSeconds)
+            return total + max(0, overlapEnd - overlapStart)
+        }
+    }
+
+    private static func normalizedDebugLabel(_ value: String) -> String {
+        let text = value.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        if text == "open / extra" || text == "extra" { return "open" }
+        return text
     }
 
     private static func activityDistanceMeters(_ activity: WorkoutEvidenceActivity) -> Double? {
@@ -1791,6 +1980,8 @@ private struct RawDebugPayload: Codable {
     var reconstructedIntervals: [RawDebugReconstructedInterval]
     var activityBoundaryCandidateSummary: RawDebugActivityBoundaryCandidateSummary
     var activityBoundaryCandidateIntervals: [RawDebugActivityBoundaryCandidateInterval]
+    var customWorkoutCandidateRuleSummary: RawDebugCustomWorkoutCandidateRuleSummary
+    var customWorkoutCandidateRuleRows: [RawDebugCustomWorkoutCandidateRuleRow]
     var boundaryDiagnostics: [RawDebugIntervalBoundaryDiagnostics]
     var segmentMarkers: [RawDebugSegmentMarker]
     var plannedStepBoundaryComparisons: [RawDebugPlannedStepBoundaryComparison]
@@ -1812,6 +2003,8 @@ private struct ParityPacketPayload: Codable {
     var reconstructedIntervals: [RawDebugReconstructedInterval]
     var activityBoundaryCandidateSummary: RawDebugActivityBoundaryCandidateSummary
     var activityBoundaryCandidateIntervals: [RawDebugActivityBoundaryCandidateInterval]
+    var customWorkoutCandidateRuleSummary: RawDebugCustomWorkoutCandidateRuleSummary
+    var customWorkoutCandidateRuleRows: [RawDebugCustomWorkoutCandidateRuleRow]
     var plannedStepBoundaryComparisons: [RawDebugPlannedStepBoundaryComparison]
     var boundarySourceWarnings: [String]
     var diagnosticsWarnings: [String]
@@ -1982,6 +2175,52 @@ private struct RawDebugActivityBoundaryCandidateInterval: Codable {
     var caveats: [String]
     var notScoreableReason: String?
     var productionUIWarning: String
+}
+
+private struct RawDebugCustomWorkoutCandidateRuleScore {
+    var summary: RawDebugCustomWorkoutCandidateRuleSummary
+    var rows: [RawDebugCustomWorkoutCandidateRuleRow]
+}
+
+private struct RawDebugCustomWorkoutCandidateRuleSummary: Codable {
+    var strategyID: String = "custom_workout_candidate_rule_active_time"
+    var scope: String = "debug/export-only"
+    var ruleStatus: String
+    var candidateRowCount: Int
+    var openTailRowCount: Int
+    var pairedPauseCount: Int
+    var totalPairedPauseSeconds: Double
+    var isScoreable: Bool
+    var notScoreableReason: String?
+    var caveats: [String]
+    var productionUIWarning: String
+    var productionIntervalBehaviorChanged: Bool = false
+    var normalWorkoutUIChanged: Bool = false
+    var boundaryLogicChanged: Bool = false
+    var usesFITRuntimeTruth: Bool = false
+    var usesAppleFitnessManualRuntimeLogic: Bool = false
+}
+
+private struct RawDebugCustomWorkoutCandidateRuleRow: Codable {
+    var index: Int
+    var label: String
+    var stepType: String
+    var mappingStatus: String
+    var elapsedDurationSeconds: Double?
+    var pauseOverlapSeconds: Double
+    var activeDurationSeconds: Double?
+    var distanceMeters: Double?
+    var durationRule: String
+    var isOpenTail: Bool
+    var candidateConfidence: String
+    var caveats: [String]
+    var productionUIWarning: String
+}
+
+private struct RawDebugPauseInterval {
+    var startOffsetSeconds: Double
+    var endOffsetSeconds: Double
+    var durationSeconds: Double
 }
 
 private struct RawDebugWorkoutActivity: Codable {
