@@ -71,6 +71,42 @@ Current screenshot-confirmed findings:
 - `2026-05-01T12:07:44Z` supports the `Open` tail label but still needs matching pause-debug evidence before timer conclusions.
 - This scorecard is docs/debug validation only and does not approve production interval reconstruction, normal workout UI changes, `HKWorkoutActivity` promotion, FIT runtime use, HealthFit dependency changes, or Phase 3.
 
+## Smallest Next Evidence Batch
+
+Goal: close the smallest remaining evidence gaps needed to move from screenshot-confirmed behavior toward data-source-confirmed reconstruction rules. Keep this docs/debug-only. Do not change Swift, production interval behavior, normal workout UI, `HKWorkoutActivity` promotion, FIT runtime use, HealthFit dependency status, or Phase 3 implementation.
+
+### Priority 1: Required
+
+| Priority | Start | Why it is needed | Apple Fitness screenshots | HealthFit FIT export | Raw HealthKit Debug monthly refresh/export | RunSignal parity packet/export | Manual row confirmation |
+| ---: | --- | --- | --- | --- | --- | --- | --- |
+| 1 | `2026-05-01T12:07:44Z` | Apple Fitness confirms fixed cooldown followed by `Open 16 m`, and overview shows a `233 s` elapsed-vs-workout-time delta, but the screenshot scorecard has no paired pause-debug evidence for this workout. | Already collected: `May 1 v1.PNG`, `May 1 v2.PNG`. Re-capture only if interval rows or overview are unclear. | Confirm the existing May 1 running FIT is present; re-export through HealthFit only if the file is missing or cannot be matched by start time. | Refresh May 2026 in Raw HealthKit Debug, then export Monthly Diagnostics JSON and Monthly Diagnostics Summary. | Export a selected-workout parity packet for May 1 after the May refresh. | Confirm the visible rows remain `Warmup 2.00 km / 12:52`, `Recovery 194 m / 2:00`, `Work 5.00 km / 21:44`, `Cooldown 1.99 km / 12:22`, `Open 16 m / 0:10`; note any visible pause/workout-time context. |
+
+Expected result for Priority 1: the next scorecard should either match May 1's `233 s` Apple Fitness elapsed-vs-workout-time delta to paired HealthKit pause/resume evidence, or explicitly classify May 1 as an Open-tail fixture with missing/unavailable pause-debug evidence.
+
+### Priority 2: Optional Manual Clarification
+
+| Priority | Start | Why it is optional | Apple Fitness screenshots | HealthFit FIT export | Raw HealthKit Debug monthly refresh/export | RunSignal parity packet/export | Manual row confirmation |
+| ---: | --- | --- | --- | --- | --- | --- | --- |
+| 2 | `2026-03-19T16:51:00Z` | Screenshot exists, but the Work distance was visually uncertain, so it was not added to the scored screenshot fixture. This is useful only if we want to revisit the distance-drift exclusion with a manual Apple Fitness row. | Existing: `March 19 v1.PNG`, `March 19 v2.PNG`. Re-capture a tighter interval-row screenshot only if the Work distance is not readable from the original. | Not required for the smallest batch if the existing Gate B/FIT artifact remains usable. Re-export through HealthFit only if March 19 is promoted back into active scoring. | Not required for the smallest batch. Refresh March 2026 only if March 19 is promoted back into active scoring. | Not required for the smallest batch. Export a selected-workout parity packet only if the manual row changes the distance-drift review. | Manually type the exact Work row distance visible in Apple Fitness, plus Warmup, Work, and Cooldown times/distances. |
+
+### Already Covered: Do Not Recollect Unless Needed
+
+These screenshot fixtures already have enough evidence for the current docs/debug scorecard and should not be recollected unless a later scoring run exposes a specific mismatch or we intentionally build per-workout archive packets for every fixture:
+
+| Start | Current evidence status | Reason to skip recollection |
+| --- | --- | --- |
+| `2026-03-05T14:37:43Z` | Screenshot-confirmed and candidate-supported. | Clean three-row tempo fixture already matches planned/candidate/FIT rows within current tolerance. |
+| `2026-04-22T11:39:58Z` | Screenshot-confirmed repeat expansion and pause delta matched to debug paired-pause evidence. | Structure is supported; metric drift is already classified for timer handling. |
+| `2026-04-24T12:02:30Z` | Screenshot-confirmed and candidate-supported. | Clean three-row tempo fixture already matches planned/candidate/FIT rows within current tolerance. |
+| `2026-04-29T11:49:02Z` | Screenshot-confirmed repeat expansion and pause delta matched to debug paired-pause evidence. | Structure is supported; metric drift is already classified for timer handling. |
+| `2026-05-06T12:02:13Z` | Screenshot-confirmed repeat expansion and pause delta matched to debug paired-pause evidence. | Structure is supported; metric drift is already classified for timer handling. |
+| `2026-05-13T11:52:06Z` | Screenshot-confirmed repeat expansion and pause delta matched to debug paired-pause evidence. | Structure is supported; metric drift is already classified for timer handling. |
+| `2026-05-20T11:43:00Z` | Screenshot-confirmed and candidate-supported. | Clean repeat-block fixture already matches planned/candidate/FIT rows within current tolerance. |
+| `2026-05-29T11:49:28Z` | Screenshot-confirmed pause delta matched to debug paired-pause evidence. | Timer drift is already explained by paired pause evidence. |
+| `2026-06-03T11:45:08Z` | Screenshot-confirmed and candidate-supported. | Clean repeat-block fixture already matches planned/candidate/FIT rows within current tolerance, and a per-workout parity packet already exists. |
+| `2026-06-05T11:53:53Z` | Screenshot-confirmed Open-tail fixture. | Open-tail behavior is supported, and a per-workout parity packet already exists. |
+| `2026-06-10T11:27:51Z` | Screenshot-confirmed repeat expansion plus Open-tail fixture. | Planned/candidate/FIT evidence supports the row shape; recollect only if future tail scoring needs a dedicated per-workout packet. |
+
 ## Balanced Collection Rule
 
 Evidence collection should stay balanced across easy, tempo, interval, tail, paused, and clean no-pause cases. More narrow warmup/work/open-cooldown examples are useful, but they should not crowd out the real program shapes: easy Work/Open runs, Friday tempo variants, Wednesday repeat blocks, fixed-cooldown Open/Extra tails, intentionally paused hard workouts, and clean controls without pause ambiguity.

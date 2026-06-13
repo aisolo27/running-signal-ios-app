@@ -31,7 +31,7 @@ Last updated: 2026-06-13
 - Define Gate B evidence rules for warmup/work/cooldown specials: Warmup, Work, Recovery, Cooldown, Open/Extra labels and Open tail handling after cooldown.
 - Use `docs/validation/apple-fitness-interval-parity-dataset/gate-b-timer-drift-evidence-2026-03-to-2026-06.md` before reconsidering timer-drift outliers such as `2026-05-29T11:49:28Z` or the high-error repeat-block rows.
 - Keep elapsed-vs-timer and pause-event debug output visible in future Gate B scoring; do not collapse row timing to one derived duration.
-- Refresh parity packet/monthly diagnostics for screenshot fixtures that lack matching pause-debug evidence, starting with `2026-05-01T12:07:44Z`.
+- Refresh parity packet/monthly diagnostics for the smallest remaining screenshot-backed gap: `2026-05-01T12:07:44Z`. `2026-03-19T16:51:00Z` is optional/manual only unless its visually uncertain Work row distance is needed for a renewed distance-drift review.
 - Continue `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-implementation-plan.md` with Phase 3 only after a later task explicitly approves prototype work.
 - Preserve the current production reconstruction while Gate B is incomplete.
 - Archive completed date-specific validation evidence to `docs/archive/old-validation/` after it is no longer active.
