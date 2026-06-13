@@ -107,7 +107,8 @@ enum DebugCustomWorkoutComparisonBuilder {
         rowsAreDebugEquivalent: Bool = false,
         activityRowsAreContiguous: Bool = true,
         labelsAreAmbiguous: Bool = false,
-        tailAmbiguity: CustomWorkoutTailAmbiguity = .none
+        tailAmbiguity: CustomWorkoutTailAmbiguity = .none,
+        repeatBlockRuleApproved: Bool = false
     ) -> DebugCustomWorkoutComparison {
         let plannedRows = plan?.expandedSteps ?? []
         let fallbackReasons = fallbackReasons(
@@ -126,7 +127,8 @@ enum DebugCustomWorkoutComparisonBuilder {
             fallbackReasons: fallbackReasons,
             rowLevelSupport: rowLevelSupport,
             rowsAreDebugEquivalent: rowsAreDebugEquivalent,
-            tailAmbiguity: tailAmbiguity
+            tailAmbiguity: tailAmbiguity,
+            repeatBlockRuleApproved: repeatBlockRuleApproved
         )
 
         return DebugCustomWorkoutComparison(
@@ -194,7 +196,8 @@ enum DebugCustomWorkoutComparisonBuilder {
         fallbackReasons: [CustomWorkoutFallbackReason],
         rowLevelSupport: Bool,
         rowsAreDebugEquivalent: Bool,
-        tailAmbiguity: CustomWorkoutTailAmbiguity
+        tailAmbiguity: CustomWorkoutTailAmbiguity,
+        repeatBlockRuleApproved: Bool
     ) -> CustomWorkoutComparisonStatus {
         if fallbackReasons.contains(.missingPlannedSteps)
             || fallbackReasons.contains(.missingActivityRows)
@@ -212,11 +215,13 @@ enum DebugCustomWorkoutComparisonBuilder {
         if tailAmbiguity.needsOpenTailRule {
             return .openTailNeedsRule
         }
+        if plan?.blocks.contains(where: { $0.iterationCount > 1 }) == true {
+            if !repeatBlockRuleApproved {
+                return .repeatBlockNeedsRule
+            }
+        }
         if rowLevelSupport {
             return .supported
-        }
-        if plan?.blocks.contains(where: { $0.iterationCount > 1 }) == true {
-            return .repeatBlockNeedsRule
         }
         if rowsAreDebugEquivalent {
             return .equivalent

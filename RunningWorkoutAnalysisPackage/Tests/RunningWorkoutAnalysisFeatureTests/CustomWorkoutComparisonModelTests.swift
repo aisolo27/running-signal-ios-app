@@ -59,6 +59,20 @@ import Testing
     expectDebugOnly(comparison)
 }
 
+@Test func debugCustomWorkoutComparisonMissingEvidenceWinsOverRowLevelSupport() {
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plan: singleWorkPlan(),
+        activityRows: [],
+        rowLevelSupport: true,
+        rowsAreDebugEquivalent: true
+    )
+
+    #expect(comparison.status == .missingRequiredEvidence)
+    #expect(comparison.fallbackReasons.contains(.missingActivityRows))
+    #expect(comparison.rows.allSatisfy { $0.confidence == .missingEvidence })
+    expectDebugOnly(comparison)
+}
+
 @Test func debugCustomWorkoutComparisonEqualPlannedAndActivityCountsCanBeEquivalentWithoutApproval() {
     let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
         plan: singleWorkPlan(),
@@ -69,6 +83,20 @@ import Testing
 
     #expect(comparison.status == .equivalent)
     #expect(comparison.rows[0].confidence == .equivalent)
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonTailAmbiguityBlocksRowLevelSupport() {
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plan: singleWorkPlan(),
+        activityRows: [activityRow()],
+        rowLevelSupport: true,
+        tailAmbiguity: .ambiguous
+    )
+
+    #expect(comparison.status == .openTailNeedsRule)
+    #expect(comparison.fallbackReasons.contains(.openExtraTailAmbiguous))
+    #expect(comparison.rows[0].confidence == .needsRule)
     expectDebugOnly(comparison)
 }
 
@@ -86,6 +114,41 @@ import Testing
     #expect(comparison.tailAmbiguity == .postPlanActivityCandidate)
     #expect(comparison.fallbackReasons.contains(.activityCountMismatch))
     #expect(comparison.fallbackReasons.contains(.openExtraTailAmbiguous))
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonRepeatBlockNeedsRuleEvenWithRowLevelSupport() {
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plan: repeatBlockPlan(),
+        activityRows: [
+            activityRow(index: 1, role: .work),
+            activityRow(index: 2, role: .recovery),
+            activityRow(index: 3, role: .work),
+            activityRow(index: 4, role: .recovery)
+        ],
+        rowLevelSupport: true
+    )
+
+    #expect(comparison.status == .repeatBlockNeedsRule)
+    #expect(comparison.rows.allSatisfy { $0.confidence == .needsRule })
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonRepeatBlockCanBeSupportedOnlyWhenRuleApproved() {
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plan: repeatBlockPlan(),
+        activityRows: [
+            activityRow(index: 1, role: .work),
+            activityRow(index: 2, role: .recovery),
+            activityRow(index: 3, role: .work),
+            activityRow(index: 4, role: .recovery)
+        ],
+        rowLevelSupport: true,
+        repeatBlockRuleApproved: true
+    )
+
+    #expect(comparison.status == .supported)
+    #expect(comparison.rows.allSatisfy { $0.confidence == .supported })
     expectDebugOnly(comparison)
 }
 
