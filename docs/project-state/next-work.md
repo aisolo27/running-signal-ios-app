@@ -25,11 +25,13 @@ Last updated: 2026-06-13
 - Review `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-shape-coverage-audit-2026-03-to-2026-06.md` before any Phase 3 prototype or narrow evidence collection plan; collect balanced easy, tempo, interval, tail, and pause/timer evidence instead of only more narrow warmup/work/open-cooldown rows.
 - Use `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-balanced-evidence-collection-plan.md` when collecting new custom workout evidence; it defines minimum and better targets, Apple Watch templates, screenshot/export checklists, and subclass acceptance criteria.
 - Use `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-evidence-collection-tracker.md` to track the next validation cycle's target templates, completed counts, screenshots, FIT exports, monthly diagnostics refreshes, and parity packet exports.
+- Use `docs/validation/apple-fitness-interval-parity-dataset/apple-fitness-screenshot-confirmed-scorecard-2026-03-to-2026-06.md` before any debug-only rule proposal based on screenshot-confirmed Apple Fitness rows.
 - Use `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-reconstruction-rules.md` and `custom-workout-swift-gap-analysis.md` before any custom workout Swift design.
 - Define Gate B evidence rules for structured intervals: repeat-block expansion, work/recovery mapping, activity count, planned step count, FIT lap count, FIT workout step count, and material row shifts.
 - Define Gate B evidence rules for warmup/work/cooldown specials: Warmup, Work, Recovery, Cooldown, Open/Extra labels and Open tail handling after cooldown.
 - Use `docs/validation/apple-fitness-interval-parity-dataset/gate-b-timer-drift-evidence-2026-03-to-2026-06.md` before reconsidering timer-drift outliers such as `2026-05-29T11:49:28Z` or the high-error repeat-block rows.
 - Keep elapsed-vs-timer and pause-event debug output visible in future Gate B scoring; do not collapse row timing to one derived duration.
+- Refresh parity packet/monthly diagnostics for screenshot fixtures that lack matching pause-debug evidence, starting with `2026-05-01T12:07:44Z`.
 - Continue `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-implementation-plan.md` with Phase 3 only after a later task explicitly approves prototype work.
 - Preserve the current production reconstruction while Gate B is incomplete.
 - Archive completed date-specific validation evidence to `docs/archive/old-validation/` after it is no longer active.

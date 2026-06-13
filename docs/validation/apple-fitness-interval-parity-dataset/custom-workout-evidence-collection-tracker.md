@@ -51,10 +51,25 @@ These workouts already appear in the March-June evidence set, but Apple Fitness 
 
 | Start | Why screenshots would help | Needed evidence |
 | --- | --- | --- |
-| `2026-03-05T14:37:43Z` | Supported tempo candidate in the narrow no-tail warmup/work/open-cooldown class. | Overview, interval rows, elapsed time, distance. |
-| `2026-04-24T12:02:30Z` | Supported tempo candidate with `Warmup(2 km) > Work(4 km) > Cooldown(Open)`. | Overview, interval rows, elapsed time, distance. |
-| `2026-03-19T16:51:00Z` | Tempo candidate currently excluded for distance drift. | Overview, interval rows, elapsed time, distance, any visible workout/timer time. |
-| `2026-05-29T11:49:28Z` | Tempo candidate currently excluded for pause/timer drift. | Overview, interval rows, elapsed time, workout/timer time if visible, distance, pause evidence. |
+| `2026-03-05T14:37:43Z` | Supported tempo candidate in the narrow no-tail warmup/work/open-cooldown class. | Collected in screenshot fixture. |
+| `2026-04-24T12:02:30Z` | Supported tempo candidate with `Warmup(2 km) > Work(4 km) > Cooldown(Open)`. | Collected in screenshot fixture. |
+| `2026-03-19T16:51:00Z` | Tempo candidate currently excluded for distance drift. | Screenshot collected but not yet scored because the current screenshot fixture focused on Gate B rule examples. Add a tighter manual row if exact Work distance is needed. |
+| `2026-05-29T11:49:28Z` | Tempo candidate currently excluded for pause/timer drift. | Collected in screenshot fixture; overview workout-vs-elapsed delta matches debug pause evidence. |
+
+## Screenshot Fixture Scorecard
+
+Apple Fitness screenshot-confirmed rows are tracked in `apple-fitness-screenshot-confirmed-rows-2026-03-to-2026-06.json` and scored by `score_screenshot_confirmed_custom_workouts.py`.
+
+Latest generated scorecard: `apple-fitness-screenshot-confirmed-scorecard-2026-03-to-2026-06.md`.
+
+Current screenshot-confirmed findings:
+
+- 12 custom-workout screenshot fixtures are typed from Apple Fitness rows.
+- 7 repeat-block workouts confirm Apple Fitness presents expanded Work/Recovery rows.
+- 3 fixed-step tail examples confirm Apple Fitness labels post-fixed-step residual movement as `Open`.
+- 5 of 6 paused screenshots with overview elapsed-vs-workout time match total paired pause duration in debug evidence.
+- `2026-05-01T12:07:44Z` supports the `Open` tail label but still needs matching pause-debug evidence before timer conclusions.
+- This scorecard is docs/debug validation only and does not approve production interval reconstruction, normal workout UI changes, `HKWorkoutActivity` promotion, FIT runtime use, HealthFit dependency changes, or Phase 3.
 
 ## Balanced Collection Rule
 

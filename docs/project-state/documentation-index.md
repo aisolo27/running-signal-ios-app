@@ -35,6 +35,8 @@ Keep active validation lean. Once a date-specific parity investigation is comple
 - `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-shape-coverage-audit-2026-03-to-2026-06.md`: generated docs/debug custom-workout shape inventory across easy, tempo, interval, tail, and pause/timer cases.
 - `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-balanced-evidence-collection-plan.md`: docs-only balanced collection plan for easy, tempo, interval, tail, paused, and clean no-pause custom workout evidence.
 - `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-evidence-collection-tracker.md`: active docs-only tracker for target templates, completed evidence, screenshots, FIT exports, diagnostics refreshes, and parity packet exports in the next custom workout validation cycle.
+- `docs/validation/apple-fitness-interval-parity-dataset/apple-fitness-screenshot-confirmed-rows-2026-03-to-2026-06.json`: manually typed Apple Fitness screenshot rows for selected March-June custom workouts; validation fixture only.
+- `docs/validation/apple-fitness-interval-parity-dataset/apple-fitness-screenshot-confirmed-scorecard-2026-03-to-2026-06.md`: generated docs/debug scorecard comparing screenshot-confirmed rows with RunSignal current rows, `HKWorkoutActivity` candidate rows, WorkoutKit planned rows, FIT laps, and pause-drift evidence.
 
 ## Reference Docs To Read Selectively
 
