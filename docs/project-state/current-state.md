@@ -4,7 +4,7 @@ Last updated: 2026-06-13
 
 ## Current Product Direction
 
-RunSignal is a native iPhone SwiftUI app focused on evidence-grounded completed running workout analysis. The current v1 priority is accurate HealthKit/WorkoutKit-based reconstruction of Apple Watch running workouts, especially custom workout intervals and tails. Coaching expansion, backend sync, AI calls, and file imports remain out of scope.
+RunSignal is a native iPhone SwiftUI app focused on evidence-grounded completed running workout analysis. The current v1 priority is custom Apple Watch running workout correctness: warmup, work, recovery, cooldown, repeat blocks, and Open/Extra tails. Coaching expansion, backend sync, AI calls, and file imports remain out of scope.
 
 ## Current Data Source
 
@@ -34,8 +34,9 @@ RunSignal is a native iPhone SwiftUI app focused on evidence-grounded completed 
 - Refreshed March-June 2026 monthly diagnostics are summarized in `docs/validation/apple-fitness-interval-parity-dataset/monthly-diagnostics-rollup-2026-03-to-2026-06.md`.
 - March-June 2026 FIT reference evidence is summarized in `docs/validation/apple-fitness-interval-parity-dataset/fit-reference-rollup-2026-03-to-2026-06.md`.
 - The FIT-backed two-gate plan is documented in `docs/validation/apple-fitness-interval-parity-dataset/fit-backed-two-gate-validation-plan-2026-03-to-2026-06.md`.
-- Gate A: FIT supports a narrow feature-flagged `HKWorkoutActivity` prototype for simple fixed-distance Work + Open only.
-- Gate B: `docs/validation/apple-fitness-interval-parity-dataset/gate-b-custom-workout-fit-scorecard-2026-03-to-2026-06.md` confirms strong count alignment for structured intervals and warmup/work/cooldown specials, but no Gate B subclass is approved yet because row-level FIT label/error extraction is still missing.
+- Gate A: FIT supports a narrow feature-flagged `HKWorkoutActivity` prototype for simple fixed-distance Work + Open only, but that prototype is intentionally not being implemented yet.
+- Gate B: `docs/validation/apple-fitness-interval-parity-dataset/gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.md` adds row-level FIT lap/workout_step extraction. It found 2 warmup/work/cooldown cases with candidate row-level support, 17 repeat-block rule cases, 4 Open/Extra tail rule cases, and 2 inconclusive rows. Structured intervals remain blocked; no broad custom workout promotion or Swift prototype is approved.
+- Custom workout rule/spec work is documented in `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-reconstruction-rules.md`, `custom-workout-swift-gap-analysis.md`, and `custom-workout-implementation-plan.md`. These are docs-only and do not change Swift behavior.
 - Duplicate, no-plan, and drift/guard-unknown workouts remain excluded from approval scoring.
 
 ## Current Known Limitations
@@ -44,7 +45,7 @@ RunSignal is a native iPhone SwiftUI app focused on evidence-grounded completed 
 - FIT does not prove exact Apple Fitness UI presentation parity or private Apple smoothing/labeling rules.
 - FIT is offline validation evidence only. It is not runtime truth, not an app data input, not a HealthFit dependency, and not a production data source.
 - WorkoutKit plan data can be unavailable or throw and must stay optional.
-- Structured and special custom workouts are not 100% settled; Gate B still needs row-level FIT lap labels, timing, distance, repeat-block mapping, and Open/Extra tail rules before any promotion.
+- Structured and special custom workouts are not 100% settled; Gate B now has row-level FIT extraction, but repeat-block mapping, Open/Extra tail rules, and inconclusive warmup/work/cooldown outliers still block broad promotion.
 - Mechanics, trends, and stronger run-type claims remain confidence-gated.
 
 ## Current Next Steps
@@ -52,8 +53,8 @@ RunSignal is a native iPhone SwiftUI app focused on evidence-grounded completed 
 - Use `docs/project-state/next-work.md` for the short current priority list.
 - For parity work, use `docs/validation/apple-fitness-interval-parity-dataset/README.md`, `analysis-summary.md`, and `next-boundary-validation-plan.md`.
 - Review `candidate-boundary-strategy-scorecard.md`, `hkworkoutactivity-boundary-scorecard.md`, and `fit-backed-two-gate-validation-plan-2026-03-to-2026-06.md` before changing boundary logic.
-- Next likely implementation, if explicitly approved, is a narrow feature-flagged prototype for simple Work + Open only.
-- Continue Gate B work by extracting row-level FIT labels/timing/distance before changing structured interval or warmup/work/cooldown behavior.
+- Next implementation requires explicit custom workout reconstruction model types and debug-only comparison rules before any production interval behavior changes.
+- Continue Gate B work by reviewing row-level outliers and defining repeat-block plus Open/Extra tail rules before changing structured interval or warmup/work/cooldown behavior. Gate A simple Work/Open remains validated but parked.
 - Keep `docs/project-state/current-state.md` and `docs/project-state/next-work.md` updated when project direction, validation status, known limitations, or next steps change.
 
 ## Read Only When Relevant

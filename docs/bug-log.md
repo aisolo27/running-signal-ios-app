@@ -60,6 +60,7 @@ Use this as a selective lookup, not required full-context reading. Read the inde
 - Rule: Apple Fitness split times can still differ by a few seconds from RunSignal's HealthKit distance-series interpolation because Apple may use private smoothing, route/distance presentation, and rounding. Treat 3 seconds on a 1 km split as an acceptable parity tolerance unless repeated evidence shows a wider drift.
 - Rule: older workouts with zero detailed evidence should not be used for boundary tuning until Raw HealthKit Debug proves fresh evidence loading. Check for stale summary-only cached evidence or an empty-detail workout that was marked enriched; a future debug-only reload action should invalidate the selected workout's evidence cache before re-querying HealthKit.
 - Rule: total calories can differ from Apple Fitness by about 1 kcal after refresh because active and basal energy may be summed from unrounded HealthKit evidence while Apple Fitness rounds display values. Treat 1 kcal as acceptable rounding tolerance.
+- Rule: docs-only FIT decoders should map `workout_step` to FIT global message `27`; global message `26` is `workout`. A wrong mapping can parse placeholder step rows and falsely classify repeat-block evidence.
 
 ## Milestones And Docs
 
