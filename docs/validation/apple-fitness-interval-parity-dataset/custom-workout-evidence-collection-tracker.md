@@ -68,7 +68,7 @@ Current screenshot-confirmed findings:
 - 7 repeat-block workouts confirm Apple Fitness presents expanded Work/Recovery rows.
 - 3 fixed-step tail examples confirm Apple Fitness labels post-fixed-step residual movement as `Open`.
 - 5 of 6 paused screenshots with overview elapsed-vs-workout time match total paired pause duration in debug evidence.
-- `2026-05-01T12:07:44Z` supports the `Open` tail label but still needs matching pause-debug evidence before timer conclusions.
+- `2026-05-01T12:07:44Z` now has fresh paired pause-debug evidence and a matching HealthFit FIT export. Two paired HealthKit pause intervals totaling `232.8 s` match the Apple Fitness `233 s` elapsed-vs-workout-time gap, and FIT lap timer-vs-elapsed deltas independently match those pause intervals.
 - This scorecard is docs/debug validation only and does not approve production interval reconstruction, normal workout UI changes, `HKWorkoutActivity` promotion, FIT runtime use, HealthFit dependency changes, or Phase 3.
 
 ## Smallest Next Evidence Batch
@@ -79,9 +79,9 @@ Goal: close the smallest remaining evidence gaps needed to move from screenshot-
 
 | Priority | Start | Why it is needed | Apple Fitness screenshots | HealthFit FIT export | Raw HealthKit Debug monthly refresh/export | RunSignal parity packet/export | Manual row confirmation |
 | ---: | --- | --- | --- | --- | --- | --- | --- |
-| 1 | `2026-05-01T12:07:44Z` | Apple Fitness confirms fixed cooldown followed by `Open 16 m`, and overview shows a `233 s` elapsed-vs-workout-time delta, but the screenshot scorecard has no paired pause-debug evidence for this workout. | Already collected: `May 1 v1.PNG`, `May 1 v2.PNG`. Re-capture only if interval rows or overview are unclear. | Confirm the existing May 1 running FIT is present; re-export through HealthFit only if the file is missing or cannot be matched by start time. | Refresh May 2026 in Raw HealthKit Debug, then export Monthly Diagnostics JSON and Monthly Diagnostics Summary. | Export a selected-workout parity packet for May 1 after the May refresh. | Confirm the visible rows remain `Warmup 2.00 km / 12:52`, `Recovery 194 m / 2:00`, `Work 5.00 km / 21:44`, `Cooldown 1.99 km / 12:22`, `Open 16 m / 0:10`; note any visible pause/workout-time context. |
+| 1 | `2026-05-01T12:07:44Z` | Completed for the targeted pause-debug gap. Apple Fitness confirms fixed cooldown followed by `Open 16 m`, and fresh HealthKit debug evidence now explains the `233 s` elapsed-vs-workout-time gap with `232.8 s` of paired pause intervals. | Collected: `updated may 1 v1.PNG`, `updated may 1 v2.PNG`. | Collected: `2026-05-01-080744-Outdoor Running-Adriel Apple Watch.fit`; FIT confirms four workout steps, four lap rows, and `232.8 s` of timer-vs-elapsed pause subtraction across Work and Cooldown. | Completed: May 2026 monthly diagnostics JSON and summary exported from fresh refresh. | Completed: selected-workout parity packet exported for May 1. | Confirmed: `Warmup 2.00 km / 12:52`, `Recovery 194 m / 2:00`, `Work 5.00 km / 21:44`, `Cooldown 1.99 km / 12:22`, `Open 16 m / 0:10`. |
 
-Expected result for Priority 1: the next scorecard should either match May 1's `233 s` Apple Fitness elapsed-vs-workout-time delta to paired HealthKit pause/resume evidence, or explicitly classify May 1 as an Open-tail fixture with missing/unavailable pause-debug evidence.
+Priority 1 result: May 1's `233 s` Apple Fitness elapsed-vs-workout-time delta matches `232.8 s` of paired HealthKit pause/resume intervals. See `may-1-open-tail-pause-evidence-2026-05-01.md`.
 
 ### Priority 2: Optional Manual Clarification
 
