@@ -1655,6 +1655,9 @@ struct RawHealthKitWorkoutDebugView: View {
                 SectionHeader("WorkoutKit Reconstructed Intervals")
                 reconstructedIntervalsView
 
+                SectionHeader("Parity Lab Candidate Rows")
+                parityLabCandidateRowsView
+
                 SectionHeader("HealthKit Segment Markers")
                 NoticeCard(
                     title: "Raw debug only",
@@ -1902,10 +1905,217 @@ struct RawHealthKitWorkoutDebugView: View {
         }
     }
 
+    @ViewBuilder
+    private var parityLabCandidateRowsView: some View {
+        let result = parityLabCandidateRowsResult
+        VStack(alignment: .leading, spacing: 10) {
+            NoticeCard(
+                title: "Debug-only",
+                message: "Candidate rows are for Parity Lab inspection only. They do not replace the normal workout detail intervals."
+            )
+
+            if let unavailableReason = result.unavailableReason {
+                NoticeCard(title: "Unavailable", message: unavailableReason)
+            } else {
+                MetricGrid(items: [
+                    MetricItem(title: "Rows", value: "\(result.rows.count)", detail: "Candidate"),
+                    MetricItem(title: "Open tails", value: "\(result.rows.filter(\.isOpenTail).count)", detail: "Inferred"),
+                    MetricItem(title: "Pauses", value: "\(result.pairedPauseCount)", detail: RunFormatters.duration(result.totalPairedPauseSeconds)),
+                    MetricItem(title: "Scope", value: "Debug", detail: "No production change")
+                ])
+
+                ForEach(result.rows) { row in
+                    VStack(alignment: .leading, spacing: 9) {
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("\(row.index). \(row.label)")
+                                    .font(.subheadline.bold())
+                                Text(row.detail)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text(row.isOpenTail ? "Open / Extra" : "Planned")
+                                .font(.caption.bold())
+                                .foregroundStyle(row.isOpenTail ? .orange : .secondary)
+                        }
+
+                        MetricGrid(items: [
+                            MetricItem(title: "Elapsed", value: RunFormatters.duration(row.elapsedDurationSeconds), detail: "Wall-clock row"),
+                            MetricItem(title: "Pause", value: RunFormatters.duration(row.pauseOverlapSeconds), detail: "Paired overlap"),
+                            MetricItem(title: "Active", value: RunFormatters.duration(row.activeDurationSeconds), detail: row.durationRule),
+                            MetricItem(title: "Distance", value: RunFormatters.distance(row.distanceMeters), detail: row.mappingStatus)
+                        ])
+
+                        Text("\(RunFormatters.duration(row.startOffsetSeconds)) -> \(RunFormatters.duration(row.endOffsetSeconds)) from workout start")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(10)
+                    .background(.background)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+            }
+        }
+    }
+
+    private var parityLabCandidateRowsResult: ParityLabCandidateRowsResult {
+        guard let evidence = currentWorkout.evidence else {
+            return ParityLabCandidateRowsResult(unavailableReason: "Reload HealthKit evidence on the physical iPhone before inspecting candidate rows.")
+        }
+        guard let audit = evidence.workoutPlanAudit, !audit.plannedSteps.isEmpty else {
+            return ParityLabCandidateRowsResult(unavailableReason: "WorkoutKit planned steps are missing for this workout.")
+        }
+        let plannedSteps = audit.plannedSteps.sorted { $0.index < $1.index }
+        let activities = evidence.activities.sorted { $0.startDate < $1.startDate }
+        guard !activities.isEmpty else {
+            return ParityLabCandidateRowsResult(unavailableReason: "HealthKit workout activity rows are missing for this workout.")
+        }
+        guard activities.count == plannedSteps.count else {
+            return ParityLabCandidateRowsResult(unavailableReason: "HealthKit activity row count does not match WorkoutKit planned step count.")
+        }
+        for index in activities.indices {
+            let activity = activities[index]
+            guard let endDate = activity.endDate, endDate > activity.startDate else {
+                return ParityLabCandidateRowsResult(unavailableReason: "HealthKit activity row \(index + 1) is missing a completed end boundary.")
+            }
+            if index > 0, let previousEndDate = activities[index - 1].endDate {
+                let gap = abs(activity.startDate.timeIntervalSince(previousEndDate))
+                if gap > 1 {
+                    return ParityLabCandidateRowsResult(unavailableReason: "HealthKit activity row \(index + 1) is not contiguous with the prior activity.")
+                }
+            }
+        }
+
+        let pauses = pairedPauseIntervals(in: evidence.events)
+        var rows = zip(plannedSteps, activities).enumerated().map { offset, pair in
+            let (step, activity) = pair
+            let startOffset = activity.startDate.timeIntervalSince(currentWorkout.startDate)
+            let endOffset = activity.endDate?.timeIntervalSince(currentWorkout.startDate)
+            let elapsed = activity.endDate?.timeIntervalSince(activity.startDate) ?? activity.durationSeconds
+            let pauseOverlap = pauseOverlapSeconds(startOffset: startOffset, endOffset: endOffset, pauses: pauses)
+            return ParityLabCandidateRow(
+                index: step.index,
+                label: step.label,
+                detail: "\(step.stepType.displayName) · \(step.plannedGoalDisplayText)",
+                startOffsetSeconds: startOffset,
+                endOffsetSeconds: endOffset,
+                elapsedDurationSeconds: elapsed,
+                pauseOverlapSeconds: pauseOverlap,
+                activeDurationSeconds: max(0, elapsed - pauseOverlap),
+                distanceMeters: activityDistanceMeters(activity),
+                durationRule: "Active duration",
+                mappingStatus: "Activity row \(offset + 1)",
+                isOpenTail: false
+            )
+        }
+
+        let mappedDistance = rows.compactMap(\.distanceMeters).reduce(0, +)
+        if let lastEndDate = activities.last?.endDate {
+            let remainingSeconds = currentWorkout.endDate.timeIntervalSince(lastEndDate)
+            let remainingMeters = currentWorkout.distanceMeters.map { max(0, $0 - mappedDistance) }
+            if remainingSeconds > 0.5 || (remainingMeters ?? 0) > 0.5 {
+                let startOffset = lastEndDate.timeIntervalSince(currentWorkout.startDate)
+                rows.append(
+                    ParityLabCandidateRow(
+                        index: rows.count + 1,
+                        label: "Open / Extra",
+                        detail: "Inferred after fixed planned rows",
+                        startOffsetSeconds: startOffset,
+                        endOffsetSeconds: currentWorkout.endDate.timeIntervalSince(currentWorkout.startDate),
+                        elapsedDurationSeconds: remainingSeconds,
+                        pauseOverlapSeconds: 0,
+                        activeDurationSeconds: remainingSeconds,
+                        distanceMeters: remainingMeters,
+                        durationRule: "Measured tail",
+                        mappingStatus: "Workout end tail",
+                        isOpenTail: true
+                    )
+                )
+            }
+        }
+
+        return ParityLabCandidateRowsResult(
+            rows: rows,
+            pairedPauseCount: pauses.count,
+            totalPairedPauseSeconds: pauses.map(\.durationSeconds).reduce(0, +)
+        )
+    }
+
+    private func pairedPauseIntervals(in events: [WorkoutEvidenceEvent]) -> [ParityLabPauseInterval] {
+        var pendingPause: Double?
+        var intervals: [ParityLabPauseInterval] = []
+        for event in events.sorted(by: { $0.startDate < $1.startDate }) {
+            let label = event.displayLabel.lowercased()
+            let offset = event.startDate.timeIntervalSince(currentWorkout.startDate)
+            if label.contains("pause") && !label.contains("resume") {
+                pendingPause = offset
+            } else if label.contains("resume"), let start = pendingPause {
+                intervals.append(
+                    ParityLabPauseInterval(
+                        startOffsetSeconds: start,
+                        endOffsetSeconds: offset,
+                        durationSeconds: max(0, offset - start)
+                    )
+                )
+                pendingPause = nil
+            }
+        }
+        return intervals
+    }
+
+    private func pauseOverlapSeconds(
+        startOffset: Double,
+        endOffset: Double?,
+        pauses: [ParityLabPauseInterval]
+    ) -> Double {
+        guard let endOffset, endOffset > startOffset else { return 0 }
+        return pauses.reduce(0) { total, pause in
+            let overlapStart = max(startOffset, pause.startOffsetSeconds)
+            let overlapEnd = min(endOffset, pause.endOffsetSeconds)
+            return total + max(0, overlapEnd - overlapStart)
+        }
+    }
+
+    private func activityDistanceMeters(_ activity: WorkoutEvidenceActivity) -> Double? {
+        activity.statistics.first {
+            $0.quantityType == "HKQuantityTypeIdentifierDistanceWalkingRunning"
+        }?.sum
+    }
+
     private func metricSourceText(summary: Bool, samples: Int) -> String {
         if samples > 0 { return "Direct samples" }
         if summary { return "Summary only" }
         return "Unavailable"
+    }
+
+    private struct ParityLabCandidateRowsResult {
+        var rows: [ParityLabCandidateRow] = []
+        var unavailableReason: String?
+        var pairedPauseCount: Int = 0
+        var totalPairedPauseSeconds: Double = 0
+    }
+
+    private struct ParityLabCandidateRow: Identifiable {
+        var id: Int { index }
+        var index: Int
+        var label: String
+        var detail: String
+        var startOffsetSeconds: Double
+        var endOffsetSeconds: Double?
+        var elapsedDurationSeconds: Double
+        var pauseOverlapSeconds: Double
+        var activeDurationSeconds: Double
+        var distanceMeters: Double?
+        var durationRule: String
+        var mappingStatus: String
+        var isOpenTail: Bool
+    }
+
+    private struct ParityLabPauseInterval {
+        var startOffsetSeconds: Double
+        var endOffsetSeconds: Double
+        var durationSeconds: Double
     }
 }
 
