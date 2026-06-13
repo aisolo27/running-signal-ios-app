@@ -103,6 +103,8 @@ enum DebugCustomWorkoutComparisonBuilder {
         currentRows: [DebugCustomWorkoutCurrentRow] = [],
         activityRows: [DebugCustomWorkoutActivityCandidateRow] = [],
         hasRowLevelEvidence: Bool = true,
+        rowLevelSupport: Bool = false,
+        rowsAreDebugEquivalent: Bool = false,
         activityRowsAreContiguous: Bool = true,
         labelsAreAmbiguous: Bool = false,
         tailAmbiguity: CustomWorkoutTailAmbiguity = .none
@@ -122,6 +124,8 @@ enum DebugCustomWorkoutComparisonBuilder {
             plannedRows: plannedRows,
             activityRows: activityRows,
             fallbackReasons: fallbackReasons,
+            rowLevelSupport: rowLevelSupport,
+            rowsAreDebugEquivalent: rowsAreDebugEquivalent,
             tailAmbiguity: tailAmbiguity
         )
 
@@ -188,33 +192,42 @@ enum DebugCustomWorkoutComparisonBuilder {
         plannedRows: [ExpandedCustomWorkoutPlanStep],
         activityRows: [DebugCustomWorkoutActivityCandidateRow],
         fallbackReasons: [CustomWorkoutFallbackReason],
+        rowLevelSupport: Bool,
+        rowsAreDebugEquivalent: Bool,
         tailAmbiguity: CustomWorkoutTailAmbiguity
     ) -> CustomWorkoutComparisonStatus {
+        if fallbackReasons.contains(.missingPlannedSteps)
+            || fallbackReasons.contains(.missingActivityRows)
+            || fallbackReasons.contains(.noRowLevelEvidence) {
+            return .missingRequiredEvidence
+        }
+        if fallbackReasons.contains(.invalidRepeatCount)
+            || fallbackReasons.contains(.nonContiguousActivityRows)
+            || fallbackReasons.contains(.missingEndBoundary) {
+            return .inconclusive
+        }
         if fallbackReasons.contains(.labelMappingAmbiguous) {
             return .labelMappingNeedsRule
         }
         if tailAmbiguity.needsOpenTailRule {
             return .openTailNeedsRule
         }
+        if rowLevelSupport {
+            return .supported
+        }
         if plan?.blocks.contains(where: { $0.iterationCount > 1 }) == true {
             return .repeatBlockNeedsRule
         }
-        if fallbackReasons.contains(.invalidRepeatCount) {
-            return .inconclusive
-        }
-        if fallbackReasons.contains(.missingPlannedSteps)
-            || fallbackReasons.contains(.missingActivityRows)
-            || fallbackReasons.contains(.noRowLevelEvidence) {
-            return .missingRequiredEvidence
+        if rowsAreDebugEquivalent {
+            return .equivalent
         }
         if fallbackReasons.contains(.nonContiguousActivityRows)
             || fallbackReasons.contains(.missingEndBoundary)
             || fallbackReasons.contains(.activityCountMismatch) {
             return .inconclusive
         }
-        if plannedRows.count == activityRows.count {
-            return .supported
-        }
+        _ = plannedRows
+        _ = activityRows
         return .inconclusive
     }
 

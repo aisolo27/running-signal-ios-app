@@ -27,8 +27,7 @@ RunSignal is a native iPhone SwiftUI app focused on evidence-grounded completed 
 
 ## Current Validation Focus
 
-- Production interval behavior remains unchanged.
-- Swift source remains unchanged unless a later task explicitly approves a prototype.
+- Production interval behavior remains unchanged. Swift changes since Phase 1 are limited to internal/debug validation models unless a later task explicitly approves a prototype.
 - Raw HealthKit Debug has diagnostics-only Parity Lab infrastructure, selected-workout force re-enrich, monthly evidence refresh, parity packet export, and side-by-side `activityBoundaryCandidateSummary` / `activityBoundaryCandidateIntervals`.
 - Debug-only candidate boundary scoring is available at `docs/validation/apple-fitness-interval-parity-dataset/score_candidate_boundary_strategies.py`.
 - Refreshed March-June 2026 monthly diagnostics are summarized in `docs/validation/apple-fitness-interval-parity-dataset/monthly-diagnostics-rollup-2026-03-to-2026-06.md`.

@@ -9,10 +9,10 @@ import Testing
 
     #expect(comparison.status == .missingRequiredEvidence)
     #expect(comparison.fallbackReasons.contains(.missingPlannedSteps))
-    #expect(comparison.promotesProductionBehavior == false)
+    expectDebugOnly(comparison)
 }
 
-@Test func debugCustomWorkoutComparisonInvalidRepeatCountIsInconclusiveWithFallbackReason() {
+@Test func debugCustomWorkoutComparisonInvalidRepeatCountKeepsFallbackReason() {
     let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
         plan: CustomWorkoutStepModel(
             blocks: [
@@ -22,16 +22,32 @@ import Testing
         activityRows: [activityRow()]
     )
 
-    #expect(comparison.status == .inconclusive)
+    #expect(comparison.status == .missingRequiredEvidence)
     #expect(comparison.fallbackReasons.contains(.invalidRepeatCount))
     #expect(comparison.fallbackReasons.contains(.missingPlannedSteps))
+    expectDebugOnly(comparison)
 }
 
-@Test func debugCustomWorkoutComparisonEqualPlannedAndActivityCountsClassifiesWithoutPromotion() {
+@Test func debugCustomWorkoutComparisonEqualPlannedAndActivityCountsWithoutRowLevelSupportIsNotSupported() {
     let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
         plan: singleWorkPlan(),
         currentRows: [currentRow()],
         activityRows: [activityRow()]
+    )
+
+    #expect(comparison.status == .inconclusive)
+    #expect(comparison.status != .supported)
+    #expect(comparison.rows.count == 1)
+    #expect(comparison.rows[0].confidence == .inconclusive)
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonEqualPlannedAndActivityCountsWithRowLevelSupportCanBeSupported() {
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plan: singleWorkPlan(),
+        currentRows: [currentRow()],
+        activityRows: [activityRow()],
+        rowLevelSupport: true
     )
 
     #expect(comparison.status == .supported)
@@ -40,7 +56,20 @@ import Testing
     #expect(comparison.rows[0].plannedRow?.role == .work)
     #expect(comparison.rows[0].currentRunSignalRow?.role == .work)
     #expect(comparison.rows[0].activityCandidateRow?.role == .work)
-    #expect(comparison.promotesProductionBehavior == false)
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonEqualPlannedAndActivityCountsCanBeEquivalentWithoutApproval() {
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plan: singleWorkPlan(),
+        currentRows: [currentRow()],
+        activityRows: [activityRow()],
+        rowsAreDebugEquivalent: true
+    )
+
+    #expect(comparison.status == .equivalent)
+    #expect(comparison.rows[0].confidence == .equivalent)
+    expectDebugOnly(comparison)
 }
 
 @Test func debugCustomWorkoutComparisonActivityCountMismatchCanBeOpenTailNeedsRule() {
@@ -57,6 +86,7 @@ import Testing
     #expect(comparison.tailAmbiguity == .postPlanActivityCandidate)
     #expect(comparison.fallbackReasons.contains(.activityCountMismatch))
     #expect(comparison.fallbackReasons.contains(.openExtraTailAmbiguous))
+    expectDebugOnly(comparison)
 }
 
 @Test func debugCustomWorkoutComparisonLabelAmbiguityProducesLabelMappingNeedsRule() {
@@ -69,6 +99,21 @@ import Testing
     #expect(comparison.status == .labelMappingNeedsRule)
     #expect(comparison.fallbackReasons.contains(.labelMappingAmbiguous))
     #expect(comparison.rows[0].confidence == .needsRule)
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonLabelAmbiguityDoesNotHideMissingRequiredEvidence() {
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plan: nil,
+        activityRows: [],
+        labelsAreAmbiguous: true
+    )
+
+    #expect(comparison.status == .missingRequiredEvidence)
+    #expect(comparison.fallbackReasons.contains(.missingPlannedSteps))
+    #expect(comparison.fallbackReasons.contains(.missingActivityRows))
+    #expect(comparison.fallbackReasons.contains(.labelMappingAmbiguous))
+    expectDebugOnly(comparison)
 }
 
 @Test func debugCustomWorkoutComparisonRepeatBlockProducesRepeatBlockNeedsRule() {
@@ -86,6 +131,18 @@ import Testing
     #expect(comparison.rows.count == 4)
     #expect(comparison.rows.map { $0.plannedRow?.repeatIteration } == [1, 1, 2, 2])
     #expect(comparison.rows.allSatisfy { $0.confidence == .needsRule })
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonRepeatBlockWithMissingActivityRowsReturnsMissingRequiredEvidence() {
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plan: repeatBlockPlan(),
+        activityRows: []
+    )
+
+    #expect(comparison.status == .missingRequiredEvidence)
+    #expect(comparison.fallbackReasons.contains(.missingActivityRows))
+    expectDebugOnly(comparison)
 }
 
 @Test func debugCustomWorkoutComparisonOpenExtraTailProducesOpenTailNeedsRule() {
@@ -112,6 +169,20 @@ import Testing
     #expect(comparison.status == .openTailNeedsRule)
     #expect(comparison.tailAmbiguity == .fixedCooldownFollowedByPossibleOpenExtraTail)
     #expect(comparison.fallbackReasons.contains(.openExtraTailAmbiguous))
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonOpenExtraTailAmbiguityWithMissingEvidenceReturnsMissingRequiredEvidence() {
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plan: singleWorkPlan(),
+        activityRows: [],
+        tailAmbiguity: .fixedCooldownFollowedByPossibleOpenExtraTail
+    )
+
+    #expect(comparison.status == .missingRequiredEvidence)
+    #expect(comparison.fallbackReasons.contains(.missingActivityRows))
+    #expect(comparison.fallbackReasons.contains(.openExtraTailAmbiguous))
+    expectDebugOnly(comparison)
 }
 
 private func singleWorkPlan() -> CustomWorkoutStepModel {
@@ -173,4 +244,8 @@ private func activityRow(
         startOffsetSeconds: Double(index - 1) * 60,
         endOffsetSeconds: Double(index) * 60
     )
+}
+
+private func expectDebugOnly(_ comparison: DebugCustomWorkoutComparison) {
+    #expect(comparison.promotesProductionBehavior == false)
 }
