@@ -1,0 +1,137 @@
+{
+  "gateName": "fit-backed-two-gate-validation-plan-2026-03-to-2026-06",
+  "generatedAt": "2026-06-13T00:00:00Z",
+  "runtimeSource": "HealthKit/WorkoutKit",
+  "validationOracle": "FIT offline reference",
+  "appleFitnessScreenshotsRequired": false,
+  "appleFitnessScreenshotsRole": "optional sanity evidence only",
+  "fitRuntimeUseAllowed": false,
+  "fitImportAllowed": false,
+  "healthFitDependencyAllowed": false,
+  "productionBehaviorChanged": false,
+  "swiftSourceChanged": false,
+  "scope": {
+    "months": [
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06"
+    ],
+    "runSignalWorkouts": 87,
+    "fitFilesParsed": 86,
+    "matchedRunSignalWorkouts": 87,
+    "unmatchedRunSignalWorkouts": 0,
+    "unmatchedFitFiles": 0
+  },
+  "gates": {
+    "gateA_simple_work_open": {
+      "description": "Narrow FIT-backed gate for simple fixed-distance Work + Open workouts.",
+      "eligibleForNarrowFeatureFlaggedPrototype": true,
+      "eligibleForBroadProductionPromotion": false,
+      "requiredEvidence": {
+        "fitMatched": true,
+        "fitSupport": "HKWorkoutActivity candidate",
+        "activityCount": 1,
+        "plannedStepCount": 1,
+        "candidateRowCount": 2,
+        "candidateRows": [
+          "Work",
+          "Open"
+        ],
+        "currentNotBetterThanCandidate": true,
+        "excludedCasesIncluded": false
+      },
+      "thresholds": {
+        "largeShiftCandidateSupportRate": "100%",
+        "largeShiftCurrentSupportCount": 0,
+        "simpleCandidateSupportRate": "100%",
+        "simpleInconclusiveCount": 0,
+        "knownGuardBreakCount": 0
+      },
+      "currentEvidence": {
+        "simpleWorkOpenTotal": 50,
+        "largeShiftTotal": 10,
+        "largeShiftCandidateSupportedByFIT": 10,
+        "largeShiftCurrentSupportedByFIT": 0,
+        "simpleWorkOpenCandidateSupportedByFIT": 50,
+        "simpleWorkOpenCurrentSupportedByFIT": 0,
+        "simpleWorkOpenInconclusiveAtFITLevel": 0
+      },
+      "decision": "passes for narrow feature-flagged prototype only",
+      "recommendedAction": "Allow a debug or feature-flagged HKWorkoutActivity boundary prototype for simple Work + Open only, with fallback to current reconstruction when any required evidence is missing or incompatible."
+    },
+    "gateB_custom_multi_step": {
+      "description": "Separate FIT-backed gate for custom multi-step workouts.",
+      "eligibleForNarrowFeatureFlaggedPrototype": false,
+      "eligibleForBroadProductionPromotion": false,
+      "coveredClasses": [
+        "structured_interval",
+        "warmup_work_cooldown_special"
+      ],
+      "requiredEvidenceBeforePromotion": {
+        "fitMatched": true,
+        "activityCountMatchesPlannedStepCount": true,
+        "lapOrStepCountReconcilesWithPlan": true,
+        "labelsSupported": [
+          "Warmup",
+          "Work",
+          "Recovery",
+          "Cooldown",
+          "Open",
+          "Extra"
+        ],
+        "repeatBlocksReconciled": true,
+        "openTailHandlingVerified": true,
+        "materialRowShiftReviewComplete": true
+      },
+      "currentEvidence": {
+        "structuredIntervalTotal": 20,
+        "warmupWorkCooldownSpecialTotal": 5,
+        "gateBScorecard": "gate-b-custom-workout-fit-scorecard-2026-03-to-2026-06.json",
+        "structuredActivityPlannedCountAlignment": 20,
+        "structuredFITLapActivityCountAlignment": 20,
+        "warmupWorkCooldownActivityPlannedCountAlignment": 5,
+        "warmupWorkCooldownFITLapActivityCountAlignment": 5,
+        "approvedSubclasses": 0,
+        "blockedReason": "row-level FIT label, timing, and distance extraction is not available yet for Gate B"
+      },
+      "decision": "blocked pending separate structured and special-workout gates",
+      "recommendedAction": "Keep structured intervals and warmup/work/cooldown specials out of the simple Work + Open prototype."
+    },
+    "duplicate_no_plan_excluded": {
+      "eligibleForNarrowFeatureFlaggedPrototype": false,
+      "eligibleForBroadProductionPromotion": false,
+      "coveredClasses": [
+        "duplicate_same_day_extra_run_candidate",
+        "no_workoutkit_plan",
+        "drift_guard_candidate_unknown"
+      ],
+      "currentEvidence": {
+        "excludedCount": 12,
+        "noPlanNonfixtureWorkouts": 9
+      },
+      "decision": "excluded from production approval scoring",
+      "recommendedAction": "Use as reference evidence only unless a workout is clearly matched to a planned fixture and reclassified."
+    }
+  },
+  "fallbackRules": [
+    "Use the current reconstruction when HKWorkoutActivity rows are missing.",
+    "Use the current reconstruction when activity count and WorkoutKit planned step count do not reconcile for the active gate.",
+    "Use the current reconstruction when candidate rows are missing required Work/Open rows for Gate A.",
+    "Use the current reconstruction when a workout is structured, special, no-plan, duplicate, or otherwise excluded from Gate A.",
+    "Never read FIT files at runtime and never require a HealthFit dependency in the app."
+  ],
+  "notProvenByFIT": [
+    "FIT does not prove exact Apple Fitness UI presentation parity.",
+    "FIT does not prove private Apple smoothing or labeling rules.",
+    "FIT does not approve structured interval or warmup/work/cooldown promotion through Gate A.",
+    "FIT does not become a production data source."
+  ],
+  "recommendation": {
+    "simpleWorkOpen": "Proceed to a narrow feature-flagged HKWorkoutActivity prototype only.",
+    "structuredIntervals": "Blocked pending Gate B structured interval validation.",
+    "warmupWorkCooldownSpecials": "Blocked pending Gate B special-workout validation.",
+    "duplicatesNoPlanExcluded": "Remain excluded from approval scoring.",
+    "broadProductionPromotion": "Not supported."
+  }
+}

@@ -1,40 +1,41 @@
 # Next Work
 
-Last updated: 2026-06-12
+Last updated: 2026-06-13
 
 ## Priority 1
 
-- Review the debug-only candidate boundary scorecards and decide whether more evidence is needed before any boundary logic experiment.
-- Use the boundary pattern investigation as the current evidence summary: no public-API separator is production-safe yet.
-- Collect 5-10 additional simple fixed-distance Work + Open tail examples, prioritizing guard/pass cases similar to June 2 and June 4.
-- Keep WorkoutKit reconstructed intervals gated from normal UI; the current scorecards do not approve a production boundary strategy.
-- Use the completed docs-only HealthFit FIT comparison summary and lap-boundary source investigation as research evidence only. FIT lap rows are useful for investigation, but they do not approve production boundary logic or a FIT import path.
-- Review `hkworkoutactivity-boundary-scorecard.md`: `HKWorkoutActivity` improves the three drift cases and June 2, but June 4 regresses from preferred pass to temporary pass and June 3 has three special-fixture regressions.
-- Latest physical-device Raw HealthKit Debug markdown and parity packet JSON exports are archived for the active fixtures with `activityBoundaryCandidateSummary` and `activityBoundaryCandidateIntervals` beside current `reconstructedIntervals`; this is diagnostics/export-only and not production UI.
-- Use Raw HealthKit Debug's monthly diagnostics workflow to capture February 2026 through June 2026 month bundles from the physical iPhone. Select the month, run `Refresh Month Evidence`, then export the monthly JSON and markdown summary so the bundle records per-workout refresh status and fresh-query coverage. The monthly exports are debug/research-only and should be compared offline with HealthFit FIT files and Apple Fitness/manual references.
-- Collect more guard/pass examples before any production experiment. Any activity-boundary prototype must remain debug-only, use `HKWorkoutActivity` only when activity count/order reconciles with WorkoutKit planned steps, infer final Open / Extra tails from workout end when needed, and fall back to current reconstruction for missing or incompatible activity evidence.
+- Keep production interval behavior unchanged until a later task explicitly approves a prototype.
+- Use FIT as the automated offline validation oracle for boundary scoring.
+- Keep Apple Fitness screenshots/manual rows optional; they are no longer the main validation gate.
+- Review `docs/validation/apple-fitness-interval-parity-dataset/fit-backed-two-gate-validation-plan-2026-03-to-2026-06.md`.
+- Run `docs/validation/apple-fitness-interval-parity-dataset/score_fit_backed_two_gate_validation.py` after rollup changes.
+- Run `docs/validation/apple-fitness-interval-parity-dataset/score_gate_b_custom_workout_fit.py` after Gate B rollup changes.
+- Gate A: simple fixed-distance Work + Open is eligible for a narrow feature-flagged `HKWorkoutActivity` prototype only.
+- Gate B: structured interval workouts remain blocked; count alignment is strong, but row-level FIT label/error extraction is missing.
+- Gate B: warmup/work/cooldown specials remain blocked; count alignment is strong, but label mapping and Open/Extra tail rules are missing.
+- Duplicate, no-plan, same-day extra, and drift/guard-unknown workouts remain excluded from production approval scoring.
 
 ## Priority 2
 
-- Collect pass-case boundary diagnostics before changing distance-goal boundary behavior.
-- Collect more Work + Open examples that vary target distance, tail distance, and tail duration.
-- Stop this phase after 5-10 new examples and rerun the scorer; if no separator emerges, keep current public reconstruction and document the limitation.
-- Preserve the current production interval reconstruction behavior until packet-backed activity-boundary scoring/prototyping proves pass/regression safety across more guard examples.
+- Extract row-level FIT lap timing/distance/labels for structured intervals and compare those rows against current and `HKWorkoutActivity` candidate rows.
+- Define Gate B evidence rules for structured intervals: repeat-block expansion, work/recovery mapping, activity count, planned step count, FIT lap count, FIT workout step count, and material row shifts.
+- Define Gate B evidence rules for warmup/work/cooldown specials: Warmup, Work, Recovery, Cooldown, Open/Extra labels and Open tail handling after cooldown.
+- Preserve the current production reconstruction while Gate B is incomplete.
 - Archive completed date-specific validation evidence to `docs/archive/old-validation/` after it is no longer active.
 
 ## Priority 3
 
 - Run physical-device validation only when the task needs real HealthKit proof.
-- Capture and save additional parity packets only for new validation workouts or re-checks; also save Raw HealthKit Debug markdown so raw HKWorkoutEvent rows, HKWorkoutActivity inventory rows, and planned-step comparison tables are preserved.
-- Current active fixture exports have been recaptured with activity-boundary candidate summary/rows; future captures should focus on new validation workouts or re-checks.
-- For month-scale review, refresh the selected month's evidence before exporting monthly diagnostics, then promote individual workouts into fixture folders only after Apple Fitness/manual references are captured.
+- Capture new parity packets only for new validation workouts or re-checks.
+- For month-scale review, refresh selected-month evidence before exporting monthly diagnostics.
 
 ## Blocked
 
-- Apple Fitness interval labeling and boundary behavior remain partly uncertain.
-- April 28 is no longer blocked by unavailable evidence; it remains separate from production boundary tuning as an evidence-recovery fixture.
-- Normal workout detail interval UI promotion is blocked until boundary evidence is resolved or accepted.
-- Candidate boundary scoring is debug-only; no strategy is approved for production.
+- Broad production promotion of `HKWorkoutActivity` boundary rows is not approved.
+- Structured intervals are not approved through Gate A.
+- Warmup/work/cooldown specials are not approved through Gate A.
+- No Gate B subclass is approved yet.
+- Normal workout detail interval UI promotion remains blocked until the relevant gate is approved or the limitation is explicitly accepted.
 
 ## Not In Scope
 
