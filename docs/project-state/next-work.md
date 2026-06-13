@@ -14,7 +14,7 @@ Last updated: 2026-06-13
 - Gate A: simple fixed-distance Work + Open is eligible for a narrow feature-flagged `HKWorkoutActivity` prototype only, but it is not being implemented yet.
 - Gate B: structured interval workouts remain blocked; row-level FIT extraction exists, but repeat-block expansion and Open/Extra tail rules are not production-approved.
 - Gate B: warmup/work/cooldown specials remain blocked for broad promotion; 2 rows are candidate row-level supported, 2 are inconclusive, and 1 fixed-cooldown-plus-tail case still needs an Open/Extra rule.
-- Swift source and production behavior remain unchanged while custom workout reconstruction rules are being defined.
+- Production interval behavior remains unchanged while custom workout reconstruction rules are being defined. Phase 1 internal expanded-step model types exist for debug/validation use only.
 - Duplicate, no-plan, same-day extra, and drift/guard-unknown workouts remain excluded from production approval scoring.
 
 ## Priority 2
@@ -23,7 +23,7 @@ Last updated: 2026-06-13
 - Use `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-reconstruction-rules.md` and `custom-workout-swift-gap-analysis.md` before any custom workout Swift design.
 - Define Gate B evidence rules for structured intervals: repeat-block expansion, work/recovery mapping, activity count, planned step count, FIT lap count, FIT workout step count, and material row shifts.
 - Define Gate B evidence rules for warmup/work/cooldown specials: Warmup, Work, Recovery, Cooldown, Open/Extra labels and Open tail handling after cooldown.
-- Follow `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-implementation-plan.md` only after a later task explicitly approves Swift implementation.
+- Continue `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-implementation-plan.md` with Phase 2 only after a later task explicitly approves debug-only comparison work.
 - Preserve the current production reconstruction while Gate B is incomplete.
 - Archive completed date-specific validation evidence to `docs/archive/old-validation/` after it is no longer active.
 
