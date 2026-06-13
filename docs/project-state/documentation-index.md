@@ -26,6 +26,7 @@ Keep active validation lean. Once a date-specific parity investigation is comple
 - `docs/validation/apple-fitness-interval-parity-dataset/fit-lap-boundary-source-investigation.md`: docs/debug source investigation for FIT lap boundary timing versus public HealthKit/WorkoutKit evidence.
 - `docs/validation/apple-fitness-interval-parity-dataset/hkworkoutactivity-boundary-investigation.md`: current docs/debug review of regenerated physical-device `HKWorkoutActivity` boundary evidence.
 - `docs/validation/apple-fitness-interval-parity-dataset/hkworkoutactivity-boundary-scorecard.md`: current docs/debug scorecard for the archived on-device activity-boundary candidate exports; no production promotion approved.
+- `docs/validation/apple-fitness-interval-parity-dataset/gate-b-phase-3-readiness-review.md`: docs-only Gate B decision table by exact workout shape before any Phase 3 prototype discussion.
 
 ## Reference Docs To Read Selectively
 

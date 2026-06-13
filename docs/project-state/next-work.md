@@ -20,6 +20,7 @@ Last updated: 2026-06-13
 ## Priority 2
 
 - Review `docs/validation/apple-fitness-interval-parity-dataset/gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.md` before any Gate B implementation discussion.
+- Review `docs/validation/apple-fitness-interval-parity-dataset/gate-b-phase-3-readiness-review.md` before any Phase 3 prototype discussion.
 - Use `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-reconstruction-rules.md` and `custom-workout-swift-gap-analysis.md` before any custom workout Swift design.
 - Define Gate B evidence rules for structured intervals: repeat-block expansion, work/recovery mapping, activity count, planned step count, FIT lap count, FIT workout step count, and material row shifts.
 - Define Gate B evidence rules for warmup/work/cooldown specials: Warmup, Work, Recovery, Cooldown, Open/Extra labels and Open tail handling after cooldown.
