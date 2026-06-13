@@ -84,7 +84,11 @@ struct CustomWorkoutStepModel: Codable, Equatable, Sendable {
         }
 
         for block in blocks {
-            for repeatIteration in 1...max(block.iterationCount, 1) {
+            // Invalid repeat counts are preserved on the unexpanded block so Phase 2 can classify
+            // comparison/fallback behavior instead of guessing one valid execution iteration.
+            guard block.iterationCount >= 1 else { continue }
+
+            for repeatIteration in 1...block.iterationCount {
                 for step in block.steps {
                     steps.append(
                         expandedStep(

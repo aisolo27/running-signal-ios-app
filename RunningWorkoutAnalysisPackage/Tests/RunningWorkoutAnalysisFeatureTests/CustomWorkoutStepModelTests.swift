@@ -100,6 +100,28 @@ import Testing
     #expect(expanded[1].source == .healthKit)
 }
 
+@Test func customWorkoutStepModelPreservesInvalidRepeatBlockWithoutExpandingRows() {
+    let step = CustomWorkoutPlanStep(
+        originalStepIndex: 1,
+        role: .work,
+        goalType: .distance,
+        goalValue: 1_000
+    )
+    let model = CustomWorkoutStepModel(
+        blocks: [
+            CustomWorkoutRepeatBlock(blockIndex: 1, iterationCount: 0, steps: [step]),
+            CustomWorkoutRepeatBlock(blockIndex: 2, iterationCount: -2, steps: [step])
+        ]
+    )
+
+    #expect(model.blocks.count == 2)
+    #expect(model.blocks[0].iterationCount == 0)
+    #expect(model.blocks[0].steps == [step])
+    #expect(model.blocks[1].iterationCount == -2)
+    #expect(model.blocks[1].steps == [step])
+    #expect(model.expandedSteps.isEmpty)
+}
+
 @Test func customWorkoutStepModelPreservesOriginalUnexpandedStructure() {
     let warmup = CustomWorkoutPlanStep(
         originalStepIndex: 1,
