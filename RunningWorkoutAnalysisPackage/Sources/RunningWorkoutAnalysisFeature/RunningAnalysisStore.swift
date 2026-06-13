@@ -19,6 +19,7 @@ public final class RunningAnalysisStore {
     public private(set) var evidenceQueueSummary = EvidenceEnrichmentQueueSummary.empty
     public private(set) var derivedAnalysesByWorkoutID: [String: DerivedWorkoutAnalysis] = [:]
     public private(set) var parityForceReenrichResults: [String: ParityForceReenrichResult] = [:]
+    public private(set) var monthlyEvidenceRefreshResults: [String: MonthlyEvidenceRefreshResult] = [:]
 
     private let healthKitService: HealthKitService
     private let syncService: HealthKitWorkoutSyncService
@@ -288,6 +289,84 @@ public final class RunningAnalysisStore {
         recompute()
     }
 
+    public func refreshEvidenceForMonth(containing selectedMonth: Date, calendar: Calendar = .current) async {
+        guard let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth) else {
+            message = "Could not resolve the selected month for evidence refresh."
+            return
+        }
+
+        let monthWorkouts = workouts
+            .filter { monthInterval.contains($0.startDate) }
+            .sorted { $0.startDate < $1.startDate }
+        guard !monthWorkouts.isEmpty else {
+            message = "No loaded running workouts are available for the selected month."
+            return
+        }
+
+        isEnrichingAudit = true
+        defer { isEnrichingAudit = false }
+
+        for workout in monthWorkouts {
+            let requestedAt = Date()
+            let cacheWasPresent = workout.evidence != nil
+                || (modelContext.map { PersistenceService.fetchEvidence(workoutID: workout.id, context: $0) } ?? nil) != nil
+
+            if let modelContext {
+                PersistenceService.deleteEvidence(ids: [workout.id], context: modelContext)
+            }
+            invalidateLoadedEvidence(workoutID: workout.id)
+
+            let result = await healthKitService.enrichRunningWorkouts(ids: [workout.id])
+            updateHealthKitStatus(
+                authorizationState: result.authorizationState,
+                message: result.message ?? "Monthly evidence refresh is running."
+            )
+
+            let returnedWorkout = result.workouts.first { $0.id == workout.id }
+            let canUseResult = result.authorizationState == .authorized || result.authorizationState == .partial
+            if canUseResult, !result.workouts.isEmpty {
+                workouts = removeSampleWorkoutsIfRealDataExists(mergeSyncedWorkouts(changes: result.workouts, current: workouts))
+                deletePersistedSampleWorkoutsIfNeeded()
+                applyReviewedRunTypes()
+                persistCurrent()
+                markEvidenceQueueAttempt(
+                    ids: [workout.id],
+                    status: returnedWorkout == nil ? .failed : .enriched,
+                    message: result.message
+                )
+            } else {
+                markEvidenceQueueAttempt(ids: [workout.id], status: .failed, message: result.message)
+            }
+
+            let refreshedWorkout = workouts.first { $0.id == workout.id }
+            let refreshStatus: MonthlyEvidenceRefreshStatus
+            if result.authorizationState == .unavailable {
+                refreshStatus = .unsupported
+            } else if returnedWorkout != nil {
+                refreshStatus = .success
+            } else {
+                refreshStatus = .failed
+            }
+            monthlyEvidenceRefreshResults[workout.id] = MonthlyEvidenceRefreshResult(
+                workoutID: workout.id,
+                requestedAt: requestedAt,
+                completedAt: Date(),
+                refreshStatus: refreshStatus,
+                refreshError: refreshStatus == .success ? nil : (result.message ?? "HealthKit did not return this workout during month refresh."),
+                cacheWasPresent: cacheWasPresent,
+                invalidatedCache: true,
+                freshQueryReturnedWorkout: returnedWorkout != nil,
+                authorizationState: result.authorizationState,
+                evidenceCounts: refreshedWorkout.map(ParityEvidenceCounts.init(workout:)),
+                evidenceLoadedAt: refreshedWorkout?.evidence?.loadedAt,
+                diagnosticsWarnings: refreshedWorkout?.evidence?.diagnostics?.warnings ?? []
+            )
+            recompute()
+        }
+
+        message = "Monthly evidence refresh finished for \(monthWorkouts.count) running workouts."
+    }
+
     public func update(workoutID: String, manualRunType: RunType?, notes: String) {
         guard let index = workouts.firstIndex(where: { $0.id == workoutID }) else { return }
         workouts[index].manualRunType = manualRunType
@@ -379,17 +458,28 @@ public final class RunningAnalysisStore {
     }
 
     public func monthlyDiagnosticsJSON(containing workout: CanonicalWorkout) -> String {
+        monthlyDiagnosticsJSON(selectedMonth: workout.startDate)
+    }
+
+    public func monthlyDiagnosticsJSON(selectedMonth: Date) -> String {
         DiagnosticsExport.monthlyDiagnosticsJSON(
             workouts: workouts,
-            selectedMonth: workout.startDate,
-            forceReenrichResults: parityForceReenrichResults
+            selectedMonth: selectedMonth,
+            forceReenrichResults: parityForceReenrichResults,
+            monthlyRefreshResults: monthlyEvidenceRefreshResults
         )
     }
 
     public func monthlyDiagnosticsMarkdown(containing workout: CanonicalWorkout) -> String {
+        monthlyDiagnosticsMarkdown(selectedMonth: workout.startDate)
+    }
+
+    public func monthlyDiagnosticsMarkdown(selectedMonth: Date) -> String {
         DiagnosticsExport.monthlyDiagnosticsMarkdown(
             workouts: workouts,
-            selectedMonth: workout.startDate
+            selectedMonth: selectedMonth,
+            forceReenrichResults: parityForceReenrichResults,
+            monthlyRefreshResults: monthlyEvidenceRefreshResults
         )
     }
 
@@ -431,6 +521,30 @@ public final class RunningAnalysisStore {
         guard let modelContext,
               workouts.contains(where: { !isSampleWorkout($0) }) else { return }
         PersistenceService.deleteWorkouts(ids: Set(SampleData.workouts.map(\.id)), context: modelContext)
+    }
+
+    private func invalidateLoadedEvidence(workoutID: String) {
+        workouts = workouts.map { workout in
+            guard workout.id == workoutID else { return workout }
+            var invalidated = workout
+            invalidated.evidence = nil
+            invalidated.routePointCount = 0
+            invalidated.seriesSampleCount = 0
+            invalidated.heartRateSampleCount = 0
+            invalidated.runningSpeedSampleCount = 0
+            invalidated.distanceSampleCount = 0
+            invalidated.activeEnergySampleCount = 0
+            invalidated.runningPowerSampleCount = 0
+            invalidated.cadenceSampleCount = 0
+            invalidated.stepCountSampleCount = 0
+            invalidated.strideLengthSampleCount = 0
+            invalidated.verticalOscillationSampleCount = 0
+            invalidated.groundContactTimeSampleCount = 0
+            invalidated.intervalCount = 0
+            invalidated.intervalLabelsSummary = nil
+            return invalidated
+        }
+        recompute()
     }
 
     private func sampleWorkoutIDs(in workouts: [CanonicalWorkout]) -> Set<String> {

@@ -1202,6 +1202,7 @@ public enum DiagnosticsExport {
         selectedMonth: Date,
         calendar: Calendar = .current,
         forceReenrichResults: [String: ParityForceReenrichResult] = [:],
+        monthlyRefreshResults: [String: MonthlyEvidenceRefreshResult] = [:],
         generatedAt: Date = Date()
     ) -> String {
         let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth)
@@ -1213,23 +1214,61 @@ public enum DiagnosticsExport {
             .sorted { $0.startDate < $1.startDate }
 
         let records = monthWorkouts.map { workout -> [String: Any] in
+            let refreshResult = monthlyRefreshResults[workout.id]
+            let forceResult = forceReenrichResults[workout.id]
             let packet = parityPacketObject(
                 workout: workout,
-                forceReenrichResult: forceReenrichResults[workout.id],
+                forceReenrichResult: forceResult,
                 generatedAt: generatedAt
             )
-            let classification = monthlyClassification(workout: workout, in: monthWorkouts, calendar: calendar)
-            return [
+            let classification = monthlyClassification(
+                workout: workout,
+                in: monthWorkouts,
+                calendar: calendar,
+                refreshResult: refreshResult
+            )
+            let summary = monthlyDiagnosticsSummary(
+                workout: workout,
+                classification: classification,
+                refreshResult: refreshResult,
+                forceReenrichResult: forceResult
+            )
+            var record: [String: Any] = [
                 "workoutID": workout.id,
                 "startDate": workout.startDate.ISO8601Format(),
+                "source": workout.sourceName,
+                "device": workout.deviceName ?? "Unavailable",
+                "refreshStatus": summary.refreshStatus,
+                "evidenceSource": summary.evidenceSource,
+                "freshQueryReturnedWorkout": summary.freshQueryReturnedWorkout,
+                "cacheWasPresent": summary.cacheWasPresent,
+                "evidenceCounts": packet["evidenceCounts"] ?? summary.evidenceCounts.jsonObject,
+                "workoutKitPlanStatus": summary.workoutKitPlanStatus,
+                "plannedStepCount": summary.plannedStepCount,
+                "hkWorkoutActivityCount": summary.hkWorkoutActivityCount,
+                "rawWorkoutEventCount": summary.rawWorkoutEventCount,
+                "reconstructedIntervalCount": summary.reconstructedIntervalCount,
+                "activityBoundaryCandidateSummary": packet["activityBoundaryCandidateSummary"] ?? [:],
+                "activityBoundaryCandidateIntervals": packet["activityBoundaryCandidateIntervals"] ?? [],
                 "classification": classification,
-                "diagnosticsSummary": monthlyDiagnosticsSummary(
-                    workout: workout,
-                    classification: classification
-                ).jsonObject,
+                "caveat": summary.caveat,
+                "diagnosticsSummary": summary.jsonObject,
                 "parityPacket": packet
             ]
+            if let refreshError = summary.refreshError {
+                record["refreshError"] = refreshError
+            }
+            if let evidenceLoadedAt = summary.evidenceLoadedAt {
+                record["evidenceLoadedAt"] = evidenceLoadedAt
+            }
+            return record
         }
+        let summary = monthlyExportSummary(
+            records: records,
+            selectedMonth: selectedMonth,
+            calendar: calendar,
+            generatedAt: generatedAt
+        )
 
         let payload: [String: Any] = [
             "exportVersion": 1,
@@ -1237,6 +1276,7 @@ public enum DiagnosticsExport {
             "selectedMonth": monthlyIdentifier(for: selectedMonth, calendar: calendar),
             "generatedAt": generatedAt.ISO8601Format(),
             "workoutCount": records.count,
+            "summary": summary,
             "productionIntervalBehaviorChanged": false,
             "normalWorkoutUIChanged": false,
             "boundaryLogicChanged": false,
@@ -1252,6 +1292,8 @@ public enum DiagnosticsExport {
         workouts: [CanonicalWorkout],
         selectedMonth: Date,
         calendar: Calendar = .current,
+        forceReenrichResults: [String: ParityForceReenrichResult] = [:],
+        monthlyRefreshResults: [String: MonthlyEvidenceRefreshResult] = [:],
         generatedAt: Date = Date()
     ) -> String {
         let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth)
@@ -1263,11 +1305,19 @@ public enum DiagnosticsExport {
             .sorted { $0.startDate < $1.startDate }
 
         let rows = monthWorkouts.map { workout -> String in
+            let refreshResult = monthlyRefreshResults[workout.id]
             let summary = monthlyDiagnosticsSummary(
                 workout: workout,
-                classification: monthlyClassification(workout: workout, in: monthWorkouts, calendar: calendar)
+                classification: monthlyClassification(
+                    workout: workout,
+                    in: monthWorkouts,
+                    calendar: calendar,
+                    refreshResult: refreshResult
+                ),
+                refreshResult: refreshResult,
+                forceReenrichResult: forceReenrichResults[workout.id]
             )
-            return "| \(markdownCell(workout.startDate.ISO8601Format())) | \(markdownCell(workout.id)) | \(markdownCell(summary.classification)) | \(summary.hasWorkoutKitPlan ? "Yes" : "No") | \(summary.hkWorkoutActivityCount) | \(summary.reconstructedIntervalCount) | \(summary.hasOpenExtraTail ? "Yes" : "No") | \(markdownCell(summary.caveat)) |"
+            return "| \(markdownCell(workout.startDate.ISO8601Format())) | \(markdownCell(workout.id)) | \(markdownCell(summary.refreshStatus)) | \(markdownCell(summary.evidenceSource)) | \(markdownCell(summary.classification)) | \(summary.hasWorkoutKitPlan ? "Yes" : "No") | \(summary.hkWorkoutActivityCount) | \(summary.reconstructedIntervalCount) | \(summary.hasOpenExtraTail ? "Yes" : "No") | \(markdownCell(summary.caveat)) |"
         }.joined(separator: "\n")
 
         return """
@@ -1277,9 +1327,9 @@ public enum DiagnosticsExport {
         Selected month: \(monthlyIdentifier(for: selectedMonth, calendar: calendar))
         Scope: debug/research-only. Production interval behavior, normal workout UI, and boundary logic are unchanged.
 
-        | Start | Workout ID | Classification | WorkoutKit plan | Activities | Reconstructed rows | Open / Extra tail | Caveat |
-        | --- | --- | --- | --- | ---: | ---: | --- | --- |
-        \(rows.isEmpty ? "| No workouts | n/a | empty month | No | 0 | 0 | No | No running workouts loaded for this month. |" : rows)
+        | Start | Workout ID | Refresh | Evidence source | Classification | WorkoutKit plan | Activities | Reconstructed rows | Open / Extra tail | Caveat |
+        | --- | --- | --- | --- | --- | --- | ---: | ---: | --- | --- |
+        \(rows.isEmpty ? "| No workouts | n/a | skipped | missing | empty month | No | 0 | 0 | No | No running workouts loaded for this month. |" : rows)
         """
     }
 
@@ -1334,9 +1384,13 @@ public enum DiagnosticsExport {
     private static func monthlyClassification(
         workout: CanonicalWorkout,
         in monthWorkouts: [CanonicalWorkout],
-        calendar: Calendar
+        calendar: Calendar,
+        refreshResult: MonthlyEvidenceRefreshResult? = nil
     ) -> String {
         guard let evidence = workout.evidence else {
+            if refreshResult != nil {
+                return "missing evidence after refresh"
+            }
             return "missing evidence"
         }
 
@@ -1352,6 +1406,9 @@ public enum DiagnosticsExport {
 
         let activities = evidence.activities
         if activities.isEmpty {
+            if refreshResult != nil {
+                return "no HKWorkoutActivity rows after refresh"
+            }
             return "no HKWorkoutActivity rows"
         }
 
@@ -1380,7 +1437,9 @@ public enum DiagnosticsExport {
 
     private static func monthlyDiagnosticsSummary(
         workout: CanonicalWorkout,
-        classification: String
+        classification: String,
+        refreshResult: MonthlyEvidenceRefreshResult? = nil,
+        forceReenrichResult: ParityForceReenrichResult? = nil
     ) -> MonthlyDiagnosticsSummary {
         let evidence = workout.evidence
         let reconstructed = evidence.flatMap {
@@ -1389,20 +1448,40 @@ public enum DiagnosticsExport {
         let labels = reconstructed?.intervals.map { $0.label.lowercased() } ?? []
         let plannedSteps = evidence?.workoutPlanAudit?.plannedSteps ?? []
         let hasOpenTail = labels.contains { $0.contains("open") || $0.contains("extra") }
+        let evidenceCounts = ParityEvidenceCounts(workout: workout)
+        let freshQueryReturnedWorkout = refreshResult?.freshQueryReturnedWorkout ?? forceReenrichResult?.freshQueryReturnedWorkout ?? false
+        let evidenceSource: String
+        if freshQueryReturnedWorkout {
+            evidenceSource = "freshQuery"
+        } else if evidence == nil {
+            evidenceSource = "missing"
+        } else {
+            evidenceSource = "cachedState"
+        }
 
         let caveat: String
         if evidence == nil {
-            caveat = "No loaded WorkoutEvidence is available for this workout."
+            caveat = refreshResult == nil
+                ? "No loaded WorkoutEvidence is available for this workout."
+                : "No loaded WorkoutEvidence is available after month refresh."
         } else if plannedSteps.isEmpty {
             caveat = "WorkoutKit planned steps are missing."
         } else if evidence?.activities.isEmpty != false {
-            caveat = "No HKWorkoutActivity rows are available."
+            caveat = refreshResult == nil
+                ? "No HKWorkoutActivity rows are available."
+                : "No HKWorkoutActivity rows are available after month refresh."
         } else {
             caveat = "Debug-only classification; compare with Apple Fitness/manual and FIT exports offline."
         }
 
         return MonthlyDiagnosticsSummary(
             classification: classification,
+            refreshStatus: refreshResult?.refreshStatus.rawValue ?? "skipped",
+            refreshError: refreshResult?.refreshError,
+            evidenceSource: evidenceSource,
+            freshQueryReturnedWorkout: freshQueryReturnedWorkout,
+            cacheWasPresent: refreshResult?.cacheWasPresent ?? forceReenrichResult?.cacheWasPresent ?? (evidence != nil),
+            evidenceCounts: evidenceCounts,
             sourceName: workout.sourceName,
             deviceName: workout.deviceName,
             startDate: workout.startDate.ISO8601Format(),
@@ -1417,11 +1496,45 @@ public enum DiagnosticsExport {
             reconstructedIntervalCount: reconstructed?.intervals.count ?? 0,
             hasOpenExtraTail: hasOpenTail,
             evidenceLoadedAt: evidence?.loadedAt.ISO8601Format(),
+            workoutKitPlanStatus: evidence?.workoutPlanAudit?.status.rawValue ?? "missing",
             caveat: caveat,
             productionIntervalBehaviorChanged: false,
             normalWorkoutUIChanged: false,
             boundaryLogicChanged: false
         )
+    }
+
+    private static func monthlyExportSummary(
+        records: [[String: Any]],
+        selectedMonth: Date,
+        calendar: Calendar,
+        generatedAt: Date
+    ) -> [String: Any] {
+        func count(_ key: String, _ value: String) -> Int {
+            records.filter { $0[key] as? String == value }.count
+        }
+
+        return [
+            "selectedMonth": monthlyIdentifier(for: selectedMonth, calendar: calendar),
+            "generatedAt": generatedAt.ISO8601Format(),
+            "totalWorkoutCount": records.count,
+            "refreshedCount": count("refreshStatus", MonthlyEvidenceRefreshStatus.success.rawValue),
+            "failedCount": count("refreshStatus", MonthlyEvidenceRefreshStatus.failed.rawValue),
+            "skippedCount": count("refreshStatus", MonthlyEvidenceRefreshStatus.skipped.rawValue),
+            "missingEvidenceCount": records.filter { ($0["evidenceSource"] as? String) == "missing" }.count,
+            "cachedStateCount": count("evidenceSource", "cachedState"),
+            "freshQueryCount": count("evidenceSource", "freshQuery"),
+            "simpleWorkOpenCandidateCount": count("classification", "simple fixed-distance Work + Open candidate"),
+            "structuredIntervalCount": count("classification", "structured interval workout"),
+            "warmupWorkCooldownSpecialCount": count("classification", "warmup/work/cooldown special"),
+            "noWorkoutKitPlanCount": count("classification", "no WorkoutKit plan"),
+            "noHKWorkoutActivityRowsCount": records.filter {
+                guard let classification = $0["classification"] as? String else { return false }
+                return classification == "no HKWorkoutActivity rows"
+                    || classification == "no HKWorkoutActivity rows after refresh"
+            }.count,
+            "duplicateSameDayExtraRunCandidateCount": count("classification", "duplicate/same-day extra run candidate")
+        ]
     }
 
     private static func markdownCell(_ value: String) -> String {
@@ -1485,6 +1598,23 @@ public struct ParityEvidenceCounts: Codable, Equatable, Sendable {
         routePoints = workout.routePointCount
         events = workout.intervalCount
     }
+
+    public var jsonObject: [String: Any] {
+        [
+            "heartRate": heartRate,
+            "speed": speed,
+            "distance": distance,
+            "activeEnergy": activeEnergy,
+            "power": power,
+            "cadence": cadence,
+            "stepCount": stepCount,
+            "strideLength": strideLength,
+            "verticalOscillation": verticalOscillation,
+            "groundContact": groundContact,
+            "routePoints": routePoints,
+            "events": events
+        ]
+    }
 }
 
 public struct ParityForceReenrichResult: Equatable, Sendable {
@@ -1524,6 +1654,56 @@ public struct ParityForceReenrichResult: Equatable, Sendable {
     }
 }
 
+public enum MonthlyEvidenceRefreshStatus: String, Codable, Equatable, Sendable {
+    case success
+    case failed
+    case skipped
+    case unsupported
+}
+
+public struct MonthlyEvidenceRefreshResult: Equatable, Sendable {
+    public var workoutID: String
+    public var requestedAt: Date
+    public var completedAt: Date?
+    public var refreshStatus: MonthlyEvidenceRefreshStatus
+    public var refreshError: String?
+    public var cacheWasPresent: Bool
+    public var invalidatedCache: Bool
+    public var freshQueryReturnedWorkout: Bool
+    public var authorizationState: AuthorizationState
+    public var evidenceCounts: ParityEvidenceCounts?
+    public var evidenceLoadedAt: Date?
+    public var diagnosticsWarnings: [String]
+
+    public init(
+        workoutID: String,
+        requestedAt: Date,
+        completedAt: Date? = nil,
+        refreshStatus: MonthlyEvidenceRefreshStatus,
+        refreshError: String? = nil,
+        cacheWasPresent: Bool,
+        invalidatedCache: Bool,
+        freshQueryReturnedWorkout: Bool,
+        authorizationState: AuthorizationState,
+        evidenceCounts: ParityEvidenceCounts? = nil,
+        evidenceLoadedAt: Date? = nil,
+        diagnosticsWarnings: [String] = []
+    ) {
+        self.workoutID = workoutID
+        self.requestedAt = requestedAt
+        self.completedAt = completedAt
+        self.refreshStatus = refreshStatus
+        self.refreshError = refreshError
+        self.cacheWasPresent = cacheWasPresent
+        self.invalidatedCache = invalidatedCache
+        self.freshQueryReturnedWorkout = freshQueryReturnedWorkout
+        self.authorizationState = authorizationState
+        self.evidenceCounts = evidenceCounts
+        self.evidenceLoadedAt = evidenceLoadedAt
+        self.diagnosticsWarnings = diagnosticsWarnings
+    }
+}
+
 private extension String {
     func withMarkdownTablePipes() -> String {
         "| \(self) |"
@@ -1532,6 +1712,12 @@ private extension String {
 
 private struct MonthlyDiagnosticsSummary {
     var classification: String
+    var refreshStatus: String
+    var refreshError: String?
+    var evidenceSource: String
+    var freshQueryReturnedWorkout: Bool
+    var cacheWasPresent: Bool
+    var evidenceCounts: ParityEvidenceCounts
     var sourceName: String
     var deviceName: String?
     var startDate: String
@@ -1546,6 +1732,7 @@ private struct MonthlyDiagnosticsSummary {
     var reconstructedIntervalCount: Int
     var hasOpenExtraTail: Bool
     var evidenceLoadedAt: String?
+    var workoutKitPlanStatus: String
     var caveat: String
     var productionIntervalBehaviorChanged: Bool
     var normalWorkoutUIChanged: Bool
@@ -1554,6 +1741,11 @@ private struct MonthlyDiagnosticsSummary {
     var jsonObject: [String: Any] {
         var object: [String: Any] = [
             "classification": classification,
+            "refreshStatus": refreshStatus,
+            "evidenceSource": evidenceSource,
+            "freshQueryReturnedWorkout": freshQueryReturnedWorkout,
+            "cacheWasPresent": cacheWasPresent,
+            "evidenceCounts": evidenceCounts.jsonObject,
             "sourceName": sourceName,
             "startDate": startDate,
             "endDate": endDate,
@@ -1564,6 +1756,7 @@ private struct MonthlyDiagnosticsSummary {
             "rawWorkoutEventCount": rawWorkoutEventCount,
             "reconstructedIntervalCount": reconstructedIntervalCount,
             "hasOpenExtraTail": hasOpenExtraTail,
+            "workoutKitPlanStatus": workoutKitPlanStatus,
             "caveat": caveat,
             "productionIntervalBehaviorChanged": productionIntervalBehaviorChanged,
             "normalWorkoutUIChanged": normalWorkoutUIChanged,
@@ -1580,6 +1773,9 @@ private struct MonthlyDiagnosticsSummary {
         }
         if let evidenceLoadedAt {
             object["evidenceLoadedAt"] = evidenceLoadedAt
+        }
+        if let refreshError {
+            object["refreshError"] = refreshError
         }
         return object
     }

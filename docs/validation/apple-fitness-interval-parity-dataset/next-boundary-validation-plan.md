@@ -6,7 +6,7 @@ Physical-device parity packet status: archived for April 28, May 26, June 1, Jun
 
 Next export status: regenerated packet-backed fixture exports are archived after the raw HKWorkoutEvent, HKWorkoutActivity boundary source, and activity-boundary candidate enhancements. Raw HealthKit Debug and parity packet JSON now include a diagnostics/export-only activity-boundary candidate beside current reconstructed intervals, and the latest physical-device pass confirms those fields are present on-device. The activity-boundary scorer has been run against the current fixture set; it improves drift cases but does not prove guard/special-fixture safety.
 
-Monthly export status: Raw HealthKit Debug now has a diagnostics-only monthly export for the selected workout's month. It emits one JSON bundle with per-workout diagnostics summaries and embedded parity-packet-style records, plus a compact markdown summary. Use it for research triage only; it does not change production interval reconstruction, normal workout UI, or boundary selection.
+Monthly export status: Raw HealthKit Debug now has a diagnostics-only monthly evidence refresh/export workflow for a selected month. Run `Refresh Month Evidence` first to invalidate each loaded workout's evidence cache for that month, rerun HealthKit sample/event/WorkoutKit plan/activity queries one workout at a time, and record per-workout refresh status before exporting the JSON bundle and compact markdown summary. Use it for research triage only; it does not change production interval reconstruction, normal workout UI, or boundary selection.
 
 ## Current Status
 
@@ -57,7 +57,7 @@ Collect more fixed-distance Work plus real Open tail examples and pass-case boun
 - Apple Fitness screenshots showing the Work and Open rows.
 - RunSignal Raw HealthKit Debug export with boundary diagnostics, raw event inventory, and HKWorkoutActivity inventory.
 - RunSignal parity packet JSON after force re-enrich, with raw event inventory, HKWorkoutActivity inventory, and planned-step boundary comparison fields.
-- If reviewing a full month, first save the monthly diagnostics JSON and markdown summary from Raw HealthKit Debug, then save individual workout exports only for the candidate fixtures selected from that bundle.
+- If reviewing a full month, first run `Refresh Month Evidence`, then save the monthly diagnostics JSON and markdown summary from Raw HealthKit Debug. Save individual workout exports only for the candidate fixtures selected from that refreshed bundle.
 - A planned Work goal that is distance-based.
 - The Work goal completed.
 - Brief continued running before stopping the workout.
@@ -74,7 +74,7 @@ Ideal examples:
 
 April 28 evidence and the May 26 through June 12 parity packets have been regenerated and saved with HKWorkoutActivity inventory plus `activityBoundaryCandidateSummary` and `activityBoundaryCandidateIntervals`. Use the complete packet-backed fixture set and current scorecards for research, not for immediate production boundary changes.
 
-Next physical-device batch: export February 2026, March 2026, April 2026, May 2026, and June 2026 monthly diagnostics bundles. Use the monthly classifications to identify simple fixed-distance Work + Open candidates, guard/pass candidates, drift candidates, structured interval workouts, warmup/work/cooldown special cases, no-plan workouts, missing activity rows, and same-day extra runs.
+Next physical-device batch: refresh evidence and export February 2026, March 2026, April 2026, May 2026, and June 2026 monthly diagnostics bundles. Use the monthly refresh statuses, evidence-source counts, and classifications to identify simple fixed-distance Work + Open candidates, guard/pass candidates, drift candidates, structured interval workouts, warmup/work/cooldown special cases, no-plan workouts, missing evidence after refresh, missing activity rows after refresh, and same-day extra runs.
 
 After 5-10 new simple Work + Open examples, rerun the scorer. If no public-API separator emerges, keep the current public reconstruction and document Apple Fitness exact-boundary matching as a limitation for this phase.
 

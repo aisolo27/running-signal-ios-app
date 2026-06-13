@@ -2182,6 +2182,76 @@ import Testing
     #expect(secondSummary["hasWorkoutKitPlan"] as? Bool == false)
 }
 
+@Test func monthlyDiagnosticsExportIncludesRefreshSummaryAndPerWorkoutStatus() throws {
+    let calendar = fixedCalendar()
+    let month = calendar.date(from: DateComponents(year: 2026, month: 6, day: 1))!
+    let successStart = calendar.date(from: DateComponents(year: 2026, month: 6, day: 4, hour: 7))!
+    let failedStart = calendar.date(from: DateComponents(year: 2026, month: 6, day: 5, hour: 7))!
+
+    var refreshed = testWorkout(id: "refreshed", start: successStart, distanceMeters: 5_000, durationSeconds: 1_700)
+    refreshed.evidence = monthlyEvidence(
+        workout: refreshed,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Work 1", stepType: .work, plannedGoalType: .distance, plannedGoalValue: 5_000, plannedGoalDisplayText: "5 km")
+        ],
+        activityEndOffset: 1_700,
+        activityDistanceMeters: 5_000,
+        distancePoints: [(0, 0), (1_700, 5_000)]
+    )
+    let failed = testWorkout(id: "failed", start: failedStart, distanceMeters: 4_000, durationSeconds: 1_500)
+
+    let object = try monthlyDiagnosticsObject(
+        DiagnosticsExport.monthlyDiagnosticsJSON(
+            workouts: [failed, refreshed],
+            selectedMonth: month,
+            calendar: calendar,
+            monthlyRefreshResults: [
+                refreshed.id: MonthlyEvidenceRefreshResult(
+                    workoutID: refreshed.id,
+                    requestedAt: month,
+                    completedAt: month.addingTimeInterval(1),
+                    refreshStatus: .success,
+                    cacheWasPresent: true,
+                    invalidatedCache: true,
+                    freshQueryReturnedWorkout: true,
+                    authorizationState: .authorized,
+                    evidenceCounts: ParityEvidenceCounts(workout: refreshed),
+                    evidenceLoadedAt: refreshed.evidence?.loadedAt
+                ),
+                failed.id: MonthlyEvidenceRefreshResult(
+                    workoutID: failed.id,
+                    requestedAt: month,
+                    completedAt: month.addingTimeInterval(2),
+                    refreshStatus: .failed,
+                    refreshError: "No matching HealthKit running workouts were found for enrichment.",
+                    cacheWasPresent: false,
+                    invalidatedCache: true,
+                    freshQueryReturnedWorkout: false,
+                    authorizationState: .partial
+                )
+            ],
+            generatedAt: month
+        )
+    )
+    let summary = try #require(object["summary"] as? [String: Any])
+    let records = try #require(object["records"] as? [[String: Any]])
+
+    #expect(summary["totalWorkoutCount"] as? Int == 2)
+    #expect(summary["refreshedCount"] as? Int == 1)
+    #expect(summary["failedCount"] as? Int == 1)
+    #expect(summary["freshQueryCount"] as? Int == 1)
+    #expect(summary["missingEvidenceCount"] as? Int == 1)
+
+    #expect(records[0]["refreshStatus"] as? String == "success")
+    #expect(records[0]["evidenceSource"] as? String == "freshQuery")
+    #expect(records[0]["freshQueryReturnedWorkout"] as? Bool == true)
+    #expect(records[0]["cacheWasPresent"] as? Bool == true)
+
+    #expect(records[1]["refreshStatus"] as? String == "failed")
+    #expect(records[1]["classification"] as? String == "missing evidence after refresh")
+    #expect(records[1]["refreshError"] as? String == "No matching HealthKit running workouts were found for enrichment.")
+}
+
 @Test func monthlyDiagnosticsExportHandlesEmptyMonth() throws {
     let calendar = fixedCalendar()
     let month = calendar.date(from: DateComponents(year: 2026, month: 2, day: 1))!
@@ -2198,6 +2268,95 @@ import Testing
     #expect(object["selectedMonth"] as? String == "2026-02")
     #expect(object["workoutCount"] as? Int == 0)
     #expect(records.isEmpty)
+}
+
+@Test func monthlyDiagnosticsExportClassifiesNoPlanWithGoodHealthKitEvidenceAfterRefresh() throws {
+    let calendar = fixedCalendar()
+    let month = calendar.date(from: DateComponents(year: 2026, month: 6, day: 1))!
+    let start = calendar.date(from: DateComponents(year: 2026, month: 6, day: 6, hour: 7))!
+
+    var workout = testWorkout(id: "good-no-plan", start: start, distanceMeters: 3_000, durationSeconds: 1_100)
+    workout.evidence = monthlyEvidence(
+        workout: workout,
+        plannedSteps: [],
+        activityEndOffset: 1_100,
+        activityDistanceMeters: 3_000,
+        distancePoints: [(0, 0), (1_100, 3_000)]
+    )
+
+    let object = try monthlyDiagnosticsObject(
+        DiagnosticsExport.monthlyDiagnosticsJSON(
+            workouts: [workout],
+            selectedMonth: month,
+            calendar: calendar,
+            monthlyRefreshResults: [
+                workout.id: MonthlyEvidenceRefreshResult(
+                    workoutID: workout.id,
+                    requestedAt: month,
+                    completedAt: month,
+                    refreshStatus: .success,
+                    cacheWasPresent: false,
+                    invalidatedCache: true,
+                    freshQueryReturnedWorkout: true,
+                    authorizationState: .authorized
+                )
+            ],
+            generatedAt: month
+        )
+    )
+    let records = try #require(object["records"] as? [[String: Any]])
+
+    #expect(records[0]["classification"] as? String == "no WorkoutKit plan")
+    #expect(records[0]["evidenceSource"] as? String == "freshQuery")
+    #expect(records[0]["workoutKitPlanStatus"] as? String == "unavailable")
+}
+
+@Test func monthlyDiagnosticsExportClassifiesMissingActivitiesAfterRefresh() throws {
+    let calendar = fixedCalendar()
+    let month = calendar.date(from: DateComponents(year: 2026, month: 6, day: 1))!
+    let start = calendar.date(from: DateComponents(year: 2026, month: 6, day: 7, hour: 7))!
+
+    var workout = testWorkout(id: "no-activities", start: start, distanceMeters: 5_000, durationSeconds: 1_800)
+    workout.evidence = monthlyEvidence(
+        workout: workout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Work 1", stepType: .work, plannedGoalType: .distance, plannedGoalValue: 5_000, plannedGoalDisplayText: "5 km")
+        ],
+        activityEndOffset: 1_800,
+        activityDistanceMeters: 5_000,
+        distancePoints: [(0, 0), (1_800, 5_000)],
+        includeActivity: false
+    )
+
+    let object = try monthlyDiagnosticsObject(
+        DiagnosticsExport.monthlyDiagnosticsJSON(
+            workouts: [workout],
+            selectedMonth: month,
+            calendar: calendar,
+            monthlyRefreshResults: [
+                workout.id: MonthlyEvidenceRefreshResult(
+                    workoutID: workout.id,
+                    requestedAt: month,
+                    completedAt: month,
+                    refreshStatus: .success,
+                    cacheWasPresent: true,
+                    invalidatedCache: true,
+                    freshQueryReturnedWorkout: true,
+                    authorizationState: .authorized
+                )
+            ],
+            generatedAt: month
+        )
+    )
+    let summary = try #require(object["summary"] as? [String: Any])
+    let records = try #require(object["records"] as? [[String: Any]])
+
+    #expect(records[0]["classification"] as? String == "no HKWorkoutActivity rows after refresh")
+    #expect(summary["noHKWorkoutActivityRowsCount"] as? Int == 1)
+    #expect(records[0]["productionIntervalBehaviorChanged"] == nil)
+    #expect(object["productionIntervalBehaviorChanged"] as? Bool == false)
+    #expect(object["normalWorkoutUIChanged"] as? Bool == false)
+    #expect(object["usesFITRuntimeTruth"] as? Bool == false)
 }
 
 @Test func monthlyDiagnosticsExportClassifiesStructuredAndSameDayExtraRuns() throws {
@@ -2283,7 +2442,8 @@ private func monthlyEvidence(
     plannedSteps: [PlannedWorkoutStep],
     activityEndOffset: TimeInterval,
     activityDistanceMeters: Double,
-    distancePoints: [(TimeInterval, Double)]
+    distancePoints: [(TimeInterval, Double)],
+    includeActivity: Bool = true
 ) -> WorkoutEvidence {
     WorkoutEvidence(
         workoutID: workout.id,
@@ -2301,7 +2461,7 @@ private func monthlyEvidence(
             )
         ],
         events: [],
-        activities: [
+        activities: includeActivity ? [
             WorkoutEvidenceActivity(
                 id: "\(workout.id)-activity",
                 activityType: "HKWorkoutActivityTypeRunning",
@@ -2323,7 +2483,7 @@ private func monthlyEvidence(
                     )
                 ]
             )
-        ],
+        ] : [],
         workoutPlanAudit: WorkoutPlanAudit(
             status: plannedSteps.isEmpty ? .unavailable : .available,
             planType: plannedSteps.isEmpty ? nil : "Custom workout",

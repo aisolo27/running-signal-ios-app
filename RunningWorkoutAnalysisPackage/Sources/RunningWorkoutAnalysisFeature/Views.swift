@@ -1532,6 +1532,8 @@ struct SplitsAndEventsPanel: View {
 struct RawHealthKitWorkoutDebugView: View {
     var store: RunningAnalysisStore
     let workout: CanonicalWorkout
+    @State private var selectedDiagnosticsMonth = Date()
+    @State private var showingMonthlyExportSheet = false
 
     var body: some View {
         let workout = currentWorkout
@@ -1569,14 +1571,45 @@ struct RawHealthKitWorkoutDebugView: View {
                 }
                 .buttonStyle(.bordered)
 
+                SectionHeader("Monthly Diagnostics")
+                DatePicker(
+                    "Select month",
+                    selection: $selectedDiagnosticsMonth,
+                    displayedComponents: [.date]
+                )
+                .datePickerStyle(.compact)
+
+                Button {
+                    Task {
+                        await store.refreshEvidenceForMonth(containing: selectedDiagnosticsMonth)
+                    }
+                } label: {
+                    Label("Refresh Month Evidence", systemImage: "arrow.triangle.2.circlepath")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(store.isEnrichingAudit)
+
+                Button {
+                    Task {
+                        await store.refreshEvidenceForMonth(containing: selectedDiagnosticsMonth)
+                        showingMonthlyExportSheet = true
+                    }
+                } label: {
+                    Label("Refresh + Export Month", systemImage: "square.and.arrow.up.on.square")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .disabled(store.isEnrichingAudit)
+
                 ShareLink(item: monthlyDiagnosticsJSON) {
-                    Label("Share monthly diagnostics JSON", systemImage: "calendar.badge.clock")
+                    Label("Export Monthly Diagnostics JSON", systemImage: "calendar.badge.clock")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
 
                 ShareLink(item: monthlyDiagnosticsMarkdown) {
-                    Label("Share monthly diagnostics summary", systemImage: "calendar")
+                    Label("Export Monthly Diagnostics Summary", systemImage: "calendar")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -1676,6 +1709,37 @@ struct RawHealthKitWorkoutDebugView: View {
             .padding()
         }
         .navigationTitle("Debug")
+        .onAppear {
+            selectedDiagnosticsMonth = currentWorkout.startDate
+        }
+        .sheet(isPresented: $showingMonthlyExportSheet) {
+            NavigationStack {
+                VStack(alignment: .leading, spacing: 14) {
+                    HeaderBlock(title: "Export Monthly Diagnostics", subtitle: "Share the refreshed month bundle.")
+                    ShareLink(item: monthlyDiagnosticsJSON) {
+                        Label("Export Monthly Diagnostics JSON", systemImage: "calendar.badge.clock")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    ShareLink(item: monthlyDiagnosticsMarkdown) {
+                        Label("Export Monthly Diagnostics Summary", systemImage: "calendar")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    Spacer()
+                }
+                .padding()
+                .navigationTitle("Monthly Export")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done") {
+                            showingMonthlyExportSheet = false
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.medium])
+        }
     }
 
     private var derivedIntervalCandidates: [DerivedWorkoutInterval] {
@@ -1697,11 +1761,11 @@ struct RawHealthKitWorkoutDebugView: View {
     }
 
     private var monthlyDiagnosticsJSON: String {
-        store.monthlyDiagnosticsJSON(containing: currentWorkout)
+        store.monthlyDiagnosticsJSON(selectedMonth: selectedDiagnosticsMonth)
     }
 
     private var monthlyDiagnosticsMarkdown: String {
-        store.monthlyDiagnosticsMarkdown(containing: currentWorkout)
+        store.monthlyDiagnosticsMarkdown(selectedMonth: selectedDiagnosticsMonth)
     }
 
     private var currentWorkout: CanonicalWorkout {
