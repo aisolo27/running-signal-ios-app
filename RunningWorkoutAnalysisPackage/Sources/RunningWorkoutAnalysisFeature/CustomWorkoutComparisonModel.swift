@@ -123,7 +123,7 @@ enum DebugCustomWorkoutComparisonBuilder {
             && activityRows.allSatisfy { $0.endOffsetSeconds != nil }
             && sortedActivities.allSatisfy { activityDistanceMeters($0) != nil }
             && activityRowsAreContiguous(sortedActivities)
-        let hasRepeatBlock = sortedSteps.contains { $0.repeatBlockIndex != nil }
+        let hasRepeatBlock = sortedSteps.contains { ($0.repeatIndex ?? 1) > 1 }
         let repeatBlockIsScoreable = !hasRepeatBlock || repeatBlockRuleApproved
         let rowsAreScoreable = hasCoreRowEvidence
             && !tailAmbiguity.needsOpenTailRule
