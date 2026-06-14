@@ -63,6 +63,7 @@ Use this as a selective lookup, not required full-context reading. Read the inde
 - Rule: docs-only FIT decoders should map `workout_step` to FIT global message `27`; global message `26` is `workout`. A wrong mapping can parse placeholder step rows and falsely classify repeat-block evidence.
 - Rule: Gate B row-level FIT timing must keep elapsed time and timer time visible. Large custom-workout errors can be pause/timer artifacts even when labels and distances look good, so do not approve repeat-block or warmup/work/cooldown subclasses from a single derived duration.
 - Rule: WorkoutKit can represent a one-step Work section as `Block 1: 1x, 1 step(s)`. Treat that as a single Work step, not a repeat-block blocker; only expanded repeat iterations such as `repeatIndex > 1` should trigger `repeat-block-needs-rule`.
+- Rule: clean fixed-cooldown Open / Extra tail support does not approve recovery-containing tails, repeat-block tails, simple Work/Open promotion, or broad `HKWorkoutActivity` promotion. Keep those behind separate Gate B decisions.
 
 ## Milestones And Docs
 

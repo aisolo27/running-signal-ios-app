@@ -1533,7 +1533,7 @@ struct SplitsAndEventsPanel: View {
 
     private var normalDetailCustomWorkoutIntervals: WorkoutIntervalReconstructionResult? {
         guard let evidence = workout.evidence else { return nil }
-        return CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkOpenCooldown(
+        return CustomWorkoutNormalDetailGate.supportedIntervals(
             workout: workout,
             evidence: evidence
         )

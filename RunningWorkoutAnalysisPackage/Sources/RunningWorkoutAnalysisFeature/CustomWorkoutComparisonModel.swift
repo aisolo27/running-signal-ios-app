@@ -103,7 +103,8 @@ enum DebugCustomWorkoutComparisonBuilder {
         activities: [WorkoutEvidenceActivity],
         workout: CanonicalWorkout,
         hasRowLevelEvidence: Bool = true,
-        repeatBlockRuleApproved: Bool = false
+        repeatBlockRuleApproved: Bool = false,
+        openTailRuleApproved: Bool = false
     ) -> DebugCustomWorkoutComparison {
         let sortedSteps = plannedSteps.sorted { $0.index < $1.index }
         let sortedActivities = activities.sorted { $0.startDate < $1.startDate }
@@ -126,7 +127,7 @@ enum DebugCustomWorkoutComparisonBuilder {
         let hasRepeatBlock = sortedSteps.contains { ($0.repeatIndex ?? 1) > 1 }
         let repeatBlockIsScoreable = !hasRepeatBlock || repeatBlockRuleApproved
         let rowsAreScoreable = hasCoreRowEvidence
-            && !tailAmbiguity.needsOpenTailRule
+            && (!tailAmbiguity.needsOpenTailRule || openTailRuleApproved)
             && repeatBlockIsScoreable
 
         return comparison(
@@ -139,6 +140,7 @@ enum DebugCustomWorkoutComparisonBuilder {
             labelsAreAmbiguous: sortedSteps.contains { $0.stepType == .unknown },
             tailAmbiguity: tailAmbiguity,
             repeatBlockRuleApproved: repeatBlockRuleApproved,
+            openTailRuleApproved: openTailRuleApproved,
             repeatBlockNeedsRule: hasRepeatBlock
         )
     }
@@ -154,6 +156,7 @@ enum DebugCustomWorkoutComparisonBuilder {
         labelsAreAmbiguous: Bool = false,
         tailAmbiguity: CustomWorkoutTailAmbiguity = .none,
         repeatBlockRuleApproved: Bool = false,
+        openTailRuleApproved: Bool = false,
         repeatBlockNeedsRule: Bool? = nil
     ) -> DebugCustomWorkoutComparison {
         let plannedRows = plan?.expandedSteps ?? []
@@ -164,7 +167,8 @@ enum DebugCustomWorkoutComparisonBuilder {
             hasRowLevelEvidence: hasRowLevelEvidence,
             activityRowsAreContiguous: activityRowsAreContiguous,
             labelsAreAmbiguous: labelsAreAmbiguous,
-            tailAmbiguity: tailAmbiguity
+            tailAmbiguity: tailAmbiguity,
+            openTailRuleApproved: openTailRuleApproved
         )
         let status = status(
             plan: plan,
@@ -175,6 +179,7 @@ enum DebugCustomWorkoutComparisonBuilder {
             rowsAreDebugEquivalent: rowsAreDebugEquivalent,
             tailAmbiguity: tailAmbiguity,
             repeatBlockRuleApproved: repeatBlockRuleApproved,
+            openTailRuleApproved: openTailRuleApproved,
             repeatBlockNeedsRule: repeatBlockNeedsRule ?? (plan?.blocks.contains(where: { $0.iterationCount > 1 }) == true)
         )
 
@@ -199,7 +204,8 @@ enum DebugCustomWorkoutComparisonBuilder {
         hasRowLevelEvidence: Bool,
         activityRowsAreContiguous: Bool,
         labelsAreAmbiguous: Bool,
-        tailAmbiguity: CustomWorkoutTailAmbiguity
+        tailAmbiguity: CustomWorkoutTailAmbiguity,
+        openTailRuleApproved: Bool
     ) -> [CustomWorkoutFallbackReason] {
         var reasons: [CustomWorkoutFallbackReason] = []
 
@@ -224,7 +230,7 @@ enum DebugCustomWorkoutComparisonBuilder {
         if labelsAreAmbiguous {
             reasons.append(.labelMappingAmbiguous)
         }
-        if tailAmbiguity.needsOpenTailRule {
+        if tailAmbiguity.needsOpenTailRule && !openTailRuleApproved {
             reasons.append(.openExtraTailAmbiguous)
         }
         if !plannedRows.isEmpty,
@@ -245,6 +251,7 @@ enum DebugCustomWorkoutComparisonBuilder {
         rowsAreDebugEquivalent: Bool,
         tailAmbiguity: CustomWorkoutTailAmbiguity,
         repeatBlockRuleApproved: Bool,
+        openTailRuleApproved: Bool,
         repeatBlockNeedsRule: Bool
     ) -> CustomWorkoutComparisonStatus {
         if fallbackReasons.contains(.missingPlannedSteps)
@@ -260,7 +267,7 @@ enum DebugCustomWorkoutComparisonBuilder {
         if fallbackReasons.contains(.labelMappingAmbiguous) {
             return .labelMappingNeedsRule
         }
-        if tailAmbiguity.needsOpenTailRule {
+        if tailAmbiguity.needsOpenTailRule && !openTailRuleApproved {
             return .openTailNeedsRule
         }
         if repeatBlockNeedsRule {

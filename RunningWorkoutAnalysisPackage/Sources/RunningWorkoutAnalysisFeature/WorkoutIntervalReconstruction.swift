@@ -621,6 +621,14 @@ public enum WorkoutIntervalReconstructionEngine {
 }
 
 public enum CustomWorkoutNormalDetailGate {
+    public static func supportedIntervals(
+        workout: CanonicalWorkout,
+        evidence: WorkoutEvidence
+    ) -> WorkoutIntervalReconstructionResult? {
+        supportedNarrowWarmupWorkOpenCooldown(workout: workout, evidence: evidence)
+            ?? supportedNarrowWarmupWorkFixedCooldownOpenTail(workout: workout, evidence: evidence)
+    }
+
     public static func supportedNarrowWarmupWorkOpenCooldown(
         workout: CanonicalWorkout,
         evidence: WorkoutEvidence
@@ -645,6 +653,33 @@ public enum CustomWorkoutNormalDetailGate {
         return result
     }
 
+    public static func supportedNarrowWarmupWorkFixedCooldownOpenTail(
+        workout: CanonicalWorkout,
+        evidence: WorkoutEvidence
+    ) -> WorkoutIntervalReconstructionResult? {
+        guard let audit = evidence.workoutPlanAudit else { return nil }
+        let plannedSteps = audit.plannedSteps.sorted { $0.index < $1.index }
+        let activities = evidence.activities.sorted { $0.startDate < $1.startDate }
+        let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+            plannedSteps: plannedSteps,
+            activities: activities,
+            workout: workout,
+            openTailRuleApproved: true
+        )
+
+        guard comparison.status == .supported,
+              comparison.tailAmbiguity == .fixedCooldownFollowedByPossibleOpenExtraTail,
+              isNarrowWarmupWorkFixedCooldownOpenTail(plannedSteps),
+              let result = WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: evidence),
+              result.intervals.count == 4,
+              result.intervals.map(\.stepType) == [.warmup, .work, .cooldown, .open],
+              result.intervals.last?.tailDiagnostics != nil else {
+            return nil
+        }
+
+        return result
+    }
+
     private static func isNarrowWarmupWorkOpenCooldown(_ plannedSteps: [PlannedWorkoutStep]) -> Bool {
         guard plannedSteps.count == 3 else { return false }
         let warmup = plannedSteps[0]
@@ -658,5 +693,21 @@ public enum CustomWorkoutNormalDetailGate {
             && (work.repeatIndex ?? 1) == 1
             && cooldown.stepType == .cooldown
             && cooldown.plannedGoalType == .open
+    }
+
+    private static func isNarrowWarmupWorkFixedCooldownOpenTail(_ plannedSteps: [PlannedWorkoutStep]) -> Bool {
+        guard plannedSteps.count == 3 else { return false }
+        let warmup = plannedSteps[0]
+        let work = plannedSteps[1]
+        let cooldown = plannedSteps[2]
+
+        return warmup.stepType == .warmup
+            && warmup.plannedGoalType == .distance
+            && abs((warmup.plannedGoalValue ?? 0) - 2_000) <= 1
+            && work.stepType == .work
+            && (work.repeatIndex ?? 1) == 1
+            && (work.plannedGoalType == .time || work.plannedGoalType == .distance)
+            && cooldown.stepType == .cooldown
+            && (cooldown.plannedGoalType == .time || cooldown.plannedGoalType == .distance)
     }
 }

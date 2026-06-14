@@ -342,6 +342,57 @@ import Testing
     expectDebugOnly(comparison)
 }
 
+@Test func debugCustomWorkoutComparisonBridgeSupportsOpenTailOnlyAfterRuleApproval() {
+    let start = Date(timeIntervalSince1970: 1_797_000_000)
+    let workout = bridgeWorkout(start: start, distanceMeters: 4_500, durationSeconds: 1_800)
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plannedSteps: [
+            plannedStep(index: 1, label: "Warmup", stepType: .warmup, goalType: .distance, goalValue: 2_000),
+            plannedStep(index: 2, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, goalType: .distance, goalValue: 1_000),
+            plannedStep(index: 3, label: "Cooldown", stepType: .cooldown, goalType: .distance, goalValue: 1_000)
+        ],
+        activities: [
+            evidenceActivity(index: 1, start: start, end: start.addingTimeInterval(800), distance: 2_000),
+            evidenceActivity(index: 2, start: start.addingTimeInterval(800), end: start.addingTimeInterval(1_100), distance: 1_000),
+            evidenceActivity(index: 3, start: start.addingTimeInterval(1_100), end: start.addingTimeInterval(1_600), distance: 1_000)
+        ],
+        workout: workout,
+        openTailRuleApproved: true
+    )
+
+    #expect(comparison.status == .supported)
+    #expect(comparison.fallbackReasons.isEmpty)
+    #expect(comparison.tailAmbiguity == .fixedCooldownFollowedByPossibleOpenExtraTail)
+    #expect(comparison.rows.allSatisfy { $0.confidence == .supported })
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonBridgeStillBlocksRepeatOpenTailWithoutRepeatRuleApproval() {
+    let start = Date(timeIntervalSince1970: 1_797_000_000)
+    let workout = bridgeWorkout(start: start, distanceMeters: 1_100, durationSeconds: 420)
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plannedSteps: [
+            plannedStep(index: 1, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, goalType: .distance, goalValue: 400),
+            plannedStep(index: 2, label: "Recovery 1", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 1, goalType: .time, goalValue: 60),
+            plannedStep(index: 3, label: "Work 2", stepType: .work, repeatBlockIndex: 1, repeatIndex: 2, goalType: .distance, goalValue: 400),
+            plannedStep(index: 4, label: "Cooldown", stepType: .cooldown, goalType: .distance, goalValue: 100)
+        ],
+        activities: [
+            evidenceActivity(index: 1, start: start, end: start.addingTimeInterval(120), distance: 400),
+            evidenceActivity(index: 2, start: start.addingTimeInterval(120), end: start.addingTimeInterval(180), distance: 100),
+            evidenceActivity(index: 3, start: start.addingTimeInterval(180), end: start.addingTimeInterval(300), distance: 400),
+            evidenceActivity(index: 4, start: start.addingTimeInterval(300), end: start.addingTimeInterval(360), distance: 100)
+        ],
+        workout: workout,
+        openTailRuleApproved: true
+    )
+
+    #expect(comparison.status == .repeatBlockNeedsRule)
+    #expect(comparison.tailAmbiguity == .fixedCooldownFollowedByPossibleOpenExtraTail)
+    #expect(comparison.rows.allSatisfy { $0.confidence == .needsRule })
+    expectDebugOnly(comparison)
+}
+
 private func singleWorkPlan() -> CustomWorkoutStepModel {
     CustomWorkoutStepModel(
         blocks: [

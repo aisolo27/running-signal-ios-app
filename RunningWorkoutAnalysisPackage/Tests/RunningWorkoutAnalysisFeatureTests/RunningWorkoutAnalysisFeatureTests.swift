@@ -1778,6 +1778,37 @@ import Testing
     #expect(result.intervals.map(\.label).contains("Open / Extra") == false)
 }
 
+@Test func normalDetailGateSupportsNarrowFixedCooldownOpenTail() throws {
+    let start = Date(timeIntervalSince1970: 10_655)
+    let workout = testWorkout(id: "normal-detail-fixed-cooldown-tail", start: start, distanceMeters: 4_500, durationSeconds: 1_800)
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km"),
+            PlannedWorkoutStep(index: 3, label: "Cooldown", stepType: .cooldown, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km")
+        ],
+        activityWindows: [
+            (0, 800, 2_000),
+            (800, 1_100, 1_000),
+            (1_100, 1_600, 1_000)
+        ],
+        distancePoints: [
+            (800, 2_000),
+            (1_100, 1_000),
+            (1_600, 1_000),
+            (1_800, 500)
+        ]
+    )
+
+    let result = try #require(CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkFixedCooldownOpenTail(workout: workout, evidence: evidence))
+
+    #expect(result.intervals.map(\.label) == ["Warmup", "Work 1", "Cooldown", "Open / Extra"])
+    #expect(result.intervals.map(\.stepType) == [.warmup, .work, .cooldown, .open])
+    #expect(result.intervals.last?.tailDiagnostics?.remainingSeconds == 200)
+    #expect(result.intervals.last?.actualDistanceMeters == 500)
+}
+
 @Test func normalDetailGateBlocksRepeatAndOpenTailCases() {
     let start = Date(timeIntervalSince1970: 10_656)
     let repeatWorkout = testWorkout(id: "normal-detail-repeat", start: start, distanceMeters: 3_000, durationSeconds: 1_200)
@@ -1819,8 +1850,34 @@ import Testing
         ]
     )
 
+    let repeatTailWorkout = testWorkout(id: "normal-detail-repeat-tail", start: start, distanceMeters: 1_100, durationSeconds: 420)
+    let repeatTailEvidence = normalDetailGateEvidence(
+        workout: repeatTailWorkout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .distance, plannedGoalValue: 400, plannedGoalDisplayText: "400 m"),
+            PlannedWorkoutStep(index: 2, label: "Recovery 1", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .time, plannedGoalValue: 60, plannedGoalDisplayText: "60 s"),
+            PlannedWorkoutStep(index: 3, label: "Work 2", stepType: .work, repeatBlockIndex: 1, repeatIndex: 2, plannedGoalType: .distance, plannedGoalValue: 400, plannedGoalDisplayText: "400 m"),
+            PlannedWorkoutStep(index: 4, label: "Cooldown", stepType: .cooldown, plannedGoalType: .distance, plannedGoalValue: 100, plannedGoalDisplayText: "100 m")
+        ],
+        activityWindows: [
+            (0, 120, 400),
+            (120, 180, 100),
+            (180, 300, 400),
+            (300, 360, 100)
+        ],
+        distancePoints: [
+            (120, 400),
+            (180, 100),
+            (300, 400),
+            (360, 100),
+            (420, 100)
+        ]
+    )
+
     #expect(CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkOpenCooldown(workout: repeatWorkout, evidence: repeatEvidence) == nil)
     #expect(CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkOpenCooldown(workout: tailWorkout, evidence: tailEvidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: tailWorkout, evidence: tailEvidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: repeatTailWorkout, evidence: repeatTailEvidence) == nil)
 }
 
 @Test func finalFixedDistanceCooldownStillCreatesOpenExtraForContinuedRunning() throws {
