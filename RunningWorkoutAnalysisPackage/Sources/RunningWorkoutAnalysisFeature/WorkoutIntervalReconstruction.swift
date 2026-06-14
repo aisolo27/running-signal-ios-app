@@ -648,7 +648,9 @@ public enum CustomWorkoutNormalDetailGate {
               isNarrowWarmupWorkOpenCooldown(plannedSteps),
               let result = WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: evidence),
               result.intervals.count == 3,
-              result.intervals.map(\.stepType) == [.warmup, .work, .cooldown] else {
+              result.intervals.map(\.stepType) == [.warmup, .work, .cooldown],
+              hasNoPairedPausesWhenTimeGoalsArePromoted(plannedSteps: plannedSteps, evidence: evidence),
+              activityRowsMatchReconstructedRows(result: result, activities: activities, workout: workout) else {
             return nil
         }
 
@@ -680,7 +682,8 @@ public enum CustomWorkoutNormalDetailGate {
               result.intervals.dropLast().last?.stepType == .cooldown,
               result.intervals.last?.stepType == .open,
               result.intervals.last?.tailDiagnostics != nil,
-              result.intervals.map(\.stepType).dropFirst().dropLast(2).allSatisfy({ $0 == .work || $0 == .recovery }) else {
+              result.intervals.map(\.stepType).dropFirst().dropLast(2).allSatisfy({ $0 == .work || $0 == .recovery }),
+              activityRowsMatchReconstructedRows(result: result, activities: activities, workout: workout) else {
             return nil
         }
 
@@ -707,7 +710,9 @@ public enum CustomWorkoutNormalDetailGate {
               let result = WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: evidence),
               result.intervals.count == 4,
               result.intervals.map(\.stepType) == [.warmup, .work, .cooldown, .open],
-              result.intervals.last?.tailDiagnostics != nil else {
+              result.intervals.last?.tailDiagnostics != nil,
+              hasNoPairedPausesWhenTimeGoalsArePromoted(plannedSteps: plannedSteps, evidence: evidence),
+              activityRowsMatchReconstructedRows(result: result, activities: activities, workout: workout) else {
             return nil
         }
 
@@ -737,7 +742,8 @@ public enum CustomWorkoutNormalDetailGate {
               result.intervals.first?.stepType == .warmup,
               result.intervals.last?.stepType == .cooldown,
               result.intervals.map(\.stepType).dropFirst().dropLast().allSatisfy({ $0 == .work || $0 == .recovery }),
-              result.intervals.map(\.label).contains("Open / Extra") == false else {
+              result.intervals.map(\.label).contains("Open / Extra") == false,
+              activityRowsMatchReconstructedRows(result: result, activities: activities, workout: workout) else {
             return nil
         }
 
@@ -838,6 +844,68 @@ public enum CustomWorkoutNormalDetailGate {
         }
 
         return true
+    }
+
+    private static func hasNoPairedPausesWhenTimeGoalsArePromoted(
+        plannedSteps: [PlannedWorkoutStep],
+        evidence: WorkoutEvidence
+    ) -> Bool {
+        guard plannedSteps.contains(where: { $0.plannedGoalType == .time }) else {
+            return true
+        }
+        return pairedPauseCount(in: evidence.events) == 0
+    }
+
+    private static func activityRowsMatchReconstructedRows(
+        result: WorkoutIntervalReconstructionResult,
+        activities: [WorkoutEvidenceActivity],
+        workout: CanonicalWorkout
+    ) -> Bool {
+        let plannedIntervals = result.intervals.filter { $0.stepType != .open }
+        guard plannedIntervals.count == activities.count else { return false }
+
+        for (interval, activity) in zip(plannedIntervals, activities) {
+            guard let activityEnd = activity.endDate,
+                  abs(activity.startDate.timeIntervalSince(interval.actualStartDate)) <= activityTimeToleranceSeconds,
+                  abs(activityEnd.timeIntervalSince(interval.actualEndDate)) <= activityTimeToleranceSeconds,
+                  let activityDistance = activityDistanceMeters(activity),
+                  let intervalDistance = interval.actualDistanceMeters,
+                  abs(activityDistance - intervalDistance) <= activityDistanceToleranceMeters(activityDistance) else {
+                return false
+            }
+        }
+
+        let openTail = result.intervals.last?.stepType == .open ? result.intervals.last : nil
+        if let openTail {
+            guard let lastActivityEnd = activities.last?.endDate,
+                  abs(lastActivityEnd.timeIntervalSince(openTail.actualStartDate)) <= activityTimeToleranceSeconds,
+                  abs(workout.endDate.timeIntervalSince(openTail.actualEndDate)) <= activityTimeToleranceSeconds else {
+                return false
+            }
+
+            if let workoutDistance = workout.distanceMeters,
+               let tailDistance = openTail.actualDistanceMeters {
+                let activityDistanceTotal = activities.compactMap(activityDistanceMeters).reduce(0, +)
+                let expectedTailDistance = max(0, workoutDistance - activityDistanceTotal)
+                if abs(expectedTailDistance - tailDistance) > activityDistanceToleranceMeters(max(expectedTailDistance, tailDistance)) {
+                    return false
+                }
+            }
+        }
+
+        return true
+    }
+
+    private static var activityTimeToleranceSeconds: Double { 3 }
+
+    private static func activityDistanceToleranceMeters(_ distanceMeters: Double) -> Double {
+        max(10, min(25, distanceMeters * 0.02))
+    }
+
+    private static func activityDistanceMeters(_ activity: WorkoutEvidenceActivity) -> Double? {
+        activity.statistics.first {
+            $0.quantityType == "HKQuantityTypeIdentifierDistanceWalkingRunning"
+        }?.sum
     }
 
     private static func pairedPauseCount(in events: [WorkoutEvidenceEvent]) -> Int {

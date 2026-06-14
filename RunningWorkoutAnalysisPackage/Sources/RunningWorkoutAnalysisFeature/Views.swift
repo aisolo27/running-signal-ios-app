@@ -1564,7 +1564,7 @@ private struct IntervalRowView: View {
                 VStack(alignment: .trailing, spacing: 3) {
                     Text(RunFormatters.duration(interval.actualDurationSeconds))
                         .font(.subheadline.monospacedDigit().bold())
-                    Text(RunFormatters.distance(interval.actualDistanceMeters))
+                    Text(RunFormatters.compactDistance(interval.actualDistanceMeters))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }

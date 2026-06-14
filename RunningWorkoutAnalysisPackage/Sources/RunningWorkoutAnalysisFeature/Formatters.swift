@@ -19,6 +19,14 @@ enum RunFormatters {
         return String(format: "%.2f km", meters / 1_000)
     }
 
+    static func compactDistance(_ meters: Double?) -> String {
+        guard let meters else { return "Unavailable" }
+        if meters < 1_000 {
+            return "\(Int(meters.rounded())) m"
+        }
+        return String(format: "%.2f km", meters / 1_000)
+    }
+
     static func duration(_ seconds: Double?) -> String {
         guard let seconds else { return "Unavailable" }
         let total = Int(seconds.rounded())

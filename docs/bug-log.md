@@ -64,6 +64,8 @@ Use this as a selective lookup, not required full-context reading. Read the inde
 - Rule: Gate B row-level FIT timing must keep elapsed time and timer time visible. Large custom-workout errors can be pause/timer artifacts even when labels and distances look good, so do not approve repeat-block or warmup/work/cooldown subclasses from a single derived duration.
 - Rule: WorkoutKit can represent a one-step Work section as `Block 1: 1x, 1 step(s)`. Treat that as a single Work step, not a repeat-block blocker; only expanded repeat iterations such as `repeatIndex > 1` should trigger `repeat-block-needs-rule`.
 - Rule: clean fixed-cooldown Open / Extra tail support does not approve recovery-containing tails, repeat-block tails, simple Work/Open promotion, or broad `HKWorkoutActivity` promotion. Keep those behind separate Gate B decisions.
+- Rule: count/shape alignment is not enough for normal-detail interval promotion. Compare reconstructed row starts, ends, and distances against matching `HKWorkoutActivity` rows within tolerance before showing Apple Fitness-style rows.
+- Rule: time-goal custom-workout rows use elapsed planned seconds until pause-adjusted active timer logic exists. Block promoted time-goal normal-detail rows when paired pause/resume evidence is present.
 
 ## Milestones And Docs
 
