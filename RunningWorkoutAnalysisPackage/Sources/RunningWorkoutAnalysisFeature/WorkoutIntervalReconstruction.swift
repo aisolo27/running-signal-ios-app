@@ -628,6 +628,7 @@ public enum CustomWorkoutNormalDetailGate {
         supportedNarrowWarmupWorkOpenCooldown(workout: workout, evidence: evidence)
             ?? supportedNarrowWarmupWorkFixedCooldownOpenTail(workout: workout, evidence: evidence)
             ?? supportedNarrowNoPauseRepeatBlockOpenCooldown(workout: workout, evidence: evidence)
+            ?? supportedNarrowNoPauseRepeatBlockFixedCooldownOpenTail(workout: workout, evidence: evidence)
     }
 
     public static func supportedNarrowWarmupWorkOpenCooldown(
@@ -648,6 +649,38 @@ public enum CustomWorkoutNormalDetailGate {
               let result = WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: evidence),
               result.intervals.count == 3,
               result.intervals.map(\.stepType) == [.warmup, .work, .cooldown] else {
+            return nil
+        }
+
+        return result
+    }
+
+    public static func supportedNarrowNoPauseRepeatBlockFixedCooldownOpenTail(
+        workout: CanonicalWorkout,
+        evidence: WorkoutEvidence
+    ) -> WorkoutIntervalReconstructionResult? {
+        guard let audit = evidence.workoutPlanAudit,
+              pairedPauseCount(in: evidence.events) == 0 else { return nil }
+        let plannedSteps = audit.plannedSteps.sorted { $0.index < $1.index }
+        let activities = evidence.activities.sorted { $0.startDate < $1.startDate }
+        let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+            plannedSteps: plannedSteps,
+            activities: activities,
+            workout: workout,
+            repeatBlockRuleApproved: true,
+            openTailRuleApproved: true
+        )
+
+        guard comparison.status == .supported,
+              comparison.tailAmbiguity == .fixedCooldownFollowedByPossibleOpenExtraTail,
+              isNarrowNoPauseRepeatBlockFixedCooldownOpenTail(plannedSteps),
+              let result = WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: evidence),
+              result.intervals.count == plannedSteps.count + 1,
+              result.intervals.first?.stepType == .warmup,
+              result.intervals.dropLast().last?.stepType == .cooldown,
+              result.intervals.last?.stepType == .open,
+              result.intervals.last?.tailDiagnostics != nil,
+              result.intervals.map(\.stepType).dropFirst().dropLast(2).allSatisfy({ $0 == .work || $0 == .recovery }) else {
             return nil
         }
 
@@ -755,6 +788,42 @@ public enum CustomWorkoutNormalDetailGate {
               abs((warmup.plannedGoalValue ?? 0) - 2_000) <= 1,
               cooldown.stepType == .cooldown,
               cooldown.plannedGoalType == .open,
+              repeatIndexes.contains(where: { $0 > 1 }),
+              repeatedSteps.allSatisfy({ $0.repeatBlockIndex != nil && $0.repeatIndex != nil }),
+              repeatedSteps.count.isMultiple(of: 2) else {
+            return false
+        }
+
+        for (offset, step) in repeatedSteps.enumerated() {
+            let expectedType: DerivedIntervalLabel = offset.isMultiple(of: 2) ? .work : .recovery
+            if step.stepType != expectedType {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    private static func isNarrowNoPauseRepeatBlockFixedCooldownOpenTail(_ plannedSteps: [PlannedWorkoutStep]) -> Bool {
+        guard isNarrowRepeatBlockShape(plannedSteps),
+              let cooldown = plannedSteps.last else {
+            return false
+        }
+        return cooldown.plannedGoalType == .time || cooldown.plannedGoalType == .distance
+    }
+
+    private static func isNarrowRepeatBlockShape(_ plannedSteps: [PlannedWorkoutStep]) -> Bool {
+        guard plannedSteps.count >= 6,
+              let warmup = plannedSteps.first,
+              let cooldown = plannedSteps.last else { return false }
+
+        let repeatedSteps = plannedSteps.dropFirst().dropLast()
+        let repeatIndexes = repeatedSteps.compactMap(\.repeatIndex)
+
+        guard warmup.stepType == .warmup,
+              warmup.plannedGoalType == .distance,
+              abs((warmup.plannedGoalValue ?? 0) - 2_000) <= 1,
+              cooldown.stepType == .cooldown,
               repeatIndexes.contains(where: { $0 > 1 }),
               repeatedSteps.allSatisfy({ $0.repeatBlockIndex != nil && $0.repeatIndex != nil }),
               repeatedSteps.count.isMultiple(of: 2) else {
