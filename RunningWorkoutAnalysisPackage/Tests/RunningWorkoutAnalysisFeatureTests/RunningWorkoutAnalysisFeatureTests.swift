@@ -1813,6 +1813,9 @@ import Testing
 
     #expect(CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkOpenCooldown(workout: workout, evidence: evidence) == nil)
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.blockedReasons(workout: workout, evidence: evidence).contains {
+        $0.contains("pause/resume")
+    })
 }
 
 @Test func normalDetailGateSupportsNarrowFixedCooldownOpenTail() throws {
@@ -1871,6 +1874,9 @@ import Testing
 
     #expect(CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkFixedCooldownOpenTail(workout: workout, evidence: evidence) == nil)
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.blockedReasons(workout: workout, evidence: evidence).contains {
+        $0.contains("beyond tolerance")
+    })
 }
 
 @Test func normalDetailGateSupportsCleanRepeatBlockOpenCooldown() throws {
@@ -2101,6 +2107,9 @@ import Testing
     #expect(CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkOpenCooldown(workout: tailWorkout, evidence: tailEvidence) == nil)
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: tailWorkout, evidence: tailEvidence) == nil)
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: repeatTailWorkout, evidence: repeatTailEvidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.blockedReasons(workout: repeatWorkout, evidence: repeatEvidence).contains {
+        $0.contains("outside the four approved")
+    })
 }
 
 @Test func finalFixedDistanceCooldownStillCreatesOpenExtraForContinuedRunning() throws {

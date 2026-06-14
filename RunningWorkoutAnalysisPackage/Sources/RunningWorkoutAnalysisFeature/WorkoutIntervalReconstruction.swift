@@ -631,6 +631,68 @@ public enum CustomWorkoutNormalDetailGate {
             ?? supportedNarrowNoPauseRepeatBlockFixedCooldownOpenTail(workout: workout, evidence: evidence)
     }
 
+    public static func blockedReasons(
+        workout: CanonicalWorkout,
+        evidence: WorkoutEvidence
+    ) -> [String] {
+        if supportedIntervals(workout: workout, evidence: evidence) != nil {
+            return []
+        }
+        guard let audit = evidence.workoutPlanAudit else {
+            return ["WorkoutKit plan evidence is missing."]
+        }
+        guard audit.status == .available else {
+            return ["WorkoutKit plan is \(audit.status.label.lowercased())."]
+        }
+
+        let plannedSteps = audit.plannedSteps.sorted { $0.index < $1.index }
+        let activities = evidence.activities.sorted { $0.startDate < $1.startDate }
+        guard !plannedSteps.isEmpty else {
+            return ["WorkoutKit plan has no planned rows."]
+        }
+
+        var reasons: [String] = []
+        if activities.isEmpty {
+            reasons.append("HealthKit activity rows are missing.")
+        } else if plannedSteps.count != activities.count {
+            reasons.append("Planned row count (\(plannedSteps.count)) does not match HealthKit activity row count (\(activities.count)).")
+        }
+        if activities.contains(where: { $0.endDate == nil }) {
+            reasons.append("One or more HealthKit activity rows are missing end times.")
+        }
+        if !activityRowsAreContiguous(activities) {
+            reasons.append("HealthKit activity rows are not contiguous.")
+        }
+        if plannedSteps.contains(where: { $0.plannedGoalType == .time }) && pairedPauseCount(in: evidence.events) > 0 {
+            reasons.append("Time-goal rows have paired pause/resume evidence, and pause-adjusted timer logic is not enabled yet.")
+        }
+        if !isApprovedNormalDetailShape(plannedSteps) {
+            reasons.append("Workout shape is outside the four approved normal-detail interval gates.")
+        }
+
+        let comparison = approvedComparison(plannedSteps: plannedSteps, activities: activities, workout: workout)
+        if comparison.status != .supported {
+            reasons.append("Structured comparison status is \(comparison.status.rawValue).")
+        }
+        for fallback in comparison.fallbackReasons {
+            reasons.append("Fallback: \(fallback.rawValue).")
+        }
+        if comparison.tailAmbiguity != .none {
+            reasons.append("Tail status is \(comparison.tailAmbiguity.rawValue).")
+        }
+
+        if let result = WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: evidence) {
+            if !activities.isEmpty,
+               !activityRowsMatchReconstructedRows(result: result, activities: activities, workout: workout) {
+                reasons.append("Reconstructed rows differ from matching HealthKit activity rows beyond tolerance.")
+            }
+        } else {
+            reasons.append("RunSignal could not reconstruct interval windows from the available distance/time evidence.")
+        }
+
+        return uniqueReasonLabels(reasons)
+    }
+
     public static func supportedNarrowWarmupWorkOpenCooldown(
         workout: CanonicalWorkout,
         evidence: WorkoutEvidence
@@ -846,6 +908,29 @@ public enum CustomWorkoutNormalDetailGate {
         return true
     }
 
+    private static func isApprovedNormalDetailShape(_ plannedSteps: [PlannedWorkoutStep]) -> Bool {
+        isNarrowWarmupWorkOpenCooldown(plannedSteps)
+            || isNarrowWarmupWorkFixedCooldownOpenTail(plannedSteps)
+            || isNarrowNoPauseRepeatBlockOpenCooldown(plannedSteps)
+            || isNarrowNoPauseRepeatBlockFixedCooldownOpenTail(plannedSteps)
+    }
+
+    private static func approvedComparison(
+        plannedSteps: [PlannedWorkoutStep],
+        activities: [WorkoutEvidenceActivity],
+        workout: CanonicalWorkout
+    ) -> DebugCustomWorkoutComparison {
+        DebugCustomWorkoutComparisonBuilder.comparison(
+            plannedSteps: plannedSteps,
+            activities: activities,
+            workout: workout,
+            repeatBlockRuleApproved: isNarrowNoPauseRepeatBlockOpenCooldown(plannedSteps)
+                || isNarrowNoPauseRepeatBlockFixedCooldownOpenTail(plannedSteps),
+            openTailRuleApproved: isNarrowWarmupWorkFixedCooldownOpenTail(plannedSteps)
+                || isNarrowNoPauseRepeatBlockFixedCooldownOpenTail(plannedSteps)
+        )
+    }
+
     private static func hasNoPairedPausesWhenTimeGoalsArePromoted(
         plannedSteps: [PlannedWorkoutStep],
         evidence: WorkoutEvidence
@@ -906,6 +991,22 @@ public enum CustomWorkoutNormalDetailGate {
         activity.statistics.first {
             $0.quantityType == "HKQuantityTypeIdentifierDistanceWalkingRunning"
         }?.sum
+    }
+
+    private static func activityRowsAreContiguous(_ activities: [WorkoutEvidenceActivity]) -> Bool {
+        guard activities.count > 1 else { return true }
+        for index in activities.indices.dropFirst() {
+            guard let previousEnd = activities[index - 1].endDate else { return false }
+            if abs(activities[index].startDate.timeIntervalSince(previousEnd)) > 1 {
+                return false
+            }
+        }
+        return true
+    }
+
+    private static func uniqueReasonLabels(_ reasons: [String]) -> [String] {
+        var seen: Set<String> = []
+        return reasons.filter { seen.insert($0).inserted }
     }
 
     private static func pairedPauseCount(in events: [WorkoutEvidenceEvent]) -> Int {

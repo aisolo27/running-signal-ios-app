@@ -1540,10 +1540,17 @@ struct SplitsAndEventsPanel: View {
     }
 
     private var intervalMessage: String {
+        let baseMessage: String
         if !segments.eventSummary.hasEvents {
-            return "HealthKit did not return workout events for this run. RunSignal cannot show Apple Fitness-style Warmup, Work, Recovery, Cooldown, or Open rows yet."
+            baseMessage = "HealthKit did not return workout events for this run. RunSignal cannot show Apple Fitness-style Warmup, Work, Recovery, Cooldown, or Open rows yet."
+        } else {
+            baseMessage = "HealthKit returned \(segments.eventSummary.healthKitSummary), but not the full Apple Fitness interval table with distance, time, pace, and heart rate. RunSignal hides those raw marker durations here because they are not the same as Apple Fitness Intervals. Use Raw HealthKit Debug if you need to inspect the raw events."
         }
-        return "HealthKit returned \(segments.eventSummary.healthKitSummary), but not the full Apple Fitness interval table with distance, time, pace, and heart rate. RunSignal hides those raw marker durations here because they are not the same as Apple Fitness Intervals. Use Raw HealthKit Debug if you need to inspect the raw events."
+
+        guard let evidence = workout.evidence else { return baseMessage }
+        let reasons = CustomWorkoutNormalDetailGate.blockedReasons(workout: workout, evidence: evidence)
+        guard !reasons.isEmpty else { return baseMessage }
+        return baseMessage + "\n\nBlocked reason: " + reasons.prefix(3).joined(separator: " ")
     }
 }
 
