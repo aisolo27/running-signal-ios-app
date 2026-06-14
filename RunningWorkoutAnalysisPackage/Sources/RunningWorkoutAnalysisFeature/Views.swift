@@ -1482,6 +1482,7 @@ struct SplitsAndEventsPanel: View {
     let segments: RunWorkoutSegments
 
     var body: some View {
+        let supportedIntervals = normalDetailCustomWorkoutIntervals
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader("1 km Splits")
             if segments.kilometerSplits.isEmpty {
@@ -1514,11 +1515,27 @@ struct SplitsAndEventsPanel: View {
             }
 
             SectionHeader("Apple Fitness Intervals")
-            NoticeCard(
-                title: segments.eventSummary.hasEvents ? "Not comparable yet" : "Unavailable",
-                message: intervalMessage
-            )
+            if let supportedIntervals {
+                VStack(spacing: 8) {
+                    ForEach(supportedIntervals.intervals, id: \.index) { interval in
+                        IntervalRowView(interval: interval)
+                    }
+                }
+            } else {
+                NoticeCard(
+                    title: segments.eventSummary.hasEvents ? "Not comparable yet" : "Unavailable",
+                    message: intervalMessage
+                )
+            }
         }
+    }
+
+    private var normalDetailCustomWorkoutIntervals: WorkoutIntervalReconstructionResult? {
+        guard let evidence = workout.evidence else { return nil }
+        return CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkOpenCooldown(
+            workout: workout,
+            evidence: evidence
+        )
     }
 
     private var intervalMessage: String {
@@ -1526,6 +1543,40 @@ struct SplitsAndEventsPanel: View {
             return "HealthKit did not return workout events for this run. RunSignal cannot show Apple Fitness-style Warmup, Work, Recovery, Cooldown, or Open rows yet."
         }
         return "HealthKit returned \(segments.eventSummary.healthKitSummary), but not the full Apple Fitness interval table with distance, time, pace, and heart rate. RunSignal hides those raw marker durations here because they are not the same as Apple Fitness Intervals. Use Raw HealthKit Debug if you need to inspect the raw events."
+    }
+}
+
+private struct IntervalRowView: View {
+    let interval: ReconstructedWorkoutInterval
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("\(interval.index). \(interval.label)")
+                        .font(.subheadline.bold())
+                    Text(interval.plannedGoalDisplayText)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text(RunFormatters.duration(interval.actualDurationSeconds))
+                        .font(.subheadline.monospacedDigit().bold())
+                    Text(RunFormatters.distance(interval.actualDistanceMeters))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            MetricGrid(items: [
+                MetricItem(title: "Pace", value: RunFormatters.pace(interval.actualPaceSecondsPerKm), detail: "Derived"),
+                MetricItem(title: "Avg HR", value: RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"), detail: "Window"),
+                MetricItem(title: "Power", value: RunFormatters.number(interval.averagePower, suffix: " W"), detail: "Avg")
+            ])
+        }
+        .padding(10)
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 

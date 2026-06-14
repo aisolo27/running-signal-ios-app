@@ -1,6 +1,6 @@
 # Next Work
 
-Last updated: 2026-06-13
+Last updated: 2026-06-14
 
 ## Priority 1
 
@@ -35,7 +35,8 @@ Last updated: 2026-06-13
 - Keep elapsed-vs-timer and pause-event debug output visible in future Gate B scoring; do not collapse row timing to one derived duration.
 - May 1's smallest screenshot-backed evidence gap is now closed in `docs/validation/apple-fitness-interval-parity-dataset/may-1-open-tail-pause-evidence-2026-05-01.md`; `2026-03-19T16:51:00Z` remains optional/manual only unless its visually uncertain Work row distance is needed for a renewed distance-drift review.
 - Debug-only Parity Lab Swift scorer now exists in Raw HealthKit Debug/parity packet exports as `customWorkoutCandidateRuleSummary` and `customWorkoutCandidateRuleRows`, and Raw HealthKit Debug now includes a debug-only "Parity Lab Candidate Rows" in-app section. The existing Parity Lab view/export path is wired to `CustomWorkoutComparisonModel` structured status/fallback output through `customWorkoutComparisonSummary`; it reports status, fallback reasons, row confidences, tail ambiguity, and debug-only safety flags. Latest balanced evidence matched all 12 screenshot-confirmed fixtures; see `docs/validation/apple-fitness-interval-parity-dataset/balanced-evidence-batch-review-2026-06-13.md`. Physical iPhone `AIS17PM` exports for May 1, Jun 5, and Jun 10 are archived in `docs/validation/apple-fitness-interval-parity-dataset/physical-iphone-parity-lab-proof-2026-06-13/` and match expected candidate rows. Do not replace normal workout detail interval UI.
-- Next immediate step: after installing the corrected build, regenerate physical-iPhone Parity Lab structured exports for March 5, 2026 and April 24, 2026. Those one-iteration WorkoutKit block cases should report the narrow `Warmup(2 km) > one Work step > Cooldown(Open)` class as supported. Re-check May 1, June 5, April 22, May 20, and June 10 only as fallback guards. If supported and blocked subclasses report exact fallback reasons, proceed to an internal-gated normal workout detail integration ticket for that narrow class only.
+- Regenerated physical-iPhone Parity Lab structured exports from March 5, 2026 and April 24, 2026 now report the narrow `Warmup(2 km) > one Work step > Cooldown(Open)` class as supported, with April 22 and May 1 still blocked by expected fallback statuses.
+- Internal-gated normal workout detail integration now exists for only the supported narrow class. Next immediate step: install the latest build on `AIS17PM`, open normal workout detail for March 5, 2026 and April 24, 2026, and confirm Apple Fitness Intervals shows three Warmup/Work/Cooldown rows. Confirm April 22, 2026 and May 1, 2026 still show the blocked placeholder instead of promoted interval rows.
 - Continue `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-implementation-plan.md` with Phase 3 only after a later task explicitly approves prototype work. Use the production-readiness plan as the gate between debug-only Parity Lab evidence, a possible debug prototype, and any later normal workout detail UI promotion.
 - Preserve the current production reconstruction while Gate B is incomplete.
 - Archive completed date-specific validation evidence to `docs/archive/old-validation/` after it is no longer active.
@@ -52,7 +53,7 @@ Last updated: 2026-06-13
 - Structured intervals are not approved through Gate A.
 - Warmup/work/cooldown specials are not approved through Gate A.
 - No Gate B subclass is approved for production. A narrow no-tail warmup/work/open-cooldown candidate subclass has 2 supported rows and may be discussed later as debug-only only; no Swift prototype is recommended now.
-- Normal workout detail interval UI promotion remains blocked until the structured Parity Lab status/fallback output is spot-checked and the relevant narrow gate is explicitly approved or the limitation is explicitly accepted.
+- Broad normal workout detail interval UI promotion remains blocked. Only the narrow `Warmup(2 km) > one Work step > Cooldown(Open)` class is internally gated into normal detail pending physical UI proof.
 
 ## Not In Scope
 

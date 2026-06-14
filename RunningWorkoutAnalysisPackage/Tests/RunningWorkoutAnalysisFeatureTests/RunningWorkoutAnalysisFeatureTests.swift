@@ -1749,6 +1749,80 @@ import Testing
     #expect(result.intervals.map(\.label).contains("Open / Extra") == false)
 }
 
+@Test func normalDetailGateSupportsOnlyNarrowWarmupWorkOpenCooldown() throws {
+    let start = Date(timeIntervalSince1970: 10_655)
+    let workout = testWorkout(id: "normal-detail-narrow", start: start, distanceMeters: 3_500, durationSeconds: 1_500)
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .time, plannedGoalValue: 600, plannedGoalDisplayText: "600 s"),
+            PlannedWorkoutStep(index: 3, label: "Cooldown", stepType: .cooldown, plannedGoalType: .open, plannedGoalDisplayText: "Open")
+        ],
+        activityWindows: [
+            (0, 800, 2_000),
+            (800, 1_400, 1_250),
+            (1_400, 1_500, 250)
+        ],
+        distancePoints: [
+            (800, 2_000),
+            (1_400, 1_250),
+            (1_500, 250)
+        ]
+    )
+
+    let result = try #require(CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkOpenCooldown(workout: workout, evidence: evidence))
+
+    #expect(result.intervals.map(\.label) == ["Warmup", "Work 1", "Cooldown"])
+    #expect(result.intervals.map(\.stepType) == [.warmup, .work, .cooldown])
+    #expect(result.intervals.map(\.label).contains("Open / Extra") == false)
+}
+
+@Test func normalDetailGateBlocksRepeatAndOpenTailCases() {
+    let start = Date(timeIntervalSince1970: 10_656)
+    let repeatWorkout = testWorkout(id: "normal-detail-repeat", start: start, distanceMeters: 3_000, durationSeconds: 1_200)
+    let repeatEvidence = normalDetailGateEvidence(
+        workout: repeatWorkout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .distance, plannedGoalValue: 400, plannedGoalDisplayText: "400 m"),
+            PlannedWorkoutStep(index: 3, label: "Recovery 1", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .time, plannedGoalValue: 60, plannedGoalDisplayText: "60 s"),
+            PlannedWorkoutStep(index: 4, label: "Work 2", stepType: .work, repeatBlockIndex: 1, repeatIndex: 2, plannedGoalType: .distance, plannedGoalValue: 400, plannedGoalDisplayText: "400 m")
+        ],
+        activityWindows: [
+            (0, 700, 2_000),
+            (700, 800, 400),
+            (800, 860, 100),
+            (860, 960, 400)
+        ],
+        distancePoints: [
+            (700, 2_000),
+            (800, 400),
+            (860, 100),
+            (960, 400),
+            (1_200, 100)
+        ]
+    )
+
+    let tailWorkout = testWorkout(id: "normal-detail-tail", start: start, distanceMeters: 1_050, durationSeconds: 360)
+    let tailEvidence = normalDetailGateEvidence(
+        workout: tailWorkout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Work 1", stepType: .work, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km")
+        ],
+        activityWindows: [
+            (0, 300, 1_000)
+        ],
+        distancePoints: [
+            (300, 1_000),
+            (360, 50)
+        ]
+    )
+
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkOpenCooldown(workout: repeatWorkout, evidence: repeatEvidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkOpenCooldown(workout: tailWorkout, evidence: tailEvidence) == nil)
+}
+
 @Test func finalFixedDistanceCooldownStillCreatesOpenExtraForContinuedRunning() throws {
     let start = Date(timeIntervalSince1970: 10_660)
     let workout = testWorkout(id: "fixed-distance-cooldown-tail", start: start, distanceMeters: 510, durationSeconds: 510)
@@ -2541,6 +2615,60 @@ private func assertInterval(
 private func monthlyDiagnosticsObject(_ json: String) throws -> [String: Any] {
     let data = try #require(json.data(using: .utf8))
     return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+}
+
+private func normalDetailGateEvidence(
+    workout: CanonicalWorkout,
+    plannedSteps: [PlannedWorkoutStep],
+    activityWindows: [(start: TimeInterval, end: TimeInterval, distance: Double)],
+    distancePoints: [(offset: TimeInterval, distance: Double)]
+) -> WorkoutEvidence {
+    WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: workout.startDate,
+        series: [
+            .distance: WorkoutMetricSeries(
+                metric: .distance,
+                unit: "m",
+                points: distancePoints.map { offset, distance in
+                    WorkoutEvidencePoint(
+                        date: workout.startDate.addingTimeInterval(offset),
+                        value: distance
+                    )
+                }
+            )
+        ],
+        activities: activityWindows.enumerated().map { offset, window in
+            let startDate = workout.startDate.addingTimeInterval(window.start)
+            let endDate = workout.startDate.addingTimeInterval(window.end)
+            return WorkoutEvidenceActivity(
+                id: "\(workout.id)-activity-\(offset + 1)",
+                activityType: "HKWorkoutActivityTypeRunning",
+                locationType: nil,
+                startDate: startDate,
+                endDate: endDate,
+                durationSeconds: window.end - window.start,
+                metadataKeys: [],
+                events: [],
+                statistics: [
+                    WorkoutEvidenceActivityStatistic(
+                        quantityType: "HKQuantityTypeIdentifierDistanceWalkingRunning",
+                        unit: "m",
+                        startDate: startDate,
+                        endDate: endDate,
+                        sourceCount: 1,
+                        sum: window.distance,
+                        durationSeconds: window.end - window.start
+                    )
+                ]
+            )
+        },
+        workoutPlanAudit: WorkoutPlanAudit(
+            status: plannedSteps.isEmpty ? .unavailable : .available,
+            planType: plannedSteps.isEmpty ? nil : "Custom workout",
+            plannedSteps: plannedSteps
+        )
+    )
 }
 
 private func monthlyEvidence(
