@@ -1298,6 +1298,7 @@ struct WorkoutDetailView: View {
                 }
             }
             .padding()
+            .padding(.bottom, 120)
         }
         .navigationTitle("Workout")
     }
