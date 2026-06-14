@@ -1918,6 +1918,8 @@ struct RawHealthKitWorkoutDebugView: View {
                 NoticeCard(title: "Unavailable", message: unavailableReason)
             } else {
                 MetricGrid(items: [
+                    MetricItem(title: "Status", value: result.structuredStatus, detail: "Structured gate"),
+                    MetricItem(title: "Fallback", value: result.primaryFallbackReason ?? "None", detail: "Primary reason"),
                     MetricItem(title: "Rows", value: "\(result.rows.count)", detail: "Candidate"),
                     MetricItem(title: "Open tails", value: "\(result.rows.filter(\.isOpenTail).count)", detail: "Inferred"),
                     MetricItem(title: "Pauses", value: "\(result.pairedPauseCount)", detail: RunFormatters.duration(result.totalPairedPauseSeconds)),
@@ -1988,6 +1990,11 @@ struct RawHealthKitWorkoutDebugView: View {
         }
 
         let pauses = pairedPauseIntervals(in: evidence.events)
+        let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+            plannedSteps: plannedSteps,
+            activities: activities,
+            workout: currentWorkout
+        )
         var rows = zip(plannedSteps, activities).enumerated().map { offset, pair in
             let (step, activity) = pair
             let startOffset = activity.startDate.timeIntervalSince(currentWorkout.startDate)
@@ -2037,6 +2044,8 @@ struct RawHealthKitWorkoutDebugView: View {
 
         return ParityLabCandidateRowsResult(
             rows: rows,
+            structuredStatus: comparison.status.rawValue,
+            fallbackReasons: comparison.fallbackReasons.map(\.rawValue),
             pairedPauseCount: pauses.count,
             totalPairedPauseSeconds: pauses.map(\.durationSeconds).reduce(0, +)
         )
@@ -2092,8 +2101,14 @@ struct RawHealthKitWorkoutDebugView: View {
     private struct ParityLabCandidateRowsResult {
         var rows: [ParityLabCandidateRow] = []
         var unavailableReason: String?
+        var structuredStatus: String = CustomWorkoutComparisonStatus.missingRequiredEvidence.rawValue
+        var fallbackReasons: [String] = []
         var pairedPauseCount: Int = 0
         var totalPairedPauseSeconds: Double = 0
+
+        var primaryFallbackReason: String? {
+            fallbackReasons.first
+        }
     }
 
     private struct ParityLabCandidateRow: Identifiable {

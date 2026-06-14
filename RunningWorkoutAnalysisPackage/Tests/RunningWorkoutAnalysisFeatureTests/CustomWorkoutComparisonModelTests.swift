@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import RunningWorkoutAnalysisFeature
 
@@ -248,6 +249,91 @@ import Testing
     expectDebugOnly(comparison)
 }
 
+@Test func debugCustomWorkoutComparisonBridgeSupportsSimplePlannedActivityRows() {
+    let start = Date(timeIntervalSince1970: 1_797_000_000)
+    let workout = bridgeWorkout(start: start, distanceMeters: 3_000, durationSeconds: 1_200)
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plannedSteps: [
+            plannedStep(index: 1, label: "Warmup", stepType: .warmup, goalType: .distance, goalValue: 2_000),
+            plannedStep(index: 2, label: "Work", stepType: .work, goalType: .time, goalValue: 900),
+            plannedStep(index: 3, label: "Cooldown", stepType: .cooldown, goalType: .open)
+        ],
+        activities: [
+            evidenceActivity(index: 1, start: start, end: start.addingTimeInterval(700), distance: 2_000),
+            evidenceActivity(index: 2, start: start.addingTimeInterval(700), end: start.addingTimeInterval(1_000), distance: 900),
+            evidenceActivity(index: 3, start: start.addingTimeInterval(1_000), end: start.addingTimeInterval(1_200), distance: 100)
+        ],
+        workout: workout
+    )
+
+    #expect(comparison.status == .supported)
+    #expect(comparison.fallbackReasons.isEmpty)
+    #expect(comparison.tailAmbiguity == .plannedOpenCooldownContinuesToWorkoutEnd)
+    #expect(comparison.rows.allSatisfy { $0.confidence == .supported })
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonBridgeKeepsRepeatBlocksBehindRule() {
+    let start = Date(timeIntervalSince1970: 1_797_000_000)
+    let workout = bridgeWorkout(start: start, distanceMeters: 800, durationSeconds: 240)
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plannedSteps: [
+            plannedStep(index: 1, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, goalType: .distance, goalValue: 400),
+            plannedStep(index: 2, label: "Recovery 1", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 1, goalType: .time, goalValue: 60)
+        ],
+        activities: [
+            evidenceActivity(index: 1, start: start, end: start.addingTimeInterval(120), distance: 400),
+            evidenceActivity(index: 2, start: start.addingTimeInterval(120), end: start.addingTimeInterval(240), distance: 400)
+        ],
+        workout: workout
+    )
+
+    #expect(comparison.status == .repeatBlockNeedsRule)
+    #expect(comparison.rows.allSatisfy { $0.confidence == .needsRule })
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonBridgeSupportsRepeatBlocksOnlyAfterRuleApproval() {
+    let start = Date(timeIntervalSince1970: 1_797_000_000)
+    let workout = bridgeWorkout(start: start, distanceMeters: 800, durationSeconds: 240)
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plannedSteps: [
+            plannedStep(index: 1, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, goalType: .distance, goalValue: 400),
+            plannedStep(index: 2, label: "Recovery 1", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 1, goalType: .time, goalValue: 60)
+        ],
+        activities: [
+            evidenceActivity(index: 1, start: start, end: start.addingTimeInterval(120), distance: 400),
+            evidenceActivity(index: 2, start: start.addingTimeInterval(120), end: start.addingTimeInterval(240), distance: 400)
+        ],
+        workout: workout,
+        repeatBlockRuleApproved: true
+    )
+
+    #expect(comparison.status == .supported)
+    #expect(comparison.fallbackReasons.isEmpty)
+    #expect(comparison.rows.allSatisfy { $0.confidence == .supported })
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonBridgeBlocksOpenTailRule() {
+    let start = Date(timeIntervalSince1970: 1_797_000_000)
+    let workout = bridgeWorkout(start: start, distanceMeters: 1_050, durationSeconds: 360)
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plannedSteps: [
+            plannedStep(index: 1, label: "Work", stepType: .work, goalType: .distance, goalValue: 1_000)
+        ],
+        activities: [
+            evidenceActivity(index: 1, start: start, end: start.addingTimeInterval(300), distance: 1_000)
+        ],
+        workout: workout
+    )
+
+    #expect(comparison.status == .openTailNeedsRule)
+    #expect(comparison.fallbackReasons.contains(.openExtraTailAmbiguous))
+    #expect(comparison.rows.allSatisfy { $0.confidence == .needsRule })
+    expectDebugOnly(comparison)
+}
+
 private func singleWorkPlan() -> CustomWorkoutStepModel {
     CustomWorkoutStepModel(
         blocks: [
@@ -311,4 +397,68 @@ private func activityRow(
 
 private func expectDebugOnly(_ comparison: DebugCustomWorkoutComparison) {
     #expect(comparison.promotesProductionBehavior == false)
+}
+
+private func bridgeWorkout(
+    start: Date,
+    distanceMeters: Double,
+    durationSeconds: TimeInterval
+) -> CanonicalWorkout {
+    CanonicalWorkout(
+        id: "bridge-workout",
+        sourceID: "watch",
+        sourceName: "Apple Watch",
+        startDate: start,
+        endDate: start.addingTimeInterval(durationSeconds),
+        environment: .outdoor,
+        distanceMeters: distanceMeters,
+        durationSeconds: durationSeconds
+    )
+}
+
+private func plannedStep(
+    index: Int,
+    label: String,
+    stepType: DerivedIntervalLabel,
+    repeatBlockIndex: Int? = nil,
+    repeatIndex: Int? = nil,
+    goalType: PlannedWorkoutGoalType,
+    goalValue: Double? = nil
+) -> PlannedWorkoutStep {
+    PlannedWorkoutStep(
+        index: index,
+        label: label,
+        stepType: stepType,
+        repeatBlockIndex: repeatBlockIndex,
+        repeatIndex: repeatIndex,
+        plannedGoalType: goalType,
+        plannedGoalValue: goalValue,
+        plannedGoalDisplayText: goalValue.map { "\($0)" } ?? "Open"
+    )
+}
+
+private func evidenceActivity(
+    index: Int,
+    start: Date,
+    end: Date,
+    distance: Double
+) -> WorkoutEvidenceActivity {
+    WorkoutEvidenceActivity(
+        id: "activity-\(index)",
+        activityType: "HKWorkoutActivityTypeRunning",
+        startDate: start,
+        endDate: end,
+        durationSeconds: end.timeIntervalSince(start),
+        statistics: [
+            WorkoutEvidenceActivityStatistic(
+                quantityType: "HKQuantityTypeIdentifierDistanceWalkingRunning",
+                unit: "m",
+                startDate: start,
+                endDate: end,
+                sourceCount: 1,
+                sum: distance,
+                durationSeconds: end.timeIntervalSince(start)
+            )
+        ]
+    )
 }

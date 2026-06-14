@@ -99,6 +99,51 @@ struct DebugCustomWorkoutComparison: Codable, Equatable, Sendable {
 
 enum DebugCustomWorkoutComparisonBuilder {
     static func comparison(
+        plannedSteps: [PlannedWorkoutStep],
+        activities: [WorkoutEvidenceActivity],
+        workout: CanonicalWorkout,
+        hasRowLevelEvidence: Bool = true,
+        repeatBlockRuleApproved: Bool = false
+    ) -> DebugCustomWorkoutComparison {
+        let sortedSteps = plannedSteps.sorted { $0.index < $1.index }
+        let sortedActivities = activities.sorted { $0.startDate < $1.startDate }
+        let plan = CustomWorkoutStepModel(plannedSteps: sortedSteps)
+        let activityRows = sortedActivities.enumerated().map { offset, activity in
+            DebugCustomWorkoutActivityCandidateRow(
+                index: offset + 1,
+                role: sortedSteps[safe: offset]?.stepType.customWorkoutStepRole ?? .unknown,
+                startOffsetSeconds: activity.startDate.timeIntervalSince(workout.startDate),
+                endOffsetSeconds: activity.endDate?.timeIntervalSince(workout.startDate)
+            )
+        }
+        let tailAmbiguity = tailAmbiguity(plannedSteps: sortedSteps, activities: sortedActivities, workout: workout)
+        let hasCoreRowEvidence = !sortedSteps.isEmpty
+            && sortedSteps.count == sortedActivities.count
+            && !sortedActivities.isEmpty
+            && activityRows.allSatisfy { $0.endOffsetSeconds != nil }
+            && sortedActivities.allSatisfy { activityDistanceMeters($0) != nil }
+            && activityRowsAreContiguous(sortedActivities)
+        let hasRepeatBlock = sortedSteps.contains { $0.repeatBlockIndex != nil }
+        let repeatBlockIsScoreable = !hasRepeatBlock || repeatBlockRuleApproved
+        let rowsAreScoreable = hasCoreRowEvidence
+            && !tailAmbiguity.needsOpenTailRule
+            && repeatBlockIsScoreable
+
+        return comparison(
+            plan: plan,
+            activityRows: activityRows,
+            hasRowLevelEvidence: hasRowLevelEvidence && hasCoreRowEvidence,
+            rowLevelSupport: rowsAreScoreable,
+            rowsAreDebugEquivalent: rowsAreScoreable,
+            activityRowsAreContiguous: activityRowsAreContiguous(sortedActivities),
+            labelsAreAmbiguous: sortedSteps.contains { $0.stepType == .unknown },
+            tailAmbiguity: tailAmbiguity,
+            repeatBlockRuleApproved: repeatBlockRuleApproved,
+            repeatBlockNeedsRule: hasRepeatBlock
+        )
+    }
+
+    static func comparison(
         plan: CustomWorkoutStepModel?,
         currentRows: [DebugCustomWorkoutCurrentRow] = [],
         activityRows: [DebugCustomWorkoutActivityCandidateRow] = [],
@@ -108,7 +153,8 @@ enum DebugCustomWorkoutComparisonBuilder {
         activityRowsAreContiguous: Bool = true,
         labelsAreAmbiguous: Bool = false,
         tailAmbiguity: CustomWorkoutTailAmbiguity = .none,
-        repeatBlockRuleApproved: Bool = false
+        repeatBlockRuleApproved: Bool = false,
+        repeatBlockNeedsRule: Bool? = nil
     ) -> DebugCustomWorkoutComparison {
         let plannedRows = plan?.expandedSteps ?? []
         let fallbackReasons = fallbackReasons(
@@ -128,7 +174,8 @@ enum DebugCustomWorkoutComparisonBuilder {
             rowLevelSupport: rowLevelSupport,
             rowsAreDebugEquivalent: rowsAreDebugEquivalent,
             tailAmbiguity: tailAmbiguity,
-            repeatBlockRuleApproved: repeatBlockRuleApproved
+            repeatBlockRuleApproved: repeatBlockRuleApproved,
+            repeatBlockNeedsRule: repeatBlockNeedsRule ?? (plan?.blocks.contains(where: { $0.iterationCount > 1 }) == true)
         )
 
         return DebugCustomWorkoutComparison(
@@ -197,7 +244,8 @@ enum DebugCustomWorkoutComparisonBuilder {
         rowLevelSupport: Bool,
         rowsAreDebugEquivalent: Bool,
         tailAmbiguity: CustomWorkoutTailAmbiguity,
-        repeatBlockRuleApproved: Bool
+        repeatBlockRuleApproved: Bool,
+        repeatBlockNeedsRule: Bool
     ) -> CustomWorkoutComparisonStatus {
         if fallbackReasons.contains(.missingPlannedSteps)
             || fallbackReasons.contains(.missingActivityRows)
@@ -215,7 +263,7 @@ enum DebugCustomWorkoutComparisonBuilder {
         if tailAmbiguity.needsOpenTailRule {
             return .openTailNeedsRule
         }
-        if plan?.blocks.contains(where: { $0.iterationCount > 1 }) == true {
+        if repeatBlockNeedsRule {
             if !repeatBlockRuleApproved {
                 return .repeatBlockNeedsRule
             }
@@ -277,6 +325,42 @@ enum DebugCustomWorkoutComparisonBuilder {
         var seen: Set<CustomWorkoutFallbackReason> = []
         return reasons.filter { seen.insert($0).inserted }
     }
+
+    private static func tailAmbiguity(
+        plannedSteps: [PlannedWorkoutStep],
+        activities: [WorkoutEvidenceActivity],
+        workout: CanonicalWorkout
+    ) -> CustomWorkoutTailAmbiguity {
+        guard !plannedSteps.isEmpty, let lastStep = plannedSteps.last else { return .none }
+        if lastStep.plannedGoalType == .open, lastStep.stepType == .cooldown {
+            return .plannedOpenCooldownContinuesToWorkoutEnd
+        }
+        guard let lastActivityEnd = activities.last?.endDate else { return .none }
+        let mappedDistance = activities.compactMap(activityDistanceMeters).reduce(0, +)
+        let remainingSeconds = workout.endDate.timeIntervalSince(lastActivityEnd)
+        let remainingMeters = workout.distanceMeters.map { max(0, $0 - mappedDistance) } ?? 0
+        if remainingSeconds > 0.5 || remainingMeters > 0.5 {
+            return .fixedCooldownFollowedByPossibleOpenExtraTail
+        }
+        return .none
+    }
+
+    private static func activityRowsAreContiguous(_ activities: [WorkoutEvidenceActivity]) -> Bool {
+        guard activities.count > 1 else { return true }
+        for index in activities.indices.dropFirst() {
+            guard let previousEnd = activities[index - 1].endDate else { return false }
+            if abs(activities[index].startDate.timeIntervalSince(previousEnd)) > 1 {
+                return false
+            }
+        }
+        return true
+    }
+
+    private static func activityDistanceMeters(_ activity: WorkoutEvidenceActivity) -> Double? {
+        activity.statistics.first {
+            $0.quantityType == "HKQuantityTypeIdentifierDistanceWalkingRunning"
+        }?.sum
+    }
 }
 
 private extension CustomWorkoutTailAmbiguity {
@@ -286,6 +370,50 @@ private extension CustomWorkoutTailAmbiguity {
             false
         case .fixedCooldownFollowedByPossibleOpenExtraTail, .postPlanActivityCandidate, .ambiguous:
             true
+        }
+    }
+}
+
+private extension CustomWorkoutStepModel {
+    init(plannedSteps: [PlannedWorkoutStep]) {
+        self.init(
+            blocks: [
+                CustomWorkoutRepeatBlock(
+                    blockIndex: 1,
+                    iterationCount: 1,
+                    steps: plannedSteps.map(CustomWorkoutPlanStep.init(step:))
+                )
+            ]
+        )
+    }
+}
+
+private extension CustomWorkoutPlanStep {
+    init(step: PlannedWorkoutStep) {
+        self.init(
+            originalStepIndex: step.index,
+            role: step.stepType.customWorkoutStepRole,
+            goalType: step.plannedGoalType,
+            goalValue: step.plannedGoalValue
+        )
+    }
+}
+
+private extension DerivedIntervalLabel {
+    var customWorkoutStepRole: CustomWorkoutStepRole {
+        switch self {
+        case .warmup:
+            .warmup
+        case .work:
+            .work
+        case .recovery:
+            .recovery
+        case .cooldown:
+            .cooldown
+        case .open:
+            .open
+        case .unknown:
+            .unknown
         }
     }
 }

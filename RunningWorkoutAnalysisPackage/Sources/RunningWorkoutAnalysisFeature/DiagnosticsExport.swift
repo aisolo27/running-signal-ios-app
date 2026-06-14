@@ -195,6 +195,18 @@ public enum DiagnosticsExport {
             )
         ))
 
+        ## Custom Workout Structured Comparison
+
+        Debug-only structured status and fallback taxonomy for Parity Lab rows. This is not production interval logic and is not shown in the normal workout UI.
+
+        \(customWorkoutComparisonMarkdown(
+            customWorkoutComparisonSummary(
+                plannedSteps: plannedSteps,
+                activities: evidence?.activities ?? [],
+                workout: workout
+            )
+        ))
+
         ## WorkoutKit Boundary Diagnostics
 
         \(boundaryDiagnosticsMarkdown(reconstructedIntervals, workout: workout))
@@ -319,6 +331,11 @@ public enum DiagnosticsExport {
             activityBoundaryCandidateIntervals: activityCandidate.rows,
             customWorkoutCandidateRuleSummary: candidateRuleScore.summary,
             customWorkoutCandidateRuleRows: candidateRuleScore.rows,
+            customWorkoutComparisonSummary: customWorkoutComparisonSummary(
+                plannedSteps: plannedSteps,
+                activities: evidence?.activities ?? [],
+                workout: workout
+            ),
             plannedStepBoundaryComparisons: plannedStepBoundaryComparisons(
                 reconstructedIntervals: reconstructedIntervals,
                 plannedSteps: plannedSteps,
@@ -516,6 +533,20 @@ public enum DiagnosticsExport {
         \(rows)
 
         Caveats: \(summary.caveats.map(markdownCell).joined(separator: " · "))
+        """
+    }
+
+    private static func customWorkoutComparisonMarkdown(_ summary: RawDebugCustomWorkoutComparisonSummary) -> String {
+        """
+        | Field | Value |
+        |---|---|
+        | Status | \(markdownCell(summary.status)) |
+        | Fallback reasons | \(markdownCell(summary.fallbackReasons.isEmpty ? "None" : summary.fallbackReasons.joined(separator: ", "))) |
+        | Row count | \(summary.rowCount) |
+        | Row confidences | \(markdownCell(summary.rowConfidences.isEmpty ? "None" : summary.rowConfidences.joined(separator: ", "))) |
+        | Tail ambiguity | \(markdownCell(summary.tailAmbiguity)) |
+        | Promotes production behavior | \(summary.promotesProductionBehavior ? "Yes" : "No") |
+        | Scope | \(markdownCell(summary.scope)) |
         """
     }
 
@@ -852,6 +883,11 @@ public enum DiagnosticsExport {
             activityBoundaryCandidateIntervals: activityCandidate.rows,
             customWorkoutCandidateRuleSummary: candidateRuleScore.summary,
             customWorkoutCandidateRuleRows: candidateRuleScore.rows,
+            customWorkoutComparisonSummary: customWorkoutComparisonSummary(
+                plannedSteps: plannedSteps,
+                activities: evidence?.activities ?? [],
+                workout: workout
+            ),
             boundaryDiagnostics: reconstructedIntervals?.intervals.map { RawDebugIntervalBoundaryDiagnostics(interval: $0, workout: workout) }.filter { $0.hasDiagnostics } ?? [],
             segmentMarkers: segmentMarkers.map(RawDebugSegmentMarker.init(interval:)),
             plannedStepBoundaryComparisons: plannedStepBoundaryComparisons(
@@ -1185,6 +1221,20 @@ public enum DiagnosticsExport {
                 productionUIWarning: productionWarning
             ),
             rows: rows
+        )
+    }
+
+    private static func customWorkoutComparisonSummary(
+        plannedSteps: [PlannedWorkoutStep],
+        activities: [WorkoutEvidenceActivity],
+        workout: CanonicalWorkout
+    ) -> RawDebugCustomWorkoutComparisonSummary {
+        RawDebugCustomWorkoutComparisonSummary(
+            comparison: DebugCustomWorkoutComparisonBuilder.comparison(
+                plannedSteps: plannedSteps,
+                activities: activities,
+                workout: workout
+            )
         )
     }
 
@@ -1982,6 +2032,7 @@ private struct RawDebugPayload: Codable {
     var activityBoundaryCandidateIntervals: [RawDebugActivityBoundaryCandidateInterval]
     var customWorkoutCandidateRuleSummary: RawDebugCustomWorkoutCandidateRuleSummary
     var customWorkoutCandidateRuleRows: [RawDebugCustomWorkoutCandidateRuleRow]
+    var customWorkoutComparisonSummary: RawDebugCustomWorkoutComparisonSummary
     var boundaryDiagnostics: [RawDebugIntervalBoundaryDiagnostics]
     var segmentMarkers: [RawDebugSegmentMarker]
     var plannedStepBoundaryComparisons: [RawDebugPlannedStepBoundaryComparison]
@@ -2005,6 +2056,7 @@ private struct ParityPacketPayload: Codable {
     var activityBoundaryCandidateIntervals: [RawDebugActivityBoundaryCandidateInterval]
     var customWorkoutCandidateRuleSummary: RawDebugCustomWorkoutCandidateRuleSummary
     var customWorkoutCandidateRuleRows: [RawDebugCustomWorkoutCandidateRuleRow]
+    var customWorkoutComparisonSummary: RawDebugCustomWorkoutComparisonSummary
     var plannedStepBoundaryComparisons: [RawDebugPlannedStepBoundaryComparison]
     var boundarySourceWarnings: [String]
     var diagnosticsWarnings: [String]
@@ -2215,6 +2267,28 @@ private struct RawDebugCustomWorkoutCandidateRuleRow: Codable {
     var candidateConfidence: String
     var caveats: [String]
     var productionUIWarning: String
+}
+
+private struct RawDebugCustomWorkoutComparisonSummary: Codable {
+    var status: String
+    var fallbackReasons: [String]
+    var rowCount: Int
+    var rowConfidences: [String]
+    var tailAmbiguity: String
+    var promotesProductionBehavior: Bool
+    var scope: String = "debug/export-only"
+    var productionIntervalBehaviorChanged: Bool = false
+    var normalWorkoutUIChanged: Bool = false
+    var usesFITRuntimeTruth: Bool = false
+
+    init(comparison: DebugCustomWorkoutComparison) {
+        status = comparison.status.rawValue
+        fallbackReasons = comparison.fallbackReasons.map(\.rawValue)
+        rowCount = comparison.rows.count
+        rowConfidences = comparison.rows.map { $0.confidence.rawValue }
+        tailAmbiguity = comparison.tailAmbiguity.rawValue
+        promotesProductionBehavior = comparison.promotesProductionBehavior
+    }
 }
 
 private struct RawDebugPauseInterval {
