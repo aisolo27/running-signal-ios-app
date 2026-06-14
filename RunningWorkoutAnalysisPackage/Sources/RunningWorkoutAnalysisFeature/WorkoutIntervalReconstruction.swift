@@ -627,6 +627,7 @@ public enum CustomWorkoutNormalDetailGate {
     ) -> WorkoutIntervalReconstructionResult? {
         supportedNarrowWarmupWorkOpenCooldown(workout: workout, evidence: evidence)
             ?? supportedNarrowWarmupWorkFixedCooldownOpenTail(workout: workout, evidence: evidence)
+            ?? supportedNarrowNoPauseRepeatBlockOpenCooldown(workout: workout, evidence: evidence)
     }
 
     public static func supportedNarrowWarmupWorkOpenCooldown(
@@ -680,6 +681,36 @@ public enum CustomWorkoutNormalDetailGate {
         return result
     }
 
+    public static func supportedNarrowNoPauseRepeatBlockOpenCooldown(
+        workout: CanonicalWorkout,
+        evidence: WorkoutEvidence
+    ) -> WorkoutIntervalReconstructionResult? {
+        guard let audit = evidence.workoutPlanAudit,
+              pairedPauseCount(in: evidence.events) == 0 else { return nil }
+        let plannedSteps = audit.plannedSteps.sorted { $0.index < $1.index }
+        let activities = evidence.activities.sorted { $0.startDate < $1.startDate }
+        let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+            plannedSteps: plannedSteps,
+            activities: activities,
+            workout: workout,
+            repeatBlockRuleApproved: true
+        )
+
+        guard comparison.status == .supported,
+              comparison.tailAmbiguity == .plannedOpenCooldownContinuesToWorkoutEnd,
+              isNarrowNoPauseRepeatBlockOpenCooldown(plannedSteps),
+              let result = WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: evidence),
+              result.intervals.count == plannedSteps.count,
+              result.intervals.first?.stepType == .warmup,
+              result.intervals.last?.stepType == .cooldown,
+              result.intervals.map(\.stepType).dropFirst().dropLast().allSatisfy({ $0 == .work || $0 == .recovery }),
+              result.intervals.map(\.label).contains("Open / Extra") == false else {
+            return nil
+        }
+
+        return result
+    }
+
     private static func isNarrowWarmupWorkOpenCooldown(_ plannedSteps: [PlannedWorkoutStep]) -> Bool {
         guard plannedSteps.count == 3 else { return false }
         let warmup = plannedSteps[0]
@@ -709,5 +740,49 @@ public enum CustomWorkoutNormalDetailGate {
             && (work.plannedGoalType == .time || work.plannedGoalType == .distance)
             && cooldown.stepType == .cooldown
             && (cooldown.plannedGoalType == .time || cooldown.plannedGoalType == .distance)
+    }
+
+    private static func isNarrowNoPauseRepeatBlockOpenCooldown(_ plannedSteps: [PlannedWorkoutStep]) -> Bool {
+        guard plannedSteps.count >= 6,
+              let warmup = plannedSteps.first,
+              let cooldown = plannedSteps.last else { return false }
+
+        let repeatedSteps = plannedSteps.dropFirst().dropLast()
+        let repeatIndexes = repeatedSteps.compactMap(\.repeatIndex)
+
+        guard warmup.stepType == .warmup,
+              warmup.plannedGoalType == .distance,
+              abs((warmup.plannedGoalValue ?? 0) - 2_000) <= 1,
+              cooldown.stepType == .cooldown,
+              cooldown.plannedGoalType == .open,
+              repeatIndexes.contains(where: { $0 > 1 }),
+              repeatedSteps.allSatisfy({ $0.repeatBlockIndex != nil && $0.repeatIndex != nil }),
+              repeatedSteps.count.isMultiple(of: 2) else {
+            return false
+        }
+
+        for (offset, step) in repeatedSteps.enumerated() {
+            let expectedType: DerivedIntervalLabel = offset.isMultiple(of: 2) ? .work : .recovery
+            if step.stepType != expectedType {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    private static func pairedPauseCount(in events: [WorkoutEvidenceEvent]) -> Int {
+        var pendingPause = false
+        var count = 0
+        for event in events.sorted(by: { $0.startDate < $1.startDate }) {
+            let label = event.displayLabel.lowercased()
+            if label.contains("pause") && !label.contains("resume") {
+                pendingPause = true
+            } else if label.contains("resume"), pendingPause {
+                count += 1
+                pendingPause = false
+            }
+        }
+        return count
     }
 }
