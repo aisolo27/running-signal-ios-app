@@ -1849,9 +1849,9 @@ import Testing
     #expect(result.intervals.last?.actualDistanceMeters == 500)
 }
 
-@Test func normalDetailGateBlocksActivityBoundaryMismatch() {
+@Test func normalDetailGateUsesActivityBoundaryRowsWhenDistanceReconstructionDrifts() throws {
     let start = Date(timeIntervalSince1970: 10_655)
-    let workout = testWorkout(id: "normal-detail-activity-mismatch", start: start, distanceMeters: 4_500, durationSeconds: 1_800)
+    let workout = testWorkout(id: "normal-detail-activity-boundary-drift", start: start, distanceMeters: 4_500, durationSeconds: 1_800)
     let evidence = normalDetailGateEvidence(
         workout: workout,
         plannedSteps: [
@@ -1872,11 +1872,13 @@ import Testing
         ]
     )
 
-    #expect(CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkFixedCooldownOpenTail(workout: workout, evidence: evidence) == nil)
-    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) == nil)
-    #expect(CustomWorkoutNormalDetailGate.blockedReasons(workout: workout, evidence: evidence).contains {
-        $0.contains("beyond tolerance")
-    })
+    let result = try #require(CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkFixedCooldownOpenTail(workout: workout, evidence: evidence))
+
+    #expect(result.windowSource == .healthKitActivityBoundaries)
+    #expect(result.intervals.map(\.label) == ["Warmup", "Work 1", "Cooldown", "Open / Extra"])
+    #expect(result.intervals[1].actualDurationSeconds == 320)
+    #expect(result.intervals[1].actualDistanceMeters == 1_000)
+    #expect(CustomWorkoutNormalDetailGate.blockedReasons(workout: workout, evidence: evidence).isEmpty)
 }
 
 @Test func normalDetailGateSupportsCleanRepeatBlockOpenCooldown() throws {
@@ -1901,10 +1903,10 @@ import Testing
             (1_500, 1_600, 400)
         ],
         distancePoints: [
-            (700, 2_000),
-            (950, 1_000),
+            (704, 2_000),
+            (956, 1_000),
             (1_100, 200),
-            (1_350, 1_000),
+            (1_356, 1_000),
             (1_500, 200),
             (1_600, 400)
         ]
@@ -1914,6 +1916,8 @@ import Testing
 
     #expect(result.intervals.map(\.label) == ["Warmup", "Work 1", "Recovery 1", "Work 2", "Recovery 2", "Cooldown"])
     #expect(result.intervals.map(\.stepType) == [.warmup, .work, .recovery, .work, .recovery, .cooldown])
+    #expect(result.windowSource == .healthKitActivityBoundaries)
+    #expect(result.intervals[1].actualDurationSeconds == 250)
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence)?.intervals.map(\.label) == result.intervals.map(\.label))
     #expect(result.intervals.map(\.label).contains("Open / Extra") == false)
 }
@@ -1940,10 +1944,10 @@ import Testing
             (1_150, 1_605, 1_000)
         ],
         distancePoints: [
-            (700, 2_000),
-            (820, 400),
+            (704, 2_000),
+            (826, 400),
             (925, 100),
-            (1_045, 400),
+            (1_051, 400),
             (1_150, 100),
             (1_605, 1_000),
             (1_615, 40)
@@ -1954,6 +1958,8 @@ import Testing
 
     #expect(result.intervals.map(\.label) == ["Warmup", "Work 1", "Recovery 1", "Work 2", "Recovery 2", "Cooldown", "Open / Extra"])
     #expect(result.intervals.map(\.stepType) == [.warmup, .work, .recovery, .work, .recovery, .cooldown, .open])
+    #expect(result.windowSource == .healthKitActivityBoundaries)
+    #expect(result.intervals[1].actualDurationSeconds == 120)
     #expect(result.intervals.last?.tailDiagnostics?.remainingSeconds == 10)
     #expect(result.intervals.last?.actualDistanceMeters == 40)
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence)?.intervals.map(\.label) == result.intervals.map(\.label))

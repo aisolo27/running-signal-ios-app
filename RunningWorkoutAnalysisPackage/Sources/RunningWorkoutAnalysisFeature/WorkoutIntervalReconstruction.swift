@@ -24,11 +24,13 @@ public enum IntervalPlanSource: String, Codable, Equatable, Sendable {
 
 public enum IntervalWindowSource: String, Codable, Equatable, Sendable {
     case planDerivedFromDistanceAndTimeSamples
+    case healthKitActivityBoundaries
     case unavailable
 
     public var label: String {
         switch self {
         case .planDerivedFromDistanceAndTimeSamples: "Plan-derived from HealthKit distance/time samples"
+        case .healthKitActivityBoundaries: "HealthKit activity boundaries"
         case .unavailable: "Unavailable"
         }
     }
@@ -314,6 +316,101 @@ public enum WorkoutIntervalReconstructionEngine {
         )
     }
 
+    public static func reconstructFromActivityBoundaries(
+        workout: CanonicalWorkout,
+        evidence: WorkoutEvidence
+    ) -> WorkoutIntervalReconstructionResult? {
+        guard let audit = evidence.workoutPlanAudit,
+              audit.status == .available,
+              !audit.plannedSteps.isEmpty else {
+            return nil
+        }
+
+        let plannedSteps = audit.plannedSteps.sorted { $0.index < $1.index }
+        let activities = evidence.activities.sorted { $0.startDate < $1.startDate }
+        guard plannedSteps.count == activities.count,
+              !activities.isEmpty else {
+            return nil
+        }
+
+        var intervals: [ReconstructedWorkoutInterval] = []
+        for (step, activity) in zip(plannedSteps, activities) {
+            guard let endDate = activity.endDate,
+                  endDate > activity.startDate,
+                  let distance = activityDistanceMeters(activity) else {
+                return nil
+            }
+            intervals.append(
+                reconstructedInterval(
+                    step: step,
+                    start: activity.startDate,
+                    end: endDate,
+                    workout: workout,
+                    evidence: evidence,
+                    sourceNote: "Mapped from WorkoutKit planned step order to public HealthKit activity boundary.",
+                    boundaryResolution: nil,
+                    tailDiagnostics: nil,
+                    actualDistanceOverride: distance,
+                    windowSource: .healthKitActivityBoundaries,
+                    confidence: .high
+                )
+            )
+        }
+
+        if let lastActivityEnd = activities.last?.endDate,
+           lastActivityEnd < workout.endDate {
+            let remainingTime = workout.endDate.timeIntervalSince(lastActivityEnd)
+            let totalActivityDistance = activities.compactMap(activityDistanceMeters).reduce(0, +)
+            let remainingDistance = workout.distanceMeters.map { max(0, $0 - totalActivityDistance) }
+                ?? intervalDistance(start: lastActivityEnd, end: workout.endDate, workout: workout, evidence: evidence)
+            if remainingTime > 5 || (remainingDistance ?? 0) > 5 {
+                let step = PlannedWorkoutStep(
+                    index: intervals.count + 1,
+                    label: "Open / Extra",
+                    stepType: .open,
+                    plannedGoalType: .open,
+                    plannedGoalDisplayText: "Open",
+                    plannedTargetDisplayText: nil
+                )
+                intervals.append(
+                    reconstructedInterval(
+                        step: step,
+                        start: lastActivityEnd,
+                        end: workout.endDate,
+                        workout: workout,
+                        evidence: evidence,
+                        sourceNote: "Inferred from workout end minus final mapped HealthKit activity boundary.",
+                        boundaryResolution: nil,
+                        tailDiagnostics: tailDiagnostics(
+                            plannedFinalStepEnd: lastActivityEnd,
+                            workout: workout,
+                            evidence: evidence,
+                            remainingTime: remainingTime,
+                            remainingDistance: remainingDistance,
+                            reason: "Remaining workout time or distance exceeded Open / Extra threshold after mapped HealthKit activity rows."
+                        ),
+                        actualDistanceOverride: remainingDistance,
+                        windowSource: .healthKitActivityBoundaries,
+                        confidence: .medium
+                    )
+                )
+            }
+        }
+
+        guard !intervals.isEmpty else { return nil }
+        return WorkoutIntervalReconstructionResult(
+            planSource: .workoutKit,
+            windowSource: .healthKitActivityBoundaries,
+            intervals: intervals,
+            notes: [
+                "Plan source: WorkoutKit",
+                "Window source: Public HealthKit activity boundaries mapped by planned step order",
+                "Stats source: HealthKit samples and activity distance statistics",
+                "HealthKit segment markers: not used"
+            ]
+        )
+    }
+
     private static func reconstructedInterval(
         step: PlannedWorkoutStep,
         start: Date,
@@ -322,10 +419,13 @@ public enum WorkoutIntervalReconstructionEngine {
         evidence: WorkoutEvidence,
         sourceNote: String,
         boundaryResolution: DistanceBoundaryResolution?,
-        tailDiagnostics: TailDiagnostics?
+        tailDiagnostics: TailDiagnostics?,
+        actualDistanceOverride: Double? = nil,
+        windowSource: IntervalWindowSource = .planDerivedFromDistanceAndTimeSamples,
+        confidence confidenceOverride: IntervalReconstructionConfidence? = nil
     ) -> ReconstructedWorkoutInterval {
         let duration = end.timeIntervalSince(start)
-        let distance = intervalDistance(start: start, end: end, workout: workout, evidence: evidence)
+        let distance = actualDistanceOverride ?? intervalDistance(start: start, end: end, workout: workout, evidence: evidence)
         let pace = distance.flatMap { distance -> Double? in
             guard distance > 0 else { return nil }
             return duration / (distance / 1_000)
@@ -335,14 +435,15 @@ public enum WorkoutIntervalReconstructionEngine {
             ?? average(values(metric: .stepCount, start: start, end: end, evidence: evidence))
         let power = average(values(metric: .runningPower, start: start, end: end, evidence: evidence))
 
-        let confidence: IntervalReconstructionConfidence
-        if step.plannedGoalType == .distance && distance != nil {
-            confidence = .high
-        } else if step.plannedGoalType == .time {
-            confidence = distance == nil ? .medium : .high
-        } else {
-            confidence = .medium
-        }
+        let confidence: IntervalReconstructionConfidence = confidenceOverride ?? {
+            if step.plannedGoalType == .distance && distance != nil {
+                return .high
+            } else if step.plannedGoalType == .time {
+                return distance == nil ? .medium : .high
+            } else {
+                return .medium
+            }
+        }()
 
         return ReconstructedWorkoutInterval(
             index: step.index,
@@ -362,7 +463,7 @@ public enum WorkoutIntervalReconstructionEngine {
             averageCadence: cadence,
             averagePower: power,
             planSource: .workoutKit,
-            windowSource: .planDerivedFromDistanceAndTimeSamples,
+            windowSource: windowSource,
             boundaryStrategy: boundaryResolution?.strategy,
             boundaryAdjustmentSeconds: boundaryResolution?.adjustmentSeconds,
             boundaryOvershootMeters: boundaryResolution?.overshootMeters,
@@ -607,6 +708,12 @@ public enum WorkoutIntervalReconstructionEngine {
         return points.map(\.value).reduce(0, +)
     }
 
+    private static func activityDistanceMeters(_ activity: WorkoutEvidenceActivity) -> Double? {
+        activity.statistics.first {
+            $0.quantityType == "HKQuantityTypeIdentifierDistanceWalkingRunning"
+        }?.sum
+    }
+
     private static func signedSeconds(_ seconds: Double) -> String {
         "\(seconds >= 0 ? "+" : "")\(String(format: "%.1f", seconds))s"
     }
@@ -681,13 +788,10 @@ public enum CustomWorkoutNormalDetailGate {
             reasons.append("Tail status is \(comparison.tailAmbiguity.rawValue).")
         }
 
-        if let result = WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: evidence) {
-            if !activities.isEmpty,
-               !activityRowsMatchReconstructedRows(result: result, activities: activities, workout: workout) {
-                reasons.append("Reconstructed rows differ from matching HealthKit activity rows beyond tolerance.")
-            }
-        } else {
-            reasons.append("RunSignal could not reconstruct interval windows from the available distance/time evidence.")
+        if isApprovedNormalDetailShape(plannedSteps),
+           comparison.status == .supported,
+           WorkoutIntervalReconstructionEngine.reconstructFromActivityBoundaries(workout: workout, evidence: evidence) == nil {
+            reasons.append("RunSignal could not build mapped interval rows from complete HealthKit activity boundaries.")
         }
 
         return uniqueReasonLabels(reasons)
@@ -708,11 +812,10 @@ public enum CustomWorkoutNormalDetailGate {
 
         guard comparison.status == .supported,
               isNarrowWarmupWorkOpenCooldown(plannedSteps),
-              let result = WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: evidence),
+              let result = WorkoutIntervalReconstructionEngine.reconstructFromActivityBoundaries(workout: workout, evidence: evidence),
               result.intervals.count == 3,
               result.intervals.map(\.stepType) == [.warmup, .work, .cooldown],
-              hasNoPairedPausesWhenTimeGoalsArePromoted(plannedSteps: plannedSteps, evidence: evidence),
-              activityRowsMatchReconstructedRows(result: result, activities: activities, workout: workout) else {
+              hasNoPairedPausesWhenTimeGoalsArePromoted(plannedSteps: plannedSteps, evidence: evidence) else {
             return nil
         }
 
@@ -738,14 +841,13 @@ public enum CustomWorkoutNormalDetailGate {
         guard comparison.status == .supported,
               comparison.tailAmbiguity == .fixedCooldownFollowedByPossibleOpenExtraTail,
               isNarrowNoPauseRepeatBlockFixedCooldownOpenTail(plannedSteps),
-              let result = WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: evidence),
+              let result = WorkoutIntervalReconstructionEngine.reconstructFromActivityBoundaries(workout: workout, evidence: evidence),
               result.intervals.count == plannedSteps.count + 1,
               result.intervals.first?.stepType == .warmup,
               result.intervals.dropLast().last?.stepType == .cooldown,
               result.intervals.last?.stepType == .open,
               result.intervals.last?.tailDiagnostics != nil,
-              result.intervals.map(\.stepType).dropFirst().dropLast(2).allSatisfy({ $0 == .work || $0 == .recovery }),
-              activityRowsMatchReconstructedRows(result: result, activities: activities, workout: workout) else {
+              result.intervals.map(\.stepType).dropFirst().dropLast(2).allSatisfy({ $0 == .work || $0 == .recovery }) else {
             return nil
         }
 
@@ -769,12 +871,11 @@ public enum CustomWorkoutNormalDetailGate {
         guard comparison.status == .supported,
               comparison.tailAmbiguity == .fixedCooldownFollowedByPossibleOpenExtraTail,
               isNarrowWarmupWorkFixedCooldownOpenTail(plannedSteps),
-              let result = WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: evidence),
+              let result = WorkoutIntervalReconstructionEngine.reconstructFromActivityBoundaries(workout: workout, evidence: evidence),
               result.intervals.count == 4,
               result.intervals.map(\.stepType) == [.warmup, .work, .cooldown, .open],
               result.intervals.last?.tailDiagnostics != nil,
-              hasNoPairedPausesWhenTimeGoalsArePromoted(plannedSteps: plannedSteps, evidence: evidence),
-              activityRowsMatchReconstructedRows(result: result, activities: activities, workout: workout) else {
+              hasNoPairedPausesWhenTimeGoalsArePromoted(plannedSteps: plannedSteps, evidence: evidence) else {
             return nil
         }
 
@@ -799,13 +900,12 @@ public enum CustomWorkoutNormalDetailGate {
         guard comparison.status == .supported,
               comparison.tailAmbiguity == .plannedOpenCooldownContinuesToWorkoutEnd,
               isNarrowNoPauseRepeatBlockOpenCooldown(plannedSteps),
-              let result = WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: evidence),
+              let result = WorkoutIntervalReconstructionEngine.reconstructFromActivityBoundaries(workout: workout, evidence: evidence),
               result.intervals.count == plannedSteps.count,
               result.intervals.first?.stepType == .warmup,
               result.intervals.last?.stepType == .cooldown,
               result.intervals.map(\.stepType).dropFirst().dropLast().allSatisfy({ $0 == .work || $0 == .recovery }),
-              result.intervals.map(\.label).contains("Open / Extra") == false,
-              activityRowsMatchReconstructedRows(result: result, activities: activities, workout: workout) else {
+              result.intervals.map(\.label).contains("Open / Extra") == false else {
             return nil
         }
 
