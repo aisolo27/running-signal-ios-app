@@ -28,6 +28,8 @@
 - Read milestone docs only when updating or checking milestone status.
 - Read bug-log sections selectively based on the current task.
 - Do not open archived docs unless the task specifically asks for historical context.
+- Treat repo cleanup as a separate audit track. For cleanup requests, first inventory folders/files, classify current vs stale vs archive-candidate, and propose moves; do not delete evidence, screenshots, exports, generated scorecards, or historical docs without explicit approval.
+- Avoid broad reads of old validation fixture folders by default. Date-specific folders under `docs/validation/apple-fitness-interval-parity-dataset/`, screenshot archives, physical proof exports, `_nonfixture-exports`, `_future-*` templates, and `docs/archive/**` are evidence/history; read them only when the task names them, asks for cleanup, or the active project-state docs point to them.
 - Keep `docs/project-state/current-state.md` updated after meaningful project changes.
 - When a task changes project direction, validation status, known limitations, or next steps, update `docs/project-state/current-state.md` and/or `docs/project-state/next-work.md` before the final response.
 - Keep `current-state.md` concise. Do not let it become another long milestone document.
