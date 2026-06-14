@@ -1,6 +1,6 @@
 # Documentation Index
 
-Last updated: 2026-06-13
+Last updated: 2026-06-14
 
 ## Active Docs To Read First
 
@@ -45,6 +45,7 @@ Keep active validation lean. Once a date-specific parity investigation is comple
 - `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-production-readiness-plan.md`: current docs-only plan for moving debug-only Parity Lab rows toward a future debug prototype and later production UI gate.
 - `docs/validation/apple-fitness-interval-parity-dataset/apple-fitness-screenshot-archive-2026-06-13/`: repo-local archive of Apple Fitness screenshots for the 12 screenshot-confirmed fixtures.
 - `docs/validation/apple-fitness-interval-parity-dataset/physical-iphone-parity-lab-proof-2026-06-13/`: repo-local archive and summary for physical iPhone `AIS17PM` Raw HealthKit Debug/parity packet proof exports for May 1, Jun 5, and Jun 10.
+- `docs/validation/apple-fitness-interval-parity-dataset/2026-06-14-stopped-early-and-open-run/`: docs/evidence capture for a stopped-early `Test Race Day 5k` custom workout and a plain open Watch run; matching FIT files are linked from the saved external HealthFit archive folder, copied locally, decoded, and used as controls for the narrow stopped-early Work gate plus open-run fallback behavior.
 
 ## Reference Docs To Read Selectively
 

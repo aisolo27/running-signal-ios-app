@@ -229,6 +229,11 @@ Candidate UI work:
 - Workout Analyzer parity surfaces
 - Evidence-first Training Plan Brief export improvements
 
+Analytics sequencing rule:
+- Whole-workout execution analysis may remain cached-evidence gated.
+- Interval-row analytics must wait until the relevant workout structures are read correctly or fall back clearly across custom, stopped-early, repeat-block, Open/Extra-tail, paused, and plain open-run controls.
+- Do not add analytics for one run style before the workout-style matrix is stable.
+
 Started scope:
 - Add a gated execution analysis detail section for enriched workouts using cached `DerivedWorkoutAnalysis`, with missing-evidence states for summary-only runs.
 - Add compact split review rows from cached distance evidence, limited to a small iPhone-friendly preview and hidden when split evidence is unavailable.
@@ -236,6 +241,7 @@ Started scope:
 Acceptance criteria:
 - UI uses cached evidence, not repeated ad hoc HealthKit queries.
 - Each chart/table has a missing-evidence state.
+- Structure-specific analytics show a gated state when custom interval rows are unsupported.
 - No dense table UI on iPhone.
 - Desktop/mobile-equivalent simulator checks are replaced here by small/large iPhone simulator checks plus physical-device data proof when HealthKit behavior matters.
 

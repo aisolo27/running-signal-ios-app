@@ -56,6 +56,15 @@ These workouts already appear in the March-June evidence set, but Apple Fitness 
 | `2026-03-19T16:51:00Z` | Tempo candidate currently excluded for distance drift. | Screenshot collected but not yet scored because the current screenshot fixture focused on Gate B rule examples. Add a tighter manual row if exact Work distance is needed. |
 | `2026-05-29T11:49:28Z` | Tempo candidate currently excluded for pause/timer drift. | Collected in screenshot fixture; overview workout-vs-elapsed delta matches debug pause evidence. |
 
+## New June 14 Evidence Captures
+
+These are evidence controls for correctness-first analytics work. FIT remains offline validation only; there is still no FIT import behavior, HealthFit dependency, runtime FIT usage, broad `HKWorkoutActivity` promotion, Phase 3 promotion, or broad production custom-workout reconstruction.
+
+| Start | Class | Apple Fitness screenshots | FIT exported | Raw HealthKit Debug export | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `2026-06-14T11:52:37Z` | Stopped-early single fixed-distance custom Work step: `Work(5 km)` stopped at about `3.02 km` | Collected in `2026-06-14-stopped-early-and-open-run/` | Found in saved HealthFit archive, copied locally, and decoded: `2026-06-14-075237-Outdoor Running-Adriel’s Apple Watch.fit` | Collected | Apple Fitness, FIT, and debug structured comparison show partial `Work`; a narrow normal-detail gate now supports this exact one-step/one-activity shape. |
+| `2026-06-14T12:11:05Z` | Plain open outdoor run from Watch, no custom workout structure | Collected in `2026-06-14-stopped-early-and-open-run/` | Found in saved HealthFit archive, copied locally, and decoded: `2026-06-14-081105-Outdoor Running-Adriel’s Apple Watch.fit` | Collected | Open-run control. RunSignal should read workout data and splits but not invent custom interval rows when planned steps are missing. |
+
 ## Screenshot Fixture Scorecard
 
 Apple Fitness screenshot-confirmed rows are tracked in `apple-fitness-screenshot-confirmed-rows-2026-03-to-2026-06.json` and scored by `score_screenshot_confirmed_custom_workouts.py`.

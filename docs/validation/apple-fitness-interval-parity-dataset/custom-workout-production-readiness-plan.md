@@ -1,12 +1,14 @@
 # Custom Workout Production Readiness Plan
 
-Last updated: 2026-06-13
+Last updated: 2026-06-14
 
 ## Scope
 
 This plan defines the path from debug-only Parity Lab candidate rows toward normal workout detail UI. It does not approve Swift changes, production interval reconstruction, normal workout UI changes, `HKWorkoutActivity` promotion, FIT import, HealthFit dependency, or runtime FIT usage.
 
 Runtime source remains HealthKit plus WorkoutKit. FIT remains an offline validation oracle only.
+
+Analytics work is blocked behind workout-structure correctness. Do not add deeper interval analytics, run-type conclusions, coaching-style labels, or structure-specific execution claims until supported custom, stopped-early, repeat-block, Open/Extra-tail, paused, and plain open-run controls are read correctly or explicitly fall back with stable reasons.
 
 ## Current Decision
 
@@ -16,6 +18,8 @@ The latest debug evidence is strong enough to keep Parity Lab active and to plan
 
 1. A debug-only prototype approval.
 2. A later production UI promotion approval.
+
+June 14, 2026 added one narrow normal-detail exception: a stopped-early single fixed-distance `Work` custom workout can display as a partial `Work` row when one complete HealthKit activity row maps to the single planned step and offline FIT evidence confirms the same one-lap/one-step shape. This does not approve broad simple Work/Open, repeat-block, Open/Extra tail, paused workout, or analytics promotion.
 
 ## Safest Narrow Path
 
@@ -65,8 +69,10 @@ git diff --check
 
 Normal workout detail UI promotion requires a separate later approval after a debug prototype exists. Minimum criteria:
 
+- Analytics must remain confidence-gated until row correctness is stable across the full target workout-style matrix, not just one run style.
 - Debug prototype has been validated on physical iPhone with real HealthKit data.
 - A balanced evidence set covers easy Work/Open, no-tail tempo-like warmup/work/cooldown, repeat-block intervals, fixed-cooldown Open/Extra tails, paused workouts, and clean no-pause workouts.
+- Evidence includes stopped-early single-step custom workouts and plain open Watch runs as controls.
 - The promoted subclass has explicit acceptance thresholds for row count, label mapping, timing, distance, pause overlap, and tail behavior.
 - The UI has clear fallback wording for unsupported custom workouts.
 - Unsupported workouts keep the current production reconstruction rather than showing partially trusted candidate rows.
@@ -104,6 +110,7 @@ These remain blocked for normal workout detail UI:
 - warmup/work/cooldown outliers with unresolved timing or distance drift
 - broad `HKWorkoutActivity` promotion
 - Gate A simple Work/Open production promotion
+- deeper interval analytics or structure-specific execution claims before the workout-style matrix is stable
 
 The blocked state can change only after a later task approves the relevant rule and validation shows row-level support.
 

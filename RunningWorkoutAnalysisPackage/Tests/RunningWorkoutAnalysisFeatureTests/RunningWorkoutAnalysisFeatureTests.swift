@@ -2203,6 +2203,53 @@ import Testing
     #expect(result.intervals.map(\.label) == ["Work 1"])
 }
 
+@Test func stoppedEarlySingleFixedDistanceWorkUsesActivityBoundaryInNormalDetail() throws {
+    let start = Date(timeIntervalSince1970: 10_690)
+    let workout = testWorkout(id: "stopped-early-single-work", start: start, distanceMeters: 3_026, durationSeconds: 733.8)
+    let plannedSteps = [
+        PlannedWorkoutStep(
+            index: 1,
+            label: "Work 1",
+            stepType: .work,
+            plannedGoalType: .distance,
+            plannedGoalValue: 5_000,
+            plannedGoalDisplayText: "5 km",
+            plannedTargetDisplayText: "4:00 /km"
+        )
+    ]
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: plannedSteps,
+        activityWindows: [(start: 0, end: 733.8, distance: 3_026)],
+        distancePoints: [(733.8, 3_026)]
+    )
+
+    let productionFallback = try #require(WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: evidence))
+    let result = try #require(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence))
+
+    #expect(productionFallback.intervals.map(\.label) == ["Open / Extra"])
+    #expect(result.intervals.map(\.label) == ["Work 1"])
+    #expect(result.intervals[0].stepType == .work)
+    #expect(result.intervals[0].windowSource == .healthKitActivityBoundaries)
+    #expect(abs(result.intervals[0].actualDurationSeconds - 733.8) < 0.001)
+    #expect(result.intervals[0].actualDistanceMeters == 3_026)
+    #expect(result.intervals.map(\.label).contains("Open / Extra") == false)
+}
+
+@Test func openRunWithoutPlannedStepsDoesNotInventCustomIntervals() {
+    let start = Date(timeIntervalSince1970: 10_695)
+    let workout = testWorkout(id: "plain-open-run", start: start, distanceMeters: 2_199.8, durationSeconds: 1_199.5)
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: [],
+        activityWindows: [(start: 0, end: 1_199.5, distance: 2_199.8)],
+        distancePoints: [(386.3, 1_000), (1_044.4, 1_000), (1_196.8, 199.8)]
+    )
+
+    #expect(WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) == nil)
+}
+
 @Test func healthKitSegmentMarkersAreNotUsedAsWorkoutKitReconstructedIntervals() throws {
     let start = Date(timeIntervalSince1970: 10_700)
     let workout = testWorkout(id: "segment-markers-not-used", start: start, distanceMeters: 1_000, durationSeconds: 600)

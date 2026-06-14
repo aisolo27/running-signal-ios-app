@@ -732,7 +732,8 @@ public enum CustomWorkoutNormalDetailGate {
         workout: CanonicalWorkout,
         evidence: WorkoutEvidence
     ) -> WorkoutIntervalReconstructionResult? {
-        supportedNarrowWarmupWorkOpenCooldown(workout: workout, evidence: evidence)
+        supportedNarrowSingleFixedDistanceWorkStoppedEarly(workout: workout, evidence: evidence)
+            ?? supportedNarrowWarmupWorkOpenCooldown(workout: workout, evidence: evidence)
             ?? supportedNarrowWarmupWorkFixedCooldownOpenTail(workout: workout, evidence: evidence)
             ?? supportedNarrowNoPauseRepeatBlockOpenCooldown(workout: workout, evidence: evidence)
             ?? supportedNarrowNoPauseRepeatBlockFixedCooldownOpenTail(workout: workout, evidence: evidence)
@@ -795,6 +796,33 @@ public enum CustomWorkoutNormalDetailGate {
         }
 
         return uniqueReasonLabels(reasons)
+    }
+
+    public static func supportedNarrowSingleFixedDistanceWorkStoppedEarly(
+        workout: CanonicalWorkout,
+        evidence: WorkoutEvidence
+    ) -> WorkoutIntervalReconstructionResult? {
+        guard let audit = evidence.workoutPlanAudit,
+              pairedPauseCount(in: evidence.events) == 0 else { return nil }
+        let plannedSteps = audit.plannedSteps.sorted { $0.index < $1.index }
+        let activities = evidence.activities.sorted { $0.startDate < $1.startDate }
+        let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+            plannedSteps: plannedSteps,
+            activities: activities,
+            workout: workout
+        )
+
+        guard comparison.status == .supported,
+              isNarrowSingleFixedDistanceWorkStoppedEarly(plannedSteps, activities: activities),
+              let result = WorkoutIntervalReconstructionEngine.reconstructFromActivityBoundaries(workout: workout, evidence: evidence),
+              result.intervals.count == 1,
+              result.intervals.first?.stepType == .work,
+              result.intervals.first?.plannedGoalType == .distance,
+              result.intervals.map(\.label).contains("Open / Extra") == false else {
+            return nil
+        }
+
+        return result
     }
 
     public static func supportedNarrowWarmupWorkOpenCooldown(
@@ -980,6 +1008,36 @@ public enum CustomWorkoutNormalDetailGate {
         return cooldown.plannedGoalType == .time || cooldown.plannedGoalType == .distance
     }
 
+    private static func isNarrowSingleFixedDistanceWorkStoppedEarly(
+        _ plannedSteps: [PlannedWorkoutStep],
+        activities: [WorkoutEvidenceActivity]
+    ) -> Bool {
+        guard isNarrowSingleFixedDistanceWorkShape(plannedSteps),
+              activities.count == 1,
+              let step = plannedSteps.first,
+              let activity = activities.first,
+              let plannedDistance = step.plannedGoalValue,
+              let activityDistance = activityDistanceMeters(activity),
+              activityDistance > 0,
+              activityDistance < plannedDistance - activityDistanceToleranceMeters(plannedDistance),
+              activity.endDate != nil else {
+            return false
+        }
+
+        return true
+    }
+
+    private static func isNarrowSingleFixedDistanceWorkShape(_ plannedSteps: [PlannedWorkoutStep]) -> Bool {
+        guard plannedSteps.count == 1,
+              let step = plannedSteps.first else { return false }
+
+        return step.stepType == .work
+            && step.plannedGoalType == .distance
+            && (step.plannedGoalValue ?? 0) > 0
+            && step.repeatBlockIndex == nil
+            && step.repeatIndex == nil
+    }
+
     private static func isNarrowRepeatBlockShape(_ plannedSteps: [PlannedWorkoutStep]) -> Bool {
         guard plannedSteps.count >= 6,
               let warmup = plannedSteps.first,
@@ -1009,7 +1067,8 @@ public enum CustomWorkoutNormalDetailGate {
     }
 
     private static func isApprovedNormalDetailShape(_ plannedSteps: [PlannedWorkoutStep]) -> Bool {
-        isNarrowWarmupWorkOpenCooldown(plannedSteps)
+        isNarrowSingleFixedDistanceWorkShape(plannedSteps)
+            || isNarrowWarmupWorkOpenCooldown(plannedSteps)
             || isNarrowWarmupWorkFixedCooldownOpenTail(plannedSteps)
             || isNarrowNoPauseRepeatBlockOpenCooldown(plannedSteps)
             || isNarrowNoPauseRepeatBlockFixedCooldownOpenTail(plannedSteps)

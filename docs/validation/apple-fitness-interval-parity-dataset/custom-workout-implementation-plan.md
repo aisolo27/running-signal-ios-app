@@ -1,10 +1,12 @@
 # Custom Workout Implementation Plan
 
-Last updated: 2026-06-13
+Last updated: 2026-06-14
 
 ## Scope
 
 This is a future implementation plan only. Do not implement these phases until a later task explicitly approves Swift changes. Runtime source remains HealthKit/WorkoutKit. FIT remains offline validation only. Production behavior and normal workout UI remain unchanged.
+
+Execution order for analytics is correctness-first: complete the workout-style read matrix and stable fallback reasons before adding analytics that depend on custom interval structure. Whole-workout analytics can remain evidence-gated, but interval-row analytics must wait until the relevant row windows are trusted.
 
 ## Phase 1: Internal Expanded-Step Model
 
@@ -83,6 +85,24 @@ Success criteria:
 - Prototype preserves current reconstruction when candidate rows are missing or ambiguous.
 - No broad custom workout promotion.
 
+## Phase 3A: Stopped-Early Single Work Control
+
+Keep this as a narrow normal-detail rule only:
+
+- exactly one planned step
+- step type is `Work`
+- goal type is fixed distance
+- exactly one complete HealthKit activity row
+- activity distance is positive and materially less than the planned goal
+- no paired pause/resume evidence
+- FIT offline evidence shows one lap and one workout step for the same shape
+
+Success criteria:
+
+- The row displays as partial `Work`, not `Open / Extra`.
+- Plain open Watch runs with zero planned steps still show no custom interval rows.
+- The rule does not approve broad simple Work/Open, repeat-block, tail, paused, or analytics behavior.
+
 ## Phase 4: Structured Interval Repeat-Block Prototype
 
 Start only after Gate B row-level evidence passes for structured intervals.
@@ -125,11 +145,11 @@ Blocked until:
 
 - Gate A simple Work/Open Swift prototype.
 - Production interval reconstruction.
-- Normal workout UI.
+- Broad normal workout UI.
 - `HKWorkoutActivity` promotion.
 - FIT import or HealthFit dependency.
 - Runtime FIT usage.
-- Coaching, readiness, race prediction, training load, recovery, or VDOT.
+- Coaching, readiness, race prediction, training load, recovery, VDOT, or interval analytics that depend on unsupported workout structures.
 
 ## Validation Before Any Future Swift Prototype
 

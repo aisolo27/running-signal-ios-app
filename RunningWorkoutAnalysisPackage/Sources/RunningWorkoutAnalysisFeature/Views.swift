@@ -2238,7 +2238,7 @@ struct ExecutionAnalysisCard: View {
                     MetricItem(title: "Pace basis", value: RunFormatters.pace(analysis.paceSecondsPerKmEstimate), detail: analysis.paceConfidence.label),
                     MetricItem(title: "Pacing shape", value: analysis.pacingShape ?? "Missing", detail: analysis.pacingShapeConfidence.label),
                     MetricItem(title: "HR drift", value: driftText(analysis.heartRateDriftPercent), detail: analysis.heartRateDriftConfidence.label),
-                    MetricItem(title: "Intervals", value: "\(analysis.intervalCount)", detail: analysis.intervalConfidence.label),
+                    intervalMetricItem(analysis),
                     MetricItem(title: "Mechanics", value: mechanicsSummary(analysis), detail: analysis.mechanicsConfidence.label),
                     MetricItem(title: "Data quality", value: analysis.dataQualityConfidence.label, detail: analysis.calculationVersion)
                 ])
@@ -2342,6 +2342,27 @@ struct ExecutionAnalysisCard: View {
             return "Gated until cached HealthKit evidence is available."
         }
         return "Built from persisted HealthKit evidence, not a new live query."
+    }
+
+    private func intervalMetricItem(_ analysis: DerivedWorkoutAnalysis) -> MetricItem {
+        guard hasCustomWorkoutPlan else {
+            return MetricItem(title: "Intervals", value: "\(analysis.intervalCount)", detail: analysis.intervalConfidence.label)
+        }
+        guard let supportedIntervals else {
+            return MetricItem(title: "Intervals", value: "Gated", detail: "Structure pending")
+        }
+        return MetricItem(title: "Intervals", value: "\(supportedIntervals.intervals.count)", detail: "Validated rows")
+    }
+
+    private var hasCustomWorkoutPlan: Bool {
+        guard let audit = workout.evidence?.workoutPlanAudit,
+              audit.status == .available else { return false }
+        return !audit.plannedSteps.isEmpty
+    }
+
+    private var supportedIntervals: WorkoutIntervalReconstructionResult? {
+        guard let evidence = workout.evidence else { return nil }
+        return CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence)
     }
 
     private func driftText(_ value: Double?) -> String {
