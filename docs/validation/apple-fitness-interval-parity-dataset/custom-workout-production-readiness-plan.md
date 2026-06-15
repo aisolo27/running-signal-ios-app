@@ -27,6 +27,8 @@ June 15, 2026 also added a docs/debug-only recovery-containing Open/Extra separa
 
 June 15, 2026 also added a docs/debug-only ambiguous repeat-tail separator rule in `ambiguous-repeat-tail-rule-2026-06-15.md`. It requires repeat expansion, complete row mapping, fixed final-row exhaustion, and open-cooldown guard behavior before any repeat-block Open/Extra tail. It does not approve broader repeat-tail promotion.
 
+June 15, 2026 also added the Gate A simple Work/Open prototype boundary in `simple-work-open-prototype-decision-2026-06-15.md`. It limits any future prototype discussion to exactly one fixed-distance Work step, one complete activity row, and a positive Open/Extra tail. It does not approve normal workout detail UI.
+
 ## Safest Narrow Path
 
 Start with the smallest subclass only:
@@ -61,6 +63,7 @@ A later task may approve a debug-only prototype only if all of these are true:
 - Paused repeat-block rows follow the docs/debug timer rule only when paired HealthKit pause/resume evidence can be assigned to exact row windows; unpaired or ambiguous pause evidence falls back.
 - Recovery-containing Open/Extra rows follow the docs/debug separator rule only when planned Recovery maps cleanly and the tail starts after all fixed planned rows are exhausted.
 - Ambiguous repeat-tail rows follow the docs/debug separator rule only when repeat expansion, final fixed-row exhaustion, tail thresholding, and open-cooldown guards are all proven.
+- Gate A simple Work/Open rows follow the docs/debug prototype boundary only when the workout has exactly one fixed-distance Work step, one complete HealthKit activity row, and a positive tail; all structured/special shapes fall back.
 - FIT values stay outside runtime code and appear only in docs/offline validation scripts.
 
 Required validation before prototype work:
@@ -104,6 +107,7 @@ Fallback reasons should be explicit and stable:
 - Open/Extra tail rule not approved
 - Recovery row cannot be separated from Open/Extra tail
 - repeat-tail separation ambiguous
+- Gate A simple Work/Open eligibility failed
 - row timing outside tolerance
 - row distance outside tolerance
 - label mapping ambiguous
