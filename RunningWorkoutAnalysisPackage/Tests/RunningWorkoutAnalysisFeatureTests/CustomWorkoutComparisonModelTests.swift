@@ -323,6 +323,84 @@ import Testing
     expectDebugOnly(comparison)
 }
 
+@Test func debugCustomWorkoutComparisonBridgeSupportsPausedRepeatBlocksOnlyAfterPausedRuleApproval() {
+    let start = Date(timeIntervalSince1970: 1_797_000_000)
+    let workout = bridgeWorkout(start: start, distanceMeters: 1_000, durationSeconds: 420)
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plannedSteps: [
+            plannedStep(index: 1, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, goalType: .distance, goalValue: 400),
+            plannedStep(index: 2, label: "Recovery 1", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 1, goalType: .time, goalValue: 60),
+            plannedStep(index: 3, label: "Work 2", stepType: .work, repeatBlockIndex: 1, repeatIndex: 2, goalType: .distance, goalValue: 400),
+            plannedStep(index: 4, label: "Recovery 2", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 2, goalType: .time, goalValue: 60)
+        ],
+        activities: [
+            evidenceActivity(index: 1, start: start, end: start.addingTimeInterval(120), distance: 400),
+            evidenceActivity(index: 2, start: start.addingTimeInterval(120), end: start.addingTimeInterval(220), distance: 100),
+            evidenceActivity(index: 3, start: start.addingTimeInterval(220), end: start.addingTimeInterval(340), distance: 400),
+            evidenceActivity(index: 4, start: start.addingTimeInterval(340), end: start.addingTimeInterval(420), distance: 100)
+        ],
+        workout: workout,
+        pausedRepeatBlockRuleApproved: true,
+        pairedPauseCount: 1
+    )
+
+    #expect(comparison.status == .supported)
+    #expect(comparison.fallbackReasons.isEmpty)
+    #expect(comparison.rows.allSatisfy { $0.confidence == .supported })
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonBridgeKeepsPausedRepeatBlocksBehindExplicitPausedRule() {
+    let start = Date(timeIntervalSince1970: 1_797_000_000)
+    let workout = bridgeWorkout(start: start, distanceMeters: 1_000, durationSeconds: 420)
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plannedSteps: [
+            plannedStep(index: 1, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, goalType: .distance, goalValue: 400),
+            plannedStep(index: 2, label: "Recovery 1", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 1, goalType: .time, goalValue: 60),
+            plannedStep(index: 3, label: "Work 2", stepType: .work, repeatBlockIndex: 1, repeatIndex: 2, goalType: .distance, goalValue: 400),
+            plannedStep(index: 4, label: "Recovery 2", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 2, goalType: .time, goalValue: 60)
+        ],
+        activities: [
+            evidenceActivity(index: 1, start: start, end: start.addingTimeInterval(120), distance: 400),
+            evidenceActivity(index: 2, start: start.addingTimeInterval(120), end: start.addingTimeInterval(220), distance: 100),
+            evidenceActivity(index: 3, start: start.addingTimeInterval(220), end: start.addingTimeInterval(340), distance: 400),
+            evidenceActivity(index: 4, start: start.addingTimeInterval(340), end: start.addingTimeInterval(420), distance: 100)
+        ],
+        workout: workout,
+        pairedPauseCount: 1
+    )
+
+    #expect(comparison.status == .repeatBlockNeedsRule)
+    #expect(comparison.rows.allSatisfy { $0.confidence == .needsRule })
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonBridgeDoesNotApplyPausedRepeatRuleWithoutPairedPauses() {
+    let start = Date(timeIntervalSince1970: 1_797_000_000)
+    let workout = bridgeWorkout(start: start, distanceMeters: 1_000, durationSeconds: 360)
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plannedSteps: [
+            plannedStep(index: 1, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, goalType: .distance, goalValue: 400),
+            plannedStep(index: 2, label: "Recovery 1", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 1, goalType: .time, goalValue: 60),
+            plannedStep(index: 3, label: "Work 2", stepType: .work, repeatBlockIndex: 1, repeatIndex: 2, goalType: .distance, goalValue: 400),
+            plannedStep(index: 4, label: "Recovery 2", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 2, goalType: .time, goalValue: 60)
+        ],
+        activities: [
+            evidenceActivity(index: 1, start: start, end: start.addingTimeInterval(120), distance: 400),
+            evidenceActivity(index: 2, start: start.addingTimeInterval(120), end: start.addingTimeInterval(180), distance: 100),
+            evidenceActivity(index: 3, start: start.addingTimeInterval(180), end: start.addingTimeInterval(300), distance: 400),
+            evidenceActivity(index: 4, start: start.addingTimeInterval(300), end: start.addingTimeInterval(360), distance: 100)
+        ],
+        workout: workout,
+        pausedRepeatBlockRuleApproved: true,
+        pairedPauseCount: 0
+    )
+
+    #expect(comparison.status == .repeatBlockNeedsRule)
+    #expect(comparison.rows.allSatisfy { $0.confidence == .needsRule })
+    expectDebugOnly(comparison)
+}
+
 @Test func debugCustomWorkoutComparisonBridgeBlocksOpenTailRule() {
     let start = Date(timeIntervalSince1970: 1_797_000_000)
     let workout = bridgeWorkout(start: start, distanceMeters: 1_050, durationSeconds: 360)

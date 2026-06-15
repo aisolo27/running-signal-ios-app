@@ -105,7 +105,9 @@ enum DebugCustomWorkoutComparisonBuilder {
         hasRowLevelEvidence: Bool = true,
         repeatBlockRuleApproved: Bool = false,
         openTailRuleApproved: Bool = false,
-        simpleWorkOpenRuleApproved: Bool = false
+        simpleWorkOpenRuleApproved: Bool = false,
+        pausedRepeatBlockRuleApproved: Bool = false,
+        pairedPauseCount: Int = 0
     ) -> DebugCustomWorkoutComparison {
         let sortedSteps = plannedSteps.sorted { $0.index < $1.index }
         let sortedActivities = activities.sorted { $0.startDate < $1.startDate }
@@ -126,7 +128,12 @@ enum DebugCustomWorkoutComparisonBuilder {
             && sortedActivities.allSatisfy { activityDistanceMeters($0) != nil }
             && activityRowsAreContiguous(sortedActivities)
         let hasRepeatBlock = sortedSteps.contains { ($0.repeatIndex ?? 1) > 1 }
-        let repeatBlockIsScoreable = !hasRepeatBlock || repeatBlockRuleApproved
+        let pausedRepeatBlockRuleIsScoreable = pausedRepeatBlockRuleApproved
+            && hasRepeatBlock
+            && pairedPauseCount > 0
+        let repeatBlockIsScoreable = !hasRepeatBlock
+            || repeatBlockRuleApproved
+            || pausedRepeatBlockRuleIsScoreable
         let simpleWorkOpenRuleIsScoreable = simpleWorkOpenRuleApproved
             && isSimpleWorkOpenPrototypeCandidate(
                 plannedSteps: sortedSteps,
@@ -152,6 +159,7 @@ enum DebugCustomWorkoutComparisonBuilder {
             repeatBlockRuleApproved: repeatBlockRuleApproved,
             openTailRuleApproved: openTailRuleApproved,
             simpleWorkOpenRuleApproved: simpleWorkOpenRuleIsScoreable,
+            pausedRepeatBlockRuleApproved: pausedRepeatBlockRuleIsScoreable,
             repeatBlockNeedsRule: hasRepeatBlock
         )
     }
@@ -169,6 +177,7 @@ enum DebugCustomWorkoutComparisonBuilder {
         repeatBlockRuleApproved: Bool = false,
         openTailRuleApproved: Bool = false,
         simpleWorkOpenRuleApproved: Bool = false,
+        pausedRepeatBlockRuleApproved: Bool = false,
         repeatBlockNeedsRule: Bool? = nil
     ) -> DebugCustomWorkoutComparison {
         let plannedRows = plan?.expandedSteps ?? []
@@ -194,6 +203,7 @@ enum DebugCustomWorkoutComparisonBuilder {
             repeatBlockRuleApproved: repeatBlockRuleApproved,
             openTailRuleApproved: openTailRuleApproved,
             simpleWorkOpenRuleApproved: simpleWorkOpenRuleApproved,
+            pausedRepeatBlockRuleApproved: pausedRepeatBlockRuleApproved,
             repeatBlockNeedsRule: repeatBlockNeedsRule ?? (plan?.blocks.contains(where: { $0.iterationCount > 1 }) == true)
         )
 
@@ -268,6 +278,7 @@ enum DebugCustomWorkoutComparisonBuilder {
         repeatBlockRuleApproved: Bool,
         openTailRuleApproved: Bool,
         simpleWorkOpenRuleApproved: Bool,
+        pausedRepeatBlockRuleApproved: Bool,
         repeatBlockNeedsRule: Bool
     ) -> CustomWorkoutComparisonStatus {
         if fallbackReasons.contains(.missingPlannedSteps)
@@ -287,7 +298,7 @@ enum DebugCustomWorkoutComparisonBuilder {
             return .openTailNeedsRule
         }
         if repeatBlockNeedsRule {
-            if !repeatBlockRuleApproved {
+            if !repeatBlockRuleApproved && !pausedRepeatBlockRuleApproved {
                 return .repeatBlockNeedsRule
             }
         }

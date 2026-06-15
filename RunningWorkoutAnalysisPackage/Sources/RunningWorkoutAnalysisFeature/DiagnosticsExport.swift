@@ -203,7 +203,8 @@ public enum DiagnosticsExport {
             customWorkoutComparisonSummary(
                 plannedSteps: plannedSteps,
                 activities: evidence?.activities ?? [],
-                workout: workout
+                workout: workout,
+                events: evidence?.events ?? []
             )
         ))
 
@@ -334,7 +335,8 @@ public enum DiagnosticsExport {
             customWorkoutComparisonSummary: customWorkoutComparisonSummary(
                 plannedSteps: plannedSteps,
                 activities: evidence?.activities ?? [],
-                workout: workout
+                workout: workout,
+                events: evidence?.events ?? []
             ),
             plannedStepBoundaryComparisons: plannedStepBoundaryComparisons(
                 reconstructedIntervals: reconstructedIntervals,
@@ -886,7 +888,8 @@ public enum DiagnosticsExport {
             customWorkoutComparisonSummary: customWorkoutComparisonSummary(
                 plannedSteps: plannedSteps,
                 activities: evidence?.activities ?? [],
-                workout: workout
+                workout: workout,
+                events: evidence?.events ?? []
             ),
             boundaryDiagnostics: reconstructedIntervals?.intervals.map { RawDebugIntervalBoundaryDiagnostics(interval: $0, workout: workout) }.filter { $0.hasDiagnostics } ?? [],
             segmentMarkers: segmentMarkers.map(RawDebugSegmentMarker.init(interval:)),
@@ -1227,14 +1230,18 @@ public enum DiagnosticsExport {
     private static func customWorkoutComparisonSummary(
         plannedSteps: [PlannedWorkoutStep],
         activities: [WorkoutEvidenceActivity],
-        workout: CanonicalWorkout
+        workout: CanonicalWorkout,
+        events: [WorkoutEvidenceEvent]
     ) -> RawDebugCustomWorkoutComparisonSummary {
-        RawDebugCustomWorkoutComparisonSummary(
+        let pairedPauses = pairedPauseIntervals(events, workout: workout)
+        return RawDebugCustomWorkoutComparisonSummary(
             comparison: DebugCustomWorkoutComparisonBuilder.comparison(
                 plannedSteps: plannedSteps,
                 activities: activities,
                 workout: workout,
-                simpleWorkOpenRuleApproved: true
+                simpleWorkOpenRuleApproved: true,
+                pausedRepeatBlockRuleApproved: true,
+                pairedPauseCount: pairedPauses.count
             )
         )
     }

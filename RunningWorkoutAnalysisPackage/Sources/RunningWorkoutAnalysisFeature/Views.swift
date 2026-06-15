@@ -2053,7 +2053,9 @@ struct RawHealthKitWorkoutDebugView: View {
             plannedSteps: plannedSteps,
             activities: activities,
             workout: currentWorkout,
-            simpleWorkOpenRuleApproved: true
+            simpleWorkOpenRuleApproved: true,
+            pausedRepeatBlockRuleApproved: true,
+            pairedPauseCount: pauses.count
         )
         var rows = zip(plannedSteps, activities).enumerated().map { offset, pair in
             let (step, activity) = pair
