@@ -2056,6 +2056,7 @@ struct RawHealthKitWorkoutDebugView: View {
             simpleWorkOpenRuleApproved: true,
             pausedRepeatBlockRuleApproved: true,
             recoveryContainingOpenTailRuleApproved: true,
+            repeatTailRuleApproved: true,
             pairedPauseCount: pauses.count
         )
         var rows = zip(plannedSteps, activities).enumerated().map { offset, pair in

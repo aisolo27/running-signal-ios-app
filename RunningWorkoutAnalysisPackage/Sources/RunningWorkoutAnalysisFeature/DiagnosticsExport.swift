@@ -1242,6 +1242,7 @@ public enum DiagnosticsExport {
                 simpleWorkOpenRuleApproved: true,
                 pausedRepeatBlockRuleApproved: true,
                 recoveryContainingOpenTailRuleApproved: true,
+                repeatTailRuleApproved: true,
                 pairedPauseCount: pairedPauses.count
             )
         )
