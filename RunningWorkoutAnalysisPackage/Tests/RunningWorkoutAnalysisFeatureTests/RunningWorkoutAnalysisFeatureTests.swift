@@ -1849,6 +1849,96 @@ import Testing
     #expect(result.intervals.last?.actualDistanceMeters == 500)
 }
 
+@Test func normalDetailGateSupportsSimpleFixedDistanceWorkOpenTail() throws {
+    let start = Date(timeIntervalSince1970: 10_654)
+    let workout = testWorkout(id: "normal-detail-simple-work-open", start: start, distanceMeters: 5_050, durationSeconds: 1_930)
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .distance, plannedGoalValue: 5_000, plannedGoalDisplayText: "5 km")
+        ],
+        activityWindows: [
+            (0, 1_900, 5_005)
+        ],
+        distancePoints: [
+            (1_900, 5_005),
+            (1_930, 45)
+        ]
+    )
+
+    let result = try #require(CustomWorkoutNormalDetailGate.supportedNarrowSimpleFixedDistanceWorkOpenTail(workout: workout, evidence: evidence))
+
+    #expect(result.intervals.map(\.label) == ["Work 1", "Open / Extra"])
+    #expect(result.intervals.map(\.stepType) == [.work, .open])
+    #expect(result.intervals.first?.plannedGoalType == .distance)
+    #expect(result.intervals.last?.tailDiagnostics?.remainingSeconds == 30)
+    #expect(result.intervals.last?.actualDistanceMeters == 45)
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence)?.intervals.map(\.label) == result.intervals.map(\.label))
+}
+
+@Test func normalDetailGateBlocksSimpleWorkOpenWhenActivityRowsAreMissing() {
+    let start = Date(timeIntervalSince1970: 10_654)
+    let workout = testWorkout(id: "normal-detail-simple-work-open-missing", start: start, distanceMeters: 5_050, durationSeconds: 1_930)
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .distance, plannedGoalValue: 5_000, plannedGoalDisplayText: "5 km")
+        ],
+        activityWindows: [],
+        distancePoints: [
+            (1_930, 5_050)
+        ]
+    )
+
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowSimpleFixedDistanceWorkOpenTail(workout: workout, evidence: evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) == nil)
+}
+
+@Test func normalDetailGateBlocksSimpleWorkOpenForTrueRepeatRows() {
+    let start = Date(timeIntervalSince1970: 10_654)
+    let workout = testWorkout(id: "normal-detail-simple-work-open-repeat", start: start, distanceMeters: 450, durationSeconds: 190)
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Work 2", stepType: .work, repeatBlockIndex: 1, repeatIndex: 2, plannedGoalType: .distance, plannedGoalValue: 400, plannedGoalDisplayText: "400 m")
+        ],
+        activityWindows: [
+            (0, 160, 405)
+        ],
+        distancePoints: [
+            (160, 405),
+            (190, 45)
+        ]
+    )
+
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowSimpleFixedDistanceWorkOpenTail(workout: workout, evidence: evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) == nil)
+}
+
+@Test func normalDetailGateBlocksRecoveryContainingSimpleTail() {
+    let start = Date(timeIntervalSince1970: 10_654)
+    let workout = testWorkout(id: "normal-detail-recovery-tail-blocked", start: start, distanceMeters: 5_250, durationSeconds: 2_080)
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Recovery 1", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .time, plannedGoalValue: 120, plannedGoalDisplayText: "120 s"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .distance, plannedGoalValue: 5_000, plannedGoalDisplayText: "5 km")
+        ],
+        activityWindows: [
+            (0, 120, 180),
+            (120, 2_050, 5_005)
+        ],
+        distancePoints: [
+            (120, 180),
+            (2_050, 5_005),
+            (2_080, 65)
+        ]
+    )
+
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowSimpleFixedDistanceWorkOpenTail(workout: workout, evidence: evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) == nil)
+}
+
 @Test func normalDetailGateUsesActivityBoundaryRowsWhenDistanceReconstructionDrifts() throws {
     let start = Date(timeIntervalSince1970: 10_655)
     let workout = testWorkout(id: "normal-detail-activity-boundary-drift", start: start, distanceMeters: 4_500, durationSeconds: 1_800)
@@ -2070,18 +2160,21 @@ import Testing
         ]
     )
 
-    let tailWorkout = testWorkout(id: "normal-detail-tail", start: start, distanceMeters: 1_050, durationSeconds: 360)
-    let tailEvidence = normalDetailGateEvidence(
-        workout: tailWorkout,
+    let recoveryTailWorkout = testWorkout(id: "normal-detail-recovery-tail", start: start, distanceMeters: 1_150, durationSeconds: 420)
+    let recoveryTailEvidence = normalDetailGateEvidence(
+        workout: recoveryTailWorkout,
         plannedSteps: [
-            PlannedWorkoutStep(index: 1, label: "Work 1", stepType: .work, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km")
+            PlannedWorkoutStep(index: 1, label: "Recovery 1", stepType: .recovery, plannedGoalType: .time, plannedGoalValue: 60, plannedGoalDisplayText: "60 s"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km")
         ],
         activityWindows: [
-            (0, 300, 1_000)
+            (0, 60, 100),
+            (60, 360, 1_000)
         ],
         distancePoints: [
-            (300, 1_000),
-            (360, 50)
+            (60, 100),
+            (360, 1_000),
+            (420, 50)
         ]
     )
 
@@ -2110,11 +2203,11 @@ import Testing
     )
 
     #expect(CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkOpenCooldown(workout: repeatWorkout, evidence: repeatEvidence) == nil)
-    #expect(CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkOpenCooldown(workout: tailWorkout, evidence: tailEvidence) == nil)
-    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: tailWorkout, evidence: tailEvidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkOpenCooldown(workout: recoveryTailWorkout, evidence: recoveryTailEvidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: recoveryTailWorkout, evidence: recoveryTailEvidence) == nil)
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: repeatTailWorkout, evidence: repeatTailEvidence) == nil)
     #expect(CustomWorkoutNormalDetailGate.blockedReasons(workout: repeatWorkout, evidence: repeatEvidence).contains {
-        $0.contains("outside the four approved")
+        $0.contains("outside the approved")
     })
 }
 
