@@ -136,6 +136,10 @@ An Open/Extra tail may be created only when:
 - remaining workout duration or distance exceeds a small threshold
 - the tail can be explained as post-plan activity, not as a planned cooldown row
 
+For recovery-containing tail shapes, use `recovery-containing-open-tail-rule-2026-06-15.md`: preserve planned `Recovery` rows from expanded WorkoutKit order, require every fixed planned row to map to a complete contiguous HealthKit activity row, and infer Open/Extra only from residual movement after the final fixed planned row. Never relabel a planned Recovery row as Open/Extra.
+
+For repeat-tail shapes, use `ambiguous-repeat-tail-rule-2026-06-15.md`: expand repeat blocks by actual iteration, map every Work/Recovery/Cooldown row before inferring a tail, keep final open cooldowns labeled Cooldown, and infer Open/Extra only after a resolved fixed final row. Count alignment alone is not enough.
+
 During FIT validation, if FIT lacks an explicit Open/Extra lap, use FIT session-minus-lap totals as reference evidence only.
 
 ## Label Mapping Rules
@@ -164,6 +168,8 @@ Fallback to current reconstruction when:
 - activity rows are non-contiguous or missing end boundaries.
 - labels cannot be mapped from expanded planned step order.
 - Open/Extra tail status is ambiguous.
+- a planned Recovery row cannot be separated from a proposed Open/Extra tail.
+- repeat expansion or repeat-tail separation is ambiguous.
 - the workout is duplicate, no-plan, summary-only, or otherwise excluded from validation scoring.
 
 Never use FIT at runtime. Never use Apple Fitness/manual rows at runtime. Never promote raw HealthKit segment markers as Apple Fitness interval rows.

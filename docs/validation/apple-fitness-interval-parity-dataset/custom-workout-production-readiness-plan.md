@@ -23,6 +23,10 @@ June 14, 2026 added one narrow normal-detail exception: a stopped-early single f
 
 June 15, 2026 added a docs/debug-only paused repeat-block timer rule in `paused-repeat-block-timer-rule-2026-06-15.md`. It defines elapsed row windows plus active/timer duration from paired HealthKit pause overlap, but it does not approve normal workout detail UI, broad repeat-block promotion, or analytics.
 
+June 15, 2026 also added a docs/debug-only recovery-containing Open/Extra separator rule in `recovery-containing-open-tail-rule-2026-06-15.md`. It keeps planned Recovery rows distinct from post-plan residual movement and requires fixed-step exhaustion before any Open/Extra tail. It does not approve normal workout detail UI or analytics.
+
+June 15, 2026 also added a docs/debug-only ambiguous repeat-tail separator rule in `ambiguous-repeat-tail-rule-2026-06-15.md`. It requires repeat expansion, complete row mapping, fixed final-row exhaustion, and open-cooldown guard behavior before any repeat-block Open/Extra tail. It does not approve broader repeat-tail promotion.
+
 ## Safest Narrow Path
 
 Start with the smallest subclass only:
@@ -55,6 +59,8 @@ A later task may approve a debug-only prototype only if all of these are true:
 - Debug output includes row-level confidence and fallback reason.
 - Elapsed duration, active/timer duration, pause overlap, distance, and label mapping remain visible.
 - Paused repeat-block rows follow the docs/debug timer rule only when paired HealthKit pause/resume evidence can be assigned to exact row windows; unpaired or ambiguous pause evidence falls back.
+- Recovery-containing Open/Extra rows follow the docs/debug separator rule only when planned Recovery maps cleanly and the tail starts after all fixed planned rows are exhausted.
+- Ambiguous repeat-tail rows follow the docs/debug separator rule only when repeat expansion, final fixed-row exhaustion, tail thresholding, and open-cooldown guards are all proven.
 - FIT values stay outside runtime code and appear only in docs/offline validation scripts.
 
 Required validation before prototype work:
@@ -96,6 +102,8 @@ Fallback reasons should be explicit and stable:
 - duplicate/no-plan/summary-only workout
 - repeat-block rule not approved
 - Open/Extra tail rule not approved
+- Recovery row cannot be separated from Open/Extra tail
+- repeat-tail separation ambiguous
 - row timing outside tolerance
 - row distance outside tolerance
 - label mapping ambiguous
@@ -111,6 +119,8 @@ These remain blocked for normal workout detail UI:
 
 - repeat-block structured intervals
 - paused repeat-block structured intervals without a debug prototype and guard proof
+- recovery-containing Open/Extra tails without a debug prototype and guard proof
+- ambiguous repeat-tail cases without a debug prototype and guard proof
 - fixed cooldown followed by Open/Extra tail
 - warmup/work/cooldown outliers with unresolved timing or distance drift
 - broad `HKWorkoutActivity` promotion
