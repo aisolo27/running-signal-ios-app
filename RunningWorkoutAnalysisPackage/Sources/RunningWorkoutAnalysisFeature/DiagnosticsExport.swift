@@ -1233,7 +1233,8 @@ public enum DiagnosticsExport {
             comparison: DebugCustomWorkoutComparisonBuilder.comparison(
                 plannedSteps: plannedSteps,
                 activities: activities,
-                workout: workout
+                workout: workout,
+                simpleWorkOpenRuleApproved: true
             )
         )
     }

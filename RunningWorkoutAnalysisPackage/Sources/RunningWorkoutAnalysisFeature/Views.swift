@@ -2052,7 +2052,8 @@ struct RawHealthKitWorkoutDebugView: View {
         let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
             plannedSteps: plannedSteps,
             activities: activities,
-            workout: currentWorkout
+            workout: currentWorkout,
+            simpleWorkOpenRuleApproved: true
         )
         var rows = zip(plannedSteps, activities).enumerated().map { offset, pair in
             let (step, activity) = pair

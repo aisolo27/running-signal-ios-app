@@ -342,6 +342,48 @@ import Testing
     expectDebugOnly(comparison)
 }
 
+@Test func debugCustomWorkoutComparisonBridgeSupportsSimpleWorkOpenOnlyAfterGateAApproval() {
+    let start = Date(timeIntervalSince1970: 1_797_000_000)
+    let workout = bridgeWorkout(start: start, distanceMeters: 1_050, durationSeconds: 360)
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plannedSteps: [
+            plannedStep(index: 1, label: "Work", stepType: .work, goalType: .distance, goalValue: 1_000)
+        ],
+        activities: [
+            evidenceActivity(index: 1, start: start, end: start.addingTimeInterval(300), distance: 1_000)
+        ],
+        workout: workout,
+        simpleWorkOpenRuleApproved: true
+    )
+
+    #expect(comparison.status == .supported)
+    #expect(comparison.fallbackReasons.isEmpty)
+    #expect(comparison.tailAmbiguity == .fixedCooldownFollowedByPossibleOpenExtraTail)
+    #expect(comparison.rows.allSatisfy { $0.confidence == .supported })
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonBridgeDoesNotApplySimpleWorkOpenGateToSpecialWorkout() {
+    let start = Date(timeIntervalSince1970: 1_797_000_000)
+    let workout = bridgeWorkout(start: start, distanceMeters: 3_050, durationSeconds: 1_260)
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plannedSteps: [
+            plannedStep(index: 1, label: "Warmup", stepType: .warmup, goalType: .distance, goalValue: 2_000),
+            plannedStep(index: 2, label: "Work", stepType: .work, goalType: .distance, goalValue: 1_000)
+        ],
+        activities: [
+            evidenceActivity(index: 1, start: start, end: start.addingTimeInterval(800), distance: 2_000),
+            evidenceActivity(index: 2, start: start.addingTimeInterval(800), end: start.addingTimeInterval(1_200), distance: 1_000)
+        ],
+        workout: workout,
+        simpleWorkOpenRuleApproved: true
+    )
+
+    #expect(comparison.status == .openTailNeedsRule)
+    #expect(comparison.fallbackReasons.contains(.openExtraTailAmbiguous))
+    expectDebugOnly(comparison)
+}
+
 @Test func debugCustomWorkoutComparisonBridgeSupportsOpenTailOnlyAfterRuleApproval() {
     let start = Date(timeIntervalSince1970: 1_797_000_000)
     let workout = bridgeWorkout(start: start, distanceMeters: 4_500, durationSeconds: 1_800)

@@ -104,7 +104,8 @@ enum DebugCustomWorkoutComparisonBuilder {
         workout: CanonicalWorkout,
         hasRowLevelEvidence: Bool = true,
         repeatBlockRuleApproved: Bool = false,
-        openTailRuleApproved: Bool = false
+        openTailRuleApproved: Bool = false,
+        simpleWorkOpenRuleApproved: Bool = false
     ) -> DebugCustomWorkoutComparison {
         let sortedSteps = plannedSteps.sorted { $0.index < $1.index }
         let sortedActivities = activities.sorted { $0.startDate < $1.startDate }
@@ -126,8 +127,17 @@ enum DebugCustomWorkoutComparisonBuilder {
             && activityRowsAreContiguous(sortedActivities)
         let hasRepeatBlock = sortedSteps.contains { ($0.repeatIndex ?? 1) > 1 }
         let repeatBlockIsScoreable = !hasRepeatBlock || repeatBlockRuleApproved
+        let simpleWorkOpenRuleIsScoreable = simpleWorkOpenRuleApproved
+            && isSimpleWorkOpenPrototypeCandidate(
+                plannedSteps: sortedSteps,
+                activities: sortedActivities,
+                workout: workout
+            )
+        let openTailIsScoreable = !tailAmbiguity.needsOpenTailRule
+            || openTailRuleApproved
+            || simpleWorkOpenRuleIsScoreable
         let rowsAreScoreable = hasCoreRowEvidence
-            && (!tailAmbiguity.needsOpenTailRule || openTailRuleApproved)
+            && openTailIsScoreable
             && repeatBlockIsScoreable
 
         return comparison(
@@ -141,6 +151,7 @@ enum DebugCustomWorkoutComparisonBuilder {
             tailAmbiguity: tailAmbiguity,
             repeatBlockRuleApproved: repeatBlockRuleApproved,
             openTailRuleApproved: openTailRuleApproved,
+            simpleWorkOpenRuleApproved: simpleWorkOpenRuleIsScoreable,
             repeatBlockNeedsRule: hasRepeatBlock
         )
     }
@@ -157,6 +168,7 @@ enum DebugCustomWorkoutComparisonBuilder {
         tailAmbiguity: CustomWorkoutTailAmbiguity = .none,
         repeatBlockRuleApproved: Bool = false,
         openTailRuleApproved: Bool = false,
+        simpleWorkOpenRuleApproved: Bool = false,
         repeatBlockNeedsRule: Bool? = nil
     ) -> DebugCustomWorkoutComparison {
         let plannedRows = plan?.expandedSteps ?? []
@@ -168,7 +180,8 @@ enum DebugCustomWorkoutComparisonBuilder {
             activityRowsAreContiguous: activityRowsAreContiguous,
             labelsAreAmbiguous: labelsAreAmbiguous,
             tailAmbiguity: tailAmbiguity,
-            openTailRuleApproved: openTailRuleApproved
+            openTailRuleApproved: openTailRuleApproved,
+            simpleWorkOpenRuleApproved: simpleWorkOpenRuleApproved
         )
         let status = status(
             plan: plan,
@@ -180,6 +193,7 @@ enum DebugCustomWorkoutComparisonBuilder {
             tailAmbiguity: tailAmbiguity,
             repeatBlockRuleApproved: repeatBlockRuleApproved,
             openTailRuleApproved: openTailRuleApproved,
+            simpleWorkOpenRuleApproved: simpleWorkOpenRuleApproved,
             repeatBlockNeedsRule: repeatBlockNeedsRule ?? (plan?.blocks.contains(where: { $0.iterationCount > 1 }) == true)
         )
 
@@ -205,7 +219,8 @@ enum DebugCustomWorkoutComparisonBuilder {
         activityRowsAreContiguous: Bool,
         labelsAreAmbiguous: Bool,
         tailAmbiguity: CustomWorkoutTailAmbiguity,
-        openTailRuleApproved: Bool
+        openTailRuleApproved: Bool,
+        simpleWorkOpenRuleApproved: Bool
     ) -> [CustomWorkoutFallbackReason] {
         var reasons: [CustomWorkoutFallbackReason] = []
 
@@ -230,7 +245,7 @@ enum DebugCustomWorkoutComparisonBuilder {
         if labelsAreAmbiguous {
             reasons.append(.labelMappingAmbiguous)
         }
-        if tailAmbiguity.needsOpenTailRule && !openTailRuleApproved {
+        if tailAmbiguity.needsOpenTailRule && !openTailRuleApproved && !simpleWorkOpenRuleApproved {
             reasons.append(.openExtraTailAmbiguous)
         }
         if !plannedRows.isEmpty,
@@ -252,6 +267,7 @@ enum DebugCustomWorkoutComparisonBuilder {
         tailAmbiguity: CustomWorkoutTailAmbiguity,
         repeatBlockRuleApproved: Bool,
         openTailRuleApproved: Bool,
+        simpleWorkOpenRuleApproved: Bool,
         repeatBlockNeedsRule: Bool
     ) -> CustomWorkoutComparisonStatus {
         if fallbackReasons.contains(.missingPlannedSteps)
@@ -267,7 +283,7 @@ enum DebugCustomWorkoutComparisonBuilder {
         if fallbackReasons.contains(.labelMappingAmbiguous) {
             return .labelMappingNeedsRule
         }
-        if tailAmbiguity.needsOpenTailRule && !openTailRuleApproved {
+        if tailAmbiguity.needsOpenTailRule && !openTailRuleApproved && !simpleWorkOpenRuleApproved {
             return .openTailNeedsRule
         }
         if repeatBlockNeedsRule {
@@ -350,6 +366,32 @@ enum DebugCustomWorkoutComparisonBuilder {
             return .fixedCooldownFollowedByPossibleOpenExtraTail
         }
         return .none
+    }
+
+    private static func isSimpleWorkOpenPrototypeCandidate(
+        plannedSteps: [PlannedWorkoutStep],
+        activities: [WorkoutEvidenceActivity],
+        workout: CanonicalWorkout
+    ) -> Bool {
+        guard plannedSteps.count == 1,
+              let step = plannedSteps.first,
+              step.stepType == .work,
+              step.plannedGoalType == .distance,
+              (step.plannedGoalValue ?? 0) > 0,
+              step.repeatBlockIndex == nil,
+              step.repeatIndex == nil,
+              activities.count == 1,
+              let activity = activities.first,
+              let activityEnd = activity.endDate,
+              activityEnd > activity.startDate,
+              activityDistanceMeters(activity) != nil else {
+            return false
+        }
+
+        let mappedDistance = activities.compactMap(activityDistanceMeters).reduce(0, +)
+        let remainingSeconds = workout.endDate.timeIntervalSince(activityEnd)
+        let remainingMeters = workout.distanceMeters.map { max(0, $0 - mappedDistance) } ?? 0
+        return remainingSeconds > 0.5 || remainingMeters > 0.5
     }
 
     private static func activityRowsAreContiguous(_ activities: [WorkoutEvidenceActivity]) -> Bool {
