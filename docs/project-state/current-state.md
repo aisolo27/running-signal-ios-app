@@ -1,10 +1,12 @@
 # RunSignal Current State
 
-Last updated: 2026-06-14
+Last updated: 2026-06-15
 
 ## Current Product Direction
 
 RunSignal is a native iPhone SwiftUI app focused on evidence-grounded completed running workout analysis. The current v1 priority is custom Apple Watch running workout correctness: warmup, work, recovery, cooldown, repeat blocks, and Open/Extra tails. Coaching expansion, backend sync, AI calls, and file imports remain out of scope.
+
+The next milestone is `Custom Workout Correctness Lock v1`: keep the current five narrow normal-detail gates frozen, use a workout-style acceptance matrix for future validation/prototype decisions, and defer interval-row analytics until custom workout structure is stable.
 
 ## Current Data Source
 
@@ -48,6 +50,7 @@ RunSignal is a native iPhone SwiftUI app focused on evidence-grounded completed 
 - Custom workout shape coverage is inventoried in `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-shape-coverage-audit-2026-03-to-2026-06.md`. The narrow candidate understates real training coverage: easy fixed-goal runs are mostly Gate A Work/Open, Friday tempo-like rows split across no-tail, repeat/recovery, fixed-tail, and timer-drift shapes, and Wednesday intervals remain repeat/timer-rule blocked. Evidence collection should be balanced across easy, tempo, interval, tail, and pause/timer cases.
 - Apple Fitness screenshot-confirmed custom workout rows are now captured in `docs/validation/apple-fitness-interval-parity-dataset/apple-fitness-screenshot-confirmed-rows-2026-03-to-2026-06.json` and scored by `score_screenshot_confirmed_custom_workouts.py`. The scorecard confirms Apple Fitness expands repeat blocks into Work/Recovery rows, labels post-fixed-step residual movement as `Open`, and exposes workout-vs-elapsed time deltas that match debug pause evidence for 5 of 6 paused screenshot fixtures. May 1 targeted evidence is documented in `docs/validation/apple-fitness-interval-parity-dataset/may-1-open-tail-pause-evidence-2026-05-01.md`: fresh HealthKit debug exports and a matching HealthFit FIT export show two pause intervals totaling `232.8 s`, matching Apple Fitness's `233 s` elapsed-vs-workout-time gap, and the post-fixed-cooldown `Open / Extra` tail matches Apple Fitness `Open 16 m / 0:10`.
 - `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-candidate-reconstruction-rule-scorecard-2026-03-to-2026-06.md` scores candidate reconstruction rules across all 12 screenshot-confirmed fixtures. The docs/debug rule set matches all 12 within tolerance, supports 3 Open-tail fixtures, supports 6 pause overview gaps, and shows May 1 is not an isolated overfit: the same active/timer duration rule also resolves paused repeat-block and paused warmup/work/cooldown fixtures. This is docs/debug validation only and does not approve production interval reconstruction.
+- `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-correctness-lock-v1.md` is the current planning lock for the next milestone. It names the exact workout-style acceptance matrix, freezes the five currently approved narrow normal-detail gates, prioritizes paused repeat blocks, recovery-containing Open/Extra tails, ambiguous repeat tails, and only then simple Work/Open prototype discussion, and keeps coaching/VDOT/training-load/race prediction out of scope.
 - Fresh latest-debug-build iPhone parity exports are reviewed in `docs/validation/apple-fitness-interval-parity-dataset/fresh-iphone-parity-lab-export-review-2026-06-13.md`. Selected packets for May 1, Apr 22, May 29, Jun 5, and Jun 10 plus the May monthly diagnostics JSON all match the scorecard expectations for row counts, active duration, pause overlap, and Open/Extra tails. This reinforces the docs/debug scorer only; production interval behavior and normal workout UI remain unchanged.
 - A complete balanced evidence batch is reviewed in `docs/validation/apple-fitness-interval-parity-dataset/balanced-evidence-batch-review-2026-06-13.md`. It covers all 12 screenshot-confirmed fixtures across easy/simple, tempo-like warmup/work/cooldown, repeat-block intervals, paused workouts, no-pause workouts, and Open-tail cases. All 12 match the current docs/debug scorer within the working tolerances. Apple Fitness screenshots are archived in `docs/validation/apple-fitness-interval-parity-dataset/apple-fitness-screenshot-archive-2026-06-13/`, and the external HealthFit FIT archive link is recorded in the batch review for future offline validation.
 - Custom workout rule/spec work is documented in `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-reconstruction-rules.md`, `custom-workout-swift-gap-analysis.md`, and `custom-workout-implementation-plan.md`. Phase 1 internal expanded-step model types and Phase 2 debug comparison model types now exist for validation/debug use only; they do not change production interval behavior or normal workout UI.
@@ -64,6 +67,7 @@ RunSignal is a native iPhone SwiftUI app focused on evidence-grounded completed 
 - Structured and special custom workouts are not 100% settled; Gate B now has row-level FIT extraction, but repeat-block mapping, recovery-containing Open/Extra tail cases, repeat-block tail cases, and inconclusive warmup/work/cooldown outliers still block broad promotion.
 - Mechanics, trends, and stronger run-type claims remain confidence-gated.
 - Interval-row analytics remain structure-gated. Whole-workout execution analysis can show cached evidence, but custom-workout interval analytics must stay gated until the app reads the relevant workout style correctly or falls back clearly.
+- Coaching, VDOT, training load, recovery scoring, race prediction, backend sync, and file ingestion remain outside the current correctness-lock milestone.
 
 ## Current Next Steps
 
@@ -71,6 +75,7 @@ RunSignal is a native iPhone SwiftUI app focused on evidence-grounded completed 
 - For parity work, use `docs/validation/apple-fitness-interval-parity-dataset/README.md`, `analysis-summary.md`, and `next-boundary-validation-plan.md`.
 - Review `candidate-boundary-strategy-scorecard.md`, `hkworkoutactivity-boundary-scorecard.md`, and `fit-backed-two-gate-validation-plan-2026-03-to-2026-06.md` before changing boundary logic.
 - Next implementation should keep the narrow normal-detail gates in place and avoid broad interval promotion until stopped-early, paused repeat-block, recovery-containing Open/Extra-tail, ambiguous repeat-tail, and plain open-run controls are covered by either supported rows or stable fallback behavior.
+- Use `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-correctness-lock-v1.md` as the next-step acceptance matrix before approving new debug prototypes, normal-detail interval rows, or interval-row analytics.
 - Continue Gate B work by reviewing row-level outliers and defining repeat-block plus Open/Extra tail rules before changing structured interval or warmup/work/cooldown behavior. Gate A simple Work/Open remains validated but parked.
 - Next Gate B debug work should keep elapsed-vs-timer and pause-event diagnostics visible before reconsidering timer-drift outliers, and should use balanced shape coverage rather than only collecting more narrow warmup/work/open-cooldown rows.
 - Next custom-workout work should use the production-readiness plan before any debug-only prototype discussion. Normal workout detail UI and production interval behavior remain blocked unless a later task explicitly approves them.

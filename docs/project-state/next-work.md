@@ -1,6 +1,6 @@
 # Next Work
 
-Last updated: 2026-06-14
+Last updated: 2026-06-15
 
 ## Priority 1
 
@@ -9,6 +9,7 @@ Last updated: 2026-06-14
 - Keep Apple Fitness screenshots/manual rows optional; they are no longer the main validation gate.
 - Review `docs/validation/apple-fitness-interval-parity-dataset/fit-backed-two-gate-validation-plan-2026-03-to-2026-06.md`.
 - Current priority is custom workout correctness, especially warmup/work/recovery/cooldown, repeat blocks, and Open/Extra tails.
+- Current milestone is `Custom Workout Correctness Lock v1`; use `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-correctness-lock-v1.md` as the acceptance matrix before any new debug prototype, normal-detail interval promotion, or interval-row analytics work.
 - Analytics implementation order is correctness-first: validate workout-style reading and fallback behavior across custom, stopped-early, repeat-block, tail, paused, and plain open-run controls before adding interval-row analytics or structure-specific conclusions.
 - Run `docs/validation/apple-fitness-interval-parity-dataset/score_fit_backed_two_gate_validation.py` after rollup changes.
 - Run `docs/validation/apple-fitness-interval-parity-dataset/score_gate_b_custom_workout_fit.py` after Gate B rollup changes.
@@ -32,6 +33,7 @@ Last updated: 2026-06-14
 - Use `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-production-readiness-plan.md` before any debug-only prototype or normal workout detail UI promotion discussion.
 - Define Gate B evidence rules for structured intervals: repeat-block expansion, work/recovery mapping, activity count, planned step count, FIT lap count, FIT workout step count, and material row shifts.
 - Define remaining Gate B evidence rules for warmup/work/cooldown specials: Warmup, Work, Recovery, Cooldown, repeat-tail cases, recovery-containing Open/Extra labels, and unresolved Open tail handling after cooldown.
+- Close blocked workout-style classes in this order: paused repeat blocks first, recovery-containing Open/Extra tails second, ambiguous repeat-tail cases third, and simple fixed-distance Work/Open prototype discussion fourth.
 - Use `docs/validation/apple-fitness-interval-parity-dataset/gate-b-timer-drift-evidence-2026-03-to-2026-06.md` before reconsidering timer-drift outliers such as `2026-05-29T11:49:28Z` or the high-error repeat-block rows.
 - Keep elapsed-vs-timer and pause-event debug output visible in future Gate B scoring; do not collapse row timing to one derived duration.
 - May 1's smallest screenshot-backed evidence gap is now closed in `docs/validation/apple-fitness-interval-parity-dataset/may-1-open-tail-pause-evidence-2026-05-01.md`; `2026-03-19T16:51:00Z` remains optional/manual only unless its visually uncertain Work row distance is needed for a renewed distance-drift review.
@@ -49,6 +51,7 @@ Last updated: 2026-06-14
 - Capture new parity packets only for new validation workouts or re-checks.
 - For month-scale review, refresh selected-month evidence before exporting monthly diagnostics.
 - Later analytics can reuse reconstructed interval windows to analyze per-row HR, power, cadence, and pace streams. Keep that as a future analysis feature after interval correctness is stable across the workout-style matrix; do not add analytics for only one run style or expand the current parity slice into coaching or categorization yet.
+- Before interval-row analytics start, require the relevant workout-style rows in `custom-workout-correctness-lock-v1.md` to be either supported with evidence or intentionally blocked with stable fallback behavior.
 
 ## Blocked
 

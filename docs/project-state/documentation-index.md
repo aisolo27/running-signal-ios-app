@@ -1,6 +1,6 @@
 # Documentation Index
 
-Last updated: 2026-06-14
+Last updated: 2026-06-15
 
 ## Active Docs To Read First
 
@@ -40,6 +40,7 @@ Keep active validation lean. Once a date-specific parity investigation is comple
 - `docs/validation/apple-fitness-interval-parity-dataset/may-1-open-tail-pause-evidence-2026-05-01.md`: focused May 1 evidence report showing paired HealthKit pause intervals and matching FIT timer-vs-elapsed deltas support active-time row comparison plus Open/Extra tail classification.
 - `docs/validation/apple-fitness-interval-parity-dataset/score_candidate_reconstruction_rules.py`: docs/debug script that scores candidate reconstruction rules against screenshot-confirmed rows, Gate B row-level FIT evidence, and pause evidence.
 - `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-candidate-reconstruction-rule-scorecard-2026-03-to-2026-06.md`: generated docs/debug scorecard for active/timer duration, pause subtraction, repeat expansion, and Open/Extra tail rules across all screenshot-confirmed fixtures.
+- `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-correctness-lock-v1.md`: current milestone acceptance matrix for workout-style support, blocked classes, debug-prototype order, interval-analytics prerequisites, and explicit non-goals such as coaching, VDOT, and training load.
 - `docs/validation/apple-fitness-interval-parity-dataset/fresh-iphone-parity-lab-export-review-2026-06-13.md`: latest-debug-build iPhone export review confirming selected parity packets and May monthly diagnostics match the docs/debug candidate reconstruction scorecard.
 - `docs/validation/apple-fitness-interval-parity-dataset/balanced-evidence-batch-review-2026-06-13.md`: complete balanced evidence batch review across all 12 screenshot-confirmed fixtures, including local source paths, the repo screenshot archive, and the external HealthFit FIT archive link.
 - `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-production-readiness-plan.md`: current docs-only plan for moving debug-only Parity Lab rows toward a future debug prototype and later production UI gate.
