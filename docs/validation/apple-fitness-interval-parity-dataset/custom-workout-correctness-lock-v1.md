@@ -39,7 +39,7 @@ Everything else stays blocked, debug-only, or whole-workout-only until its exact
 | `Warmup > Work > fixed Cooldown > Open / Extra` | Internally gated for the clean fixed-cooldown tail class | Current evidence supports final extra activity as `Open / Extra` only when it is the only extra row after fixed cooldown | Show planned rows plus inferred final `Open / Extra` tail for the exact clean subclass | Recovery-containing tails and ambiguous tails remain blocked |
 | Clean no-pause repeat blocks ending in `Cooldown(Open)` | Internally gated into normal detail | Physical iPhone proof confirms expanded repeat rows with final Cooldown and no Open/Extra tail | Show expanded Work/Recovery rows and final Cooldown when activity rows are complete and contiguous | Paused repeat blocks and material row shifts are not approved |
 | Clean no-pause repeat blocks ending in fixed cooldown plus `Open / Extra` | Internally gated into normal detail | Physical iPhone proof confirms expanded repeat rows, fixed Cooldown, and final Open/Extra | Show expanded Work/Recovery rows, fixed Cooldown, and final Open/Extra for the exact clean subclass | Repeat-block tail ambiguity remains a separate blocker |
-| Paused repeat blocks | Blocked from normal-detail interval promotion | Docs/debug scorer can explain pause overlap, but production active-timer behavior is not approved | Keep debug/Parity Lab evidence visible; normal detail should fall back or show blocked placeholder | Define active-vs-elapsed timer rule, paired pause handling, row-level FIT agreement, and unsupported guard behavior |
+| Paused repeat blocks | Blocked from normal-detail interval promotion | `paused-repeat-block-timer-rule-2026-06-15.md` defines a docs/debug timer rule: keep elapsed row windows, subtract paired pause overlap for active/timer duration, and require repeat mapping plus guards before any prototype | Keep debug/Parity Lab evidence visible; normal detail should fall back or show blocked placeholder | Needs explicit debug prototype approval proving row count, labels, elapsed duration, active/timer duration, pause overlap, distance, tail behavior, and unsupported guard fallbacks |
 | Recovery-containing Open/Extra tail | Blocked | Existing evidence does not yet prove a safe label/tail separator for this exact shape | Keep unsupported rows hidden or blocked; do not show plausible-looking interval labels | Needs targeted evidence distinguishing Recovery from final Open/Extra residual movement |
 | Ambiguous repeat-tail cases | Blocked | Count/shape alignment is not enough to distinguish planned repeat rows from extra residual movement | Keep blocked fallback behavior | Needs explicit repeat-tail rule with FIT row support and guard fixtures |
 | Timer-drift or pause-heavy outliers | Blocked unless covered by an approved narrow gate | Gate B timer-drift docs show elapsed-vs-timer and pause-event artifacts | Preserve elapsed, timer, and pause diagnostics; avoid collapsing to one derived duration | Needs per-shape timer decision and material-error threshold before any UI promotion |
@@ -59,7 +59,7 @@ Everything else stays blocked, debug-only, or whole-workout-only until its exact
 
    Priority order:
 
-   1. Paused repeat blocks.
+   1. Paused repeat blocks. Timer rule is defined for docs/debug work, but prototype/UI promotion is still blocked.
    2. Recovery-containing Open/Extra tails.
    3. Ambiguous repeat-tail cases.
    4. Simple fixed-distance Work/Open prototype discussion.

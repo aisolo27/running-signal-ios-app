@@ -1,6 +1,6 @@
 # Custom Workout Production Readiness Plan
 
-Last updated: 2026-06-14
+Last updated: 2026-06-15
 
 ## Scope
 
@@ -20,6 +20,8 @@ The latest debug evidence is strong enough to keep Parity Lab active and to plan
 2. A later production UI promotion approval.
 
 June 14, 2026 added one narrow normal-detail exception: a stopped-early single fixed-distance `Work` custom workout can display as a partial `Work` row when one complete HealthKit activity row maps to the single planned step and offline FIT evidence confirms the same one-lap/one-step shape. This does not approve broad simple Work/Open, repeat-block, Open/Extra tail, paused workout, or analytics promotion.
+
+June 15, 2026 added a docs/debug-only paused repeat-block timer rule in `paused-repeat-block-timer-rule-2026-06-15.md`. It defines elapsed row windows plus active/timer duration from paired HealthKit pause overlap, but it does not approve normal workout detail UI, broad repeat-block promotion, or analytics.
 
 ## Safest Narrow Path
 
@@ -52,6 +54,7 @@ A later task may approve a debug-only prototype only if all of these are true:
 - Missing plan, missing activity rows, non-contiguous activity rows, count mismatch, duplicate/no-plan/summary-only status, Open/Extra ambiguity, and timer-drift outliers all fall back to current behavior.
 - Debug output includes row-level confidence and fallback reason.
 - Elapsed duration, active/timer duration, pause overlap, distance, and label mapping remain visible.
+- Paused repeat-block rows follow the docs/debug timer rule only when paired HealthKit pause/resume evidence can be assigned to exact row windows; unpaired or ambiguous pause evidence falls back.
 - FIT values stay outside runtime code and appear only in docs/offline validation scripts.
 
 Required validation before prototype work:
@@ -97,6 +100,7 @@ Fallback reasons should be explicit and stable:
 - row distance outside tolerance
 - label mapping ambiguous
 - pause/timer drift unresolved
+- pause events unpaired or pause overlap ambiguous
 - unsupported workout shape
 
 Fallback must not silently promote count-aligned rows.
@@ -106,6 +110,7 @@ Fallback must not silently promote count-aligned rows.
 These remain blocked for normal workout detail UI:
 
 - repeat-block structured intervals
+- paused repeat-block structured intervals without a debug prototype and guard proof
 - fixed cooldown followed by Open/Extra tail
 - warmup/work/cooldown outliers with unresolved timing or distance drift
 - broad `HKWorkoutActivity` promotion

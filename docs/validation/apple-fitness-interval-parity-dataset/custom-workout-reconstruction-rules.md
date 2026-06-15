@@ -98,7 +98,11 @@ FIT `workout_step` rows should be treated as unexpanded planned-structure eviden
 
 ### Time Goals
 
-A time-goal planned step ends when the elapsed step duration reaches the planned duration. The future implementation should explicitly document whether elapsed time or active/timer time is being used. If pause-adjusted step timing is unavailable, confidence must be lowered or the row must remain debug-only.
+A time-goal planned step normally uses the row elapsed wall-clock window, but paused custom workouts must preserve a separate active/timer duration.
+
+For paused repeat-block docs/debug scoring, use `paused-repeat-block-timer-rule-2026-06-15.md`: keep the HealthKit activity row elapsed window, subtract paired HealthKit pause overlap inside that row window to compute active/timer duration, and compare paused time-goal rows against active/timer duration. FIT may validate this offline, but runtime code must derive pause overlap from HealthKit events.
+
+If pause-adjusted step timing is unavailable, unpaired, ambiguous, or outside tolerance, confidence must be lowered or the row must remain debug-only/blocked.
 
 ### Distance Goals
 
