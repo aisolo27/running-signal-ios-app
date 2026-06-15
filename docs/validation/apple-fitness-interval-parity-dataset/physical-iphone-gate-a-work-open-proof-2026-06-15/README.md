@@ -31,4 +31,17 @@ The cause is real WorkoutKit one-step blocks exporting the single `Work` step wi
 
 ## Current Status
 
-These exports prove the real physical-iPhone packet shape and caught the one-iteration block metadata issue. They should be kept as evidence. A fresh export from the fixed build should be captured next to confirm `customWorkoutComparisonSummary.status == supported` with empty fallback reasons for the same Gate A workouts.
+These exports prove the real physical-iPhone packet shape and caught the one-iteration block metadata issue. They should be kept as evidence.
+
+Fresh fixed-build exports for 2026-06-12 are archived in `fixed-build-exports/`:
+
+- `2026-06-12-raw-healthkit-debug-fixed.txt`
+- `2026-06-12-parity-packet-fixed.txt`
+
+Both fixed-build exports confirm the intended Gate A debug result:
+
+- `customWorkoutComparisonSummary.status == supported`
+- fallback reasons are empty / `None`
+- row confidence is `supported`
+- candidate rows remain `Work 1` and inferred `Open / Extra`
+- normal workout UI and production interval behavior remain unchanged
