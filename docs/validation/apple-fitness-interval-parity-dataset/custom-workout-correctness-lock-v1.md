@@ -16,15 +16,16 @@ This milestone keeps the app focused on trusted completed-workout analysis:
 
 ## Decision
 
-Do not broaden normal workout detail interval promotion yet.
+Do not broaden normal workout detail interval promotion beyond the approved narrow gates.
 
-Keep the existing five narrow normal-detail gates as the only approved custom-workout interval classes:
+Keep the existing six narrow normal-detail gates as the only approved custom-workout interval classes:
 
 1. Stopped-early single fixed-distance `Work` mapped to one complete partial HealthKit activity row.
-2. `Warmup(2 km) > one Work step > Cooldown(Open)`.
-3. `Warmup(2 km) > one Work step > fixed Cooldown > inferred Open / Extra tail`.
-4. Clean no-pause repeat blocks shaped as `Warmup(2 km) > repeated Work/Recovery rows > Cooldown(Open)`.
-5. Clean no-pause repeat blocks shaped as `Warmup(2 km) > repeated Work/Recovery rows > fixed Cooldown > inferred Open / Extra tail`.
+2. Simple fixed-distance `Work > inferred Open / Extra`.
+3. `Warmup(2 km) > one Work step > Cooldown(Open)`.
+4. `Warmup(2 km) > one Work step > fixed Cooldown > inferred Open / Extra tail`.
+5. Clean no-pause repeat blocks shaped as `Warmup(2 km) > repeated Work/Recovery rows > Cooldown(Open)`.
+6. Clean no-pause repeat blocks shaped as `Warmup(2 km) > repeated Work/Recovery rows > fixed Cooldown > inferred Open / Extra tail`.
 
 Everything else stays blocked, debug-only, or whole-workout-only until its exact workout shape has evidence and fallback behavior.
 
@@ -33,8 +34,8 @@ Everything else stays blocked, debug-only, or whole-workout-only until its exact
 | Workout shape | Current app behavior | Evidence status | Allowed UI behavior | Blocker / next evidence |
 | --- | --- | --- | --- | --- |
 | Plain open Watch run | Readable normal run with splits and whole-run analysis; no custom interval reconstruction | FIT can contain split laps and HealthKit activity rows, but zero WorkoutKit planned steps | Show normal workout detail, splits, route, and whole-run stats. Do not invent Warmup/Work/Recovery/Cooldown rows | Keep as open-run control when validating custom workout logic |
-| Stopped-early single fixed-distance `Work` | Internally gated into normal detail as partial `Work` only for the exact one-step/one-activity shape | June 14 stopped-early control has one FIT lap and one active distance target | Show one partial `Work` row when one planned Work step maps to one complete partial HealthKit activity row | Do not generalize to broad simple Work/Open promotion |
-| Simple fixed-distance `Work + Open` | Blocked from normal-detail interval promotion; eligible only for future debug prototype discussion | `simple-work-open-prototype-decision-2026-06-15.md` defines the Gate A prototype boundary: exactly one fixed-distance Work step, one complete activity row, and a positive Open/Extra tail | Keep whole-workout behavior unless a later task explicitly approves a debug-only prototype | Needs explicit debug prototype approval proving Gate A eligibility, strict fallback behavior, plain-open controls, and no structured/special workout leakage |
+| Stopped-early single fixed-distance `Work` | Internally gated into normal detail as partial `Work` only for the exact one-step/one-activity shape | June 14 stopped-early control has one FIT lap and one active distance target | Show one partial `Work` row when one planned Work step maps to one complete partial HealthKit activity row | Do not generalize beyond stopped-early single-step evidence |
+| Simple fixed-distance `Work + Open` | Internally gated into normal detail only for the exact Gate A shape | `simple-work-open-prototype-decision-2026-06-15.md` defines exactly one fixed-distance Work step, one complete activity row, and a positive Open/Extra tail; June 12 post-promotion exports confirm `Work 1` plus `Open / Extra` with structured comparison `supported` and no fallback reasons | Show `Work 1` plus inferred `Open / Extra` only for the exact one-step/one-activity shape | Do not generalize to structured/special workouts, paused workouts, recovery rows, repeat rows, missing evidence, or interval analytics |
 | `Warmup > Work > Cooldown(Open)` | Internally gated for the narrow supported no-tail class | Row-level FIT support exists for the exact no-tail candidate class | Show Warmup/Work/Cooldown rows only when planned rows map one-to-one to complete contiguous HealthKit activity rows | Inconclusive outliers still need separate review before broad warmup/work/cooldown promotion |
 | `Warmup > Work > fixed Cooldown > Open / Extra` | Internally gated for the clean fixed-cooldown tail class | Current evidence supports final extra activity as `Open / Extra` only when it is the only extra row after fixed cooldown | Show planned rows plus inferred final `Open / Extra` tail for the exact clean subclass | Recovery-containing tails and ambiguous tails remain blocked |
 | Clean no-pause repeat blocks ending in `Cooldown(Open)` | Internally gated into normal detail | Physical iPhone proof confirms expanded repeat rows with final Cooldown and no Open/Extra tail | Show expanded Work/Recovery rows and final Cooldown when activity rows are complete and contiguous | Paused repeat blocks and material row shifts are not approved |
@@ -62,9 +63,10 @@ Everything else stays blocked, debug-only, or whole-workout-only until its exact
    1. Paused repeat blocks. Timer rule is defined for docs/debug work, but prototype/UI promotion is still blocked.
    2. Recovery-containing Open/Extra tails. Separator rule is defined for docs/debug work, but prototype/UI promotion is still blocked.
    3. Ambiguous repeat-tail cases. Separator rule is defined for docs/debug work, but prototype/UI promotion is still blocked.
-   4. Simple fixed-distance Work/Open prototype discussion. Boundary is defined for future debug-only prototype work, but UI promotion is still blocked.
 
-4. Keep a debug-only prototype between evidence and production UI.
+   Gate A simple fixed-distance Work/Open is closed for the exact approved shape. Future Work/Open changes require new evidence only if they broaden beyond the current one-step/one-activity gate.
+
+4. Keep a debug-only prototype between evidence and any further production UI broadening.
 
    A future prototype must first run through Parity Lab/export paths and prove:
 
@@ -91,7 +93,7 @@ A workout shape can move from blocked/debug-only toward normal-detail UI only wh
 - Open/Extra tail handling is explicit and does not rely on label guesswork.
 - At least one guard fixture proves a similar unsupported shape still blocks.
 - Parity Lab/export output reports the status, fallback reasons, row confidences, tail ambiguity, and safety flags.
-- Normal workout detail behavior is approved separately after debug/export proof.
+- Normal workout detail behavior is approved separately after debug/export proof, except for the six already approved narrow gates above.
 
 ## Non-Goals
 
