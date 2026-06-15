@@ -2055,6 +2055,7 @@ struct RawHealthKitWorkoutDebugView: View {
             workout: currentWorkout,
             simpleWorkOpenRuleApproved: true,
             pausedRepeatBlockRuleApproved: true,
+            recoveryContainingOpenTailRuleApproved: true,
             pairedPauseCount: pauses.count
         )
         var rows = zip(plannedSteps, activities).enumerated().map { offset, pair in
@@ -2107,7 +2108,7 @@ struct RawHealthKitWorkoutDebugView: View {
         return ParityLabCandidateRowsResult(
             rows: rows,
             structuredStatus: comparison.status.rawValue,
-            fallbackReasons: comparison.fallbackReasons.map(\.rawValue),
+            fallbackReasons: comparison.fallbackReasons.map { $0.rawValue },
             pairedPauseCount: pauses.count,
             totalPairedPauseSeconds: pauses.map(\.durationSeconds).reduce(0, +)
         )

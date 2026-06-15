@@ -1241,6 +1241,7 @@ public enum DiagnosticsExport {
                 workout: workout,
                 simpleWorkOpenRuleApproved: true,
                 pausedRepeatBlockRuleApproved: true,
+                recoveryContainingOpenTailRuleApproved: true,
                 pairedPauseCount: pairedPauses.count
             )
         )

@@ -107,6 +107,7 @@ enum DebugCustomWorkoutComparisonBuilder {
         openTailRuleApproved: Bool = false,
         simpleWorkOpenRuleApproved: Bool = false,
         pausedRepeatBlockRuleApproved: Bool = false,
+        recoveryContainingOpenTailRuleApproved: Bool = false,
         pairedPauseCount: Int = 0
     ) -> DebugCustomWorkoutComparison {
         let sortedSteps = plannedSteps.sorted { $0.index < $1.index }
@@ -140,9 +141,16 @@ enum DebugCustomWorkoutComparisonBuilder {
                 activities: sortedActivities,
                 workout: workout
             )
+        let recoveryContainingOpenTailRuleIsScoreable = recoveryContainingOpenTailRuleApproved
+            && isRecoveryContainingOpenTailPrototypeCandidate(
+                plannedSteps: sortedSteps,
+                activities: sortedActivities,
+                workout: workout
+            )
         let openTailIsScoreable = !tailAmbiguity.needsOpenTailRule
             || openTailRuleApproved
             || simpleWorkOpenRuleIsScoreable
+            || recoveryContainingOpenTailRuleIsScoreable
         let rowsAreScoreable = hasCoreRowEvidence
             && openTailIsScoreable
             && repeatBlockIsScoreable
@@ -159,6 +167,7 @@ enum DebugCustomWorkoutComparisonBuilder {
             repeatBlockRuleApproved: repeatBlockRuleApproved,
             openTailRuleApproved: openTailRuleApproved,
             simpleWorkOpenRuleApproved: simpleWorkOpenRuleIsScoreable,
+            recoveryContainingOpenTailRuleApproved: recoveryContainingOpenTailRuleIsScoreable,
             pausedRepeatBlockRuleApproved: pausedRepeatBlockRuleIsScoreable,
             repeatBlockNeedsRule: hasRepeatBlock
         )
@@ -177,6 +186,7 @@ enum DebugCustomWorkoutComparisonBuilder {
         repeatBlockRuleApproved: Bool = false,
         openTailRuleApproved: Bool = false,
         simpleWorkOpenRuleApproved: Bool = false,
+        recoveryContainingOpenTailRuleApproved: Bool = false,
         pausedRepeatBlockRuleApproved: Bool = false,
         repeatBlockNeedsRule: Bool? = nil
     ) -> DebugCustomWorkoutComparison {
@@ -190,7 +200,8 @@ enum DebugCustomWorkoutComparisonBuilder {
             labelsAreAmbiguous: labelsAreAmbiguous,
             tailAmbiguity: tailAmbiguity,
             openTailRuleApproved: openTailRuleApproved,
-            simpleWorkOpenRuleApproved: simpleWorkOpenRuleApproved
+            simpleWorkOpenRuleApproved: simpleWorkOpenRuleApproved,
+            recoveryContainingOpenTailRuleApproved: recoveryContainingOpenTailRuleApproved
         )
         let status = status(
             plan: plan,
@@ -203,6 +214,7 @@ enum DebugCustomWorkoutComparisonBuilder {
             repeatBlockRuleApproved: repeatBlockRuleApproved,
             openTailRuleApproved: openTailRuleApproved,
             simpleWorkOpenRuleApproved: simpleWorkOpenRuleApproved,
+            recoveryContainingOpenTailRuleApproved: recoveryContainingOpenTailRuleApproved,
             pausedRepeatBlockRuleApproved: pausedRepeatBlockRuleApproved,
             repeatBlockNeedsRule: repeatBlockNeedsRule ?? (plan?.blocks.contains(where: { $0.iterationCount > 1 }) == true)
         )
@@ -230,7 +242,8 @@ enum DebugCustomWorkoutComparisonBuilder {
         labelsAreAmbiguous: Bool,
         tailAmbiguity: CustomWorkoutTailAmbiguity,
         openTailRuleApproved: Bool,
-        simpleWorkOpenRuleApproved: Bool
+        simpleWorkOpenRuleApproved: Bool,
+        recoveryContainingOpenTailRuleApproved: Bool
     ) -> [CustomWorkoutFallbackReason] {
         var reasons: [CustomWorkoutFallbackReason] = []
 
@@ -255,7 +268,10 @@ enum DebugCustomWorkoutComparisonBuilder {
         if labelsAreAmbiguous {
             reasons.append(.labelMappingAmbiguous)
         }
-        if tailAmbiguity.needsOpenTailRule && !openTailRuleApproved && !simpleWorkOpenRuleApproved {
+        if tailAmbiguity.needsOpenTailRule
+            && !openTailRuleApproved
+            && !simpleWorkOpenRuleApproved
+            && !recoveryContainingOpenTailRuleApproved {
             reasons.append(.openExtraTailAmbiguous)
         }
         if !plannedRows.isEmpty,
@@ -278,6 +294,7 @@ enum DebugCustomWorkoutComparisonBuilder {
         repeatBlockRuleApproved: Bool,
         openTailRuleApproved: Bool,
         simpleWorkOpenRuleApproved: Bool,
+        recoveryContainingOpenTailRuleApproved: Bool,
         pausedRepeatBlockRuleApproved: Bool,
         repeatBlockNeedsRule: Bool
     ) -> CustomWorkoutComparisonStatus {
@@ -294,7 +311,10 @@ enum DebugCustomWorkoutComparisonBuilder {
         if fallbackReasons.contains(.labelMappingAmbiguous) {
             return .labelMappingNeedsRule
         }
-        if tailAmbiguity.needsOpenTailRule && !openTailRuleApproved && !simpleWorkOpenRuleApproved {
+        if tailAmbiguity.needsOpenTailRule
+            && !openTailRuleApproved
+            && !simpleWorkOpenRuleApproved
+            && !recoveryContainingOpenTailRuleApproved {
             return .openTailNeedsRule
         }
         if repeatBlockNeedsRule {
@@ -400,6 +420,32 @@ enum DebugCustomWorkoutComparisonBuilder {
 
         let mappedDistance = activities.compactMap(activityDistanceMeters).reduce(0, +)
         let remainingSeconds = workout.endDate.timeIntervalSince(activityEnd)
+        let remainingMeters = workout.distanceMeters.map { max(0, $0 - mappedDistance) } ?? 0
+        return remainingSeconds > 0.5 || remainingMeters > 0.5
+    }
+
+    private static func isRecoveryContainingOpenTailPrototypeCandidate(
+        plannedSteps: [PlannedWorkoutStep],
+        activities: [WorkoutEvidenceActivity],
+        workout: CanonicalWorkout
+    ) -> Bool {
+        guard !plannedSteps.isEmpty,
+              plannedSteps.count == activities.count,
+              plannedSteps.contains(where: { $0.stepType == .recovery }),
+              plannedSteps.allSatisfy({ ($0.repeatIndex ?? 1) == 1 }),
+              plannedSteps.allSatisfy({ $0.plannedGoalType != .open }),
+              let lastStep = plannedSteps.last,
+              lastStep.plannedGoalType == .distance || lastStep.plannedGoalType == .time,
+              let lastActivity = activities.last,
+              let lastActivityEnd = lastActivity.endDate,
+              lastActivityEnd > lastActivity.startDate,
+              activities.allSatisfy({ $0.endDate != nil && activityDistanceMeters($0) != nil }),
+              activityRowsAreContiguous(activities) else {
+            return false
+        }
+
+        let mappedDistance = activities.compactMap(activityDistanceMeters).reduce(0, +)
+        let remainingSeconds = workout.endDate.timeIntervalSince(lastActivityEnd)
         let remainingMeters = workout.distanceMeters.map { max(0, $0 - mappedDistance) } ?? 0
         return remainingSeconds > 0.5 || remainingMeters > 0.5
     }
