@@ -45,3 +45,18 @@ Both fixed-build exports confirm the intended Gate A debug result:
 - row confidence is `supported`
 - candidate rows remain `Work 1` and inferred `Open / Extra`
 - normal workout UI and production interval behavior remain unchanged
+
+Fresh post-promotion exports for 2026-06-12 are archived in `normal-detail-promotion-exports/`:
+
+- `2026-06-12-raw-healthkit-debug-normal-detail-promotion.txt`
+- `2026-06-12-parity-packet-normal-detail-promotion.json`
+
+These were captured after commit `466a23a` promoted the exact Gate A simple fixed-distance `Work > Open / Extra` class into normal workout detail. They confirm:
+
+- Raw HealthKit Debug generated at `2026-06-15T04:11:39Z` for `Friday Easy 5km`.
+- Workout date is Jun 12, 2026, duration is `32:21`, distance is `5.04 km`.
+- WorkoutKit plan is one `Work` step with a `5 km` goal and one HealthKit activity row.
+- Normal reconstructed intervals are `Work 1` and `Open / Extra`.
+- Parity packet `customWorkoutComparisonSummary.status == supported`.
+- Fallback reasons are empty / `None`.
+- Guard status remains narrow: no FIT runtime truth and no broad production interval behavior promotion.
