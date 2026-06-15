@@ -363,6 +363,35 @@ import Testing
     expectDebugOnly(comparison)
 }
 
+@Test func debugCustomWorkoutComparisonBridgeSupportsSimpleWorkOpenOneIterationBlockAfterGateAApproval() {
+    let start = Date(timeIntervalSince1970: 1_797_000_000)
+    let workout = bridgeWorkout(start: start, distanceMeters: 5_045, durationSeconds: 1_940)
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plannedSteps: [
+            plannedStep(
+                index: 1,
+                label: "Work 1",
+                stepType: .work,
+                repeatBlockIndex: 1,
+                repeatIndex: 1,
+                goalType: .distance,
+                goalValue: 5_000
+            )
+        ],
+        activities: [
+            evidenceActivity(index: 1, start: start, end: start.addingTimeInterval(1_923), distance: 5_008)
+        ],
+        workout: workout,
+        simpleWorkOpenRuleApproved: true
+    )
+
+    #expect(comparison.status == .supported)
+    #expect(comparison.fallbackReasons.isEmpty)
+    #expect(comparison.tailAmbiguity == .fixedCooldownFollowedByPossibleOpenExtraTail)
+    #expect(comparison.rows.allSatisfy { $0.confidence == .supported })
+    expectDebugOnly(comparison)
+}
+
 @Test func debugCustomWorkoutComparisonBridgeDoesNotApplySimpleWorkOpenGateToSpecialWorkout() {
     let start = Date(timeIntervalSince1970: 1_797_000_000)
     let workout = bridgeWorkout(start: start, distanceMeters: 3_050, durationSeconds: 1_260)
