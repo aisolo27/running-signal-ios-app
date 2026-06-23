@@ -849,6 +849,7 @@ public enum CustomWorkoutNormalDetailGate {
             ?? supportedNarrowSimpleFixedDistanceWorkOpenTail(workout: workout, evidence: evidence)
             ?? supportedNarrowWarmupWorkOpenCooldown(workout: workout, evidence: evidence)
             ?? supportedNarrowWarmupWorkFixedCooldownOpenTail(workout: workout, evidence: evidence)
+            ?? supportedNarrowPausedRepeatBlockOpenCooldown(workout: workout, evidence: evidence)
             ?? supportedNarrowNoPauseRepeatBlockOpenCooldown(workout: workout, evidence: evidence)
             ?? supportedNarrowNoPauseRepeatBlockFixedCooldownOpenTail(workout: workout, evidence: evidence)
     }
@@ -1089,6 +1090,43 @@ public enum CustomWorkoutNormalDetailGate {
         return result
     }
 
+    public static func supportedNarrowPausedRepeatBlockOpenCooldown(
+        workout: CanonicalWorkout,
+        evidence: WorkoutEvidence
+    ) -> WorkoutIntervalReconstructionResult? {
+        guard
+            let audit = evidence.workoutPlanAudit,
+            WorkoutPauseTimingSemantics.pairedPauseCount(in: evidence.events) > 0,
+            let pairedPauses = WorkoutPauseTimingSemantics.pairedPauseIntervals(in: evidence.events)
+        else { return nil }
+
+        let plannedSteps = audit.plannedSteps.sorted { $0.index < $1.index }
+        let activities = evidence.activities.sorted { $0.startDate < $1.startDate }
+        let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+            plannedSteps: plannedSteps,
+            activities: activities,
+            workout: workout,
+            repeatBlockRuleApproved: true,
+            pausedRepeatBlockRuleApproved: true,
+            pairedPauseCount: pairedPauses.count
+        )
+
+        guard
+            comparison.status == .supported,
+            comparison.tailAmbiguity == .plannedOpenCooldownContinuesToWorkoutEnd,
+            isNarrowNoPauseRepeatBlockOpenCooldown(plannedSteps),
+            let result = WorkoutIntervalReconstructionEngine.reconstructFromActivityBoundaries(workout: workout, evidence: evidence),
+            result.intervals.count == plannedSteps.count,
+            result.intervals.first?.stepType == .warmup,
+            result.intervals.last?.stepType == .cooldown,
+            result.intervals.allSatisfy({ $0.stepType != .open && $0.tailDiagnostics == nil }),
+            pausesAreAssignableToSingleRows(pairedPauses, intervals: result.intervals),
+            result.intervals.contains(where: { ($0.pauseOverlapSeconds ?? 0) > 0 })
+        else { return nil }
+
+        return activeTimerDisplayForPausedRows(result)
+    }
+
     private static func isNarrowWarmupWorkOpenCooldown(_ plannedSteps: [PlannedWorkoutStep]) -> Bool {
         guard plannedSteps.count == 3 else { return false }
         let warmup = plannedSteps[0]
@@ -1238,6 +1276,41 @@ public enum CustomWorkoutNormalDetailGate {
             || isNarrowWarmupWorkFixedCooldownOpenTail(plannedSteps)
             || isNarrowNoPauseRepeatBlockOpenCooldown(plannedSteps)
             || isNarrowNoPauseRepeatBlockFixedCooldownOpenTail(plannedSteps)
+    }
+
+    private static func activeTimerDisplayForPausedRows(
+        _ result: WorkoutIntervalReconstructionResult
+    ) -> WorkoutIntervalReconstructionResult {
+        var adjusted = result
+        adjusted.intervals = result.intervals.map { interval in
+            var row = interval
+            guard (row.pauseOverlapSeconds ?? 0) > 0 else { return row }
+
+            row.durationDisplayRule = .activeTimer
+            row.activeDurationSeconds = max(0, row.elapsedRowWindowDurationSeconds - (row.pauseOverlapSeconds ?? 0))
+
+            if let distance = row.actualDistanceMeters,
+               distance > 0,
+               row.activeTimerDurationSeconds > 0 {
+                row.actualPaceSecondsPerKm = row.activeTimerDurationSeconds / (distance / 1_000)
+            }
+
+            return row
+        }
+        return adjusted
+    }
+
+    private static func pausesAreAssignableToSingleRows(
+        _ pauseIntervals: [DateInterval],
+        intervals: [ReconstructedWorkoutInterval]
+    ) -> Bool {
+        pauseIntervals.allSatisfy { pauseInterval in
+            let containingRows = intervals.filter { interval in
+                pauseInterval.start >= interval.actualStartDate.addingTimeInterval(-activityTimeToleranceSeconds)
+                    && pauseInterval.end <= interval.actualEndDate.addingTimeInterval(activityTimeToleranceSeconds)
+            }
+            return containingRows.count == 1
+        }
     }
 
     private static func approvedComparison(

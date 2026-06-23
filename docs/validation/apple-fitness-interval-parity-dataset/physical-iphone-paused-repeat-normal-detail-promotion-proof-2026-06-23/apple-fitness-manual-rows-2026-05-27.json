@@ -1,0 +1,42 @@
+{
+  "startDate": "2026-05-27T11:45:47Z",
+  "localDateLabel": "May 27",
+  "screenshotFiles": [
+    "apple-fitness-screenshots/2026-05-27-apple-fitness-summary.PNG",
+    "apple-fitness-screenshots/2026-05-27-apple-fitness-intervals-top.PNG",
+    "apple-fitness-screenshots/2026-05-27-apple-fitness-intervals-bottom.PNG"
+  ],
+  "fixtureClass": "paused_repeat_block",
+  "overview": {
+    "workoutTimeSeconds": 3161,
+    "elapsedTimeSeconds": 3222,
+    "distanceMeters": 8510,
+    "averagePace": "6:11/km",
+    "averageHeartRateBPM": 155
+  },
+  "rows": [
+    {"rowIndex": 1, "label": "Warmup", "distanceMeters": 2000, "durationSeconds": 763, "pace": "6:22/km", "averageHeartRateBPM": 131},
+    {"rowIndex": 2, "label": "Work", "distanceMeters": 400, "durationSeconds": 97, "pace": "4:03/km", "averageHeartRateBPM": 164},
+    {"rowIndex": 3, "label": "Recovery", "distanceMeters": 120, "durationSeconds": 90, "pace": "12:27/km", "averageHeartRateBPM": 152},
+    {"rowIndex": 4, "label": "Work", "distanceMeters": 400, "durationSeconds": 94, "pace": "3:56/km", "averageHeartRateBPM": 164},
+    {"rowIndex": 5, "label": "Recovery", "distanceMeters": 114, "durationSeconds": 90, "pace": "13:04/km", "averageHeartRateBPM": 154},
+    {"rowIndex": 6, "label": "Work", "distanceMeters": 400, "durationSeconds": 89, "pace": "3:43/km", "averageHeartRateBPM": 164},
+    {"rowIndex": 7, "label": "Recovery", "distanceMeters": 129, "durationSeconds": 90, "pace": "11:37/km", "averageHeartRateBPM": 157},
+    {"rowIndex": 8, "label": "Work", "distanceMeters": 400, "durationSeconds": 95, "pace": "3:56/km", "averageHeartRateBPM": 168},
+    {"rowIndex": 9, "label": "Recovery", "distanceMeters": 117, "durationSeconds": 90, "pace": "12:48/km", "averageHeartRateBPM": 157},
+    {"rowIndex": 10, "label": "Work", "distanceMeters": 400, "durationSeconds": 97, "pace": "4:03/km", "averageHeartRateBPM": 168},
+    {"rowIndex": 11, "label": "Recovery", "distanceMeters": 101, "durationSeconds": 90, "pace": "14:46/km", "averageHeartRateBPM": 157},
+    {"rowIndex": 12, "label": "Work", "distanceMeters": 400, "durationSeconds": 97, "pace": "4:02/km", "averageHeartRateBPM": 170},
+    {"rowIndex": 13, "label": "Recovery", "distanceMeters": 120, "durationSeconds": 90, "pace": "12:29/km", "averageHeartRateBPM": 161},
+    {"rowIndex": 14, "label": "Work", "distanceMeters": 400, "durationSeconds": 96, "pace": "4:00/km", "averageHeartRateBPM": 168},
+    {"rowIndex": 15, "label": "Recovery", "distanceMeters": 124, "durationSeconds": 90, "pace": "12:03/km", "averageHeartRateBPM": 164},
+    {"rowIndex": 16, "label": "Work", "distanceMeters": 400, "durationSeconds": 97, "pace": "4:03/km", "averageHeartRateBPM": 174},
+    {"rowIndex": 17, "label": "Recovery", "distanceMeters": 96, "durationSeconds": 90, "pace": "15:30/km", "averageHeartRateBPM": 156},
+    {"rowIndex": 18, "label": "Work", "distanceMeters": 400, "durationSeconds": 93, "pace": "3:52/km", "averageHeartRateBPM": 168},
+    {"rowIndex": 19, "label": "Recovery", "distanceMeters": 122, "durationSeconds": 90, "pace": "12:14/km", "averageHeartRateBPM": 165},
+    {"rowIndex": 20, "label": "Work", "distanceMeters": 400, "durationSeconds": 99, "pace": "4:08/km", "averageHeartRateBPM": 174},
+    {"rowIndex": 21, "label": "Recovery", "distanceMeters": 60, "durationSeconds": 90, "pace": "24:49/km", "averageHeartRateBPM": 162},
+    {"rowIndex": 22, "label": "Cooldown", "distanceMeters": 1340, "durationSeconds": 549, "pace": "6:50/km", "averageHeartRateBPM": 158}
+  ],
+  "screenshotFinding": "Apple Fitness expands the 400 m repeat block into ten Work rows and ten Recovery rows, then Cooldown. The summary shows a 61 second workout-time versus elapsed-time gap, matching the paired pause overlap in the RunSignal parity packet."
+}

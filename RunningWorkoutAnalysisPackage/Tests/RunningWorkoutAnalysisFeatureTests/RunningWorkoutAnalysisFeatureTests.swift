@@ -2159,7 +2159,7 @@ import Testing
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence)?.intervals.map(\.label) == result.intervals.map(\.label))
 }
 
-@Test func normalDetailGateBlocksPausedRepeatBlockOpenCooldown() {
+@Test func normalDetailGateSupportsPausedRepeatBlockOpenCooldownWithActiveTiming() throws {
     let start = Date(timeIntervalSince1970: 10_656)
     let workout = testWorkout(id: "normal-detail-paused-repeat", start: start, distanceMeters: 4_800, durationSeconds: 1_700)
     var evidence = normalDetailGateEvidence(
@@ -2195,7 +2195,76 @@ import Testing
     ]
 
     #expect(CustomWorkoutNormalDetailGate.supportedNarrowNoPauseRepeatBlockOpenCooldown(workout: workout, evidence: evidence) == nil)
-    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) == nil)
+    let result = try #require(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence))
+    #expect(result.intervals.count == 6)
+    #expect(result.intervals.map(\.label) == ["Warmup", "Work 1", "Recovery 1", "Work 2", "Recovery 2", "Cooldown"])
+
+    let recovery = try #require(result.intervals.first { $0.label == "Recovery 1" })
+    #expect(recovery.durationDisplayRule == .activeTimer)
+    #expect(abs(recovery.elapsedRowWindowDurationSeconds - 150) <= 0.001)
+    #expect(abs((recovery.pauseOverlapSeconds ?? 0) - 90) <= 0.001)
+    #expect(abs(recovery.activeTimerDurationSeconds - 60) <= 0.001)
+    #expect(abs(recovery.displayDurationSeconds - 60) <= 0.001)
+    #expect(abs((recovery.actualPaceSecondsPerKm ?? 0) - 300) <= 0.001)
+    #expect(IntervalRowTimingText.pausedTimingDetail(for: recovery) == "Active 1:00 · elapsed 2:30 · paused 1:30")
+
+    let warmup = try #require(result.intervals.first)
+    #expect(warmup.durationDisplayRule == .elapsedRowWindow)
+    #expect(IntervalRowTimingText.pausedTimingDetail(for: warmup) == nil)
+}
+
+@Test func normalDetailGateBlocksPausedRepeatBlockCountMismatch() {
+    let fixture = pausedRepeatOpenCooldownFixture(
+        id: "normal-detail-paused-repeat-count-mismatch",
+        activityWindows: [
+            (0, 700, 2_000),
+            (700, 950, 1_000),
+            (950, 1_100, 200),
+            (1_100, 1_350, 1_000),
+            (1_350, 1_500, 200)
+        ]
+    )
+
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: fixture.workout, evidence: fixture.evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.blockedReasons(workout: fixture.workout, evidence: fixture.evidence).contains { $0.contains("Planned row count") })
+}
+
+@Test func normalDetailGateBlocksPausedRepeatBlockNonContiguousRows() {
+    let fixture = pausedRepeatOpenCooldownFixture(
+        id: "normal-detail-paused-repeat-non-contiguous",
+        activityWindows: [
+            (0, 700, 2_000),
+            (700, 950, 1_000),
+            (960, 1_110, 200),
+            (1_110, 1_360, 1_000),
+            (1_360, 1_510, 200),
+            (1_510, 1_700, 1_000)
+        ],
+        distancePoints: [
+            (700, 2_000),
+            (950, 1_000),
+            (1_110, 200),
+            (1_360, 1_000),
+            (1_510, 200),
+            (1_700, 1_000)
+        ]
+    )
+
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: fixture.workout, evidence: fixture.evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.blockedReasons(workout: fixture.workout, evidence: fixture.evidence).contains { $0.contains("not contiguous") })
+}
+
+@Test func normalDetailGateBlocksPausedRepeatBlockPauseCrossingRowBoundary() {
+    let start = Date(timeIntervalSince1970: 10_656)
+    let fixture = pausedRepeatOpenCooldownFixture(
+        id: "normal-detail-paused-repeat-cross-row-pause",
+        events: [
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(940), endDate: start.addingTimeInterval(940), type: "HKWorkoutEventType(rawValue: 1)", label: "Pause"),
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(1_000), endDate: start.addingTimeInterval(1_000), type: "HKWorkoutEventType(rawValue: 2)", label: "Resume")
+        ]
+    )
+
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: fixture.workout, evidence: fixture.evidence) == nil)
 }
 
 @Test func normalDetailGateBlocksPausedRepeatBlockFixedCooldownOpenTail() {
@@ -3159,12 +3228,56 @@ private func assertElapsedTimingSemantics(_ intervals: [ReconstructedWorkoutInte
         #expect(abs((interval.pauseOverlapSeconds ?? -1) - 0) <= 0.001)
         #expect(abs((interval.activeDurationSeconds ?? -1) - interval.actualDurationSeconds) <= 0.001)
         #expect(abs(interval.displayDurationSeconds - interval.actualDurationSeconds) <= 0.001)
+        #expect(IntervalRowTimingText.pausedTimingDetail(for: interval) == nil)
     }
 }
 
 private func monthlyDiagnosticsObject(_ json: String) throws -> [String: Any] {
     let data = try #require(json.data(using: .utf8))
     return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+}
+
+private func pausedRepeatOpenCooldownFixture(
+    id: String,
+    activityWindows: [(start: TimeInterval, end: TimeInterval, distance: Double)] = [
+        (0, 700, 2_000),
+        (700, 950, 1_000),
+        (950, 1_100, 200),
+        (1_100, 1_350, 1_000),
+        (1_350, 1_500, 200),
+        (1_500, 1_700, 1_000)
+    ],
+    distancePoints: [(offset: TimeInterval, distance: Double)] = [
+        (700, 2_000),
+        (950, 1_000),
+        (1_100, 200),
+        (1_350, 1_000),
+        (1_500, 200),
+        (1_700, 1_000)
+    ],
+    events: [WorkoutEvidenceEvent]? = nil
+) -> (workout: CanonicalWorkout, evidence: WorkoutEvidence) {
+    let start = Date(timeIntervalSince1970: 10_656)
+    let workout = testWorkout(id: id, start: start, distanceMeters: 4_800, durationSeconds: 1_700)
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km"),
+            PlannedWorkoutStep(index: 3, label: "Recovery 1", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .time, plannedGoalValue: 150, plannedGoalDisplayText: "150 s"),
+            PlannedWorkoutStep(index: 4, label: "Work 2", stepType: .work, repeatBlockIndex: 1, repeatIndex: 2, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km"),
+            PlannedWorkoutStep(index: 5, label: "Recovery 2", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 2, plannedGoalType: .time, plannedGoalValue: 150, plannedGoalDisplayText: "150 s"),
+            PlannedWorkoutStep(index: 6, label: "Cooldown", stepType: .cooldown, plannedGoalType: .open, plannedGoalDisplayText: "Open")
+        ],
+        activityWindows: activityWindows,
+        distancePoints: distancePoints,
+        events: events ?? [
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(1_000), endDate: start.addingTimeInterval(1_000), type: "HKWorkoutEventType(rawValue: 1)", label: "Pause"),
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(1_090), endDate: start.addingTimeInterval(1_090), type: "HKWorkoutEventType(rawValue: 2)", label: "Resume")
+        ]
+    )
+
+    return (workout, evidence)
 }
 
 private func normalDetailGateEvidence(

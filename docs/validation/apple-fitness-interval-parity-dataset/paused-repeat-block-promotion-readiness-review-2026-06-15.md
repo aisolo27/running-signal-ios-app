@@ -4,14 +4,16 @@ Last updated: 2026-06-23
 
 ## Decision
 
-Do not promote paused repeat blocks into normal workout detail yet.
+Narrow paused repeat-block normal detail promotion is implemented and physically proofed for the proven `Warmup(2 km) > repeated Work/Recovery rows > Cooldown(Open)` shape only. Simulator smoke, physical-iPhone install on `AIS17PM`, RunSignal raw/parity exports, and Apple Fitness screenshots passed for Apr 22, Apr 29, May 6, May 13, and May 27.
+
+Do not broaden paused repeat blocks beyond that narrow open-cooldown shape. True Open/Extra paused-repeat tails, recovery-containing tails, ambiguous repeat tails, unpaired pauses, missing rows, non-contiguous rows, and cross-row pause overlaps remain blocked.
 
 The physical-iPhone debug/export evidence is strong, and the interval timing semantics foundation now exists in code. Paused repeat blocks still need a separate normal-detail promotion decision because the product must decide how to display two time values:
 
 - elapsed row window duration from the HealthKit activity boundary
 - active/timer duration after subtracting paired HealthKit pause overlap
 
-Before the timing-semantics foundation, `ReconstructedWorkoutInterval` exposed one `actualDurationSeconds` field and normal detail displayed that single value as the interval time. The model now carries elapsed, pause-overlap, active/timer, display duration, and display-rule fields separately. Promotion is still blocked until the normal-detail gate explicitly chooses the display policy for paused rows:
+Before the timing-semantics foundation, `ReconstructedWorkoutInterval` exposed one `actualDurationSeconds` field and normal detail displayed that single value as the interval time. The model now carries elapsed, pause-overlap, active/timer, display duration, and display-rule fields separately. The narrow paused-repeat open-cooldown gate now chooses active/timer duration as the primary paused-row display while preserving elapsed row-window evidence as secondary text:
 
 - elapsed time preserves the correct row window but mismatches Apple Fitness timer-style row duration
 - active time matches the timer-style row duration but hides the real HealthKit activity window used for samples and stats
@@ -58,9 +60,9 @@ The interval model now also carries:
 - `displayDurationSeconds`
 - `durationDisplayRule`
 
-That is enough to represent elapsed row windows and active/timer duration without collapsing them into one value. Current approved no-pause gates still display elapsed duration unchanged. Paused repeat blocks remain blocked from normal detail pending a separate gate decision and proof pass.
+That is enough to represent elapsed row windows and active/timer duration without collapsing them into one value. Current approved no-pause gates still display elapsed duration unchanged. The narrow paused-repeat open-cooldown gate is implemented and physical proof is archived in `physical-iphone-paused-repeat-normal-detail-promotion-proof-2026-06-23/`.
 
-The debug/Parity Lab candidate path already exposed `elapsedDurationSeconds`, `pauseOverlapSeconds`, and `activeDurationSeconds`. The 2026-06-23 follow-up also adds those timing fields to `reconstructedIntervals` JSON payloads for future raw debug/parity exports.
+The debug/Parity Lab candidate path already exposed `elapsedDurationSeconds`, `pauseOverlapSeconds`, and `activeDurationSeconds`. `ReconstructedWorkoutInterval` can now carry the same timing semantics for normal-detail rows without collapsing elapsed row windows and active/timer duration.
 
 ## Completed Code Step
 
@@ -84,13 +86,15 @@ Interval timing semantics have been added before any paused repeat-block normal-
    - active/timer duration subtracts paired pause overlap
    - unpaired pause events still block
    - missing activity rows still block
+   - non-contiguous or count-mismatched activity rows still block
+   - cross-row pause overlaps still block
    - recovery-containing tail and ambiguous repeat-tail cases still block
 
-Only after this foundation should paused repeat blocks be considered for normal-detail promotion.
+The foundation, narrow gate implementation, and physical proof pass are now in place. This promotion remains limited to the open-cooldown paused-repeat shape.
 
 ## Recommended Next Product Step
 
-Proceed next with an explicit paused-repeat normal-detail gate decision and proof pass only if that promotion is approved as a separate task.
+Proceed next with the remaining blocked custom-workout classes only after separate explicit decisions: recovery-containing Open/Extra tails and ambiguous repeat-tail cases. Do not broaden beyond the narrow paused-repeat open-cooldown shape.
 
 This keeps the current correctness strategy intact:
 

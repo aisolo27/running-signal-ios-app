@@ -1576,6 +1576,12 @@ private struct IntervalRowView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            if let pausedTimingDetail = IntervalRowTimingText.pausedTimingDetail(for: interval) {
+                Text(pausedTimingDetail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
             MetricGrid(items: [
                 MetricItem(title: "Pace", value: RunFormatters.pace(interval.actualPaceSecondsPerKm), detail: "Derived"),
                 MetricItem(title: "Avg HR", value: RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"), detail: "Window"),
@@ -1585,6 +1591,13 @@ private struct IntervalRowView: View {
         .padding(10)
         .background(.background)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+enum IntervalRowTimingText {
+    static func pausedTimingDetail(for interval: ReconstructedWorkoutInterval) -> String? {
+        guard let pauseOverlap = interval.pauseOverlapSeconds, pauseOverlap > 0 else { return nil }
+        return "Active \(RunFormatters.duration(interval.activeTimerDurationSeconds)) · elapsed \(RunFormatters.duration(interval.elapsedRowWindowDurationSeconds)) · paused \(RunFormatters.duration(pauseOverlap))"
     }
 }
 
