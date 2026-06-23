@@ -877,15 +877,15 @@ public enum CustomWorkoutNormalDetailGate {
 
         var reasons: [String] = []
         if activities.isEmpty {
-            reasons.append("HealthKit activity rows are missing.")
+            reasons.append(CustomWorkoutFallbackReason.missingActivityRows.normalDetailBlockedReasonLabel)
         } else if plannedSteps.count != activities.count {
-            reasons.append("Planned row count (\(plannedSteps.count)) does not match HealthKit activity row count (\(activities.count)).")
+            reasons.append(CustomWorkoutFallbackReason.activityCountMismatch.normalDetailBlockedReasonLabel)
         }
         if activities.contains(where: { $0.endDate == nil }) {
-            reasons.append("One or more HealthKit activity rows are missing end times.")
+            reasons.append(CustomWorkoutFallbackReason.missingEndBoundary.normalDetailBlockedReasonLabel)
         }
         if !activityRowsAreContiguous(activities) {
-            reasons.append("HealthKit activity rows are not contiguous.")
+            reasons.append(CustomWorkoutFallbackReason.nonContiguousActivityRows.normalDetailBlockedReasonLabel)
         }
         if plannedSteps.contains(where: { $0.plannedGoalType == .time }) && WorkoutPauseTimingSemantics.hasPauseOrResumeEvents(in: evidence.events) {
             if WorkoutPauseTimingSemantics.pairedPauseIntervals(in: evidence.events) == nil {
@@ -903,7 +903,7 @@ public enum CustomWorkoutNormalDetailGate {
             reasons.append("Structured comparison status is \(comparison.status.rawValue).")
         }
         for fallback in comparison.fallbackReasons {
-            reasons.append("Fallback: \(fallback.rawValue).")
+            reasons.append(fallback.normalDetailBlockedReasonLabel)
         }
         if comparison.tailAmbiguity != .none {
             reasons.append("Tail status is \(comparison.tailAmbiguity.rawValue).")

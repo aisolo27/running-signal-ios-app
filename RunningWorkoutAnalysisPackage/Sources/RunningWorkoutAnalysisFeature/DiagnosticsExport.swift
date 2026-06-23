@@ -181,7 +181,7 @@ public enum DiagnosticsExport {
 
         ## Custom Workout Candidate Rule Scorer
 
-        Debug-only Parity Lab scorer for active-time duration, pause overlap, and Open / Extra tail rows. These rows are not production interval logic and are not shown in the normal workout UI.
+        Debug-only Parity Lab scorer for active-time duration, pause overlap, and Open / Extra tail rows. These rows are not production interval logic, are not shown in the normal workout UI, and do not approve a normal-detail gate.
 
         \(customWorkoutCandidateRuleMarkdown(
             customWorkoutCandidateRuleScore(
@@ -197,7 +197,7 @@ public enum DiagnosticsExport {
 
         ## Custom Workout Structured Comparison
 
-        Debug-only structured status and fallback taxonomy for Parity Lab rows. This is not production interval logic and is not shown in the normal workout UI.
+        Debug-only structured status and fallback taxonomy for Parity Lab rows. This status is not production interval logic, is not shown in the normal workout UI, and does not approve a normal-detail gate by itself.
 
         \(customWorkoutComparisonMarkdown(
             customWorkoutComparisonSummary(

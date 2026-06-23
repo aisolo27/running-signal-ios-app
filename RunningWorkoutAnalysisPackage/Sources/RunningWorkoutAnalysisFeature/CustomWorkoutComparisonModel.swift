@@ -22,6 +22,31 @@ enum CustomWorkoutFallbackReason: String, Codable, Equatable, Sendable {
     case noRowLevelEvidence
 }
 
+extension CustomWorkoutFallbackReason {
+    var normalDetailBlockedReasonLabel: String {
+        switch self {
+        case .missingPlannedSteps:
+            "WorkoutKit planned rows are missing."
+        case .missingActivityRows:
+            "HealthKit activity rows are missing."
+        case .invalidRepeatCount:
+            "WorkoutKit repeat counts are invalid for normal-detail interval mapping."
+        case .activityCountMismatch:
+            "Planned row count does not match HealthKit activity row count."
+        case .nonContiguousActivityRows:
+            "HealthKit activity rows are not contiguous."
+        case .missingEndBoundary:
+            "One or more HealthKit activity rows are missing end times."
+        case .labelMappingAmbiguous:
+            "WorkoutKit-to-HealthKit row label mapping is ambiguous."
+        case .openExtraTailAmbiguous:
+            "Open / Extra tail handling is ambiguous for this workout shape."
+        case .noRowLevelEvidence:
+            "Row-level HealthKit evidence is missing."
+        }
+    }
+}
+
 enum CustomWorkoutTailAmbiguity: String, Codable, Equatable, Sendable {
     case none
     case plannedOpenCooldownContinuesToWorkoutEnd

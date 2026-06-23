@@ -97,6 +97,19 @@ A workout shape can move from blocked/debug-only toward normal-detail UI only wh
 - Parity Lab/export output reports the status, fallback reasons, row confidences, tail ambiguity, and safety flags.
 - Normal workout detail behavior is approved separately after debug/export proof, except for the eight already approved narrow gates above.
 
+## Interval Analytics Readiness Gate
+
+Interval-row analytics remain parked until workout-structure behavior is stable enough that analytics would describe the workout instead of the reconstruction algorithm.
+
+Do not add per-row pace, heart-rate response, cadence, power, repeat consistency, warmup quality, cooldown quality, coaching labels, readiness labels, VDOT, training-load, recovery, or race-prediction conclusions until all of the following are true:
+
+1. The workout shape is either supported in the acceptance matrix or intentionally blocked with stable fallback reasons.
+2. Normal-detail rows and Raw HealthKit Debug/parity export rows agree on labels, row counts, elapsed duration, active duration, pause overlap, distance, tail status, and blocked fallback reasons.
+3. Plain open-run, stopped-early, no-pause, paused, repeat-block, fixed-tail, recovery-tail, and unsupported-shape controls remain covered by tests or current proof packets.
+4. Any analytics UI states the confidence/fallback reason instead of filling gaps with inferred custom-workout rows.
+
+Whole-workout execution ideas may stay as future product notes, but they must not use custom-workout row labels or interval-specific conclusions until this readiness gate is met.
+
 ## Non-Goals
 
 - No coaching expansion.

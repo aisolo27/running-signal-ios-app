@@ -1980,11 +1980,11 @@ struct RawHealthKitWorkoutDebugView: View {
     @ViewBuilder
     private var parityLabCandidateRowsView: some View {
         let result = parityLabCandidateRowsResult
-        VStack(alignment: .leading, spacing: 10) {
-            NoticeCard(
-                title: "Debug-only",
-                message: "Candidate rows are for Parity Lab inspection only. They do not replace the normal workout detail intervals."
-            )
+            VStack(alignment: .leading, spacing: 10) {
+                NoticeCard(
+                    title: "Debug-only",
+                    message: "Candidate rows are for Parity Lab inspection only. They do not approve or replace normal workout detail intervals."
+                )
 
             if let unavailableReason = result.unavailableReason {
                 NoticeCard(title: "Unavailable", message: unavailableReason)

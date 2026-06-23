@@ -1221,7 +1221,7 @@ import Testing
     #expect(result?.intervals[3].actualDistanceMeters == 5)
 }
 
-@Test func rawHealthKitDebugExportIncludesReconstructedIntervalsAndJsonPayload() {
+@Test func rawHealthKitDebugExportIncludesReconstructedIntervalsAndJsonPayload() throws {
     let start = Date(timeIntervalSince1970: 10_275)
     var workout = testWorkout(
         id: "raw-debug-export",
@@ -1325,8 +1325,10 @@ import Testing
     #expect(markdown.contains("Boundary Strategy"))
     #expect(markdown.contains("## Custom Workout Candidate Rule Scorer"))
     #expect(markdown.contains("Debug-only Parity Lab scorer for active-time duration"))
+    #expect(markdown.contains("do not approve a normal-detail gate"))
     #expect(markdown.contains("active-duration-minus-paired-pause-overlap"))
     #expect(markdown.contains("## Custom Workout Structured Comparison"))
+    #expect(markdown.contains("does not approve a normal-detail gate by itself"))
     #expect(markdown.contains("| Status | open-tail-needs-rule |"))
     #expect(markdown.contains("## WorkoutKit Boundary Diagnostics"))
     #expect(markdown.contains("## Raw HKWorkoutEvent Inventory"))
@@ -1372,6 +1374,18 @@ import Testing
     #expect(markdown.contains("\"plannedStepBoundaryComparisons\""))
     #expect(markdown.contains("\"boundarySourceWarnings\""))
     #expect(markdown.contains("\"workoutKitPlanAudit\""))
+
+    let payload = try rawDebugPayloadObject(from: markdown)
+    let candidateSummary = try #require(payload["customWorkoutCandidateRuleSummary"] as? [String: Any])
+    let candidateRows = try #require(payload["customWorkoutCandidateRuleRows"] as? [[String: Any]])
+    let openTailRows = candidateRows.filter { ($0["isOpenTail"] as? Bool) == true }
+    #expect(candidateSummary["candidateRowCount"] as? Int == candidateRows.count)
+    #expect(candidateSummary["openTailRowCount"] as? Int == openTailRows.count)
+
+    let comparisonSummary = try #require(payload["customWorkoutComparisonSummary"] as? [String: Any])
+    let rowConfidences = try #require(comparisonSummary["rowConfidences"] as? [String])
+    #expect(comparisonSummary["rowCount"] as? Int == rowConfidences.count)
+    #expect(comparisonSummary["status"] as? String == "open-tail-needs-rule")
 }
 
 @Test func parityPacketExportIncludesStableDebugOnlyRefreshFields() {
@@ -2539,7 +2553,7 @@ import Testing
 
     let repeatTailBlockedReasons = CustomWorkoutNormalDetailGate.blockedReasons(workout: repeatTailWorkout, evidence: repeatTailEvidence)
     #expect(repeatTailBlockedReasons.contains { $0.contains("Structured comparison status is open-tail-needs-rule") })
-    #expect(repeatTailBlockedReasons.contains { $0.contains("Fallback: openExtraTailAmbiguous") })
+    #expect(repeatTailBlockedReasons.contains { $0.contains("Open / Extra tail handling is ambiguous") })
     #expect(repeatTailBlockedReasons.contains { $0.contains("Tail status is fixedCooldownFollowedByPossibleOpenExtraTail") })
     #expect(CustomWorkoutNormalDetailGate.blockedReasons(workout: repeatWorkout, evidence: repeatEvidence).contains {
         $0.contains("outside the approved")
@@ -3397,6 +3411,14 @@ private func assertElapsedTimingSemantics(_ intervals: [ReconstructedWorkoutInte
 private func monthlyDiagnosticsObject(_ json: String) throws -> [String: Any] {
     let data = try #require(json.data(using: .utf8))
     return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+}
+
+private func rawDebugPayloadObject(from markdown: String) throws -> [String: Any] {
+    let startRange = try #require(markdown.range(of: "```json\n"))
+    let payloadStart = startRange.upperBound
+    let remaining = markdown[payloadStart...]
+    let endRange = try #require(remaining.range(of: "\n```"))
+    return try monthlyDiagnosticsObject(String(remaining[..<endRange.lowerBound]))
 }
 
 private func pausedRepeatOpenCooldownFixture(

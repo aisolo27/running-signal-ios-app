@@ -2,6 +2,13 @@ import Foundation
 import Testing
 @testable import RunningWorkoutAnalysisFeature
 
+@Test func customWorkoutFallbackReasonNormalDetailBlockedLabelsAvoidRawEnumNames() {
+    let label = CustomWorkoutFallbackReason.openExtraTailAmbiguous.normalDetailBlockedReasonLabel
+
+    #expect(label == "Open / Extra tail handling is ambiguous for this workout shape.")
+    #expect(!label.contains("openExtraTailAmbiguous"))
+}
+
 @Test func debugCustomWorkoutComparisonMissingPlannedRowsReturnsMissingRequiredEvidence() {
     let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
         plan: nil,
