@@ -23,7 +23,9 @@ June 14, 2026 added one narrow normal-detail exception: a stopped-early single f
 
 June 15, 2026 added the Gate A simple Work/Open normal-detail gate after physical-iPhone proof. The approved shape is exactly one fixed-distance Work step, one complete HealthKit activity row, and a positive Open/Extra tail. June 12 post-promotion exports confirm `Work 1` plus `Open / Extra` with structured comparison `supported` and no fallback reasons. This does not approve structured/special workouts, paused workouts, recovery rows, repeat rows, missing-evidence cases, broad `HKWorkoutActivity` promotion, or analytics.
 
-June 15, 2026 added a docs/debug-only paused repeat-block timer rule in `paused-repeat-block-timer-rule-2026-06-15.md`. It defines elapsed row windows plus active/timer duration from paired HealthKit pause overlap, but it does not approve normal workout detail UI, broad repeat-block promotion, or analytics.
+June 15, 2026 added a docs/debug-only paused repeat-block timer rule in `paused-repeat-block-timer-rule-2026-06-15.md`. It defines elapsed row windows plus active/timer duration from paired HealthKit pause overlap.
+
+June 23, 2026 added the narrow paused-repeat open-cooldown normal-detail gate after interval timing semantics, Simulator smoke, physical-iPhone install on `AIS17PM`, RunSignal raw/parity exports, and Apple Fitness screenshots passed for Apr 22, Apr 29, May 6, May 13, and May 27. This approves only `Warmup(2 km) > repeated Work/Recovery rows > Cooldown(Open)` with no Open/Extra tail. It does not approve true Open/Extra paused-repeat tails, ambiguous paused tails, broad repeat-block promotion, or analytics.
 
 June 15, 2026 also added a docs/debug-only recovery-containing Open/Extra separator rule in `recovery-containing-open-tail-rule-2026-06-15.md`. It keeps planned Recovery rows distinct from post-plan residual movement and requires fixed-step exhaustion before any Open/Extra tail. It does not approve normal workout detail UI or analytics.
 
@@ -124,7 +126,7 @@ Fallback must not silently promote count-aligned rows.
 These remain blocked for normal workout detail UI:
 
 - repeat-block structured intervals
-- paused repeat-block structured intervals without a debug prototype and guard proof
+- paused repeat-block structured intervals outside the approved narrow open-cooldown gate
 - recovery-containing Open/Extra tails without a debug prototype and guard proof
 - ambiguous repeat-tail cases without a debug prototype and guard proof
 - unsupported fixed cooldown followed by Open/Extra tail cases outside the current clean gates

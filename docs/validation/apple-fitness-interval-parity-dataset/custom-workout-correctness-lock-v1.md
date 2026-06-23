@@ -1,6 +1,6 @@
 # Custom Workout Correctness Lock v1
 
-Last updated: 2026-06-15
+Last updated: 2026-06-23
 
 ## Goal
 
@@ -18,7 +18,7 @@ This milestone keeps the app focused on trusted completed-workout analysis:
 
 Do not broaden normal workout detail interval promotion beyond the approved narrow gates.
 
-Keep the existing six narrow normal-detail gates as the only approved custom-workout interval classes:
+Keep the existing seven narrow normal-detail gates as the only approved custom-workout interval classes:
 
 1. Stopped-early single fixed-distance `Work` mapped to one complete partial HealthKit activity row.
 2. Simple fixed-distance `Work > inferred Open / Extra`.
@@ -26,6 +26,7 @@ Keep the existing six narrow normal-detail gates as the only approved custom-wor
 4. `Warmup(2 km) > one Work step > fixed Cooldown > inferred Open / Extra tail`.
 5. Clean no-pause repeat blocks shaped as `Warmup(2 km) > repeated Work/Recovery rows > Cooldown(Open)`.
 6. Clean no-pause repeat blocks shaped as `Warmup(2 km) > repeated Work/Recovery rows > fixed Cooldown > inferred Open / Extra tail`.
+7. Narrow paused repeat blocks shaped as `Warmup(2 km) > repeated Work/Recovery rows > Cooldown(Open)`, with paired pause overlap subtracted for active/timer row display.
 
 Everything else stays blocked, debug-only, or whole-workout-only until its exact workout shape has evidence and fallback behavior.
 
@@ -38,9 +39,9 @@ Everything else stays blocked, debug-only, or whole-workout-only until its exact
 | Simple fixed-distance `Work + Open` | Internally gated into normal detail only for the exact Gate A shape | `simple-work-open-prototype-decision-2026-06-15.md` defines exactly one fixed-distance Work step, one complete activity row, and a positive Open/Extra tail; June 12 post-promotion exports confirm `Work 1` plus `Open / Extra` with structured comparison `supported` and no fallback reasons | Show `Work 1` plus inferred `Open / Extra` only for the exact one-step/one-activity shape | Do not generalize to structured/special workouts, paused workouts, recovery rows, repeat rows, missing evidence, or interval analytics |
 | `Warmup > Work > Cooldown(Open)` | Internally gated for the narrow supported no-tail class | Row-level FIT support exists for the exact no-tail candidate class | Show Warmup/Work/Cooldown rows only when planned rows map one-to-one to complete contiguous HealthKit activity rows | Inconclusive outliers still need separate review before broad warmup/work/cooldown promotion |
 | `Warmup > Work > fixed Cooldown > Open / Extra` | Internally gated for the clean fixed-cooldown tail class | Current evidence supports final extra activity as `Open / Extra` only when it is the only extra row after fixed cooldown | Show planned rows plus inferred final `Open / Extra` tail for the exact clean subclass | Recovery-containing tails and ambiguous tails remain blocked |
-| Clean no-pause repeat blocks ending in `Cooldown(Open)` | Internally gated into normal detail | Physical iPhone proof confirms expanded repeat rows with final Cooldown and no Open/Extra tail | Show expanded Work/Recovery rows and final Cooldown when activity rows are complete and contiguous | Paused repeat blocks and material row shifts are not approved |
+| Clean no-pause repeat blocks ending in `Cooldown(Open)` | Internally gated into normal detail | Physical iPhone proof confirms expanded repeat rows with final Cooldown and no Open/Extra tail | Show expanded Work/Recovery rows and final Cooldown when activity rows are complete and contiguous | Paused/tail variants outside the approved narrow gates and material row shifts are not approved |
 | Clean no-pause repeat blocks ending in fixed cooldown plus `Open / Extra` | Internally gated into normal detail | Physical iPhone proof confirms expanded repeat rows, fixed Cooldown, and final Open/Extra | Show expanded Work/Recovery rows, fixed Cooldown, and final Open/Extra for the exact clean subclass | Repeat-block tail ambiguity remains a separate blocker |
-| Paused repeat blocks | Blocked from normal-detail interval promotion | `paused-repeat-block-timer-rule-2026-06-15.md` defines a docs/debug timer rule: keep elapsed row windows, subtract paired pause overlap for active/timer duration, and require repeat mapping plus guards before any prototype | Keep debug/Parity Lab evidence visible; normal detail should fall back or show blocked placeholder | Needs explicit debug prototype approval proving row count, labels, elapsed duration, active/timer duration, pause overlap, distance, tail behavior, and unsupported guard fallbacks |
+| Narrow paused repeat blocks ending in `Cooldown(Open)` | Internally gated into normal detail for the exact open-cooldown shape only | Physical iPhone proof confirms Apr 22, Apr 29, May 6, May 13, and May 27 expanded repeat rows with paired pause overlap and no Open/Extra tail | Show expanded Work/Recovery rows plus final Cooldown; paused rows use active/timer duration while elapsed and pause overlap remain available for diagnostics | True Open/Extra paused-repeat tails, ambiguous paused tails, unpaired pauses, missing rows, non-contiguous rows, and cross-row pause overlaps remain blocked |
 | Recovery-containing Open/Extra tail | Blocked from normal-detail interval promotion | `recovery-containing-open-tail-rule-2026-06-15.md` defines a docs/debug separator rule for the May 1-style shape: preserve planned Recovery, map all fixed planned rows, and create Open/Extra only after fixed planned rows are exhausted | Keep debug/Parity Lab evidence visible; normal detail should fall back or show blocked placeholder | Needs explicit debug prototype approval proving Recovery mapping, final fixed-step exhaustion, tail threshold, open-cooldown guards, and unsupported fallbacks |
 | Ambiguous repeat-tail cases | Blocked from normal-detail interval promotion | `ambiguous-repeat-tail-rule-2026-06-15.md` defines a docs/debug separator rule: expand repeat rows, map every planned row, keep open cooldown as Cooldown, and create Open/Extra only after a resolved fixed final row | Keep debug/Parity Lab evidence visible; normal detail should fall back or show blocked placeholder | Needs explicit debug prototype approval proving repeat expansion, final fixed-row exhaustion, tail threshold, open-cooldown guards, and unsupported fallbacks |
 | Timer-drift or pause-heavy outliers | Blocked unless covered by an approved narrow gate | Gate B timer-drift docs show elapsed-vs-timer and pause-event artifacts | Preserve elapsed, timer, and pause diagnostics; avoid collapsing to one derived duration | Needs per-shape timer decision and material-error threshold before any UI promotion |
@@ -60,9 +61,9 @@ Everything else stays blocked, debug-only, or whole-workout-only until its exact
 
    Priority order:
 
-   1. Paused repeat blocks. Timer rule is defined for docs/debug work, but prototype/UI promotion is still blocked.
-   2. Recovery-containing Open/Extra tails. Separator rule is defined for docs/debug work, but prototype/UI promotion is still blocked.
-   3. Ambiguous repeat-tail cases. Separator rule is defined for docs/debug work, but prototype/UI promotion is still blocked.
+   1. Recovery-containing Open/Extra tails. Separator rule is defined for docs/debug work, but prototype/UI promotion is still blocked.
+   2. Ambiguous repeat-tail cases. Separator rule is defined for docs/debug work, but prototype/UI promotion is still blocked.
+   3. Broader paused repeat-tail shapes. The narrow open-cooldown paused-repeat gate is closed; true Open/Extra paused-repeat tails and ambiguous paused tails remain blocked.
 
    Gate A simple fixed-distance Work/Open is closed for the exact approved shape. Future Work/Open changes require new evidence only if they broaden beyond the current one-step/one-activity gate.
 
@@ -93,7 +94,7 @@ A workout shape can move from blocked/debug-only toward normal-detail UI only wh
 - Open/Extra tail handling is explicit and does not rely on label guesswork.
 - At least one guard fixture proves a similar unsupported shape still blocks.
 - Parity Lab/export output reports the status, fallback reasons, row confidences, tail ambiguity, and safety flags.
-- Normal workout detail behavior is approved separately after debug/export proof, except for the six already approved narrow gates above.
+- Normal workout detail behavior is approved separately after debug/export proof, except for the seven already approved narrow gates above.
 
 ## Non-Goals
 

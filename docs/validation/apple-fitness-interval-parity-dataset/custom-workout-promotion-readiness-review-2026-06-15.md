@@ -2,6 +2,8 @@
 
 ## Scope
 
+Current status note, 2026-06-23: this is now a historical Gate A readiness packet. Gate A simple `Work > Open / Extra` and the later narrow paused-repeat `Cooldown(Open)` gate have both been implemented and physically proofed. Recovery-containing Open/Extra tails, ambiguous repeat-tail cases, true Open/Extra paused-repeat tails, broad `HKWorkoutActivity` promotion, and interval-row analytics remain blocked.
+
 Docs-only review of whether the current Custom Workout Correctness Lock evidence is ready for a later normal-detail promotion task.
 
 This review does not approve app logic changes, production interval reconstruction changes, broad `HKWorkoutActivity` promotion, FIT runtime usage, file imports, HealthFit dependency, coaching, VDOT, training load, recovery scoring, race prediction, or interval-row analytics.
@@ -97,7 +99,7 @@ Paused repeat-block proof is strong, but the implementation risk is higher:
 - Unpaired or ambiguous pause evidence must fall back cleanly.
 - It is easier to create a UI that appears precise while hiding timer semantics.
 
-Keep paused repeat blocks debug/export-only until after the simpler Gate A promotion proves the normal-detail promotion path is safe.
+At the time of this Gate A review, paused repeat blocks stayed debug/export-only until the simpler Gate A promotion proved the normal-detail promotion path was safe. That condition is now superseded for the narrow paused-repeat `Cooldown(Open)` shape only; broader paused-repeat tails remain blocked.
 
 ## Why Not Promote Recovery-Tail Yet
 
@@ -115,4 +117,4 @@ It should remain debug/export-only until at least one more guard or proof confir
 
 Implement one narrow normal-detail promotion for Gate A simple fixed-distance `Work > Open / Extra`, behind the exact guardrails above.
 
-This should be a code-changing task with tests and physical-device proof. It should not include paused repeat blocks, recovery-containing tails, broad repeat-tail behavior, interval-row analytics, coaching, VDOT, training load, recovery scoring, or race prediction.
+This was a code-changing Gate A task with tests and physical-device proof. Its scope did not include paused repeat blocks, recovery-containing tails, broad repeat-tail behavior, interval-row analytics, coaching, VDOT, training load, recovery scoring, or race prediction. The later narrow paused-repeat `Cooldown(Open)` gate was handled by a separate task and proof folder.

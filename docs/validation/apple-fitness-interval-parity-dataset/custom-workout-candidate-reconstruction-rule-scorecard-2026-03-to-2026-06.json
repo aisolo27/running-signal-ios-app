@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-13T21:43:53.814190Z",
+  "generatedAt": "2026-06-23T17:04:57.462023Z",
   "status": "docs/debug candidate reconstruction rule scorecard",
   "sources": {
     "screenshotFixtures": "apple-fitness-screenshot-confirmed-rows-2026-03-to-2026-06.json",
@@ -28,17 +28,17 @@
     "Infer Open/Extra only after fixed planned steps are exhausted, using the measured candidate tail row."
   ],
   "summary": {
-    "workoutCount": 12,
-    "withinToleranceCount": 12,
+    "workoutCount": 13,
+    "withinToleranceCount": 13,
     "decisionCounts": {
       "supported_repeat_expansion": 4,
-      "supported_pause": 5,
+      "supported_pause": 6,
       "supported_open_tail_and_pause": 1,
       "supported_open_tail": 2
     },
     "openTailRuleSupportedCount": 3,
-    "pauseRuleSupportedCount": 6,
-    "repeatExpansionSupportedCount": 12
+    "pauseRuleSupportedCount": 7,
+    "repeatExpansionSupportedCount": 13
   },
   "rows": [
     {
@@ -1409,6 +1409,338 @@
         "fitWorkoutStepCount": 5
       },
       "decision": "supported_repeat_expansion"
+    },
+    {
+      "startDate": "2026-05-27T11:45:47Z",
+      "localDateLabel": "May 27",
+      "fixtureClass": "paused_repeat_block",
+      "gateBFound": true,
+      "rowComparison": {
+        "appleRowCount": 22,
+        "candidateRowCount": 22,
+        "fitLapCount": 22,
+        "countMatches": true,
+        "labelMismatches": 0,
+        "maxDurationDeltaSeconds": 0.9,
+        "maxDistanceDeltaMeters": 11.4,
+        "withinTolerance": true,
+        "rows": [
+          {
+            "rowIndex": 1,
+            "appleLabel": "Warmup",
+            "candidateLabel": "Warmup",
+            "labelMatches": true,
+            "appleDurationSeconds": 763.0,
+            "ruleDurationSeconds": 763.4,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": 0.4,
+            "appleDistanceMeters": 2000.0,
+            "candidateDistanceMeters": 2007.4,
+            "distanceDeltaMeters": 7.4
+          },
+          {
+            "rowIndex": 2,
+            "appleLabel": "Work",
+            "candidateLabel": "Work 1",
+            "labelMatches": true,
+            "appleDurationSeconds": 97.0,
+            "ruleDurationSeconds": 97.3,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": 0.3,
+            "appleDistanceMeters": 400.0,
+            "candidateDistanceMeters": 405.0,
+            "distanceDeltaMeters": 5.0
+          },
+          {
+            "rowIndex": 3,
+            "appleLabel": "Recovery",
+            "candidateLabel": "Recovery 1",
+            "labelMatches": true,
+            "appleDurationSeconds": 90.0,
+            "ruleDurationSeconds": 89.7,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": -0.3,
+            "appleDistanceMeters": 120.0,
+            "candidateDistanceMeters": 120.5,
+            "distanceDeltaMeters": 0.5
+          },
+          {
+            "rowIndex": 4,
+            "appleLabel": "Work",
+            "candidateLabel": "Work 2",
+            "labelMatches": true,
+            "appleDurationSeconds": 94.0,
+            "ruleDurationSeconds": 94.5,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": 0.5,
+            "appleDistanceMeters": 400.0,
+            "candidateDistanceMeters": 411.4,
+            "distanceDeltaMeters": 11.4
+          },
+          {
+            "rowIndex": 5,
+            "appleLabel": "Recovery",
+            "candidateLabel": "Recovery 2",
+            "labelMatches": true,
+            "appleDurationSeconds": 90.0,
+            "ruleDurationSeconds": 89.3,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": -0.7,
+            "appleDistanceMeters": 114.0,
+            "candidateDistanceMeters": 114.7,
+            "distanceDeltaMeters": 0.7
+          },
+          {
+            "rowIndex": 6,
+            "appleLabel": "Work",
+            "candidateLabel": "Work 3",
+            "labelMatches": true,
+            "appleDurationSeconds": 89.0,
+            "ruleDurationSeconds": 89.4,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": 0.4,
+            "appleDistanceMeters": 400.0,
+            "candidateDistanceMeters": 396.6,
+            "distanceDeltaMeters": -3.4
+          },
+          {
+            "rowIndex": 7,
+            "appleLabel": "Recovery",
+            "candidateLabel": "Recovery 3",
+            "labelMatches": true,
+            "appleDurationSeconds": 90.0,
+            "ruleDurationSeconds": 89.4,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": -0.6,
+            "appleDistanceMeters": 129.0,
+            "candidateDistanceMeters": 129.1,
+            "distanceDeltaMeters": 0.1
+          },
+          {
+            "rowIndex": 8,
+            "appleLabel": "Work",
+            "candidateLabel": "Work 4",
+            "labelMatches": true,
+            "appleDurationSeconds": 95.0,
+            "ruleDurationSeconds": 94.5,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": -0.5,
+            "appleDistanceMeters": 400.0,
+            "candidateDistanceMeters": 408.4,
+            "distanceDeltaMeters": 8.4
+          },
+          {
+            "rowIndex": 9,
+            "appleLabel": "Recovery",
+            "candidateLabel": "Recovery 4",
+            "labelMatches": true,
+            "appleDurationSeconds": 90.0,
+            "ruleDurationSeconds": 89.4,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": -0.6,
+            "appleDistanceMeters": 117.0,
+            "candidateDistanceMeters": 117.2,
+            "distanceDeltaMeters": 0.2
+          },
+          {
+            "rowIndex": 10,
+            "appleLabel": "Work",
+            "candidateLabel": "Work 5",
+            "labelMatches": true,
+            "appleDurationSeconds": 97.0,
+            "ruleDurationSeconds": 97.2,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": 0.2,
+            "appleDistanceMeters": 400.0,
+            "candidateDistanceMeters": 408.0,
+            "distanceDeltaMeters": 8.0
+          },
+          {
+            "rowIndex": 11,
+            "appleLabel": "Recovery",
+            "candidateLabel": "Recovery 5",
+            "labelMatches": true,
+            "appleDurationSeconds": 90.0,
+            "ruleDurationSeconds": 89.9,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": -0.1,
+            "appleDistanceMeters": 101.0,
+            "candidateDistanceMeters": 101.5,
+            "distanceDeltaMeters": 0.5
+          },
+          {
+            "rowIndex": 12,
+            "appleLabel": "Work",
+            "candidateLabel": "Work 6",
+            "labelMatches": true,
+            "appleDurationSeconds": 97.0,
+            "ruleDurationSeconds": 96.9,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": -0.1,
+            "appleDistanceMeters": 400.0,
+            "candidateDistanceMeters": 410.7,
+            "distanceDeltaMeters": 10.7
+          },
+          {
+            "rowIndex": 13,
+            "appleLabel": "Recovery",
+            "candidateLabel": "Recovery 6",
+            "labelMatches": true,
+            "appleDurationSeconds": 90.0,
+            "ruleDurationSeconds": 89.4,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": -0.6,
+            "appleDistanceMeters": 120.0,
+            "candidateDistanceMeters": 120.1,
+            "distanceDeltaMeters": 0.1
+          },
+          {
+            "rowIndex": 14,
+            "appleLabel": "Work",
+            "candidateLabel": "Work 7",
+            "labelMatches": true,
+            "appleDurationSeconds": 96.0,
+            "ruleDurationSeconds": 95.8,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": -0.2,
+            "appleDistanceMeters": 400.0,
+            "candidateDistanceMeters": 406.9,
+            "distanceDeltaMeters": 6.9
+          },
+          {
+            "rowIndex": 15,
+            "appleLabel": "Recovery",
+            "candidateLabel": "Recovery 7",
+            "labelMatches": true,
+            "appleDurationSeconds": 90.0,
+            "ruleDurationSeconds": 89.2,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": -0.8,
+            "appleDistanceMeters": 124.0,
+            "candidateDistanceMeters": 124.5,
+            "distanceDeltaMeters": 0.5
+          },
+          {
+            "rowIndex": 16,
+            "appleLabel": "Work",
+            "candidateLabel": "Work 8",
+            "labelMatches": true,
+            "appleDurationSeconds": 97.0,
+            "ruleDurationSeconds": 97.2,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": 0.2,
+            "appleDistanceMeters": 400.0,
+            "candidateDistanceMeters": 406.6,
+            "distanceDeltaMeters": 6.6
+          },
+          {
+            "rowIndex": 17,
+            "appleLabel": "Recovery",
+            "candidateLabel": "Recovery 8",
+            "labelMatches": true,
+            "appleDurationSeconds": 90.0,
+            "ruleDurationSeconds": 89.2,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": -0.8,
+            "appleDistanceMeters": 96.0,
+            "candidateDistanceMeters": 93.8,
+            "distanceDeltaMeters": -2.2
+          },
+          {
+            "rowIndex": 18,
+            "appleLabel": "Work",
+            "candidateLabel": "Work 9",
+            "labelMatches": true,
+            "appleDurationSeconds": 93.0,
+            "ruleDurationSeconds": 92.8,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": -0.2,
+            "appleDistanceMeters": 400.0,
+            "candidateDistanceMeters": 398.8,
+            "distanceDeltaMeters": -1.2
+          },
+          {
+            "rowIndex": 19,
+            "appleLabel": "Recovery",
+            "candidateLabel": "Recovery 9",
+            "labelMatches": true,
+            "appleDurationSeconds": 90.0,
+            "ruleDurationSeconds": 89.1,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": -0.9,
+            "appleDistanceMeters": 122.0,
+            "candidateDistanceMeters": 122.7,
+            "distanceDeltaMeters": 0.7
+          },
+          {
+            "rowIndex": 20,
+            "appleLabel": "Work",
+            "candidateLabel": "Work 10",
+            "labelMatches": true,
+            "appleDurationSeconds": 99.0,
+            "ruleDurationSeconds": 99.3,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": 0.3,
+            "appleDistanceMeters": 400.0,
+            "candidateDistanceMeters": 409.5,
+            "distanceDeltaMeters": 9.5
+          },
+          {
+            "rowIndex": 21,
+            "appleLabel": "Recovery",
+            "candidateLabel": "Recovery 10",
+            "labelMatches": true,
+            "appleDurationSeconds": 90.0,
+            "ruleDurationSeconds": 89.2,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": -0.8,
+            "appleDistanceMeters": 60.0,
+            "candidateDistanceMeters": 60.4,
+            "distanceDeltaMeters": 0.4
+          },
+          {
+            "rowIndex": 22,
+            "appleLabel": "Cooldown",
+            "candidateLabel": "Cooldown",
+            "labelMatches": true,
+            "appleDurationSeconds": 549.0,
+            "ruleDurationSeconds": 549.4,
+            "durationSource": "fit_timer_duration",
+            "durationDeltaSeconds": 0.4,
+            "appleDistanceMeters": 1340.0,
+            "candidateDistanceMeters": 1340.2,
+            "distanceDeltaMeters": 0.2
+          }
+        ]
+      },
+      "repeatBlockRule": {
+        "hasRepeatExpansion": true,
+        "plannedExpandedRowCount": 22,
+        "candidateRowCount": 22,
+        "candidateHasExtraTailRow": false,
+        "supportsExpandedRows": true
+      },
+      "openTailRule": {
+        "appleShowsOpenTail": false,
+        "candidateShowsOpenTail": false,
+        "plannedCountExcludesTail": true,
+        "finalPlannedGoalType": "open",
+        "finalPlannedStepIsFixed": false,
+        "supportsOpenTailRule": true
+      },
+      "pauseRule": {
+        "screenshotElapsedMinusWorkoutSeconds": 61.0,
+        "debugTotalPairedPauseSeconds": 60.8,
+        "pauseEvidenceSource": "gate-b-timer-drift-evidence-2026-03-to-2026-06.json",
+        "matchesScreenshotGap": true
+      },
+      "fitEvidence": {
+        "fitFileFound": true,
+        "fitFilename": "2026-05-27-074547-Outdoor Running-Adriel\u2019s Apple\u00a0Watch.fit",
+        "fitLapCount": 22,
+        "fitWorkoutStepCount": 5
+      },
+      "decision": "supported_pause"
     },
     {
       "startDate": "2026-05-29T11:49:28Z",

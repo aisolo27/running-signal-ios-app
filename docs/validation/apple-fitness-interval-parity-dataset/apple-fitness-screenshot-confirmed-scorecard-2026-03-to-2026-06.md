@@ -1,6 +1,6 @@
 # Apple Fitness Screenshot-Confirmed Custom Workout Scorecard
 
-Generated: 2026-06-13T20:13:55.289970Z
+Generated: 2026-06-23T17:04:57.415924Z
 
 This scorecard compares manually typed Apple Fitness screenshot rows against existing docs/debug evidence: RunSignal current rows, `HKWorkoutActivity` candidate rows, WorkoutKit planned rows, FIT lap rows, and pause-drift evidence.
 
@@ -10,12 +10,12 @@ It is validation-only. Screenshots and FIT are not runtime inputs, and this does
 
 | Metric | Value |
 | --- | ---: |
-| Screenshot fixture workouts | 12 |
-| Apple expanded repeat-block examples | 7 |
-| WorkoutKit planned rows with repeat expansion | 12 |
+| Screenshot fixture workouts | 13 |
+| Apple expanded repeat-block examples | 8 |
+| WorkoutKit planned rows with repeat expansion | 13 |
 | Apple Open-tail examples | 3 |
-| Pause-drift screenshots | 6 |
-| Pause-drift screenshot/debug matches | 5 |
+| Pause-drift screenshots | 7 |
+| Pause-drift screenshot/debug matches | 6 |
 
 ## Decision Counts
 
@@ -24,7 +24,7 @@ It is validation-only. Screenshots and FIT are not runtime inputs, and this does
 | open_tail_screenshot_supported | 2 |
 | open_tail_supported_pause_debug_missing | 1 |
 | screenshot_candidate_supported | 4 |
-| structure_supported_metric_drift_needs_review | 5 |
+| structure_supported_metric_drift_needs_review | 6 |
 
 ## Workout Rows
 
@@ -38,6 +38,7 @@ It is validation-only. Screenshots and FIT are not runtime inputs, and this does
 | 2026-05-06T12:02:13Z | paused_repeat_block | 14/14/14/14 | 126.9s / 8.1m | no | 126.0s / 126.4s | structure_supported_metric_drift_needs_review |
 | 2026-05-13T11:52:06Z | paused_repeat_block | 18/18/18/18 | 52.0s / 11.2m | no | 53.0s / 52.6s | structure_supported_metric_drift_needs_review |
 | 2026-05-20T11:43:00Z | clean_repeat_block | 10/10/10/10 | 1.0s / 8.7m | no | n/a / n/a | screenshot_candidate_supported |
+| 2026-05-27T11:45:47Z | paused_repeat_block | 22/22/22/22 | 60.0s / 11.4m | no | 61.0s / 60.8s | structure_supported_metric_drift_needs_review |
 | 2026-05-29T11:49:28Z | paused_warmup_work_open_cooldown | 3/3/3/3 | 158.9s / 9.1m | no | 159.0s / 159.0s | structure_supported_metric_drift_needs_review |
 | 2026-06-03T11:45:08Z | clean_repeat_block | 8/8/8/8 | 1.0s / 8.6m | no | n/a / n/a | screenshot_candidate_supported |
 | 2026-06-05T11:53:53Z | fixed_cooldown_open_tail | 4/3/4/3 | 0.5s / 6.6m | yes | n/a / n/a | open_tail_screenshot_supported |

@@ -1,6 +1,6 @@
 # Custom Workout Candidate Reconstruction Rule Scorecard
 
-Generated: 2026-06-13T21:43:53.814190Z
+Generated: 2026-06-23T17:04:57.462023Z
 
 Status: docs/debug validation only. This does not change Swift, production interval behavior, normal workout UI, `HKWorkoutActivity` promotion, FIT runtime use, HealthFit dependency status, or Phase 3 implementation.
 
@@ -20,11 +20,11 @@ Score the smallest candidate reconstruction rules against the existing screensho
 
 | Metric | Value |
 | --- | ---: |
-| Workout fixtures scored | 12 |
-| Rows within tolerance | 12 |
+| Workout fixtures scored | 13 |
+| Rows within tolerance | 13 |
 | Open-tail rules supported | 3 |
-| Pause overview gaps supported | 6 |
-| Repeat expansions supported | 12 |
+| Pause overview gaps supported | 7 |
+| Repeat expansions supported | 13 |
 
 ## Decision Counts
 
@@ -32,7 +32,7 @@ Score the smallest candidate reconstruction rules against the existing screensho
 | --- | ---: |
 | supported_open_tail | 2 |
 | supported_open_tail_and_pause | 1 |
-| supported_pause | 5 |
+| supported_pause | 6 |
 | supported_repeat_expansion | 4 |
 
 ## Workout Scores
@@ -47,6 +47,7 @@ Score the smallest candidate reconstruction rules against the existing screensho
 | 2026-05-06T12:02:13Z | paused_repeat_block | 14/14/14 | 0.9s / 8.1m | no | 126.0s / 126.4s | supported_pause |
 | 2026-05-13T11:52:06Z | paused_repeat_block | 18/18/18 | 0.8s / 11.2m | no | 53.0s / 52.6s | supported_pause |
 | 2026-05-20T11:43:00Z | clean_repeat_block | 10/10/10 | 1.0s / 8.7m | no | n/a / n/a | supported_repeat_expansion |
+| 2026-05-27T11:45:47Z | paused_repeat_block | 22/22/22 | 0.9s / 11.4m | no | 61.0s / 60.8s | supported_pause |
 | 2026-05-29T11:49:28Z | paused_warmup_work_open_cooldown | 3/3/3 | 0.2s / 9.1m | no | 159.0s / 159.0s | supported_pause |
 | 2026-06-03T11:45:08Z | clean_repeat_block | 8/8/8 | 1.0s / 8.6m | no | n/a / n/a | supported_repeat_expansion |
 | 2026-06-05T11:53:53Z | fixed_cooldown_open_tail | 4/4/3 | 0.5s / 6.6m | yes | n/a / n/a | supported_open_tail |
@@ -54,7 +55,7 @@ Score the smallest candidate reconstruction rules against the existing screensho
 
 ## Interpretation
 
-- The candidate rule set matches all 12 screenshot-confirmed fixtures within the current row tolerances.
+- The candidate rule set matches 13 of 13 screenshot-confirmed fixtures within the current row tolerances.
 - May 1 no longer stands alone: the same active/timer duration rule also resolves the paused repeat-block and paused warmup/work/cooldown fixtures.
 - The Open/Extra tail rule is supported for the three screenshot-confirmed Open-tail fixtures: May 1, Jun 5, and Jun 10.
 - Repeat-block expansion remains supported as a presentation rule, but production promotion is still blocked until a later explicit prototype gate.

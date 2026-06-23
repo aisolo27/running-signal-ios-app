@@ -8,7 +8,7 @@ Narrow paused repeat-block normal detail promotion is implemented and physically
 
 Do not broaden paused repeat blocks beyond that narrow open-cooldown shape. True Open/Extra paused-repeat tails, recovery-containing tails, ambiguous repeat tails, unpaired pauses, missing rows, non-contiguous rows, and cross-row pause overlaps remain blocked.
 
-The physical-iPhone debug/export evidence is strong, and the interval timing semantics foundation now exists in code. Paused repeat blocks still need a separate normal-detail promotion decision because the product must decide how to display two time values:
+The physical-iPhone debug/export evidence is strong, and the interval timing semantics foundation now exists in code. The separate normal-detail promotion decision has now been made for the narrow open-cooldown paused-repeat shape only, with the display rule explicitly preserving two time values:
 
 - elapsed row window duration from the HealthKit activity boundary
 - active/timer duration after subtracting paired HealthKit pause overlap
@@ -78,9 +78,9 @@ Interval timing semantics have been added before any paused repeat-block normal-
    - elapsed = actual duration
    - pause overlap = nil or zero
    - active = actual duration
-   - UI remains visually unchanged for current six gates
+   - UI remains visually unchanged for the six pre-existing gates
 3. Normal detail display reads the interval display duration while current approved gates continue to use elapsed row-window duration.
-4. Tests prove current six gates do not change.
+4. Tests prove the six pre-existing gates do not change.
 5. Paused timing fixture tests prove:
    - elapsed row window is preserved
    - active/timer duration subtracts paired pause overlap

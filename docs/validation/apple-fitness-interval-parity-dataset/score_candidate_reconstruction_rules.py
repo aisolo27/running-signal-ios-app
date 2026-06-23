@@ -468,7 +468,7 @@ def write_markdown(report: dict[str, Any]) -> None:
             "",
             "## Interpretation",
             "",
-            "- The candidate rule set matches all 12 screenshot-confirmed fixtures within the current row tolerances.",
+            f"- The candidate rule set matches {summary['withinToleranceCount']} of {summary['workoutCount']} screenshot-confirmed fixtures within the current row tolerances.",
             "- May 1 no longer stands alone: the same active/timer duration rule also resolves the paused repeat-block and paused warmup/work/cooldown fixtures.",
             "- The Open/Extra tail rule is supported for the three screenshot-confirmed Open-tail fixtures: May 1, Jun 5, and Jun 10.",
             "- Repeat-block expansion remains supported as a presentation rule, but production promotion is still blocked until a later explicit prototype gate.",
