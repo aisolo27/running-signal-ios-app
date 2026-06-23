@@ -2458,6 +2458,10 @@ import Testing
 
     #expect(CustomWorkoutNormalDetailGate.supportedNarrowNoPauseRepeatBlockFixedCooldownOpenTail(workout: workout, evidence: evidence) == nil)
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) == nil)
+
+    let blockedReasons = CustomWorkoutNormalDetailGate.blockedReasons(workout: workout, evidence: evidence)
+    #expect(blockedReasons.contains { $0.contains("pause-adjusted timer logic") })
+    #expect(blockedReasons.contains { $0.contains("Tail status is fixedCooldownFollowedByPossibleOpenExtraTail") })
 }
 
 @Test func normalDetailGateBlocksRepeatAndOpenTailCases() {
@@ -2532,6 +2536,11 @@ import Testing
     #expect(CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkOpenCooldown(workout: recoveryTailWorkout, evidence: recoveryTailEvidence) == nil)
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: recoveryTailWorkout, evidence: recoveryTailEvidence) == nil)
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: repeatTailWorkout, evidence: repeatTailEvidence) == nil)
+
+    let repeatTailBlockedReasons = CustomWorkoutNormalDetailGate.blockedReasons(workout: repeatTailWorkout, evidence: repeatTailEvidence)
+    #expect(repeatTailBlockedReasons.contains { $0.contains("Structured comparison status is open-tail-needs-rule") })
+    #expect(repeatTailBlockedReasons.contains { $0.contains("Fallback: openExtraTailAmbiguous") })
+    #expect(repeatTailBlockedReasons.contains { $0.contains("Tail status is fixedCooldownFollowedByPossibleOpenExtraTail") })
     #expect(CustomWorkoutNormalDetailGate.blockedReasons(workout: repeatWorkout, evidence: repeatEvidence).contains {
         $0.contains("outside the approved")
     })
