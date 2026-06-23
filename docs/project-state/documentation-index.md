@@ -29,6 +29,7 @@ Keep active validation lean. Once a date-specific parity investigation is comple
 - `docs/validation/apple-fitness-interval-parity-dataset/gate-b-phase-3-readiness-review.md`: docs-only Gate B decision table by exact workout shape before any Phase 3 prototype discussion.
 - `docs/validation/apple-fitness-interval-parity-dataset/gate-b-agent-findings-2026-03-to-2026-06.md`: consolidated Gate B sub-agent findings, root-cause matrix, and no-production-change decision.
 - `docs/validation/apple-fitness-interval-parity-dataset/gate-b-scoring-refresh-2026-06-23.md`: AIS-27 refresh note; reran Gate B scoring scripts, generated outputs had no diff, and Gate B remains blocked pending row-level label/error extraction.
+- `docs/validation/apple-fitness-interval-parity-dataset/gate-b-warmup-work-cooldown-outlier-review-2026-06-23.md`: AIS-28 review classifying March 19, May 29, June 5, and high-drift repeat rows; no broad Gate B promotion approved.
 - `docs/validation/apple-fitness-interval-parity-dataset/gate-b-repeat-block-evidence-2026-03-to-2026-06.md`: generated docs/debug repeat-block evidence scorecard.
 - `docs/validation/apple-fitness-interval-parity-dataset/gate-b-open-tail-evidence-2026-03-to-2026-06.md`: generated docs/debug Open/Extra tail evidence scorecard.
 - `docs/validation/apple-fitness-interval-parity-dataset/gate-b-narrow-warmup-work-cooldown-candidate-scorecard-2026-03-to-2026-06.md`: generated docs/debug narrow warmup/work/open-cooldown candidate scorecard.
