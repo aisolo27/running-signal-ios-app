@@ -66,6 +66,11 @@ public enum DistanceGoalBoundaryStrategy: String, Codable, Equatable, Sendable {
     }
 }
 
+public enum ReconstructedIntervalDurationDisplayRule: String, Codable, Equatable, Sendable {
+    case elapsedRowWindow
+    case activeTimer
+}
+
 public struct PlannedWorkoutStep: Codable, Equatable, Sendable {
     public var index: Int
     public var label: String
@@ -111,6 +116,10 @@ public struct ReconstructedWorkoutInterval: Codable, Equatable, Sendable {
     public var actualStartDate: Date
     public var actualEndDate: Date
     public var actualDurationSeconds: Double
+    public var elapsedDurationSeconds: Double?
+    public var pauseOverlapSeconds: Double?
+    public var activeDurationSeconds: Double?
+    public var durationDisplayRule: ReconstructedIntervalDurationDisplayRule?
     public var actualDistanceMeters: Double?
     public var actualPaceSecondsPerKm: Double?
     public var averageHeartRateBpm: Double?
@@ -126,6 +135,104 @@ public struct ReconstructedWorkoutInterval: Codable, Equatable, Sendable {
     public var tailDiagnostics: TailDiagnostics?
     public var sourceNote: String
     public var confidence: IntervalReconstructionConfidence
+
+    public var elapsedRowWindowDurationSeconds: Double {
+        elapsedDurationSeconds ?? actualDurationSeconds
+    }
+
+    public var activeTimerDurationSeconds: Double {
+        activeDurationSeconds ?? actualDurationSeconds
+    }
+
+    public var displayDurationSeconds: Double {
+        switch durationDisplayRule ?? .elapsedRowWindow {
+        case .elapsedRowWindow:
+            elapsedRowWindowDurationSeconds
+        case .activeTimer:
+            activeTimerDurationSeconds
+        }
+    }
+}
+
+fileprivate enum WorkoutPauseTimingSemantics {
+    fileprivate enum PauseEventKind {
+        case pause
+        case resume
+    }
+
+    static func pauseEventKind(for event: WorkoutEvidenceEvent) -> PauseEventKind? {
+        let label = event.displayLabel.lowercased()
+        if label.contains("resume") {
+            return .resume
+        }
+        if label.contains("pause") {
+            return .pause
+        }
+        return nil
+    }
+
+    static func hasPauseOrResumeEvents(in events: [WorkoutEvidenceEvent]) -> Bool {
+        events.contains { pauseEventKind(for: $0) != nil }
+    }
+
+    static func pairedPauseCount(in events: [WorkoutEvidenceEvent]) -> Int {
+        var pendingPause = false
+        var count = 0
+        for event in events.sorted(by: { $0.startDate < $1.startDate }) {
+            switch pauseEventKind(for: event) {
+            case .pause:
+                pendingPause = true
+            case .resume where pendingPause:
+                count += 1
+                pendingPause = false
+            case .resume, .none:
+                continue
+            }
+        }
+        return count
+    }
+
+    static func pairedPauseIntervals(in events: [WorkoutEvidenceEvent]) -> [DateInterval]? {
+        var pendingPauseStart: Date?
+        var intervals: [DateInterval] = []
+
+        for event in events.sorted(by: { $0.startDate < $1.startDate }) {
+            switch pauseEventKind(for: event) {
+            case .pause:
+                guard pendingPauseStart == nil else { return nil }
+                pendingPauseStart = event.startDate
+            case .resume:
+                guard let pauseStart = pendingPauseStart,
+                      event.startDate >= pauseStart else {
+                    return nil
+                }
+                intervals.append(DateInterval(start: pauseStart, end: event.startDate))
+                pendingPauseStart = nil
+            case .none:
+                continue
+            }
+        }
+
+        guard pendingPauseStart == nil else { return nil }
+        return intervals
+    }
+
+    static func pairedPauseOverlapSeconds(
+        in events: [WorkoutEvidenceEvent],
+        start: Date,
+        end: Date
+    ) -> Double? {
+        guard let pauseIntervals = pairedPauseIntervals(in: events) else {
+            return nil
+        }
+
+        return pauseIntervals.reduce(0) { total, pauseInterval in
+            let overlapStart = max(start, pauseInterval.start)
+            let overlapEnd = min(end, pauseInterval.end)
+            guard overlapEnd > overlapStart else { return total }
+            return total + overlapEnd.timeIntervalSince(overlapStart)
+        }
+    }
 }
 
 public struct DistanceBoundaryDiagnostics: Codable, Equatable, Sendable {
@@ -426,6 +533,8 @@ public enum WorkoutIntervalReconstructionEngine {
     ) -> ReconstructedWorkoutInterval {
         let duration = end.timeIntervalSince(start)
         let distance = actualDistanceOverride ?? intervalDistance(start: start, end: end, workout: workout, evidence: evidence)
+        let pauseOverlap = WorkoutPauseTimingSemantics.pairedPauseOverlapSeconds(in: evidence.events, start: start, end: end)
+        let activeDuration = pauseOverlap.map { max(0, duration - $0) }
         let pace = distance.flatMap { distance -> Double? in
             guard distance > 0 else { return nil }
             return duration / (distance / 1_000)
@@ -456,6 +565,10 @@ public enum WorkoutIntervalReconstructionEngine {
             actualStartDate: start,
             actualEndDate: end,
             actualDurationSeconds: duration,
+            elapsedDurationSeconds: duration,
+            pauseOverlapSeconds: pauseOverlap,
+            activeDurationSeconds: activeDuration,
+            durationDisplayRule: .elapsedRowWindow,
             actualDistanceMeters: distance,
             actualPaceSecondsPerKm: pace,
             averageHeartRateBpm: average(heartRates),
@@ -772,8 +885,12 @@ public enum CustomWorkoutNormalDetailGate {
         if !activityRowsAreContiguous(activities) {
             reasons.append("HealthKit activity rows are not contiguous.")
         }
-        if plannedSteps.contains(where: { $0.plannedGoalType == .time }) && pairedPauseCount(in: evidence.events) > 0 {
-            reasons.append("Time-goal rows have paired pause/resume evidence, and pause-adjusted timer logic is not enabled yet.")
+        if plannedSteps.contains(where: { $0.plannedGoalType == .time }) && WorkoutPauseTimingSemantics.hasPauseOrResumeEvents(in: evidence.events) {
+            if WorkoutPauseTimingSemantics.pairedPauseIntervals(in: evidence.events) == nil {
+                reasons.append("Time-goal rows have unpaired pause/resume evidence, and pause-adjusted timer logic is not enabled yet.")
+            } else {
+                reasons.append("Time-goal rows have paired pause/resume evidence, and pause-adjusted timer logic is not enabled yet.")
+            }
         }
         if !isApprovedNormalDetailShape(plannedSteps) {
             reasons.append("Workout shape is outside the approved normal-detail interval gates.")
@@ -804,7 +921,7 @@ public enum CustomWorkoutNormalDetailGate {
         evidence: WorkoutEvidence
     ) -> WorkoutIntervalReconstructionResult? {
         guard let audit = evidence.workoutPlanAudit,
-              pairedPauseCount(in: evidence.events) == 0 else { return nil }
+              WorkoutPauseTimingSemantics.pairedPauseCount(in: evidence.events) == 0 else { return nil }
         let plannedSteps = audit.plannedSteps.sorted { $0.index < $1.index }
         let activities = evidence.activities.sorted { $0.startDate < $1.startDate }
         let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
@@ -831,7 +948,7 @@ public enum CustomWorkoutNormalDetailGate {
         evidence: WorkoutEvidence
     ) -> WorkoutIntervalReconstructionResult? {
         guard let audit = evidence.workoutPlanAudit,
-              pairedPauseCount(in: evidence.events) == 0 else { return nil }
+              WorkoutPauseTimingSemantics.pairedPauseCount(in: evidence.events) == 0 else { return nil }
         let plannedSteps = audit.plannedSteps.sorted { $0.index < $1.index }
         let activities = evidence.activities.sorted { $0.startDate < $1.startDate }
         let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
@@ -887,7 +1004,7 @@ public enum CustomWorkoutNormalDetailGate {
         evidence: WorkoutEvidence
     ) -> WorkoutIntervalReconstructionResult? {
         guard let audit = evidence.workoutPlanAudit,
-              pairedPauseCount(in: evidence.events) == 0 else { return nil }
+              WorkoutPauseTimingSemantics.pairedPauseCount(in: evidence.events) == 0 else { return nil }
         let plannedSteps = audit.plannedSteps.sorted { $0.index < $1.index }
         let activities = evidence.activities.sorted { $0.startDate < $1.startDate }
         let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
@@ -947,7 +1064,7 @@ public enum CustomWorkoutNormalDetailGate {
         evidence: WorkoutEvidence
     ) -> WorkoutIntervalReconstructionResult? {
         guard let audit = evidence.workoutPlanAudit,
-              pairedPauseCount(in: evidence.events) == 0 else { return nil }
+              WorkoutPauseTimingSemantics.pairedPauseCount(in: evidence.events) == 0 else { return nil }
         let plannedSteps = audit.plannedSteps.sorted { $0.index < $1.index }
         let activities = evidence.activities.sorted { $0.startDate < $1.startDate }
         let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
@@ -1147,7 +1264,7 @@ public enum CustomWorkoutNormalDetailGate {
         guard plannedSteps.contains(where: { $0.plannedGoalType == .time }) else {
             return true
         }
-        return pairedPauseCount(in: evidence.events) == 0
+        return !WorkoutPauseTimingSemantics.hasPauseOrResumeEvents(in: evidence.events)
     }
 
     private static func activityRowsMatchReconstructedRows(
@@ -1218,18 +1335,4 @@ public enum CustomWorkoutNormalDetailGate {
         return reasons.filter { seen.insert($0).inserted }
     }
 
-    private static func pairedPauseCount(in events: [WorkoutEvidenceEvent]) -> Int {
-        var pendingPause = false
-        var count = 0
-        for event in events.sorted(by: { $0.startDate < $1.startDate }) {
-            let label = event.displayLabel.lowercased()
-            if label.contains("pause") && !label.contains("resume") {
-                pendingPause = true
-            } else if label.contains("resume"), pendingPause {
-                count += 1
-                pendingPause = false
-            }
-        }
-        return count
-    }
 }

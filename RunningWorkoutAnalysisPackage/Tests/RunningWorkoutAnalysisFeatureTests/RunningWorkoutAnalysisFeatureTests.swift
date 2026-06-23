@@ -1783,6 +1783,7 @@ import Testing
     #expect(result.intervals.map(\.label) == ["Warmup", "Work 1", "Cooldown"])
     #expect(result.intervals.map(\.stepType) == [.warmup, .work, .cooldown])
     #expect(result.intervals.map(\.label).contains("Open / Extra") == false)
+    assertElapsedTimingSemantics(result.intervals)
 }
 
 @Test func normalDetailGateBlocksPausedTimeGoalWarmupWorkOpenCooldown() {
@@ -1818,6 +1819,91 @@ import Testing
     })
 }
 
+@Test func reconstructedIntervalsCarryPausedTimingSemanticsWithoutPromotion() throws {
+    let start = Date(timeIntervalSince1970: 10_655)
+    let workout = testWorkout(id: "paused-timing-semantics", start: start, distanceMeters: 3_000, durationSeconds: 1_200)
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, plannedGoalType: .time, plannedGoalValue: 120, plannedGoalDisplayText: "2 min"),
+            PlannedWorkoutStep(index: 3, label: "Cooldown", stepType: .cooldown, plannedGoalType: .open, plannedGoalValue: nil, plannedGoalDisplayText: "Open")
+        ],
+        activityWindows: [
+            (0, 800, 2_000),
+            (800, 920, 400),
+            (920, 1_200, 600)
+        ],
+        distancePoints: [(0, 0), (800, 2_000), (920, 2_400), (1_200, 3_000)],
+        events: [
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(830), endDate: start.addingTimeInterval(830), type: "HKWorkoutEventType(rawValue: 1)", label: "Pause"),
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(860), endDate: start.addingTimeInterval(860), type: "HKWorkoutEventType(rawValue: 2)", label: "Resume")
+        ]
+    )
+
+    let result = try #require(WorkoutIntervalReconstructionEngine.reconstructFromActivityBoundaries(workout: workout, evidence: evidence))
+    let work = try #require(result.intervals.first { $0.label == "Work 1" })
+
+    #expect(abs(work.actualDurationSeconds - 120) <= 0.001)
+    #expect(abs((work.elapsedDurationSeconds ?? 0) - 120) <= 0.001)
+    #expect(abs((work.pauseOverlapSeconds ?? 0) - 30) <= 0.001)
+    #expect(abs((work.activeDurationSeconds ?? 0) - 90) <= 0.001)
+    #expect(work.durationDisplayRule == .elapsedRowWindow)
+    #expect(abs(work.displayDurationSeconds - 120) <= 0.001)
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) == nil)
+}
+
+@Test func normalDetailGateBlocksUnpairedPauseEvents() {
+    let start = Date(timeIntervalSince1970: 10_655)
+    let workout = testWorkout(id: "normal-detail-unpaired-pause", start: start, distanceMeters: 3_000, durationSeconds: 1_200)
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, plannedGoalType: .time, plannedGoalValue: 120, plannedGoalDisplayText: "2 min"),
+            PlannedWorkoutStep(index: 3, label: "Cooldown", stepType: .cooldown, plannedGoalType: .open, plannedGoalValue: nil, plannedGoalDisplayText: "Open")
+        ],
+        activityWindows: [
+            (0, 800, 2_000),
+            (800, 920, 400),
+            (920, 1_200, 600)
+        ],
+        distancePoints: [(0, 0), (800, 2_000), (920, 2_400), (1_200, 3_000)],
+        events: [
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(830), endDate: start.addingTimeInterval(830), type: "HKWorkoutEventType(rawValue: 1)", label: "Pause")
+        ]
+    )
+
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.blockedReasons(workout: workout, evidence: evidence).contains {
+        $0.contains("unpaired pause/resume")
+    })
+}
+
+@Test func normalDetailGateBlocksPausedTimingWhenActivityRowsAreMissing() {
+    let start = Date(timeIntervalSince1970: 10_655)
+    let workout = testWorkout(id: "normal-detail-paused-missing-activities", start: start, distanceMeters: 3_000, durationSeconds: 1_200)
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, plannedGoalType: .time, plannedGoalValue: 120, plannedGoalDisplayText: "2 min"),
+            PlannedWorkoutStep(index: 3, label: "Cooldown", stepType: .cooldown, plannedGoalType: .open, plannedGoalValue: nil, plannedGoalDisplayText: "Open")
+        ],
+        activityWindows: [],
+        distancePoints: [(0, 0), (800, 2_000), (920, 2_400), (1_200, 3_000)],
+        events: [
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(830), endDate: start.addingTimeInterval(830), type: "HKWorkoutEventType(rawValue: 1)", label: "Pause"),
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(860), endDate: start.addingTimeInterval(860), type: "HKWorkoutEventType(rawValue: 2)", label: "Resume")
+        ]
+    )
+
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.blockedReasons(workout: workout, evidence: evidence).contains {
+        $0.contains("activity rows are missing")
+    })
+}
+
 @Test func normalDetailGateSupportsNarrowFixedCooldownOpenTail() throws {
     let start = Date(timeIntervalSince1970: 10_655)
     let workout = testWorkout(id: "normal-detail-fixed-cooldown-tail", start: start, distanceMeters: 4_500, durationSeconds: 1_800)
@@ -1847,6 +1933,7 @@ import Testing
     #expect(result.intervals.map(\.stepType) == [.warmup, .work, .cooldown, .open])
     #expect(result.intervals.last?.tailDiagnostics?.remainingSeconds == 200)
     #expect(result.intervals.last?.actualDistanceMeters == 500)
+    assertElapsedTimingSemantics(result.intervals)
 }
 
 @Test func normalDetailGateSupportsSimpleFixedDistanceWorkOpenTail() throws {
@@ -1873,6 +1960,7 @@ import Testing
     #expect(result.intervals.first?.plannedGoalType == .distance)
     #expect(result.intervals.last?.tailDiagnostics?.remainingSeconds == 30)
     #expect(result.intervals.last?.actualDistanceMeters == 45)
+    assertElapsedTimingSemantics(result.intervals)
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence)?.intervals.map(\.label) == result.intervals.map(\.label))
 }
 
@@ -2010,6 +2098,7 @@ import Testing
     #expect(result.intervals[1].actualDurationSeconds == 250)
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence)?.intervals.map(\.label) == result.intervals.map(\.label))
     #expect(result.intervals.map(\.label).contains("Open / Extra") == false)
+    assertElapsedTimingSemantics(result.intervals)
 }
 
 @Test func normalDetailGateSupportsCleanRepeatBlockFixedCooldownOpenTail() throws {
@@ -2052,6 +2141,7 @@ import Testing
     #expect(result.intervals[1].actualDurationSeconds == 120)
     #expect(result.intervals.last?.tailDiagnostics?.remainingSeconds == 10)
     #expect(result.intervals.last?.actualDistanceMeters == 40)
+    assertElapsedTimingSemantics(result.intervals)
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence)?.intervals.map(\.label) == result.intervals.map(\.label))
 }
 
@@ -2327,6 +2417,7 @@ import Testing
     #expect(abs(result.intervals[0].actualDurationSeconds - 733.8) < 0.001)
     #expect(result.intervals[0].actualDistanceMeters == 3_026)
     #expect(result.intervals.map(\.label).contains("Open / Extra") == false)
+    assertElapsedTimingSemantics(result.intervals)
 }
 
 @Test func openRunWithoutPlannedStepsDoesNotInventCustomIntervals() {
@@ -3047,6 +3138,16 @@ private func assertInterval(
     #expect(abs((interval.actualDistanceMeters ?? 0) - expectedDistance) <= distanceTolerance)
 }
 
+private func assertElapsedTimingSemantics(_ intervals: [ReconstructedWorkoutInterval]) {
+    for interval in intervals {
+        #expect(interval.durationDisplayRule == .elapsedRowWindow)
+        #expect(abs((interval.elapsedDurationSeconds ?? -1) - interval.actualDurationSeconds) <= 0.001)
+        #expect(abs((interval.pauseOverlapSeconds ?? -1) - 0) <= 0.001)
+        #expect(abs((interval.activeDurationSeconds ?? -1) - interval.actualDurationSeconds) <= 0.001)
+        #expect(abs(interval.displayDurationSeconds - interval.actualDurationSeconds) <= 0.001)
+    }
+}
+
 private func monthlyDiagnosticsObject(_ json: String) throws -> [String: Any] {
     let data = try #require(json.data(using: .utf8))
     return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -3056,7 +3157,8 @@ private func normalDetailGateEvidence(
     workout: CanonicalWorkout,
     plannedSteps: [PlannedWorkoutStep],
     activityWindows: [(start: TimeInterval, end: TimeInterval, distance: Double)],
-    distancePoints: [(offset: TimeInterval, distance: Double)]
+    distancePoints: [(offset: TimeInterval, distance: Double)],
+    events: [WorkoutEvidenceEvent] = []
 ) -> WorkoutEvidence {
     WorkoutEvidence(
         workoutID: workout.id,
@@ -3073,6 +3175,7 @@ private func normalDetailGateEvidence(
                 }
             )
         ],
+        events: events,
         activities: activityWindows.enumerated().map { offset, window in
             let startDate = workout.startDate.addingTimeInterval(window.start)
             let endDate = workout.startDate.addingTimeInterval(window.end)

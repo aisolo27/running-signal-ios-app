@@ -1569,7 +1569,7 @@ private struct IntervalRowView: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 3) {
-                    Text(RunFormatters.duration(interval.actualDurationSeconds))
+                    Text(RunFormatters.duration(interval.displayDurationSeconds))
                         .font(.subheadline.monospacedDigit().bold())
                     Text(RunFormatters.compactDistance(interval.actualDistanceMeters))
                         .font(.caption2)
@@ -1924,7 +1924,7 @@ struct RawHealthKitWorkoutDebugView: View {
                             }
                             Spacer()
                             VStack(alignment: .trailing, spacing: 3) {
-                                Text(RunFormatters.duration(interval.actualDurationSeconds))
+                                Text(RunFormatters.duration(interval.displayDurationSeconds))
                                     .font(.subheadline.monospacedDigit().bold())
                                 Text(RunFormatters.distance(interval.actualDistanceMeters))
                                     .font(.caption2)
