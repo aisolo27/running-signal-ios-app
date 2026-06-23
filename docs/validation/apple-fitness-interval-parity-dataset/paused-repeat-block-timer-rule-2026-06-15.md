@@ -10,7 +10,7 @@ This is docs/debug validation only. It does not approve Swift changes, normal wo
 
 ## Decision
 
-Paused repeat blocks are still blocked from normal workout detail UI, but they now have a docs/debug timer rule for future scorer/prototype work:
+The narrow open-cooldown paused-repeat shape is now promoted into normal workout detail after separate interval-timing and physical proof. Broader paused-repeat tails remain blocked, but this docs/debug timer rule remains the reference for scorer/prototype work:
 
 1. Use expanded WorkoutKit planned rows for row order and labels.
 2. Use complete contiguous HealthKit activity rows as elapsed wall-clock row windows.
@@ -104,4 +104,4 @@ Do not collapse the two durations into one field. The evidence depends on keepin
 
 Paused repeat blocks move from `timer rule undefined` to `timer rule defined for docs/debug scoring`.
 
-They remain blocked from normal workout detail UI until a later task explicitly approves debug-only prototype work and the prototype proves row count, labels, elapsed duration, active/timer duration, pause overlap, distance, tail behavior, and guard fallbacks.
+The exact open-cooldown paused-repeat shape is no longer blocked from normal workout detail UI. True Open/Extra paused-repeat tails, ambiguous paused tails, unpaired pauses, missing rows, non-contiguous rows, and cross-row pause overlaps remain blocked until a later task explicitly proves row count, labels, elapsed duration, active/timer duration, pause overlap, distance, tail behavior, and guard fallbacks for a narrower shape.

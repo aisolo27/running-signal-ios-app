@@ -104,6 +104,8 @@ def monthly_records() -> dict[str, dict[str, Any]]:
     records: dict[str, dict[str, Any]] = {}
     for item in rollup.get("matchedFiles", {}).values():
         path = MONTHLY_EXPORT_FOLDER / item["json"]
+        if not path.exists():
+            continue
         data = load_json(path)
         for record in data.get("records", []):
             start = record.get("startDate")
@@ -320,19 +322,71 @@ def classify(workout: dict[str, Any], rows: list[dict[str, Any]]) -> tuple[str, 
     return "missing_required_evidence", reasons or ["no classifier reached support"]
 
 
+def material_timer_status(rows: list[dict[str, Any]]) -> str:
+    if not rows:
+        return "missing_required_evidence"
+
+    max_time_row = max_abs_row(rows, "candidateMinusFITTimerSeconds")
+    if not max_time_row:
+        return "missing_required_evidence"
+
+    max_timer_error = abs(float(max_time_row["candidateMinusFITTimerSeconds"]))
+    max_elapsed_error = abs(float(max_time_row["candidateMinusFITElapsedSeconds"]))
+    elapsed_timer_delta = abs(float(max_time_row["elapsedMinusTimerSeconds"]))
+    pause_overlap_match = bool(max_time_row.get("pauseOverlapMatchesElapsedTimerDelta"))
+
+    if max_timer_error <= TIME_TOLERANCE_SECONDS:
+        return "within_timer_tolerance"
+
+    if (
+        max_elapsed_error <= ELAPSED_MATCH_TOLERANCE_SECONDS
+        and elapsed_timer_delta > TIME_TOLERANCE_SECONDS
+        and pause_overlap_match
+    ):
+        return "pause_explained_not_material_boundary_error"
+
+    return "material_timer_error"
+
+
+def existing_report_rows() -> dict[str, dict[str, Any]]:
+    if not JSON_REPORT.exists():
+        return {}
+
+    try:
+        report = load_json(JSON_REPORT)
+    except json.JSONDecodeError:
+        return {}
+
+    return {
+        row["startDate"]: row
+        for row in report.get("rows", [])
+        if row.get("startDate")
+    }
+
+
 def build_report() -> dict[str, Any]:
     source = load_json(SOURCE)
     records = monthly_records()
+    existing_rows = existing_report_rows()
     by_start = {workout["startDate"]: workout for workout in source["workouts"]}
     rows = []
     for start in PRIMARY_OUTLIERS:
         workout = by_start[start]
         record = records.get(start)
-        events = raw_events(record)
-        pause_markers = pause_resume_events(events)
-        pause_intervals = paired_pause_intervals(events)
-        evidence_rows = row_evidence(workout, record)
+        existing_row = existing_rows.get(start, {})
+        if record is None and existing_row.get("rowEvidence"):
+            events = []
+            pause_markers = existing_row.get("pauseResumeMarkers") or []
+            pause_intervals = existing_row.get("pairedPauseIntervals") or []
+            evidence_rows = existing_row.get("rowEvidence") or []
+        else:
+            events = raw_events(record)
+            pause_markers = pause_resume_events(events)
+            pause_intervals = paired_pause_intervals(events)
+            evidence_rows = row_evidence(workout, record)
         classification, reasons = classify(workout, evidence_rows)
+        material_status = material_timer_status(evidence_rows)
+        raw_event_count = len(events) or existing_row.get("rawHealthKitEventCount", 0)
         max_time_row = max_abs_row(evidence_rows, "candidateMinusFITTimerSeconds")
         max_distance_row = max_abs_row(evidence_rows, "candidateDistanceErrorMeters")
         rows.append(
@@ -342,7 +396,7 @@ def build_report() -> dict[str, Any]:
                 "gateBDecision": workout["scores"]["classification"],
                 "shape": shape(workout),
                 "fitFilename": workout.get("fitFilename"),
-                "rawHealthKitEventCount": len(events),
+                "rawHealthKitEventCount": raw_event_count,
                 "pauseResumeMarkerCount": len(pause_markers),
                 "pairedPauseIntervalCount": len(
                     [interval for interval in pause_intervals if interval.get("durationSeconds") is not None]
@@ -353,6 +407,7 @@ def build_report() -> dict[str, Any]:
                 "maxDistanceDriftRow": max_distance_row,
                 "rowEvidence": evidence_rows,
                 "driftClassification": classification,
+                "materialTimerStatus": material_status,
                 "reasons": reasons,
                 "recommendation": "exclude_from_phase_3_candidate",
             }
@@ -372,12 +427,21 @@ def build_report() -> dict[str, Any]:
         "summary": {
             "outlierCount": len(rows),
             "classificationCounts": dict(Counter(row["driftClassification"] for row in rows)),
+            "materialTimerStatusCounts": dict(Counter(row["materialTimerStatus"] for row in rows)),
             "excludedFromNarrowPhase3Candidate": sum(
                 1 for row in rows if row["recommendation"] == "exclude_from_phase_3_candidate"
             ),
         },
         "rows": rows,
-        "recommendation": "Keep all timer-drift outliers excluded from any narrow Phase 3 candidate until elapsed-vs-timer semantics and repeat/tail rules are explicitly approved.",
+            "recommendation": "Keep all timer-drift outliers excluded from any narrow Phase 3 candidate until elapsed-vs-timer semantics and repeat/tail rules are explicitly approved.",
+            "materialTimerPolicy": {
+                "timeToleranceSeconds": TIME_TOLERANCE_SECONDS,
+                "elapsedMatchToleranceSeconds": ELAPSED_MATCH_TOLERANCE_SECONDS,
+                "pauseMatchToleranceSeconds": PAUSE_MATCH_TOLERANCE_SECONDS,
+                "distanceToleranceMeters": DISTANCE_TOLERANCE_METERS,
+                "pauseExplainedStatus": "pause_explained_not_material_boundary_error",
+                "blockedStatus": "material_timer_error",
+            },
     }
 
 
@@ -402,6 +466,7 @@ def write_markdown(report: dict[str, Any]) -> None:
                 ["---", "---:"],
                 ["Outliers reviewed", report["summary"]["outlierCount"]],
                 ["Excluded from narrow Phase 3 candidate", report["summary"]["excludedFromNarrowPhase3Candidate"]],
+                ["Material timer policy", "pause-explained drift is not a material boundary error"],
             ]
         ),
         "",
@@ -412,6 +477,16 @@ def write_markdown(report: dict[str, Any]) -> None:
                 ["Classification", "Count"],
                 ["---", "---:"],
                 *[[key, value] for key, value in report["summary"]["classificationCounts"].items()],
+            ]
+        ),
+        "",
+        "## Material Timer Status Counts",
+        "",
+        md_table(
+            [
+                ["Material timer status", "Count"],
+                ["---", "---:"],
+                *[[key, value] for key, value in report["summary"]["materialTimerStatusCounts"].items()],
             ]
         ),
         "",
@@ -429,8 +504,9 @@ def write_markdown(report: dict[str, Any]) -> None:
                     "Pause overlap",
                     "Pause markers",
                     "Decision",
+                    "Material timer status",
                 ],
-                ["---", "---", "---", "---:", "---:", "---:", "---:", "---:", "---"],
+                ["---", "---", "---", "---:", "---:", "---:", "---:", "---:", "---", "---"],
                 *[
                     [
                         row["startDate"],
@@ -442,6 +518,7 @@ def write_markdown(report: dict[str, Any]) -> None:
                         fmt_seconds((row["maxTimerDriftRow"] or {}).get("pauseOverlapSeconds")),
                         row["pauseResumeMarkerCount"],
                         row["driftClassification"],
+                        row["materialTimerStatus"],
                     ]
                     for row in rows
                 ],
@@ -461,6 +538,7 @@ def write_markdown(report: dict[str, Any]) -> None:
                 f"- Shape: `{row['shape']}`",
                 f"- Gate B decision: `{row['gateBDecision']}`.",
                 f"- Drift classification: `{row['driftClassification']}`.",
+                f"- Material timer status: `{row['materialTimerStatus']}`.",
                 f"- Max timer-drift row: {row_label(max_row)}.",
                 f"- FIT elapsed/timer: {fit_elapsed_timer(max_row)}.",
                 f"- Candidate duration minus FIT elapsed: {fmt_seconds(max_row.get('candidateMinusFITElapsedSeconds'))}.",
@@ -478,6 +556,8 @@ def write_markdown(report: dict[str, Any]) -> None:
             "## Recommendation",
             "",
             report["recommendation"],
+            "",
+            "Material timer policy: a large candidate-vs-FIT-timer delta is not a material boundary error when candidate elapsed matches FIT elapsed, paired HealthKit pause overlap matches elapsed-minus-timer drift, and unresolved repeat/tail/shape blockers remain separately enforced.",
             "",
             "Before any Phase 3 discussion, the scorer/debug export should keep both elapsed and timer duration visible by row and preserve pause/resume marker evidence. Repeat-block and tail rules remain separately blocked.",
             "",
@@ -511,6 +591,7 @@ def main() -> int:
     print(f"Wrote {JSON_REPORT.name}")
     print(f"Wrote {MARKDOWN_REPORT.name}")
     print(f"Classification counts: {report['summary']['classificationCounts']}")
+    print(f"Material timer status counts: {report['summary']['materialTimerStatusCounts']}")
     print("Timer-drift outliers remain excluded from Phase 3 candidates.")
     return 0
 
