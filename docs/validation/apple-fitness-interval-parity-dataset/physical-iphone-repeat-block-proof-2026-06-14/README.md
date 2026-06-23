@@ -76,4 +76,4 @@ The visible rows preserve Work/Recovery numbering, keep the fixed planned row la
 
 This is physical-iPhone proof that the narrow clean repeat-block gate works for May 20 and June 3, and that the narrow clean repeat-block fixed-cooldown Open/Extra-tail gate works for June 10 on the latest installed build.
 
-This proof does not approve broad repeat-block promotion. April 22-style paused/timer-drift repeat blocks, May 1-style recovery/tail/pause cases, ambiguous repeat-tail cases, and recovery-containing Open/Extra tail cases remain blocked.
+This proof does not approve broad repeat-block promotion. True Open/Extra paused-repeat tails, unresolved ambiguous repeat-tail cases, broad recovery-containing Open/Extra tail behavior, and unsupported repeat/tail shapes remain blocked.

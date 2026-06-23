@@ -2,7 +2,7 @@
 
 ## Scope
 
-Current status note, 2026-06-23: this is now a historical Gate A readiness packet. Gate A simple `Work > Open / Extra`, the later narrow paused-repeat `Cooldown(Open)` gate, and the later narrow May 1-style recovery-containing fixed-cooldown/Open tail gate have been implemented and physically proofed. Ambiguous repeat-tail cases, true Open/Extra paused-repeat tails, broad recovery-tail behavior, broad `HKWorkoutActivity` promotion, and interval-row analytics remain blocked.
+Current status note, 2026-06-23: this is now a historical Gate A readiness packet. Gate A simple `Work > Open / Extra`, the later narrow paused-repeat `Cooldown(Open)` gate, and the later narrow May 1-style recovery-containing fixed-cooldown/Open tail gate have been implemented and physically proofed. Unresolved ambiguous repeat-tail cases, true Open/Extra paused-repeat tails, broad recovery-tail behavior, broad `HKWorkoutActivity` promotion, and interval-row analytics remain blocked.
 
 Docs-only review of whether the current Custom Workout Correctness Lock evidence is ready for a later normal-detail promotion task.
 
