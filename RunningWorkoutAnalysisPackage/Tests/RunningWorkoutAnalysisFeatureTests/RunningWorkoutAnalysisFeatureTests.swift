@@ -2017,6 +2017,159 @@ import Testing
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) == nil)
 }
 
+@Test func normalDetailGateSupportsRecoveryContainingFixedCooldownOpenTail() throws {
+    let (workout, evidence) = recoveryTailNormalDetailFixture()
+
+    let result = try #require(
+        CustomWorkoutNormalDetailGate.supportedNarrowRecoveryContainingFixedCooldownOpenTail(
+            workout: workout,
+            evidence: evidence
+        )
+    )
+
+    #expect(result.intervals.map(\.label) == ["Warmup", "Recovery 1", "Work 1", "Cooldown", "Open / Extra"])
+    #expect(result.intervals.map(\.stepType) == [.warmup, .recovery, .work, .cooldown, .open])
+
+    let recovery = try #require(result.intervals.first { $0.label == "Recovery 1" })
+    #expect(recovery.durationDisplayRule == .elapsedRowWindow)
+    #expect(abs(recovery.elapsedRowWindowDurationSeconds - 119.5) <= 0.001)
+    #expect((recovery.pauseOverlapSeconds ?? 0) == 0)
+    #expect(IntervalRowTimingText.pausedTimingDetail(for: recovery) == nil)
+
+    let work = try #require(result.intervals.first { $0.label == "Work 1" })
+    #expect(work.durationDisplayRule == .activeTimer)
+    #expect(abs(work.elapsedRowWindowDurationSeconds - 1_445.4) <= 0.001)
+    #expect(abs((work.pauseOverlapSeconds ?? 0) - 141.0) <= 0.001)
+    #expect(abs(work.activeTimerDurationSeconds - 1_304.4) <= 0.001)
+    #expect(abs(work.displayDurationSeconds - 1_304.4) <= 0.001)
+    #expect(abs((work.actualPaceSecondsPerKm ?? 0) - (1_304.4 / 5.0057)) <= 0.001)
+    #expect(IntervalRowTimingText.pausedTimingDetail(for: work) != nil)
+
+    let cooldown = try #require(result.intervals.first { $0.label == "Cooldown" })
+    #expect(cooldown.durationDisplayRule == .activeTimer)
+    #expect(abs(cooldown.elapsedRowWindowDurationSeconds - 834.0) <= 0.001)
+    #expect(abs((cooldown.pauseOverlapSeconds ?? 0) - 91.8) <= 0.001)
+    #expect(abs(cooldown.activeTimerDurationSeconds - 742.2) <= 0.001)
+
+    let tail = try #require(result.intervals.last)
+    #expect(tail.label == "Open / Extra")
+    #expect(tail.tailDiagnostics != nil)
+    #expect(tail.durationDisplayRule == .elapsedRowWindow)
+    #expect(abs(tail.elapsedRowWindowDurationSeconds - 9.9) <= 0.001)
+    #expect(abs((tail.actualDistanceMeters ?? 0) - 16.6) <= 0.001)
+}
+
+@Test func normalDetailGateBlocksRecoveryContainingTailWhenActivityRowsAreMissing() {
+    let windows = Array(recoveryTailActivityWindows().dropLast())
+    let (workout, evidence) = recoveryTailNormalDetailFixture(
+        id: "normal-detail-recovery-tail-missing-row",
+        activityWindows: windows
+    )
+
+    #expect(
+        CustomWorkoutNormalDetailGate.supportedNarrowRecoveryContainingFixedCooldownOpenTail(
+            workout: workout,
+            evidence: evidence
+        ) == nil
+    )
+}
+
+@Test func normalDetailGateBlocksRecoveryContainingTailWhenRowsAreNotContiguous() {
+    var windows = recoveryTailActivityWindows()
+    windows[2] = (start: 900.0, end: 2_337.4, distance: 5_005.7)
+    let (workout, evidence) = recoveryTailNormalDetailFixture(
+        id: "normal-detail-recovery-tail-non-contiguous",
+        activityWindows: windows
+    )
+
+    #expect(
+        CustomWorkoutNormalDetailGate.supportedNarrowRecoveryContainingFixedCooldownOpenTail(
+            workout: workout,
+            evidence: evidence
+        ) == nil
+    )
+}
+
+@Test func normalDetailGateBlocksRecoveryContainingTailWithUnpairedPause() {
+    let start = Date(timeIntervalSince1970: 10_661)
+    let (workout, evidence) = recoveryTailNormalDetailFixture(
+        id: "normal-detail-recovery-tail-unpaired-pause",
+        start: start,
+        events: [
+            WorkoutEvidenceEvent(
+                startDate: start.addingTimeInterval(1_500.0),
+                endDate: start.addingTimeInterval(1_500.0),
+                type: "HKWorkoutEventType(rawValue: 1)",
+                label: "Pause"
+            )
+        ]
+    )
+
+    #expect(
+        CustomWorkoutNormalDetailGate.supportedNarrowRecoveryContainingFixedCooldownOpenTail(
+            workout: workout,
+            evidence: evidence
+        ) == nil
+    )
+}
+
+@Test func normalDetailGateBlocksRecoveryContainingTailWithRepeatRows() {
+    var plannedSteps = recoveryTailPlannedSteps()
+    plannedSteps[2].repeatBlockIndex = 1
+    plannedSteps[2].repeatIndex = 1
+    let (workout, evidence) = recoveryTailNormalDetailFixture(
+        id: "normal-detail-recovery-tail-repeat-row",
+        plannedSteps: plannedSteps
+    )
+
+    #expect(
+        CustomWorkoutNormalDetailGate.supportedNarrowRecoveryContainingFixedCooldownOpenTail(
+            workout: workout,
+            evidence: evidence
+        ) == nil
+    )
+}
+
+@Test func normalDetailGateBlocksRecoveryContainingTailWithOpenCooldownFinalStep() {
+    var plannedSteps = recoveryTailPlannedSteps()
+    plannedSteps[3] = PlannedWorkoutStep(
+        index: 4,
+        label: "Cooldown",
+        stepType: .cooldown,
+        plannedGoalType: .open,
+        plannedGoalDisplayText: "Open"
+    )
+    let (workout, evidence) = recoveryTailNormalDetailFixture(
+        id: "normal-detail-recovery-tail-open-cooldown",
+        plannedSteps: plannedSteps
+    )
+
+    #expect(
+        CustomWorkoutNormalDetailGate.supportedNarrowRecoveryContainingFixedCooldownOpenTail(
+            workout: workout,
+            evidence: evidence
+        ) == nil
+    )
+}
+
+@Test func normalDetailGateBlocksRecoveryContainingTailWhenTailIsBelowThreshold() {
+    let windows = recoveryTailActivityWindows()
+    let mappedDistance = windows.reduce(0) { $0 + $1.distance }
+    let (workout, evidence) = recoveryTailNormalDetailFixture(
+        id: "normal-detail-recovery-tail-below-threshold",
+        activityWindows: windows,
+        workoutDistanceMeters: mappedDistance + 0.4,
+        workoutDurationSeconds: 3_171.8
+    )
+
+    #expect(
+        CustomWorkoutNormalDetailGate.supportedNarrowRecoveryContainingFixedCooldownOpenTail(
+            workout: workout,
+            evidence: evidence
+        ) == nil
+    )
+}
+
 @Test func normalDetailGateBlocksRecoveryContainingSimpleTail() {
     let start = Date(timeIntervalSince1970: 10_654)
     let workout = testWorkout(id: "normal-detail-recovery-tail-blocked", start: start, distanceMeters: 5_250, durationSeconds: 2_080)
@@ -3278,6 +3431,112 @@ private func pausedRepeatOpenCooldownFixture(
     )
 
     return (workout, evidence)
+}
+
+private func recoveryTailNormalDetailFixture(
+    id: String = "normal-detail-recovery-tail-supported",
+    start: Date = Date(timeIntervalSince1970: 10_661),
+    plannedSteps: [PlannedWorkoutStep] = recoveryTailPlannedSteps(),
+    activityWindows: [(start: TimeInterval, end: TimeInterval, distance: Double)] = recoveryTailActivityWindows(),
+    workoutDistanceMeters: Double? = nil,
+    workoutDurationSeconds: Double? = nil,
+    distancePoints: [(offset: TimeInterval, distance: Double)]? = nil,
+    events: [WorkoutEvidenceEvent]? = nil
+) -> (workout: CanonicalWorkout, evidence: WorkoutEvidence) {
+    let mappedDurationSeconds = activityWindows.last?.end ?? 0
+    let mappedDistanceMeters = activityWindows.reduce(0) { $0 + $1.distance }
+    let durationSeconds = workoutDurationSeconds ?? mappedDurationSeconds + 9.9
+    let distanceMeters = workoutDistanceMeters ?? mappedDistanceMeters + 16.6
+    let workout = testWorkout(id: id, start: start, distanceMeters: distanceMeters, durationSeconds: durationSeconds)
+    let defaultEvents = [
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(1_500.0),
+            endDate: start.addingTimeInterval(1_500.0),
+            type: "HKWorkoutEventType(rawValue: 1)",
+            label: "Pause"
+        ),
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(1_641.0),
+            endDate: start.addingTimeInterval(1_641.0),
+            type: "HKWorkoutEventType(rawValue: 2)",
+            label: "Resume"
+        ),
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(2_500.0),
+            endDate: start.addingTimeInterval(2_500.0),
+            type: "HKWorkoutEventType(rawValue: 1)",
+            label: "Pause"
+        ),
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(2_591.8),
+            endDate: start.addingTimeInterval(2_591.8),
+            type: "HKWorkoutEventType(rawValue: 2)",
+            label: "Resume"
+        )
+    ]
+
+    return (
+        workout,
+        normalDetailGateEvidence(
+            workout: workout,
+            plannedSteps: plannedSteps,
+            activityWindows: activityWindows,
+            distancePoints: distancePoints ?? recoveryTailDistancePoints(from: activityWindows),
+            events: events ?? defaultEvents
+        )
+    )
+}
+
+private func recoveryTailPlannedSteps() -> [PlannedWorkoutStep] {
+    [
+        PlannedWorkoutStep(
+            index: 1,
+            label: "Warmup",
+            stepType: .warmup,
+            plannedGoalType: .distance,
+            plannedGoalValue: 2_000,
+            plannedGoalDisplayText: "2 km"
+        ),
+        PlannedWorkoutStep(
+            index: 2,
+            label: "Recovery 1",
+            stepType: .recovery,
+            plannedGoalType: .time,
+            plannedGoalValue: 120,
+            plannedGoalDisplayText: "2 min"
+        ),
+        PlannedWorkoutStep(
+            index: 3,
+            label: "Work 1",
+            stepType: .work,
+            plannedGoalType: .distance,
+            plannedGoalValue: 5_000,
+            plannedGoalDisplayText: "5 km"
+        ),
+        PlannedWorkoutStep(
+            index: 4,
+            label: "Cooldown",
+            stepType: .cooldown,
+            plannedGoalType: .distance,
+            plannedGoalValue: 2_000,
+            plannedGoalDisplayText: "2 km"
+        )
+    ]
+}
+
+private func recoveryTailActivityWindows() -> [(start: TimeInterval, end: TimeInterval, distance: Double)] {
+    [
+        (start: 0.0, end: 772.5, distance: 2_009.1),
+        (start: 772.5, end: 892.0, distance: 194.8),
+        (start: 892.0, end: 2_337.4, distance: 5_005.7),
+        (start: 2_337.4, end: 3_171.4, distance: 1_995.9)
+    ]
+}
+
+private func recoveryTailDistancePoints(
+    from activityWindows: [(start: TimeInterval, end: TimeInterval, distance: Double)]
+) -> [(offset: TimeInterval, distance: Double)] {
+    activityWindows.map { (offset: $0.end, distance: $0.distance) }
 }
 
 private func normalDetailGateEvidence(

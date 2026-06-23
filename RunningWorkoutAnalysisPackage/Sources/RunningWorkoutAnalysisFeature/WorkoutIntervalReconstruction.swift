@@ -849,6 +849,7 @@ public enum CustomWorkoutNormalDetailGate {
             ?? supportedNarrowSimpleFixedDistanceWorkOpenTail(workout: workout, evidence: evidence)
             ?? supportedNarrowWarmupWorkOpenCooldown(workout: workout, evidence: evidence)
             ?? supportedNarrowWarmupWorkFixedCooldownOpenTail(workout: workout, evidence: evidence)
+            ?? supportedNarrowRecoveryContainingFixedCooldownOpenTail(workout: workout, evidence: evidence)
             ?? supportedNarrowPausedRepeatBlockOpenCooldown(workout: workout, evidence: evidence)
             ?? supportedNarrowNoPauseRepeatBlockOpenCooldown(workout: workout, evidence: evidence)
             ?? supportedNarrowNoPauseRepeatBlockFixedCooldownOpenTail(workout: workout, evidence: evidence)
@@ -1060,6 +1061,47 @@ public enum CustomWorkoutNormalDetailGate {
         return result
     }
 
+    public static func supportedNarrowRecoveryContainingFixedCooldownOpenTail(
+        workout: CanonicalWorkout,
+        evidence: WorkoutEvidence
+    ) -> WorkoutIntervalReconstructionResult? {
+        guard let audit = evidence.workoutPlanAudit else { return nil }
+
+        let pairedPauses: [DateInterval]
+        if let intervals = WorkoutPauseTimingSemantics.pairedPauseIntervals(in: evidence.events) {
+            pairedPauses = intervals
+        } else if WorkoutPauseTimingSemantics.hasPauseOrResumeEvents(in: evidence.events) {
+            return nil
+        } else {
+            pairedPauses = []
+        }
+
+        let plannedSteps = audit.plannedSteps.sorted { $0.index < $1.index }
+        let activities = evidence.activities.sorted { $0.startDate < $1.startDate }
+        let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+            plannedSteps: plannedSteps,
+            activities: activities,
+            workout: workout,
+            recoveryContainingOpenTailRuleApproved: true,
+            pairedPauseCount: pairedPauses.count
+        )
+
+        guard comparison.status == .supported,
+              comparison.tailAmbiguity == .fixedCooldownFollowedByPossibleOpenExtraTail,
+              isNarrowRecoveryContainingFixedCooldownOpenTail(plannedSteps),
+              let result = WorkoutIntervalReconstructionEngine.reconstructFromActivityBoundaries(workout: workout, evidence: evidence),
+              result.intervals.count == plannedSteps.count + 1,
+              result.intervals.last?.stepType == .open,
+              result.intervals.last?.tailDiagnostics != nil,
+              result.intervals.dropLast().map(\.stepType) == plannedSteps.map(\.stepType),
+              activityRowsMatchReconstructedRows(result: result, activities: activities, workout: workout),
+              pausesAreAssignableToSingleRows(pairedPauses, intervals: result.intervals) else {
+            return nil
+        }
+
+        return activeTimerDisplayForPausedRows(result)
+    }
+
     public static func supportedNarrowNoPauseRepeatBlockOpenCooldown(
         workout: CanonicalWorkout,
         evidence: WorkoutEvidence
@@ -1156,6 +1198,25 @@ public enum CustomWorkoutNormalDetailGate {
             && (work.plannedGoalType == .time || work.plannedGoalType == .distance)
             && cooldown.stepType == .cooldown
             && (cooldown.plannedGoalType == .time || cooldown.plannedGoalType == .distance)
+    }
+
+    private static func isNarrowRecoveryContainingFixedCooldownOpenTail(_ plannedSteps: [PlannedWorkoutStep]) -> Bool {
+        guard plannedSteps.count == 4 else { return false }
+
+        let stepTypes = plannedSteps.map(\.stepType)
+        guard stepTypes == [.warmup, .recovery, .work, .cooldown],
+              plannedSteps.allSatisfy({ $0.repeatBlockIndex == nil && $0.repeatIndex == nil }),
+              plannedSteps.allSatisfy({ $0.plannedGoalType == .distance || $0.plannedGoalType == .time }) else {
+            return false
+        }
+
+        let warmup = plannedSteps[0]
+        let finalCooldown = plannedSteps[3]
+
+        return warmup.plannedGoalType == .distance
+            && abs((warmup.plannedGoalValue ?? 0) - 2_000) <= 1
+            && finalCooldown.stepType == .cooldown
+            && (finalCooldown.plannedGoalType == .distance || finalCooldown.plannedGoalType == .time)
     }
 
     private static func isNarrowNoPauseRepeatBlockOpenCooldown(_ plannedSteps: [PlannedWorkoutStep]) -> Bool {
@@ -1274,6 +1335,7 @@ public enum CustomWorkoutNormalDetailGate {
         isNarrowSingleFixedDistanceWorkShape(plannedSteps)
             || isNarrowWarmupWorkOpenCooldown(plannedSteps)
             || isNarrowWarmupWorkFixedCooldownOpenTail(plannedSteps)
+            || isNarrowRecoveryContainingFixedCooldownOpenTail(plannedSteps)
             || isNarrowNoPauseRepeatBlockOpenCooldown(plannedSteps)
             || isNarrowNoPauseRepeatBlockFixedCooldownOpenTail(plannedSteps)
     }
@@ -1326,7 +1388,8 @@ public enum CustomWorkoutNormalDetailGate {
                 || isNarrowNoPauseRepeatBlockFixedCooldownOpenTail(plannedSteps),
             openTailRuleApproved: isNarrowWarmupWorkFixedCooldownOpenTail(plannedSteps)
                 || isNarrowNoPauseRepeatBlockFixedCooldownOpenTail(plannedSteps),
-            simpleWorkOpenRuleApproved: true
+            simpleWorkOpenRuleApproved: true,
+            recoveryContainingOpenTailRuleApproved: isNarrowRecoveryContainingFixedCooldownOpenTail(plannedSteps)
         )
     }
 

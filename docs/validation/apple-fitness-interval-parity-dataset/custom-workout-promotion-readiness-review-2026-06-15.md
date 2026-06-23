@@ -2,7 +2,7 @@
 
 ## Scope
 
-Current status note, 2026-06-23: this is now a historical Gate A readiness packet. Gate A simple `Work > Open / Extra` and the later narrow paused-repeat `Cooldown(Open)` gate have both been implemented and physically proofed. Recovery-containing Open/Extra tails, ambiguous repeat-tail cases, true Open/Extra paused-repeat tails, broad `HKWorkoutActivity` promotion, and interval-row analytics remain blocked.
+Current status note, 2026-06-23: this is now a historical Gate A readiness packet. Gate A simple `Work > Open / Extra`, the later narrow paused-repeat `Cooldown(Open)` gate, and the later narrow May 1-style recovery-containing fixed-cooldown/Open tail gate have been implemented and physically proofed. Ambiguous repeat-tail cases, true Open/Extra paused-repeat tails, broad recovery-tail behavior, broad `HKWorkoutActivity` promotion, and interval-row analytics remain blocked.
 
 Docs-only review of whether the current Custom Workout Correctness Lock evidence is ready for a later normal-detail promotion task.
 
@@ -64,8 +64,8 @@ The existing clean no-pause repeat-tail subclass is not the next new promotion c
 | Clean no-pause repeat block ending in `Cooldown(Open)` | Normal-detail gated | May 20 and June 3 screenshots | Keep as-is |
 | Clean no-pause repeat block ending in fixed `Cooldown > Open / Extra` | Normal-detail gated | June 10 screenshots plus June 15 debug/export proof | Keep as-is; proof complete |
 | Simple fixed-distance `Work > Open / Extra` | Debug/export supported only | May 26, June 1, June 2, June 4, June 12; fixed-build June 12 supported | Best next new normal-detail promotion candidate |
-| Recovery-containing fixed-tail | Debug/export supported only | May 1 supported, with paired pauses | Keep debug-only for now; needs at least one more guard/proof before promotion |
-| Paused repeat blocks | Debug/export supported only | April 22, April 29, May 6, May 13, May 27 supported | Keep debug-only for now; timer semantics are higher risk |
+| Recovery-containing fixed-tail | Narrow May 1-style normal-detail gate later implemented and physically proofed | May 1 supported, with paired pauses | Exact shape only; broad recovery-tail behavior remains blocked |
+| Paused repeat blocks | Narrow open-cooldown normal-detail gate later implemented and physically proofed | April 22, April 29, May 6, May 13, May 27 supported | Exact `Cooldown(Open)` shape only; true Open/Extra paused-repeat tails remain blocked |
 | Ambiguous/no-pause repeat-tail prototype | Debug/export supported only, overlaps existing clean repeat-tail gate | June 10 supported | Treat as proof for the existing clean gate, not a new broad promotion |
 | Timer-drift, missing evidence, duplicate/no-plan/guard-unknown | Blocked or excluded | Mixed | Keep blocked |
 
@@ -117,4 +117,4 @@ It should remain debug/export-only until at least one more guard or proof confir
 
 Implement one narrow normal-detail promotion for Gate A simple fixed-distance `Work > Open / Extra`, behind the exact guardrails above.
 
-This was a code-changing Gate A task with tests and physical-device proof. Its scope did not include paused repeat blocks, recovery-containing tails, broad repeat-tail behavior, interval-row analytics, coaching, VDOT, training load, recovery scoring, or race prediction. The later narrow paused-repeat `Cooldown(Open)` gate was handled by a separate task and proof folder.
+This was a code-changing Gate A task with tests and physical-device proof. Its scope did not include paused repeat blocks, recovery-containing tails, broad repeat-tail behavior, interval-row analytics, coaching, VDOT, training load, recovery scoring, or race prediction. The later narrow paused-repeat `Cooldown(Open)` gate and narrow May 1-style recovery-containing fixed-cooldown/Open tail gate were handled by separate tasks and proof folders.

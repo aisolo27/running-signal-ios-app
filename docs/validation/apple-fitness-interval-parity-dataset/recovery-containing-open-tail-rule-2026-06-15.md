@@ -6,7 +6,7 @@ Last updated: 2026-06-23
 
 Define the docs/debug separator rule for custom workouts that contain a planned `Recovery` row and later continue into an `Open / Extra` tail after fixed planned steps are exhausted.
 
-This is docs/debug validation only. It does not approve Swift changes, normal workout detail interval promotion, broad `HKWorkoutActivity` promotion, FIT runtime usage, HealthFit dependency, file import, or interval-row analytics.
+This rule started as docs/debug validation only. As of 2026-06-23, the exact May 1-style shape is also physically proven as a narrow normal-detail gate. This does not approve broad recovery-tail behavior, broad `HKWorkoutActivity` promotion, FIT runtime usage, HealthFit dependency, file import, or interval-row analytics.
 
 ## Decision
 
@@ -40,7 +40,7 @@ May 1, 2026 is the key fixture:
 | Debug candidate rows | 5 |
 | Tail | `16.6 m / 9.9 s` |
 | Paired pause overlap | `232.8 s` |
-| Status | docs/debug separator supported; normal UI still blocked |
+| Status | Narrow May 1-style normal-detail gate physically proven; broad recovery-tail behavior still blocked |
 
 The activity-boundary candidate maps:
 
@@ -101,13 +101,13 @@ Fallback reason examples:
 
 ## Current Status
 
-Recovery-containing Open/Extra tails move from `separator undefined` to `separator defined for docs/debug scoring`.
+Recovery-containing Open/Extra tails moved from `separator undefined` to `separator defined for docs/debug scoring`. The exact May 1-style shape is now physically proven for normal detail; broader recovery-containing tail shapes remain blocked.
 
 They remain blocked from normal workout detail UI until a later task explicitly implements and proves the exact gate below.
 
 ## Normal-Detail Candidate Gate - 2026-06-23
 
-The next normal-detail candidate is the May 1-style shape only:
+The physically proven normal-detail gate is the May 1-style shape only:
 
 `Warmup(fixed) > Recovery(fixed) > Work(fixed) > Cooldown(fixed) > inferred Open / Extra`
 
@@ -148,5 +148,5 @@ Implementation acceptance:
 
 - May 1 renders as `Warmup`, `Recovery`, `Work`, `Cooldown`, and `Open / Extra`.
 - Missing rows, count mismatch, non-contiguous rows, unpaired pause, repeat rows, open-cooldown final rows, and ambiguous tail timing still block.
-- Existing seven normal-detail gates remain unchanged.
+- Existing no-recovery normal-detail gates remain unchanged.
 - Package tests, `git diff --check`, Simulator smoke for UI-affecting changes, and physical-iPhone proof pass before promotion commit/push.
