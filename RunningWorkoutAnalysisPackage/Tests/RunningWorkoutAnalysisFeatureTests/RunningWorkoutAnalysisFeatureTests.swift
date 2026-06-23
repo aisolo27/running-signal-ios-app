@@ -1850,6 +1850,20 @@ import Testing
     #expect(abs((work.activeDurationSeconds ?? 0) - 90) <= 0.001)
     #expect(work.durationDisplayRule == .elapsedRowWindow)
     #expect(abs(work.displayDurationSeconds - 120) <= 0.001)
+
+    var exportWorkout = workout
+    exportWorkout.evidence = evidence
+    let json = DiagnosticsExport.parityPacketJSON(workout: exportWorkout, forceReenrichResult: nil, generatedAt: start)
+    let data = try #require(json.data(using: .utf8))
+    let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let exportedIntervals = try #require(object["reconstructedIntervals"] as? [[String: Any]])
+    let exportedWork = try #require(exportedIntervals.first { $0["label"] as? String == "Work 1" })
+    #expect(abs((exportedWork["elapsedDurationSeconds"] as? Double ?? 0) - 120) <= 0.001)
+    #expect(abs((exportedWork["pauseOverlapSeconds"] as? Double ?? 0) - 30) <= 0.001)
+    #expect(abs((exportedWork["activeDurationSeconds"] as? Double ?? 0) - 90) <= 0.001)
+    #expect(abs((exportedWork["displayDurationSeconds"] as? Double ?? 0) - 120) <= 0.001)
+    #expect(exportedWork["durationDisplayRule"] as? String == "elapsedRowWindow")
+
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) == nil)
 }
 

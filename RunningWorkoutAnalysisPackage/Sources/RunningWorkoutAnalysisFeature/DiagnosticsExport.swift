@@ -411,7 +411,11 @@ public enum DiagnosticsExport {
                 markdownCell(interval.plannedGoalDisplayText),
                 markdownCell(interval.plannedTargetDisplayText ?? "Target unavailable"),
                 RunFormatters.distance(interval.actualDistanceMeters),
-                RunFormatters.duration(interval.actualDurationSeconds),
+                RunFormatters.duration(interval.elapsedRowWindowDurationSeconds),
+                optionalSeconds(interval.pauseOverlapSeconds),
+                interval.activeDurationSeconds.map(RunFormatters.duration) ?? "Unavailable",
+                RunFormatters.duration(interval.displayDurationSeconds),
+                markdownCell((interval.durationDisplayRule ?? ReconstructedIntervalDurationDisplayRule.elapsedRowWindow).rawValue),
                 RunFormatters.pace(interval.actualPaceSecondsPerKm),
                 RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"),
                 RunFormatters.number(interval.maxHeartRateBpm, suffix: " bpm"),
@@ -427,8 +431,8 @@ public enum DiagnosticsExport {
         }.map { "| \($0) |" }.joined(separator: "\n")
 
         return """
-        | Row | Label | Goal | Target | Distance | Time | Pace | Avg HR | Max HR | Power | Start Offset | End Offset | Boundary Strategy | Boundary Adjustment | Overshoot | Confidence | Notes |
-        |---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---|---|
+        | Row | Label | Goal | Target | Distance | Elapsed | Pause overlap | Active time | Display time | Duration rule | Pace | Avg HR | Max HR | Power | Start Offset | End Offset | Boundary Strategy | Boundary Adjustment | Overshoot | Confidence | Notes |
+        |---:|---|---|---|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---|---:|---:|---|---|
         \(rows)
 
         Notes: \(result.notes.map(markdownCell).joined(separator: " · "))
@@ -2527,6 +2531,11 @@ private struct RawDebugReconstructedInterval: Codable {
     var startOffsetSeconds: Double
     var endOffsetSeconds: Double
     var durationSeconds: Double
+    var elapsedDurationSeconds: Double
+    var pauseOverlapSeconds: Double?
+    var activeDurationSeconds: Double?
+    var displayDurationSeconds: Double
+    var durationDisplayRule: String
     var distanceMeters: Double?
     var paceSecondsPerKm: Double?
     var averageHeartRateBpm: Double?
@@ -2551,6 +2560,11 @@ private struct RawDebugReconstructedInterval: Codable {
         startOffsetSeconds = interval.actualStartDate.timeIntervalSince(workout.startDate)
         endOffsetSeconds = interval.actualEndDate.timeIntervalSince(workout.startDate)
         durationSeconds = interval.actualDurationSeconds
+        elapsedDurationSeconds = interval.elapsedRowWindowDurationSeconds
+        pauseOverlapSeconds = interval.pauseOverlapSeconds
+        activeDurationSeconds = interval.activeDurationSeconds
+        displayDurationSeconds = interval.displayDurationSeconds
+        durationDisplayRule = (interval.durationDisplayRule ?? ReconstructedIntervalDurationDisplayRule.elapsedRowWindow).rawValue
         distanceMeters = interval.actualDistanceMeters
         paceSecondsPerKm = interval.actualPaceSecondsPerKm
         averageHeartRateBpm = interval.averageHeartRateBpm
