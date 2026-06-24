@@ -1280,6 +1280,27 @@ public enum DiagnosticsExport {
         events: [WorkoutEvidenceEvent]
     ) -> RawDebugCustomWorkoutComparisonSummary {
         let pairedPauses = pairedPauseIntervals(events, workout: workout)
+        let hasPauseOrResumeEvidence = events.contains { event in
+            let label = event.displayLabel.lowercased()
+            let type = event.type.lowercased()
+            return label.contains("pause")
+                || label.contains("resume")
+                || type.contains("rawvalue: 1")
+                || type.contains("rawvalue: 2")
+        }
+        let enablesPausedRepeatTailRule = !pairedPauses.isEmpty
+            && plannedSteps.contains { ($0.repeatIndex ?? 1) > 1 }
+            && plannedSteps.contains { $0.stepType == .work && $0.repeatBlockIndex != nil }
+            && plannedSteps.contains { $0.stepType == .recovery && $0.repeatBlockIndex != nil }
+            && plannedSteps.last?.stepType == .cooldown
+            && plannedSteps.last?.plannedGoalType != .open
+        let pauseEvidenceState: CustomWorkoutPauseEvidenceState = if enablesPausedRepeatTailRule {
+            .paired
+        } else if hasPauseOrResumeEvidence {
+            .unpaired
+        } else {
+            .none
+        }
         return RawDebugCustomWorkoutComparisonSummary(
             comparison: DebugCustomWorkoutComparisonBuilder.comparison(
                 plannedSteps: plannedSteps,
@@ -1288,8 +1309,10 @@ public enum DiagnosticsExport {
                 simpleWorkOpenRuleApproved: true,
                 pausedRepeatBlockRuleApproved: true,
                 recoveryContainingOpenTailRuleApproved: true,
-                repeatTailRuleApproved: true,
-                pairedPauseCount: pairedPauses.count
+                repeatTailRuleApproved: !hasPauseOrResumeEvidence,
+                pausedRepeatTailRuleApproved: enablesPausedRepeatTailRule,
+                pairedPauseCount: pairedPauses.count,
+                pauseEvidenceState: pauseEvidenceState
             )
         )
     }

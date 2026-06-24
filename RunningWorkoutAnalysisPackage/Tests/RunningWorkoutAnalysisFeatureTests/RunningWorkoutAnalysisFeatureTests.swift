@@ -1117,6 +1117,39 @@ import Testing
     #expect(abs((candidates[2].paceSecondsPerKm ?? 0) - 656.25) < 0.001)
 }
 
+@Test func derivedIntervalCandidatesWarnWhenWorkoutKitRowsArePresent() {
+    let start = Date(timeIntervalSince1970: 9_710)
+    let workout = testWorkout(id: "derived-custom-workout-guard", start: start, distanceMeters: 1_000, durationSeconds: 300)
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .distance: WorkoutMetricSeries(
+                metric: .distance,
+                unit: "m",
+                points: [
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(300), value: 1_000)
+                ]
+            )
+        ],
+        events: [
+            WorkoutEvidenceEvent(startDate: start, endDate: start.addingTimeInterval(300), type: "HKWorkoutEventTypeSegment", label: "Work")
+        ],
+        workoutPlanAudit: WorkoutPlanAudit(
+            status: .available,
+            planType: "Custom workout",
+            plannedSteps: [
+                PlannedWorkoutStep(index: 1, label: "Work", stepType: .work, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km")
+            ]
+        )
+    )
+
+    let candidates = DerivedAnalyticsEngine.intervalCandidates(workout: workout, evidence: evidence)
+
+    #expect(candidates.count == 1)
+    #expect(candidates[0].caveats.contains("WorkoutKit planned rows are available, so this raw marker must not be used as custom-workout row analytics."))
+}
+
 @Test func workoutKitSpeedRangeConvertsToPaceRangeFastToSlow() {
     let display = WorkoutIntervalReconstructionFormat.paceRangeDisplay(
         speedLowerMetersPerSecond: 2.56,
@@ -2643,6 +2676,134 @@ import Testing
     let blockedReasons = CustomWorkoutNormalDetailGate.blockedReasons(workout: workout, evidence: evidence)
     #expect(blockedReasons.contains { $0.contains("pause-adjusted timer logic") })
     #expect(blockedReasons.contains { $0.contains("Tail status is fixedCooldownFollowedByPossibleOpenExtraTail") })
+}
+
+@Test func parityPacketExportSupportsPausedRepeatFixedCooldownOpenTailAsDebugOnly() throws {
+    let start = Date(timeIntervalSince1970: 10_658)
+    var workout = testWorkout(id: "debug-paused-repeat-tail", start: start, distanceMeters: 4_040, durationSeconds: 1_615)
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .distance, plannedGoalValue: 400, plannedGoalDisplayText: "400 m"),
+            PlannedWorkoutStep(index: 3, label: "Recovery 1", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .time, plannedGoalValue: 105, plannedGoalDisplayText: "105 s"),
+            PlannedWorkoutStep(index: 4, label: "Work 2", stepType: .work, repeatBlockIndex: 1, repeatIndex: 2, plannedGoalType: .distance, plannedGoalValue: 400, plannedGoalDisplayText: "400 m"),
+            PlannedWorkoutStep(index: 5, label: "Recovery 2", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 2, plannedGoalType: .time, plannedGoalValue: 105, plannedGoalDisplayText: "105 s"),
+            PlannedWorkoutStep(index: 6, label: "Cooldown", stepType: .cooldown, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km")
+        ],
+        activityWindows: [
+            (0, 700, 2_000),
+            (700, 820, 400),
+            (820, 925, 100),
+            (925, 1_045, 400),
+            (1_045, 1_150, 100),
+            (1_150, 1_605, 1_000)
+        ],
+        distancePoints: [
+            (700, 2_000),
+            (820, 400),
+            (925, 100),
+            (1_045, 400),
+            (1_150, 100),
+            (1_605, 1_000),
+            (1_615, 40)
+        ],
+        events: [
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(1_000), endDate: start.addingTimeInterval(1_000), type: "HKWorkoutEventType(rawValue: 1)"),
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(1_090), endDate: start.addingTimeInterval(1_090), type: "HKWorkoutEventType(rawValue: 2)")
+        ]
+    )
+    workout.evidence = evidence
+
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) == nil)
+
+    let json = DiagnosticsExport.parityPacketJSON(workout: workout, forceReenrichResult: nil, generatedAt: start)
+    let data = try #require(json.data(using: .utf8))
+    let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let comparisonSummary = try #require(object["customWorkoutComparisonSummary"] as? [String: Any])
+    let candidateSummary = try #require(object["customWorkoutCandidateRuleSummary"] as? [String: Any])
+
+    #expect(comparisonSummary["status"] as? String == "supported")
+    #expect((comparisonSummary["fallbackReasons"] as? [String])?.isEmpty == true)
+    #expect(comparisonSummary["scope"] as? String == "debug/export-only")
+    #expect(comparisonSummary["normalWorkoutUIChanged"] as? Bool == false)
+    #expect(comparisonSummary["usesFITRuntimeTruth"] as? Bool == false)
+    #expect(candidateSummary["pairedPauseCount"] as? Int == 1)
+    #expect(candidateSummary["tailStatus"] as? String == "open-extra-tail-present")
+    #expect(candidateSummary["tailElapsedDurationSeconds"] as? Double == 10)
+    #expect(candidateSummary["tailDistanceMeters"] as? Double == 40)
+}
+
+@Test func parityPacketExportBlocksPausedRepeatFixedCooldownOpenTailNearMisses() throws {
+    let start = Date(timeIntervalSince1970: 10_659)
+    let baseSteps = [
+        PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km"),
+        PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .distance, plannedGoalValue: 400, plannedGoalDisplayText: "400 m"),
+        PlannedWorkoutStep(index: 3, label: "Recovery 1", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .time, plannedGoalValue: 105, plannedGoalDisplayText: "105 s"),
+        PlannedWorkoutStep(index: 4, label: "Work 2", stepType: .work, repeatBlockIndex: 1, repeatIndex: 2, plannedGoalType: .distance, plannedGoalValue: 400, plannedGoalDisplayText: "400 m"),
+        PlannedWorkoutStep(index: 5, label: "Recovery 2", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 2, plannedGoalType: .time, plannedGoalValue: 105, plannedGoalDisplayText: "105 s"),
+        PlannedWorkoutStep(index: 6, label: "Cooldown", stepType: .cooldown, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km")
+    ]
+    let pairedPauseEvents = [
+        WorkoutEvidenceEvent(startDate: start.addingTimeInterval(1_000), endDate: start.addingTimeInterval(1_000), type: "HKWorkoutEventType(rawValue: 1)"),
+        WorkoutEvidenceEvent(startDate: start.addingTimeInterval(1_090), endDate: start.addingTimeInterval(1_090), type: "HKWorkoutEventType(rawValue: 2)")
+    ]
+
+    func comparisonSummary(
+        plannedSteps: [PlannedWorkoutStep],
+        events: [WorkoutEvidenceEvent]
+    ) throws -> [String: Any] {
+        var workout = testWorkout(id: UUID().uuidString, start: start, distanceMeters: 4_040, durationSeconds: 1_615)
+        let evidence = normalDetailGateEvidence(
+            workout: workout,
+            plannedSteps: plannedSteps,
+            activityWindows: [
+                (0, 700, 2_000),
+                (700, 820, 400),
+                (820, 925, 100),
+                (925, 1_045, 400),
+                (1_045, 1_150, 100),
+                (1_150, 1_605, 1_000)
+            ],
+            distancePoints: [
+                (700, 2_000),
+                (820, 400),
+                (925, 100),
+                (1_045, 400),
+                (1_150, 100),
+                (1_605, 1_000),
+                (1_615, 40)
+            ],
+            events: events
+        )
+        workout.evidence = evidence
+        let json = DiagnosticsExport.parityPacketJSON(workout: workout, forceReenrichResult: nil, generatedAt: start)
+        let data = try #require(json.data(using: .utf8))
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        return try #require(object["customWorkoutComparisonSummary"] as? [String: Any])
+    }
+
+    var missingCooldownSteps = baseSteps
+    missingCooldownSteps[5] = PlannedWorkoutStep(index: 6, label: "Recovery 3", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 3, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km")
+    let missingCooldownSummary = try comparisonSummary(plannedSteps: missingCooldownSteps, events: pairedPauseEvents)
+    #expect(missingCooldownSummary["status"] as? String != "supported")
+    #expect((missingCooldownSummary["fallbackReasons"] as? [String])?.isEmpty == false)
+
+    let unpairedPauseSummary = try comparisonSummary(
+        plannedSteps: baseSteps,
+        events: [
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(1_000), endDate: start.addingTimeInterval(1_000), type: "HKWorkoutEventType(rawValue: 1)")
+        ]
+    )
+    #expect(unpairedPauseSummary["status"] as? String != "supported")
+    #expect((unpairedPauseSummary["fallbackReasons"] as? [String])?.isEmpty == false)
+
+    var missingRecoverySteps = baseSteps
+    missingRecoverySteps[2] = PlannedWorkoutStep(index: 3, label: "Work 1 extra", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .time, plannedGoalValue: 105, plannedGoalDisplayText: "105 s")
+    missingRecoverySteps[4] = PlannedWorkoutStep(index: 5, label: "Work 2 extra", stepType: .work, repeatBlockIndex: 1, repeatIndex: 2, plannedGoalType: .time, plannedGoalValue: 105, plannedGoalDisplayText: "105 s")
+    let missingRecoverySummary = try comparisonSummary(plannedSteps: missingRecoverySteps, events: pairedPauseEvents)
+    #expect(missingRecoverySummary["status"] as? String != "supported")
+    #expect((missingRecoverySummary["fallbackReasons"] as? [String])?.isEmpty == false)
 }
 
 @Test func normalDetailGateBlocksRepeatAndOpenTailCases() {

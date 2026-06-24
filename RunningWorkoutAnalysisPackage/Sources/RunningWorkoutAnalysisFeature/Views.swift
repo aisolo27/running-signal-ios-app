@@ -1995,7 +1995,8 @@ struct RawHealthKitWorkoutDebugView: View {
                     MetricItem(title: "Rows", value: "\(result.rows.count)", detail: "Candidate"),
                     MetricItem(title: "Open tails", value: "\(result.rows.filter(\.isOpenTail).count)", detail: "Inferred"),
                     MetricItem(title: "Pauses", value: "\(result.pairedPauseCount)", detail: RunFormatters.duration(result.totalPairedPauseSeconds)),
-                    MetricItem(title: "Scope", value: "Debug", detail: "No production change")
+                    MetricItem(title: "Scope", value: "Debug", detail: "No production change"),
+                    MetricItem(title: "Normal UI", value: "Blocked", detail: "Separate proof required")
                 ])
 
                 ForEach(result.rows) { row in
@@ -2062,6 +2063,27 @@ struct RawHealthKitWorkoutDebugView: View {
         }
 
         let pauses = pairedPauseIntervals(in: evidence.events)
+        let hasPauseOrResumeEvidence = evidence.events.contains { event in
+            let label = event.displayLabel.lowercased()
+            let type = event.type.lowercased()
+            return label.contains("pause")
+                || label.contains("resume")
+                || type.contains("rawvalue: 1")
+                || type.contains("rawvalue: 2")
+        }
+        let enablesPausedRepeatTailRule = !pauses.isEmpty
+            && plannedSteps.contains { ($0.repeatIndex ?? 1) > 1 }
+            && plannedSteps.contains { $0.stepType == .work && $0.repeatBlockIndex != nil }
+            && plannedSteps.contains { $0.stepType == .recovery && $0.repeatBlockIndex != nil }
+            && plannedSteps.last?.stepType == .cooldown
+            && plannedSteps.last?.plannedGoalType != .open
+        let pauseEvidenceState: CustomWorkoutPauseEvidenceState = if enablesPausedRepeatTailRule {
+            .paired
+        } else if hasPauseOrResumeEvidence {
+            .unpaired
+        } else {
+            .none
+        }
         let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
             plannedSteps: plannedSteps,
             activities: activities,
@@ -2069,8 +2091,10 @@ struct RawHealthKitWorkoutDebugView: View {
             simpleWorkOpenRuleApproved: true,
             pausedRepeatBlockRuleApproved: true,
             recoveryContainingOpenTailRuleApproved: true,
-            repeatTailRuleApproved: true,
-            pairedPauseCount: pauses.count
+            repeatTailRuleApproved: !hasPauseOrResumeEvidence,
+            pausedRepeatTailRuleApproved: enablesPausedRepeatTailRule,
+            pairedPauseCount: pauses.count,
+            pauseEvidenceState: pauseEvidenceState
         )
         var rows = zip(plannedSteps, activities).enumerated().map { offset, pair in
             let (step, activity) = pair

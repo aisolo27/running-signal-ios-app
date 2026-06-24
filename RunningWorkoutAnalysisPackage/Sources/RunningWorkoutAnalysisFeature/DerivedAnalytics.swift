@@ -434,6 +434,9 @@ public enum DerivedAnalyticsEngine {
                 break
             }
             caveats.append("Duration and pace use elapsed HealthKit event-window time; pause overlap is not subtracted.")
+            if evidence.workoutPlanAudit?.plannedSteps.isEmpty == false {
+                caveats.append("WorkoutKit planned rows are available, so this raw marker must not be used as custom-workout row analytics.")
+            }
             if distance == nil {
                 caveats.append("Distance series is unavailable for this event window.")
             }

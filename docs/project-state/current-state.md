@@ -73,7 +73,7 @@ The remaining blocked workout-style classes have explicit boundary docs:
 - Use `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-correctness-lock-v1.md` as the acceptance matrix before approving new debug prototypes, normal-detail interval rows, or interval-row analytics.
 - Continue Gate B work by approving or rejecting exact repeat-block, Open/Extra tail, warmup/work/cooldown, and fallback rules from the row-level evidence.
 - Use `docs/validation/apple-fitness-interval-parity-dataset/ambiguous-repeat-tail-decision-rules-2026-06-24.md` before repeat-tail prototype or scorecard work; it keeps broad repeat tails blocked and defines tie-breakers/fallback reasons for docs/debug scoring.
-- Use `docs/validation/apple-fitness-interval-parity-dataset/paused-repeat-open-extra-debug-prototype-plan-2026-06-24.md` for the paused repeat fixed-tail `Open / Extra` debug/export prototype; Raw HealthKit Debug/parity output now exposes row/tail/pause/fallback diagnostics, while normal-detail promotion remains blocked pending separate proof.
+- Use `docs/validation/apple-fitness-interval-parity-dataset/paused-repeat-open-extra-debug-prototype-plan-2026-06-24.md` for the paused repeat fixed-tail `Open / Extra` debug/export prototype; Raw HealthKit Debug/parity output and the in-app Parity Lab status now expose row/tail/pause/fallback diagnostics and mark the exact paired-pause repeat fixed-tail shape debug-supported, while normal-detail promotion remains blocked pending separate proof.
 - Keep elapsed-vs-timer, active/timer, and pause-event diagnostics visible in future Gate B scoring.
 - Keep interval analytics whole-workout-level until supported and blocked custom-workout styles have stable rows, diagnostics agreement, and regression fixtures.
 
