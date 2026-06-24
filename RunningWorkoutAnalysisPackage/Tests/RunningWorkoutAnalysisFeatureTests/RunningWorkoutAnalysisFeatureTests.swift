@@ -1833,6 +1833,147 @@ import Testing
     })
 }
 
+@Test func pauseWindowResolverUsesStateMachineForCleanPairsAndToggles() {
+    let start = Date(timeIntervalSince1970: 10_655)
+    let workoutEnd = start.addingTimeInterval(600)
+
+    let clean = PauseWindowResolver.resolve(
+        events: [
+            PauseResolutionEvent(timestamp: start.addingTimeInterval(120), kind: .pause),
+            PauseResolutionEvent(timestamp: start.addingTimeInterval(180), kind: .resume)
+        ],
+        workoutStart: start,
+        workoutEnd: workoutEnd
+    )
+
+    #expect(clean.confidence == .high)
+    #expect(clean.caveats.isEmpty)
+    #expect(clean.intervals.count == 1)
+    #expect(abs((clean.intervals.first?.duration ?? 0) - 60) <= 0.001)
+
+    let toggleOnly = PauseWindowResolver.resolve(
+        events: [
+            PauseResolutionEvent(timestamp: start.addingTimeInterval(240), kind: .toggle),
+            PauseResolutionEvent(timestamp: start.addingTimeInterval(300), kind: .toggle)
+        ],
+        workoutStart: start,
+        workoutEnd: workoutEnd
+    )
+
+    #expect(toggleOnly.confidence == .high)
+    #expect(toggleOnly.caveats.isEmpty)
+    #expect(toggleOnly.intervals.count == 1)
+    #expect(abs((toggleOnly.intervals.first?.duration ?? 0) - 60) <= 0.001)
+}
+
+@Test func pauseWindowResolverFlagsMalformedPauseStreams() {
+    let start = Date(timeIntervalSince1970: 10_655)
+    let workoutEnd = start.addingTimeInterval(600)
+
+    let duplicatePause = PauseWindowResolver.resolve(
+        events: [
+            PauseResolutionEvent(timestamp: start.addingTimeInterval(120), kind: .pause),
+            PauseResolutionEvent(timestamp: start.addingTimeInterval(150), kind: .pause),
+            PauseResolutionEvent(timestamp: start.addingTimeInterval(210), kind: .resume)
+        ],
+        workoutStart: start,
+        workoutEnd: workoutEnd
+    )
+
+    #expect(duplicatePause.confidence == .low)
+    #expect(duplicatePause.isReliableForNormalDetail == false)
+    #expect(duplicatePause.caveats.contains("Duplicate pause event ignored"))
+    #expect(duplicatePause.intervals.count == 1)
+    #expect(abs((duplicatePause.intervals.first?.duration ?? 0) - 90) <= 0.001)
+
+    let danglingPause = PauseWindowResolver.resolve(
+        events: [
+            PauseResolutionEvent(timestamp: start.addingTimeInterval(540), kind: .pause)
+        ],
+        workoutStart: start,
+        workoutEnd: workoutEnd
+    )
+
+    #expect(danglingPause.confidence == .low)
+    #expect(danglingPause.isReliableForNormalDetail == false)
+    #expect(danglingPause.caveats.contains("Dangling pause closed at workout end"))
+    #expect(danglingPause.intervals.count == 1)
+    #expect(abs((danglingPause.intervals.first?.duration ?? 0) - 60) <= 0.001)
+}
+
+@Test func pauseWindowResolverReturnsElapsedTimingWhenThereAreNoPauses() {
+    let start = Date(timeIntervalSince1970: 10_655)
+    let resolution = PauseWindowResolver.resolve(
+        events: [],
+        workoutStart: start,
+        workoutEnd: start.addingTimeInterval(600)
+    )
+
+    #expect(resolution.confidence == .high)
+    #expect(resolution.caveats.isEmpty)
+    #expect(resolution.intervals.isEmpty)
+}
+
+@Test func reconstructedIntervalsResolvePauseResumeRequestToggleEvents() throws {
+    let start = Date(timeIntervalSince1970: 10_655)
+    let workout = testWorkout(id: "pause-resume-request-timing", start: start, distanceMeters: 3_000, durationSeconds: 1_200)
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, plannedGoalType: .time, plannedGoalValue: 120, plannedGoalDisplayText: "2 min"),
+            PlannedWorkoutStep(index: 3, label: "Cooldown", stepType: .cooldown, plannedGoalType: .open, plannedGoalValue: nil, plannedGoalDisplayText: "Open")
+        ],
+        activityWindows: [
+            (0, 800, 2_000),
+            (800, 920, 400),
+            (920, 1_200, 600)
+        ],
+        distancePoints: [(0, 0), (800, 2_000), (920, 2_400), (1_200, 3_000)],
+        events: [
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(830), endDate: start.addingTimeInterval(830), type: "HKWorkoutEventTypePauseOrResumeRequest", label: "Pause/resume request"),
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(860), endDate: start.addingTimeInterval(860), type: "HKWorkoutEventTypePauseOrResumeRequest", label: "Pause/resume request")
+        ]
+    )
+
+    let result = try #require(WorkoutIntervalReconstructionEngine.reconstructFromActivityBoundaries(workout: workout, evidence: evidence))
+    let work = try #require(result.intervals.first { $0.label == "Work 1" })
+
+    #expect(abs((work.pauseOverlapSeconds ?? 0) - 30) <= 0.001)
+    #expect(abs((work.activeDurationSeconds ?? 0) - 90) <= 0.001)
+}
+
+@Test func reconstructedIntervalsResolveMixedManualAndMotionPauseEvents() throws {
+    let start = Date(timeIntervalSince1970: 10_655)
+    let workout = testWorkout(id: "mixed-manual-motion-pauses", start: start, distanceMeters: 3_000, durationSeconds: 1_200)
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, plannedGoalType: .time, plannedGoalValue: 120, plannedGoalDisplayText: "2 min"),
+            PlannedWorkoutStep(index: 3, label: "Cooldown", stepType: .cooldown, plannedGoalType: .open, plannedGoalValue: nil, plannedGoalDisplayText: "Open")
+        ],
+        activityWindows: [
+            (0, 800, 2_000),
+            (800, 920, 400),
+            (920, 1_200, 600)
+        ],
+        distancePoints: [(0, 0), (800, 2_000), (920, 2_400), (1_200, 3_000)],
+        events: [
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(830), endDate: start.addingTimeInterval(830), type: "HKWorkoutEventType(rawValue: 1)", label: "Pause"),
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(860), endDate: start.addingTimeInterval(860), type: "HKWorkoutEventType(rawValue: 2)", label: "Resume"),
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(880), endDate: start.addingTimeInterval(880), type: "HKWorkoutEventTypeMotionPaused"),
+            WorkoutEvidenceEvent(startDate: start.addingTimeInterval(900), endDate: start.addingTimeInterval(900), type: "HKWorkoutEventTypeMotionResumed")
+        ]
+    )
+
+    let result = try #require(WorkoutIntervalReconstructionEngine.reconstructFromActivityBoundaries(workout: workout, evidence: evidence))
+    let work = try #require(result.intervals.first { $0.label == "Work 1" })
+
+    #expect(abs((work.pauseOverlapSeconds ?? 0) - 50) <= 0.001)
+    #expect(abs((work.activeDurationSeconds ?? 0) - 70) <= 0.001)
+}
+
 @Test func reconstructedIntervalsCarryPausedTimingSemanticsWithoutPromotion() throws {
     let start = Date(timeIntervalSince1970: 10_655)
     let workout = testWorkout(id: "paused-timing-semantics", start: start, distanceMeters: 3_000, durationSeconds: 1_200)
@@ -2691,6 +2832,112 @@ import Testing
 
     #expect(WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: evidence) == nil)
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) == nil)
+}
+
+@Test func approvedNormalDetailGateRouterStillRecognizesEightNarrowShapes() {
+    func repeatSteps(finalCooldownGoal: PlannedWorkoutGoalType) -> [PlannedWorkoutStep] {
+        [
+            PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .distance, plannedGoalValue: 400, plannedGoalDisplayText: "400 m"),
+            PlannedWorkoutStep(index: 3, label: "Recovery 1", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .time, plannedGoalValue: 120, plannedGoalDisplayText: "120 s"),
+            PlannedWorkoutStep(index: 4, label: "Work 2", stepType: .work, repeatBlockIndex: 1, repeatIndex: 2, plannedGoalType: .distance, plannedGoalValue: 400, plannedGoalDisplayText: "400 m"),
+            PlannedWorkoutStep(index: 5, label: "Recovery 2", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 2, plannedGoalType: .time, plannedGoalValue: 120, plannedGoalDisplayText: "120 s"),
+            PlannedWorkoutStep(
+                index: 6,
+                label: "Cooldown",
+                stepType: .cooldown,
+                plannedGoalType: finalCooldownGoal,
+                plannedGoalValue: finalCooldownGoal == .distance ? 1_000 : nil,
+                plannedGoalDisplayText: finalCooldownGoal == .distance ? "1 km" : "Open"
+            )
+        ]
+    }
+
+    let stoppedEarlyWorkout = testWorkout(id: "freeze-stopped-early-single-work", start: Date(timeIntervalSince1970: 10_710), distanceMeters: 3_026, durationSeconds: 733.8)
+    let stoppedEarlyEvidence = normalDetailGateEvidence(
+        workout: stoppedEarlyWorkout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Work 1", stepType: .work, plannedGoalType: .distance, plannedGoalValue: 5_000, plannedGoalDisplayText: "5 km")
+        ],
+        activityWindows: [(start: 0, end: 733.8, distance: 3_026)],
+        distancePoints: [(733.8, 3_026)]
+    )
+
+    let simpleWorkOpenWorkout = testWorkout(id: "freeze-simple-work-open", start: Date(timeIntervalSince1970: 10_720), distanceMeters: 5_050, durationSeconds: 1_900)
+    let simpleWorkOpenEvidence = normalDetailGateEvidence(
+        workout: simpleWorkOpenWorkout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Work 1", stepType: .work, plannedGoalType: .distance, plannedGoalValue: 5_000, plannedGoalDisplayText: "5 km")
+        ],
+        activityWindows: [(start: 0, end: 1_800, distance: 5_000)],
+        distancePoints: [(1_800, 5_000), (1_900, 5_050)]
+    )
+
+    let warmupWorkOpenCooldownWorkout = testWorkout(id: "freeze-warmup-work-open-cooldown", start: Date(timeIntervalSince1970: 10_730), distanceMeters: 3_500, durationSeconds: 1_500)
+    let warmupWorkOpenCooldownEvidence = normalDetailGateEvidence(
+        workout: warmupWorkOpenCooldownWorkout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, plannedGoalType: .time, plannedGoalValue: 600, plannedGoalDisplayText: "600 s"),
+            PlannedWorkoutStep(index: 3, label: "Cooldown", stepType: .cooldown, plannedGoalType: .open, plannedGoalDisplayText: "Open")
+        ],
+        activityWindows: [(start: 0, end: 800, distance: 2_000), (start: 800, end: 1_400, distance: 1_250), (start: 1_400, end: 1_500, distance: 250)],
+        distancePoints: [(800, 2_000), (1_400, 3_250), (1_500, 3_500)]
+    )
+
+    let warmupWorkFixedCooldownTailWorkout = testWorkout(id: "freeze-warmup-work-fixed-cooldown-tail", start: Date(timeIntervalSince1970: 10_740), distanceMeters: 4_050, durationSeconds: 1_700)
+    let warmupWorkFixedCooldownTailEvidence = normalDetailGateEvidence(
+        workout: warmupWorkFixedCooldownTailWorkout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km"),
+            PlannedWorkoutStep(index: 3, label: "Cooldown", stepType: .cooldown, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km")
+        ],
+        activityWindows: [(start: 0, end: 800, distance: 2_000), (start: 800, end: 1_200, distance: 1_000), (start: 1_200, end: 1_600, distance: 1_000)],
+        distancePoints: [(800, 2_000), (1_200, 3_000), (1_600, 4_000), (1_700, 4_050)]
+    )
+
+    let repeatOpenCooldownWorkout = testWorkout(id: "freeze-repeat-open-cooldown", start: Date(timeIntervalSince1970: 10_750), distanceMeters: 4_800, durationSeconds: 1_600)
+    let repeatOpenCooldownEvidence = normalDetailGateEvidence(
+        workout: repeatOpenCooldownWorkout,
+        plannedSteps: repeatSteps(finalCooldownGoal: .open),
+        activityWindows: [(start: 0, end: 700, distance: 2_000), (start: 700, end: 820, distance: 400), (start: 820, end: 940, distance: 100), (start: 940, end: 1_060, distance: 400), (start: 1_060, end: 1_180, distance: 100), (start: 1_180, end: 1_600, distance: 1_800)],
+        distancePoints: [(700, 2_000), (820, 2_400), (940, 2_500), (1_060, 2_900), (1_180, 3_000), (1_600, 4_800)]
+    )
+
+    let repeatFixedCooldownTailWorkout = testWorkout(id: "freeze-repeat-fixed-cooldown-tail", start: Date(timeIntervalSince1970: 10_760), distanceMeters: 4_050, durationSeconds: 1_500)
+    let repeatFixedCooldownTailEvidence = normalDetailGateEvidence(
+        workout: repeatFixedCooldownTailWorkout,
+        plannedSteps: repeatSteps(finalCooldownGoal: .distance),
+        activityWindows: [(start: 0, end: 700, distance: 2_000), (start: 700, end: 820, distance: 400), (start: 820, end: 940, distance: 100), (start: 940, end: 1_060, distance: 400), (start: 1_060, end: 1_180, distance: 100), (start: 1_180, end: 1_400, distance: 1_000)],
+        distancePoints: [(700, 2_000), (820, 2_400), (940, 2_500), (1_060, 2_900), (1_180, 3_000), (1_400, 4_000), (1_500, 4_050)]
+    )
+
+    let pausedRepeatOpenCooldown = pausedRepeatOpenCooldownFixture(id: "freeze-paused-repeat-open-cooldown")
+    let recoveryTail = recoveryTailNormalDetailFixture(id: "freeze-recovery-containing-tail")
+
+    let fixtures: [(name: String, workout: CanonicalWorkout, evidence: WorkoutEvidence, labels: [String])] = [
+        ("stopped-early single Work", stoppedEarlyWorkout, stoppedEarlyEvidence, ["Work 1"]),
+        ("simple Work/Open", simpleWorkOpenWorkout, simpleWorkOpenEvidence, ["Work 1", "Open / Extra"]),
+        ("warmup/work/open cooldown", warmupWorkOpenCooldownWorkout, warmupWorkOpenCooldownEvidence, ["Warmup", "Work 1", "Cooldown"]),
+        ("warmup/work/fixed cooldown tail", warmupWorkFixedCooldownTailWorkout, warmupWorkFixedCooldownTailEvidence, ["Warmup", "Work 1", "Cooldown", "Open / Extra"]),
+        ("clean repeat open cooldown", repeatOpenCooldownWorkout, repeatOpenCooldownEvidence, ["Warmup", "Work 1", "Recovery 1", "Work 2", "Recovery 2", "Cooldown"]),
+        ("clean repeat fixed cooldown tail", repeatFixedCooldownTailWorkout, repeatFixedCooldownTailEvidence, ["Warmup", "Work 1", "Recovery 1", "Work 2", "Recovery 2", "Cooldown", "Open / Extra"]),
+        ("paused repeat open cooldown", pausedRepeatOpenCooldown.workout, pausedRepeatOpenCooldown.evidence, []),
+        ("recovery-containing fixed cooldown tail", recoveryTail.workout, recoveryTail.evidence, ["Warmup", "Recovery 1", "Work 1", "Cooldown", "Open / Extra"])
+    ]
+
+    #expect(fixtures.count == 8)
+    for fixture in fixtures {
+        let result = CustomWorkoutNormalDetailGate.supportedIntervals(workout: fixture.workout, evidence: fixture.evidence)
+        #expect(result != nil, "\(fixture.name) should stay approved")
+        if fixture.labels.isEmpty {
+            #expect(result?.intervals.map(\.stepType) == [.warmup, .work, .recovery, .work, .recovery, .cooldown])
+            #expect(result?.intervals.contains { ($0.pauseOverlapSeconds ?? 0) > 0 } == true)
+        } else {
+            #expect(result?.intervals.map(\.label) == fixture.labels)
+        }
+    }
 }
 
 @Test func healthKitSegmentMarkersAreNotUsedAsWorkoutKitReconstructedIntervals() throws {

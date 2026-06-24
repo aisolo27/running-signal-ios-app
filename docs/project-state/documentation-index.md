@@ -8,6 +8,7 @@ Last updated: 2026-06-23
 - `docs/project-state/next-work.md`: short priority list and out-of-scope guardrails.
 - `AGENTS.md`: repo rules, tool routing, and context-loading policy.
 - `docs/bug-log.md`: selective gotcha index; read only the relevant section.
+- `docs/claude-runsignal-architecture-handoff.md`: Claude-oriented app architecture, HealthKit data map, analytics/UI handoff, and review prompts.
 - `docs/milestones/09-healthkit-evidence-contract.md`: active milestone and Step 7 status.
 
 ## Active Validation Docs
@@ -28,15 +29,18 @@ Keep active validation lean. Once a date-specific parity investigation is comple
 - `docs/validation/apple-fitness-interval-parity-dataset/hkworkoutactivity-boundary-scorecard.md`: current docs/debug scorecard for the archived on-device activity-boundary candidate exports; no production promotion approved.
 - `docs/validation/apple-fitness-interval-parity-dataset/gate-b-phase-3-readiness-review.md`: docs-only Gate B decision table by exact workout shape before any Phase 3 prototype discussion.
 - `docs/validation/apple-fitness-interval-parity-dataset/gate-b-agent-findings-2026-03-to-2026-06.md`: consolidated Gate B sub-agent findings, root-cause matrix, and no-production-change decision.
-- `docs/validation/apple-fitness-interval-parity-dataset/gate-b-scoring-refresh-2026-06-23.md`: AIS-27 refresh note; reran Gate B scoring scripts, generated outputs had no diff, and Gate B remains blocked pending row-level label/error extraction.
+- `docs/validation/apple-fitness-interval-parity-dataset/gate-b-scoring-refresh-2026-06-23.md`: AIS-27 historical refresh note; AIS-41 later linked the count-level scorecard to row-level FIT label/error evidence, so current Gate B blockers are exact-shape label/tail/fallback rules.
 - `docs/validation/apple-fitness-interval-parity-dataset/gate-b-warmup-work-cooldown-outlier-review-2026-06-23.md`: AIS-28 review classifying March 19, May 29, June 5, and high-drift repeat rows; no broad Gate B promotion approved.
 - `docs/validation/apple-fitness-interval-parity-dataset/gate-b-repeat-block-evidence-2026-03-to-2026-06.md`: generated docs/debug repeat-block evidence scorecard.
 - `docs/validation/apple-fitness-interval-parity-dataset/gate-b-open-tail-evidence-2026-03-to-2026-06.md`: generated docs/debug Open/Extra tail evidence scorecard.
 - `docs/validation/apple-fitness-interval-parity-dataset/gate-b-narrow-warmup-work-cooldown-candidate-scorecard-2026-03-to-2026-06.md`: generated docs/debug narrow warmup/work/open-cooldown candidate scorecard.
 - `docs/validation/apple-fitness-interval-parity-dataset/gate-b-timer-drift-evidence-2026-03-to-2026-06.md`: generated docs/debug elapsed-vs-timer, active/timer, pause-event, and material timer policy evidence for Gate B outliers.
 - `docs/validation/apple-fitness-interval-parity-dataset/paused-repeat-block-timer-rule-2026-06-15.md`: docs/debug timer rule for paused repeat blocks; preserves elapsed row windows and active/timer duration from paired HealthKit pause overlap. The narrow open-cooldown shape is now promoted, while broader paused tails remain blocked.
+- `docs/validation/apple-fitness-interval-parity-dataset/paused-repeat-open-extra-tail-rule-2026-06-23.md`: AIS-39 docs/debug separator rule for true paused repeat fixed-tail `Open / Extra` cases; keeps them blocked unless paired pauses, fixed-row exhaustion, tail thresholding, and open-cooldown controls are proven.
+- `docs/validation/apple-fitness-interval-parity-dataset/broad-recovery-tail-boundaries-2026-06-23.md`: AIS-40 boundary note; keeps broad recovery-containing `Open / Extra` tails blocked outside the narrow May 1-style proven gate.
 - `docs/validation/apple-fitness-interval-parity-dataset/paused-repeat-block-promotion-readiness-review-2026-06-15.md`: docs-only readiness review concluding paused repeat blocks should not enter normal detail until interval timing semantics can carry elapsed, pause-overlap, and active/timer duration separately.
 - `docs/validation/apple-fitness-interval-parity-dataset/recovery-containing-open-tail-rule-2026-06-15.md`: docs/debug separator rule for recovery-containing Open/Extra tails; preserves planned Recovery rows and requires fixed-step exhaustion before post-plan Open/Extra.
+- `docs/validation/apple-fitness-interval-parity-dataset/interval-analytics-readiness-handoff-2026-06-23.md`: AIS-46 handoff; parks interval-row analytics until supported and blocked workout styles have stable rows, diagnostics agreement, and regression fixtures.
 - `docs/validation/apple-fitness-interval-parity-dataset/ambiguous-repeat-tail-rule-2026-06-15.md`: repeat-tail taxonomy and docs/debug separator rule; separates the approved clean no-pause fixed-cooldown repeat-tail gate from unresolved ambiguous cases that still require fixed final-row exhaustion, tail threshold, and open-cooldown guards.
 - `docs/validation/apple-fitness-interval-parity-dataset/ambiguous-repeat-tail-evidence-decision-2026-06-23.md`: AIS-24 decision; no new broad repeat-tail gate, clean June 10-style shape is already closed, and AIS-25 should harden fallback/tests for unresolved cases.
 - `docs/validation/apple-fitness-interval-parity-dataset/repeat-tail-tests-and-proof-closure-2026-06-23.md`: AIS-26 closure; AIS-25 was test/docs-only, existing June 10 plus May 20/June 3 physical proof remains sufficient, and no new app artifacts are required.

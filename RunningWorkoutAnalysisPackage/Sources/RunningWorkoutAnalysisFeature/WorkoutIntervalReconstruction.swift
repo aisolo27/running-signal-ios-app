@@ -154,18 +154,113 @@ public struct ReconstructedWorkoutInterval: Codable, Equatable, Sendable {
     }
 }
 
-fileprivate enum WorkoutPauseTimingSemantics {
-    fileprivate enum PauseEventKind {
-        case pause
-        case resume
-    }
+enum PauseResolutionEventKind: Equatable, Sendable {
+    case pause
+    case resume
+    case toggle
+}
 
-    static func pauseEventKind(for event: WorkoutEvidenceEvent) -> PauseEventKind? {
-        let label = event.displayLabel.lowercased()
-        if label.contains("resume") {
+struct PauseResolutionEvent: Equatable, Sendable {
+    var timestamp: Date
+    var kind: PauseResolutionEventKind
+}
+
+struct PauseWindowResolution: Equatable, Sendable {
+    var intervals: [DateInterval]
+    var confidence: IntervalReconstructionConfidence
+    var caveats: [String]
+
+    var isReliableForNormalDetail: Bool {
+        caveats.isEmpty
+    }
+}
+
+enum PauseWindowResolver {
+    static func resolve(
+        events: [PauseResolutionEvent],
+        workoutStart: Date,
+        workoutEnd: Date
+    ) -> PauseWindowResolution {
+        var intervals: [DateInterval] = []
+        var caveats: [String] = []
+        var pauseStart: Date?
+
+        for event in events.sorted(by: { $0.timestamp < $1.timestamp }) {
+            guard event.timestamp >= workoutStart, event.timestamp <= workoutEnd else {
+                caveats.append("Pause event outside workout bounds ignored")
+                continue
+            }
+
+            switch event.kind {
+            case .pause:
+                guard pauseStart == nil else {
+                    caveats.append("Duplicate pause event ignored")
+                    continue
+                }
+                pauseStart = event.timestamp
+            case .resume:
+                guard let start = pauseStart else {
+                    caveats.append("Resume event without active pause ignored")
+                    continue
+                }
+                if event.timestamp > start {
+                    intervals.append(DateInterval(start: start, end: event.timestamp))
+                } else {
+                    caveats.append("Zero-length pause window ignored")
+                }
+                pauseStart = nil
+            case .toggle:
+                if let start = pauseStart {
+                    if event.timestamp > start {
+                        intervals.append(DateInterval(start: start, end: event.timestamp))
+                    } else {
+                        caveats.append("Zero-length pause window ignored")
+                    }
+                    pauseStart = nil
+                } else {
+                    pauseStart = event.timestamp
+                }
+            }
+        }
+
+        if let start = pauseStart {
+            if workoutEnd > start {
+                intervals.append(DateInterval(start: start, end: workoutEnd))
+                caveats.append("Dangling pause closed at workout end")
+            } else {
+                caveats.append("Dangling pause at or after workout end ignored")
+            }
+        }
+
+        return PauseWindowResolution(
+            intervals: intervals,
+            confidence: caveats.isEmpty ? .high : .low,
+            caveats: caveats
+        )
+    }
+}
+
+fileprivate enum WorkoutPauseTimingSemantics {
+    static func pauseEventKind(for event: WorkoutEvidenceEvent) -> PauseResolutionEventKind? {
+        let normalizedType = normalizedPauseText(event.type)
+        let normalizedLabel = normalizedPauseText(event.displayLabel)
+
+        if normalizedType.contains("pauseorresumerequest")
+            || normalizedLabel.contains("pauseresumerequest") {
+            return .toggle
+        }
+        if normalizedType.contains("motionpaused")
+            || normalizedLabel.contains("motionpaused") {
+            return .pause
+        }
+        if normalizedType.contains("motionresumed")
+            || normalizedLabel.contains("motionresumed") {
             return .resume
         }
-        if label.contains("pause") {
+        if normalizedLabel.contains("resume") || normalizedType.contains("resume") {
+            return .resume
+        }
+        if normalizedLabel.contains("pause") || normalizedType.contains("pause") {
             return .pause
         }
         return nil
@@ -176,45 +271,11 @@ fileprivate enum WorkoutPauseTimingSemantics {
     }
 
     static func pairedPauseCount(in events: [WorkoutEvidenceEvent]) -> Int {
-        var pendingPause = false
-        var count = 0
-        for event in events.sorted(by: { $0.startDate < $1.startDate }) {
-            switch pauseEventKind(for: event) {
-            case .pause:
-                pendingPause = true
-            case .resume where pendingPause:
-                count += 1
-                pendingPause = false
-            case .resume, .none:
-                continue
-            }
-        }
-        return count
+        reliablePauses(in: events)?.count ?? 0
     }
 
     static func pairedPauseIntervals(in events: [WorkoutEvidenceEvent]) -> [DateInterval]? {
-        var pendingPauseStart: Date?
-        var intervals: [DateInterval] = []
-
-        for event in events.sorted(by: { $0.startDate < $1.startDate }) {
-            switch pauseEventKind(for: event) {
-            case .pause:
-                guard pendingPauseStart == nil else { return nil }
-                pendingPauseStart = event.startDate
-            case .resume:
-                guard let pauseStart = pendingPauseStart,
-                      event.startDate >= pauseStart else {
-                    return nil
-                }
-                intervals.append(DateInterval(start: pauseStart, end: event.startDate))
-                pendingPauseStart = nil
-            case .none:
-                continue
-            }
-        }
-
-        guard pendingPauseStart == nil else { return nil }
-        return intervals
+        reliablePauses(in: events)
     }
 
     static func pairedPauseOverlapSeconds(
@@ -232,6 +293,34 @@ fileprivate enum WorkoutPauseTimingSemantics {
             guard overlapEnd > overlapStart else { return total }
             return total + overlapEnd.timeIntervalSince(overlapStart)
         }
+    }
+
+    private static func reliablePauses(in events: [WorkoutEvidenceEvent]) -> [DateInterval]? {
+        let pauseEvents = events.compactMap { event -> PauseResolutionEvent? in
+            guard let kind = pauseEventKind(for: event) else { return nil }
+            return PauseResolutionEvent(timestamp: event.startDate, kind: kind)
+        }
+        guard !pauseEvents.isEmpty else {
+            return []
+        }
+
+        guard let workoutStart = pauseEvents.map(\.timestamp).min(),
+              let workoutEnd = pauseEvents.map(\.timestamp).max() else {
+            return []
+        }
+        let resolution = PauseWindowResolver.resolve(
+            events: pauseEvents,
+            workoutStart: workoutStart,
+            workoutEnd: workoutEnd
+        )
+        guard resolution.isReliableForNormalDetail else {
+            return nil
+        }
+        return resolution.intervals
+    }
+
+    private static func normalizedPauseText(_ text: String) -> String {
+        text.lowercased().filter { $0.isLetter || $0.isNumber }
     }
 }
 

@@ -16,6 +16,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent
 FIT_ROLLUP = ROOT / "fit-reference-rollup-2026-03-to-2026-06.json"
+ROW_LEVEL_REPORT = ROOT / "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json"
 JSON_REPORT = ROOT / "gate-b-custom-workout-fit-scorecard-2026-03-to-2026-06.json"
 MARKDOWN_REPORT = ROOT / "gate-b-custom-workout-fit-scorecard-2026-03-to-2026-06.md"
 
@@ -76,7 +77,98 @@ def row_decision(row: dict[str, Any]) -> str:
     return "inconclusive" if material_shift(row) else "equivalent"
 
 
-def summarize(rows: list[dict[str, Any]], key: str) -> dict[str, Any]:
+def load_row_level_scorecard() -> dict[str, Any]:
+    if not ROW_LEVEL_REPORT.exists():
+        return {
+            "available": False,
+            "source": ROW_LEVEL_REPORT.name,
+            "reason": "Gate B row-level FIT boundary scorecard has not been generated.",
+            "workoutsByStartDate": {},
+        }
+
+    data = load_json(ROW_LEVEL_REPORT)
+    workouts = data.get("workouts", [])
+    return {
+        "available": True,
+        "source": ROW_LEVEL_REPORT.name,
+        "generatedAt": data.get("generatedAt"),
+        "workoutCount": len(workouts),
+        "answers": data.get("answers", {}),
+        "workoutsByStartDate": {
+            row.get("startDate"): row
+            for row in workouts
+            if row.get("startDate")
+        },
+    }
+
+
+def max_abs(values: list[Any]) -> float | None:
+    numeric = [abs(float(value)) for value in values if isinstance(value, (int, float))]
+    return round(max(numeric), 1) if numeric else None
+
+
+def row_error_summary(errors: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "rowCount": len(errors),
+        "labelAgreementRows": sum(1 for row in errors if row.get("labelMatchesFITInference") is True),
+        "labelDisagreementRows": sum(1 for row in errors if row.get("labelMatchesFITInference") is False),
+        "maxAbsTimeErrorSeconds": max_abs([row.get("timeErrorSeconds") for row in errors]),
+        "maxAbsDistanceErrorMeters": max_abs([row.get("distanceErrorMeters") for row in errors]),
+        "rows": [
+            {
+                "rowIndex": row.get("rowIndex"),
+                "rowLabel": row.get("rowLabel"),
+                "fitLapIndex": row.get("fitLapIndex"),
+                "labelMatchesFITInference": row.get("labelMatchesFITInference"),
+                "timeErrorSeconds": row.get("timeErrorSeconds"),
+                "distanceErrorMeters": row.get("distanceErrorMeters"),
+            }
+            for row in errors
+        ],
+    }
+
+
+def row_level_summary(row: dict[str, Any], row_level: dict[str, Any]) -> dict[str, Any]:
+    if not row_level.get("available"):
+        return {
+            "available": False,
+            "source": row_level.get("source"),
+            "reason": row_level.get("reason"),
+        }
+
+    details = row_level.get("workoutsByStartDate", {}).get(row.get("startDate"))
+    if not details:
+        return {
+            "available": False,
+            "source": row_level.get("source"),
+            "reason": "No matching row-level Gate B record for this workout start date.",
+        }
+
+    current_errors = details.get("currentRowErrorsVsFITLaps", [])
+    candidate_errors = details.get("candidateRowErrorsVsFITLaps", [])
+    scores = details.get("scores", {})
+    return {
+        "available": True,
+        "source": row_level.get("source"),
+        "fitLapRows": len(details.get("fitLapRows", [])),
+        "fitWorkoutStepRows": len(details.get("fitWorkoutStepRows", [])),
+        "plannedRows": len(details.get("workoutKitPlannedRows", [])),
+        "currentRows": len(details.get("runSignalCurrentRows", [])),
+        "candidateRows": len(details.get("hkWorkoutActivityCandidateRows", [])),
+        "fallbackReason": scores.get("fallbackReason") or scores.get("classification"),
+        "tailAmbiguity": scores.get("tailAmbiguity") or scores.get("fitInferredTailStatus"),
+        "fitLapVsWorkoutStepRelationship": {
+            "fitLapRows": len(details.get("fitLapRows", [])),
+            "fitWorkoutStepRows": len(details.get("fitWorkoutStepRows", [])),
+            "matchesExpandedPlan": len(details.get("fitLapRows", [])) == len(details.get("workoutKitPlannedRows", [])),
+            "workoutStepsAreUnexpandedPlanEvidence": len(details.get("fitWorkoutStepRows", [])) != len(details.get("workoutKitPlannedRows", [])),
+        },
+        "currentVsFITLaps": row_error_summary(current_errors),
+        "candidateVsFITLaps": row_error_summary(candidate_errors),
+    }
+
+
+def summarize(rows: list[dict[str, Any]], key: str, row_level: dict[str, Any]) -> dict[str, Any]:
     subset = [row for row in rows if class_key(row) == key]
     decisions = Counter(row_decision(row) for row in subset)
     fit_lap_activity_matches = sum(
@@ -127,7 +219,10 @@ def summarize(rows: list[dict[str, Any]], key: str) -> dict[str, Any]:
         "openExtraTailCount": len(open_tail_rows),
         "repeatBlockNeedsRuleCount": len(repeat_like_rows),
         "labelMappingNeedsRuleCount": len(subset),
-        "decision": "blocked_pending_gate_b_row_level_fit_scoring",
+        "rowLevelEvidenceAvailableCount": sum(
+            1 for row in subset if row_level_summary(row, row_level).get("available")
+        ),
+        "decision": "blocked_pending_exact_shape_rules",
     }
 
 
@@ -157,6 +252,7 @@ def compact_row(row: dict[str, Any]) -> dict[str, Any]:
 
 def build_scorecard() -> dict[str, Any]:
     data = load_json(FIT_ROLLUP)
+    row_level = load_row_level_scorecard()
     rows = [row for row in data.get("matches", []) if is_gate_b(row)]
     structured = [row for row in rows if class_key(row) == "structured_interval"]
     warmup = [row for row in rows if class_key(row) == "warmup_work_cooldown"]
@@ -174,18 +270,31 @@ def build_scorecard() -> dict[str, Any]:
         "source": str(FIT_ROLLUP.name),
         "runtimeSource": "HealthKit/WorkoutKit",
         "validationOracle": "FIT offline reference",
+        "rowLevelFitEvidence": {
+            key: value for key, value in row_level.items() if key != "workoutsByStartDate"
+        },
         "fitRuntimeUseAllowed": False,
+        "rowLevelEvidenceSamples": [
+            {
+                "workoutID": row.get("workoutID"),
+                "startDate": row.get("startDate"),
+                "classification": row.get("classification"),
+                "goal": row.get("goal"),
+                "rowLevelEvidence": row_level_summary(row, row_level),
+            }
+            for row in rows
+        ],
         "productionBehaviorChanged": False,
         "swiftSourceChanged": False,
         "gateBTotal": len(rows),
-        "structuredIntervalFindings": summarize(rows, "structured_interval"),
-        "warmupWorkCooldownFindings": summarize(rows, "warmup_work_cooldown"),
+        "structuredIntervalFindings": summarize(rows, "structured_interval", row_level),
+        "warmupWorkCooldownFindings": summarize(rows, "warmup_work_cooldown", row_level),
         "comparisonSummary": {
             "candidateBetterCount": 0,
             "currentBetterCount": 0,
             "equivalentCount": sum(1 for row in rows if row_decision(row) == "equivalent"),
             "inconclusiveCount": sum(1 for row in rows if row_decision(row) == "inconclusive"),
-            "reason": "Gate B rollup has count/tail/current-vs-candidate deltas, but not full row-level FIT label/error extraction.",
+            "reason": "Gate B rollup is paired with the row-level FIT boundary scorecard for label, timing, distance, tail, and fallback review.",
         },
         "openExtraTailFindings": {
             "totalWithOpenExtraTail": len(open_tail_rows),
@@ -209,6 +318,9 @@ def build_scorecard() -> dict[str, Any]:
         "labelMappingFindings": {
             "labelMappingNeedsRule": True,
             "rowsNeedingLabelMappingRule": len(rows),
+            "rowLevelEvidenceAvailableCount": sum(
+                1 for row in rows if row_level_summary(row, row_level).get("available")
+            ),
             "ruleNeeded": "Map labels from WorkoutKit planned step order, including Warmup, Work, Recovery, Cooldown, Open, and Extra; do not infer production labels from FIT at runtime.",
         },
         "safeSubclasses": [],
@@ -222,7 +334,7 @@ def build_scorecard() -> dict[str, Any]:
                     and row.get("fitLapCount") == row.get("activityCount")
                     and not material_shift(row)
                 ),
-                "blockedReason": "needs row-level FIT label/error extraction and repeat-block label rules",
+                "blockedReason": "row-level FIT extraction is available; still needs repeat-block label rules",
             },
             {
                 "shape": "three-step warmup/work/cooldown with activityCount == plannedStepCount == FIT lap count and no Open/Extra tail",
@@ -234,7 +346,7 @@ def build_scorecard() -> dict[str, Any]:
                     and not has_open_tail(row)
                     and not material_shift(row)
                 ),
-                "blockedReason": "needs label mapping proof for Warmup, Work, and Cooldown",
+                "blockedReason": "row-level FIT extraction is available; still needs label/tail rule approval for Warmup, Work, and Cooldown",
             },
         ],
         "blockedSubclasses": [
@@ -242,14 +354,14 @@ def build_scorecard() -> dict[str, Any]:
             "structured_interval_work_recovery_mapping",
             "warmup_work_cooldown_label_mapping",
             "warmup_work_cooldown_open_or_extra_tail_after_cooldown",
-            "any_gate_b_case_without_row_level_fit_label_error_extraction",
+            "any_gate_b_case_without_row_level_fit_label_error_review",
         ],
         "gateBDecision": {
             "supportsAnyFuturePrototype": True,
             "futurePrototypeScope": "debug-only Gate B scorer/prototype may be useful for class-specific validation",
             "approvesProductionPromotion": False,
             "approvesSwiftPrototypeNow": False,
-            "reason": "Counts align strongly, but row-level FIT label/error extraction is not available yet for Gate B.",
+            "reason": "Counts align strongly, and row-level FIT label/error extraction is now available for review, but Gate B still needs exact-shape rules before production promotion.",
         },
         "materialRows": [compact_row(row) for row in material_rows],
         "workouts": [compact_row(row) for row in rows],
@@ -275,7 +387,7 @@ def write_markdown(scorecard: dict[str, Any]) -> None:
         "",
         "## Executive Summary",
         "",
-        "Gate B remains blocked for production and for Swift implementation. FIT matching shows strong count alignment for structured intervals and warmup/work/cooldown specials, but the current FIT rollup does not yet extract full row-level label/error evidence for custom multi-step workouts.",
+        "Gate B remains blocked for production and for Swift implementation. FIT matching shows strong count alignment for structured intervals and warmup/work/cooldown specials, and row-level FIT label/error evidence is now available for review, but exact-shape label, tail, and fallback rules are still required.",
         "",
         "FIT remains an offline validation oracle only. HealthKit/WorkoutKit remains the runtime source.",
         "",
@@ -304,7 +416,7 @@ def write_markdown(scorecard: dict[str, Any]) -> None:
                     structured["fitWorkoutStepPlannedCountAlignment"],
                     structured["equivalentCount"],
                     structured["inconclusiveCount"],
-                    "Blocked pending row-level FIT labels/errors",
+                    "Blocked pending exact-shape rules",
                 ],
                 [
                     "Warmup/work/cooldown",
@@ -377,11 +489,19 @@ def write_markdown(scorecard: dict[str, Any]) -> None:
         "",
         *[f"- `{item}`" for item in scorecard["blockedSubclasses"]],
         "",
+        "## Row-Level FIT Evidence",
+        "",
+        f"- Source: {scorecard['rowLevelFitEvidence'].get('source')}",
+        f"- Available workouts: {scorecard['rowLevelFitEvidence'].get('workoutCount')}",
+        f"- Structured rows with row-level evidence: {scorecard['structuredIntervalFindings'].get('rowLevelEvidenceAvailableCount')} / {scorecard['structuredIntervalFindings'].get('total')}",
+        f"- Warmup/work/cooldown rows with row-level evidence: {scorecard['warmupWorkCooldownFindings'].get('rowLevelEvidenceAvailableCount')} / {scorecard['warmupWorkCooldownFindings'].get('total')}",
+        "- JSON `rowLevelEvidenceSamples` exposes label agreement, elapsed/time error, distance error, FIT lap vs workout_step relationship, fallback reason, and tail ambiguity for each Gate B workout.",
+        "",
         "## Recommendation",
         "",
         "- Do not approve Gate B production promotion.",
         "- Do not implement a Gate B Swift prototype yet.",
-        "- Next Gate B work should extract row-level FIT lap labels/timing/distance and compare them to current and candidate rows.",
+        "- Row-level FIT lap labels/timing/distance are now available in the linked boundary scorecard; next Gate B work should approve or reject exact shapes from that evidence.",
         "- Gate A must remain separate and must not approve structured or warmup/work/cooldown workouts.",
     ]
     MARKDOWN_REPORT.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -393,7 +513,7 @@ def main() -> int:
     write_markdown(scorecard)
     print(f"Wrote {JSON_REPORT.name}")
     print(f"Wrote {MARKDOWN_REPORT.name}")
-    print("Gate B remains blocked pending row-level FIT label/error extraction.")
+    print("Gate B remains blocked pending exact-shape label/tail/fallback rules.")
     return 0
 
 

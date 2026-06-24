@@ -4,7 +4,7 @@ Generated: 2026-06-13T01:48:47Z
 
 ## Executive Summary
 
-Gate B remains blocked for production and for Swift implementation. FIT matching shows strong count alignment for structured intervals and warmup/work/cooldown specials, but the current FIT rollup does not yet extract full row-level label/error evidence for custom multi-step workouts.
+Gate B remains blocked for production and for Swift implementation. FIT matching shows strong count alignment for structured intervals and warmup/work/cooldown specials, and row-level FIT label/error evidence is now available for review, but exact-shape label, tail, and fallback rules are still required.
 
 FIT remains an offline validation oracle only. HealthKit/WorkoutKit remains the runtime source.
 
@@ -12,7 +12,7 @@ FIT remains an offline validation oracle only. HealthKit/WorkoutKit remains the 
 
 | Class | Total | FIT matched | activity==planned | FIT lap==activity | FIT step==planned | Equivalent | Inconclusive | Decision |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| Structured interval | 20 | 20 | 20 | 20 | 2 | 18 | 2 | Blocked pending row-level FIT labels/errors |
+| Structured interval | 20 | 20 | 20 | 20 | 2 | 18 | 2 | Blocked pending exact-shape rules |
 | Warmup/work/cooldown | 5 | 5 | 5 | 5 | 5 | 3 | 2 | Blocked pending label/tail rules |
 
 ## Candidate vs Current
@@ -50,8 +50,8 @@ None approved yet.
 
 | Shape | Count | Blocked reason |
 | --- | ---: | --- |
-| structured intervals with activityCount == plannedStepCount == FIT lap count and no material current/candidate shift | 18 | needs row-level FIT label/error extraction and repeat-block label rules |
-| three-step warmup/work/cooldown with activityCount == plannedStepCount == FIT lap count and no Open/Extra tail | 3 | needs label mapping proof for Warmup, Work, and Cooldown |
+| structured intervals with activityCount == plannedStepCount == FIT lap count and no material current/candidate shift | 18 | row-level FIT extraction is available; still needs repeat-block label rules |
+| three-step warmup/work/cooldown with activityCount == plannedStepCount == FIT lap count and no Open/Extra tail | 3 | row-level FIT extraction is available; still needs label/tail rule approval for Warmup, Work, and Cooldown |
 
 ## Blocked Subclasses
 
@@ -59,11 +59,19 @@ None approved yet.
 - `structured_interval_work_recovery_mapping`
 - `warmup_work_cooldown_label_mapping`
 - `warmup_work_cooldown_open_or_extra_tail_after_cooldown`
-- `any_gate_b_case_without_row_level_fit_label_error_extraction`
+- `any_gate_b_case_without_row_level_fit_label_error_review`
+
+## Row-Level FIT Evidence
+
+- Source: gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json
+- Available workouts: 25
+- Structured rows with row-level evidence: 20 / 20
+- Warmup/work/cooldown rows with row-level evidence: 5 / 5
+- JSON `rowLevelEvidenceSamples` exposes label agreement, elapsed/time error, distance error, FIT lap vs workout_step relationship, fallback reason, and tail ambiguity for each Gate B workout.
 
 ## Recommendation
 
 - Do not approve Gate B production promotion.
 - Do not implement a Gate B Swift prototype yet.
-- Next Gate B work should extract row-level FIT lap labels/timing/distance and compare them to current and candidate rows.
+- Row-level FIT lap labels/timing/distance are now available in the linked boundary scorecard; next Gate B work should approve or reject exact shapes from that evidence.
 - Gate A must remain separate and must not approve structured or warmup/work/cooldown workouts.

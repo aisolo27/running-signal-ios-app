@@ -3,7 +3,4851 @@
   "source": "fit-reference-rollup-2026-03-to-2026-06.json",
   "runtimeSource": "HealthKit/WorkoutKit",
   "validationOracle": "FIT offline reference",
+  "rowLevelFitEvidence": {
+    "available": true,
+    "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+    "generatedAt": "2026-06-13T12:01:10.116166Z",
+    "workoutCount": 25,
+    "answers": {
+      "warmupWorkCooldownCurrentlyReconstructedCorrectly": "partially; no-tail three-step warmup/work/cooldown rows have row-level support, but fixed cooldown plus Open / Extra tail remains rule-blocked",
+      "structuredIntervalsCurrentlyReconstructedCorrectly": "partially; row timings/distances are close in many cases, but repeat-block expansion and tail rules block broad approval",
+      "doesHKWorkoutActivityImproveGateBOrOnlyGateA": "HKWorkoutActivity strongly improves Gate A; for Gate B it is often equivalent to current rows and does not remove repeat/tail/label rule work",
+      "doesCurrentReconstructionAlreadyWorkForSomeShapes": "yes, especially no-tail warmup/work/cooldown and many planned structured rows, but only within the exact row-level evidence represented here",
+      "safeCustomWorkoutSubclasses": [
+        "future prototype candidate only: 2 three-step warmup/work/cooldown rows where every planned row is within 5 s and 10 m of FIT laps"
+      ],
+      "blockedCustomWorkoutSubclasses": [
+        "structured interval repeat-block workouts where FIT workout_step rows are unexpanded",
+        "structured intervals with Open / Extra tail after planned rows",
+        "warmup/work/cooldown workouts with fixed cooldown followed by Open / Extra tail",
+        "any custom workout whose row labels or row errors exceed Gate B tolerances"
+      ],
+      "labelMappingRulesNeeded": [
+        "map rows from expanded WorkoutKit planned step order",
+        "preserve Warmup, numbered Work, numbered Recovery, and Cooldown labels",
+        "use Open / Extra only after planned fixed steps are exhausted"
+      ],
+      "repeatBlockRulesNeeded": [
+        "treat FIT workout_step rows as unexpanded plan evidence",
+        "compare FIT lap rows against expanded WorkoutKit planned rows",
+        "do not approve repeat-block classes from count alignment alone"
+      ],
+      "openExtraTailRulesNeeded": [
+        "if a final Cooldown goal is open, keep Cooldown through workout end",
+        "if a fixed Cooldown completes and running continues, classify the remainder as Open / Extra",
+        "score Open / Extra against FIT session-minus-lap tail when FIT has no explicit tail lap"
+      ],
+      "nextBeforeSwiftImplementation": [
+        "keep Gate B docs/debug-only",
+        "review row-level scorecard outliers by exact workout shape",
+        "do not implement Gate A or Gate B Swift prototype from this Gate B pass"
+      ]
+    }
+  },
   "fitRuntimeUseAllowed": false,
+  "rowLevelEvidenceSamples": [
+    {
+      "workoutID": "A631421F-D5AA-4E86-8DB3-6167ED4B0FC7",
+      "startDate": "2026-03-03T13:39:37Z",
+      "classification": "structured interval workout",
+      "goal": "60 s",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 18,
+        "fitWorkoutStepRows": 5,
+        "plannedRows": 18,
+        "currentRows": 18,
+        "candidateRows": 18,
+        "fallbackReason": "repeat_block_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 18,
+          "fitWorkoutStepRows": 5,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": true
+        },
+        "currentVsFITLaps": {
+          "rowCount": 18,
+          "labelAgreementRows": 18,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 7.5,
+          "maxAbsDistanceErrorMeters": 10.5,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -7.5,
+              "distanceErrorMeters": 2.1
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.5,
+              "distanceErrorMeters": -3.3
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 5.5
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -5.5
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.2
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -6.7
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.3
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -7.8
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.8
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Work 5",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -6.2
+            },
+            {
+              "rowIndex": 11,
+              "rowLabel": "Recovery 5",
+              "fitLapIndex": 11,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 5.5
+            },
+            {
+              "rowIndex": 12,
+              "rowLabel": "Work 6",
+              "fitLapIndex": 12,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -6.0
+            },
+            {
+              "rowIndex": 13,
+              "rowLabel": "Recovery 6",
+              "fitLapIndex": 13,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 3.8
+            },
+            {
+              "rowIndex": 14,
+              "rowLabel": "Work 7",
+              "fitLapIndex": 14,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -3.8
+            },
+            {
+              "rowIndex": 15,
+              "rowLabel": "Recovery 7",
+              "fitLapIndex": 15,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 8.6
+            },
+            {
+              "rowIndex": 16,
+              "rowLabel": "Work 8",
+              "fitLapIndex": 16,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -9.4
+            },
+            {
+              "rowIndex": 17,
+              "rowLabel": "Recovery 8",
+              "fitLapIndex": 17,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.8
+            },
+            {
+              "rowIndex": 18,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 18,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 7.0,
+              "distanceErrorMeters": 10.5
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 18,
+          "labelAgreementRows": 18,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 0.0,
+          "maxAbsDistanceErrorMeters": 15.3,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 15.3
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Work 5",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 11,
+              "rowLabel": "Recovery 5",
+              "fitLapIndex": 11,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 12,
+              "rowLabel": "Work 6",
+              "fitLapIndex": 12,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 13,
+              "rowLabel": "Recovery 6",
+              "fitLapIndex": 13,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 14,
+              "rowLabel": "Work 7",
+              "fitLapIndex": 14,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 15,
+              "rowLabel": "Recovery 7",
+              "fitLapIndex": 15,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 16,
+              "rowLabel": "Work 8",
+              "fitLapIndex": 16,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 17,
+              "rowLabel": "Recovery 8",
+              "fitLapIndex": 17,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 18,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 18,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "F43BA3E4-19FF-4071-B3AD-8631967A7BD3",
+      "startDate": "2026-03-05T14:37:43Z",
+      "classification": "warmup/work/cooldown special",
+      "goal": "900 s",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 3,
+        "fitWorkoutStepRows": 3,
+        "plannedRows": 3,
+        "currentRows": 3,
+        "candidateRows": 3,
+        "fallbackReason": "candidate_row_level_supported",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 3,
+          "fitWorkoutStepRows": 3,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": false
+        },
+        "currentVsFITLaps": {
+          "rowCount": 3,
+          "labelAgreementRows": 3,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 3.2,
+          "maxAbsDistanceErrorMeters": 6.0,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -3.2,
+              "distanceErrorMeters": 6.0
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.8,
+              "distanceErrorMeters": 2.1
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 2.3,
+              "distanceErrorMeters": -0.6
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 3,
+          "labelAgreementRows": 3,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 0.0,
+          "maxAbsDistanceErrorMeters": 7.5,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.5
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "BFD992B2-C866-4E2E-A5A9-FCFC0BF9F0BE",
+      "startDate": "2026-03-10T13:49:08Z",
+      "classification": "structured interval workout",
+      "goal": "1 km",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 13,
+        "fitWorkoutStepRows": 6,
+        "plannedRows": 13,
+        "currentRows": 13,
+        "candidateRows": 13,
+        "fallbackReason": "repeat_block_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 13,
+          "fitWorkoutStepRows": 6,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": true
+        },
+        "currentVsFITLaps": {
+          "rowCount": 13,
+          "labelAgreementRows": 13,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 141.9,
+          "maxAbsDistanceErrorMeters": 21.8,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.1,
+              "distanceErrorMeters": 5.6
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.1,
+              "distanceErrorMeters": -0.4
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.4,
+              "distanceErrorMeters": 9.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.7,
+              "distanceErrorMeters": 4.7
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.8,
+              "distanceErrorMeters": 2.0
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.6,
+              "distanceErrorMeters": 0.4
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.2,
+              "distanceErrorMeters": 7.5
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.1,
+              "distanceErrorMeters": 0.3
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 2.1,
+              "distanceErrorMeters": 3.6
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.8,
+              "distanceErrorMeters": -21.8
+            },
+            {
+              "rowIndex": 11,
+              "rowLabel": "Work 5",
+              "fitLapIndex": 11,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 141.9,
+              "distanceErrorMeters": 3.7
+            },
+            {
+              "rowIndex": 12,
+              "rowLabel": "Recovery 5",
+              "fitLapIndex": 12,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.3
+            },
+            {
+              "rowIndex": 13,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 13,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 6.2,
+              "distanceErrorMeters": 4.8
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 13,
+          "labelAgreementRows": 13,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 151.3,
+          "maxAbsDistanceErrorMeters": 7.3,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.2
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.3
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.3
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.3
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 3.8
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 151.3,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 11,
+              "rowLabel": "Work 5",
+              "fitLapIndex": 11,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 3.9
+            },
+            {
+              "rowIndex": 12,
+              "rowLabel": "Recovery 5",
+              "fitLapIndex": 12,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 13,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 13,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "1A7502AE-CF69-4680-8D8C-CE636D70FAEA",
+      "startDate": "2026-03-12T13:41:02Z",
+      "classification": "structured interval workout",
+      "goal": "600 s",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 8,
+        "fitWorkoutStepRows": 5,
+        "plannedRows": 8,
+        "currentRows": 8,
+        "candidateRows": 8,
+        "fallbackReason": "repeat_block_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 8,
+          "fitWorkoutStepRows": 5,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": true
+        },
+        "currentVsFITLaps": {
+          "rowCount": 8,
+          "labelAgreementRows": 8,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 3.5,
+          "maxAbsDistanceErrorMeters": 5.4,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -3.5,
+              "distanceErrorMeters": 5.4
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.5,
+              "distanceErrorMeters": 0.8
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.6
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -0.5
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.1
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.1
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.6
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 3.0,
+              "distanceErrorMeters": 0.4
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 8,
+          "labelAgreementRows": 8,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 0.0,
+          "maxAbsDistanceErrorMeters": 7.6,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.6
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "5BFAB7FE-171E-43C0-9433-C8D39D2B6B7C",
+      "startDate": "2026-03-17T12:29:37Z",
+      "classification": "structured interval workout",
+      "goal": "400 m",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 18,
+        "fitWorkoutStepRows": 5,
+        "plannedRows": 18,
+        "currentRows": 18,
+        "candidateRows": 18,
+        "fallbackReason": "repeat_block_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 18,
+          "fitWorkoutStepRows": 5,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": true
+        },
+        "currentVsFITLaps": {
+          "rowCount": 18,
+          "labelAgreementRows": 18,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 5.3,
+          "maxAbsDistanceErrorMeters": 15.3,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -5.3,
+              "distanceErrorMeters": 0.6
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.8,
+              "distanceErrorMeters": 6.9
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 1.2,
+              "distanceErrorMeters": 2.8
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.6,
+              "distanceErrorMeters": 2.5
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.6,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.2,
+              "distanceErrorMeters": 2.0
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.6,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.3,
+              "distanceErrorMeters": 2.4
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Work 5",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.8,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 11,
+              "rowLabel": "Recovery 5",
+              "fitLapIndex": 11,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 1.0,
+              "distanceErrorMeters": 4.8
+            },
+            {
+              "rowIndex": 12,
+              "rowLabel": "Work 6",
+              "fitLapIndex": 12,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -1.4,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 13,
+              "rowLabel": "Recovery 6",
+              "fitLapIndex": 13,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.1,
+              "distanceErrorMeters": 4.0
+            },
+            {
+              "rowIndex": 14,
+              "rowLabel": "Work 7",
+              "fitLapIndex": 14,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 3.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 15,
+              "rowLabel": "Recovery 7",
+              "fitLapIndex": 15,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.2,
+              "distanceErrorMeters": -0.6
+            },
+            {
+              "rowIndex": 16,
+              "rowLabel": "Work 8",
+              "fitLapIndex": 16,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 1.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 17,
+              "rowLabel": "Recovery 8",
+              "fitLapIndex": 17,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.3,
+              "distanceErrorMeters": 6.1
+            },
+            {
+              "rowIndex": 18,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 18,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.1,
+              "distanceErrorMeters": -15.3
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 18,
+          "labelAgreementRows": 18,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 0.0,
+          "maxAbsDistanceErrorMeters": 9.4,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 8.4
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 2.1
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 2.4
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 3.4
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 2.8
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Work 5",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 4.0
+            },
+            {
+              "rowIndex": 11,
+              "rowLabel": "Recovery 5",
+              "fitLapIndex": 11,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 12,
+              "rowLabel": "Work 6",
+              "fitLapIndex": 12,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.6
+            },
+            {
+              "rowIndex": 13,
+              "rowLabel": "Recovery 6",
+              "fitLapIndex": 13,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 14,
+              "rowLabel": "Work 7",
+              "fitLapIndex": 14,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -9.4
+            },
+            {
+              "rowIndex": 15,
+              "rowLabel": "Recovery 7",
+              "fitLapIndex": 15,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 16,
+              "rowLabel": "Work 8",
+              "fitLapIndex": 16,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -4.3
+            },
+            {
+              "rowIndex": 17,
+              "rowLabel": "Recovery 8",
+              "fitLapIndex": 17,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 18,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 18,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "A1C01AA7-2955-4759-93E3-289691D204A6",
+      "startDate": "2026-03-19T16:51:00Z",
+      "classification": "warmup/work/cooldown special",
+      "goal": "1500 s",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 3,
+        "fitWorkoutStepRows": 3,
+        "plannedRows": 3,
+        "currentRows": 3,
+        "candidateRows": 3,
+        "fallbackReason": "row_level_inconclusive",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 3,
+          "fitWorkoutStepRows": 3,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": false
+        },
+        "currentVsFITLaps": {
+          "rowCount": 3,
+          "labelAgreementRows": 3,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 5.6,
+          "maxAbsDistanceErrorMeters": 19.5,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 5.3,
+              "distanceErrorMeters": 1.1
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.3,
+              "distanceErrorMeters": -5.5
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -5.6,
+              "distanceErrorMeters": -19.5
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 3,
+          "labelAgreementRows": 3,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 0.0,
+          "maxAbsDistanceErrorMeters": 24.0,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -24.0
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "CFD67D1B-41E8-44F6-ABB3-80CE5793099F",
+      "startDate": "2026-03-25T14:47:56Z",
+      "classification": "structured interval workout",
+      "goal": "600 m",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 14,
+        "fitWorkoutStepRows": 5,
+        "plannedRows": 14,
+        "currentRows": 14,
+        "candidateRows": 14,
+        "fallbackReason": "repeat_block_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 14,
+          "fitWorkoutStepRows": 5,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": true
+        },
+        "currentVsFITLaps": {
+          "rowCount": 14,
+          "labelAgreementRows": 14,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 3.8,
+          "maxAbsDistanceErrorMeters": 9.6,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -3.8,
+              "distanceErrorMeters": 4.4
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 2.0,
+              "distanceErrorMeters": 7.5
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.5,
+              "distanceErrorMeters": 0.2
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -1.1,
+              "distanceErrorMeters": 2.0
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 1.0,
+              "distanceErrorMeters": 2.0
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.1,
+              "distanceErrorMeters": 9.6
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.5,
+              "distanceErrorMeters": -1.2
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -1.7,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.2,
+              "distanceErrorMeters": 0.1
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Work 5",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.3,
+              "distanceErrorMeters": 6.0
+            },
+            {
+              "rowIndex": 11,
+              "rowLabel": "Recovery 5",
+              "fitLapIndex": 11,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.9,
+              "distanceErrorMeters": 2.6
+            },
+            {
+              "rowIndex": 12,
+              "rowLabel": "Work 6",
+              "fitLapIndex": 12,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -2.1,
+              "distanceErrorMeters": 4.5
+            },
+            {
+              "rowIndex": 13,
+              "rowLabel": "Recovery 6",
+              "fitLapIndex": 13,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.9,
+              "distanceErrorMeters": 5.5
+            },
+            {
+              "rowIndex": 14,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 14,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 3.0,
+              "distanceErrorMeters": 0.7
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 14,
+          "labelAgreementRows": 14,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 0.0,
+          "maxAbsDistanceErrorMeters": 13.0,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.7
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 1.8
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 4.1
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.0
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 3.7
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Work 5",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.6
+            },
+            {
+              "rowIndex": 11,
+              "rowLabel": "Recovery 5",
+              "fitLapIndex": 11,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 12,
+              "rowLabel": "Work 6",
+              "fitLapIndex": 12,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 13.0
+            },
+            {
+              "rowIndex": 13,
+              "rowLabel": "Recovery 6",
+              "fitLapIndex": 13,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 14,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 14,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "1594F1C9-A897-4C5C-8B61-3013BFBE570B",
+      "startDate": "2026-03-27T12:59:26Z",
+      "classification": "structured interval workout",
+      "goal": "1 km",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 8,
+        "fitWorkoutStepRows": 5,
+        "plannedRows": 8,
+        "currentRows": 8,
+        "candidateRows": 8,
+        "fallbackReason": "repeat_block_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 8,
+          "fitWorkoutStepRows": 5,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": true
+        },
+        "currentVsFITLaps": {
+          "rowCount": 8,
+          "labelAgreementRows": 8,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 3.5,
+          "maxAbsDistanceErrorMeters": 5.2,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -1.1,
+              "distanceErrorMeters": 5.2
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.7,
+              "distanceErrorMeters": 4.0
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.5,
+              "distanceErrorMeters": -0.7
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -1.3,
+              "distanceErrorMeters": 1.9
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.1,
+              "distanceErrorMeters": 0.2
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -1.3,
+              "distanceErrorMeters": 3.5
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.5,
+              "distanceErrorMeters": 3.4
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 3.5,
+              "distanceErrorMeters": 2.1
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 8,
+          "labelAgreementRows": 8,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 0.0,
+          "maxAbsDistanceErrorMeters": 9.0,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.8
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 4.4
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 4.5
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 9.0
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "EEF8B26E-093E-44D0-AFD7-FFEC318390F2",
+      "startDate": "2026-03-31T15:26:28Z",
+      "classification": "structured interval workout",
+      "goal": "400 m",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 10,
+        "fitWorkoutStepRows": 5,
+        "plannedRows": 10,
+        "currentRows": 10,
+        "candidateRows": 10,
+        "fallbackReason": "repeat_block_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 10,
+          "fitWorkoutStepRows": 5,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": true
+        },
+        "currentVsFITLaps": {
+          "rowCount": 10,
+          "labelAgreementRows": 10,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 1.5,
+          "maxAbsDistanceErrorMeters": 6.4,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -1.1,
+              "distanceErrorMeters": 6.4
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.4,
+              "distanceErrorMeters": 3.3
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.9,
+              "distanceErrorMeters": 2.6
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -1.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.8,
+              "distanceErrorMeters": 2.2
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -1.3,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.9,
+              "distanceErrorMeters": 1.8
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.4,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.3,
+              "distanceErrorMeters": -1.6
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 1.5,
+              "distanceErrorMeters": -1.4
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 10,
+          "labelAgreementRows": 10,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 0.0,
+          "maxAbsDistanceErrorMeters": 8.0,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 8.0
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 3.5
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 3.9
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 3.1
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.3
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "AE8AF4B2-FB7E-4D9C-92FD-D3BA9AE6E88F",
+      "startDate": "2026-04-12T16:01:33Z",
+      "classification": "structured interval workout",
+      "goal": "2.50 km",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 2,
+        "fitWorkoutStepRows": 2,
+        "plannedRows": 2,
+        "currentRows": 3,
+        "candidateRows": 3,
+        "fallbackReason": "open_tail_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 2,
+          "fitWorkoutStepRows": 2,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": false
+        },
+        "currentVsFITLaps": {
+          "rowCount": 2,
+          "labelAgreementRows": 2,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 4.1,
+          "maxAbsDistanceErrorMeters": 5.6,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -4.1,
+              "distanceErrorMeters": 4.1
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 1.9,
+              "distanceErrorMeters": 5.6
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 2,
+          "labelAgreementRows": 2,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 0.0,
+          "maxAbsDistanceErrorMeters": 8.7,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 8.7
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "0335DE40-44C5-48AC-9A05-F32314713DE1",
+      "startDate": "2026-04-22T11:39:58Z",
+      "classification": "structured interval workout",
+      "goal": "800 m",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 12,
+        "fitWorkoutStepRows": 5,
+        "plannedRows": 12,
+        "currentRows": 12,
+        "candidateRows": 12,
+        "fallbackReason": "repeat_block_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 12,
+          "fitWorkoutStepRows": 5,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": true
+        },
+        "currentVsFITLaps": {
+          "rowCount": 12,
+          "labelAgreementRows": 12,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 88.1,
+          "maxAbsDistanceErrorMeters": 47.0,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -3.8,
+              "distanceErrorMeters": 4.4
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.7,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.6,
+              "distanceErrorMeters": 7.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.2,
+              "distanceErrorMeters": 6.1
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.1,
+              "distanceErrorMeters": 3.2
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 3.4
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.1,
+              "distanceErrorMeters": -47.0
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 88.1,
+              "distanceErrorMeters": 7.3
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.2,
+              "distanceErrorMeters": 14.4
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Work 5",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 80.5,
+              "distanceErrorMeters": 3.6
+            },
+            {
+              "rowIndex": 11,
+              "rowLabel": "Recovery 5",
+              "fitLapIndex": 11,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.5,
+              "distanceErrorMeters": 25.3
+            },
+            {
+              "rowIndex": 12,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 12,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 12.4,
+              "distanceErrorMeters": 14.5
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 12,
+          "labelAgreementRows": 12,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 99.8,
+          "maxAbsDistanceErrorMeters": 8.1,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.6
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.0
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 8.1
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.8
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 99.8,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.3
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 78.3,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Work 5",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.1
+            },
+            {
+              "rowIndex": 11,
+              "rowLabel": "Recovery 5",
+              "fitLapIndex": 11,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 12,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 12,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "BE962B2D-5081-4AC1-888D-F5502B6CDBEA",
+      "startDate": "2026-04-24T12:02:30Z",
+      "classification": "warmup/work/cooldown special",
+      "goal": "4 km",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 3,
+        "fitWorkoutStepRows": 3,
+        "plannedRows": 3,
+        "currentRows": 3,
+        "candidateRows": 3,
+        "fallbackReason": "candidate_row_level_supported",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 3,
+          "fitWorkoutStepRows": 3,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": false
+        },
+        "currentVsFITLaps": {
+          "rowCount": 3,
+          "labelAgreementRows": 3,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 5.0,
+          "maxAbsDistanceErrorMeters": 8.4,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -5.0,
+              "distanceErrorMeters": 1.1
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 2.1,
+              "distanceErrorMeters": 8.4
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 3.0,
+              "distanceErrorMeters": 1.4
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 3,
+          "labelAgreementRows": 3,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 0.0,
+          "maxAbsDistanceErrorMeters": 6.7,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.7
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 4.2
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "9DF73D06-448A-4384-A27C-E3B34B2CD592",
+      "startDate": "2026-04-29T11:49:02Z",
+      "classification": "structured interval workout",
+      "goal": "800 m",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 12,
+        "fitWorkoutStepRows": 5,
+        "plannedRows": 12,
+        "currentRows": 12,
+        "candidateRows": 12,
+        "fallbackReason": "repeat_block_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 12,
+          "fitWorkoutStepRows": 5,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": true
+        },
+        "currentVsFITLaps": {
+          "rowCount": 12,
+          "labelAgreementRows": 12,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 108.4,
+          "maxAbsDistanceErrorMeters": 63.0,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -3.0,
+              "distanceErrorMeters": 6.5
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 1.0,
+              "distanceErrorMeters": 7.3
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.3,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.3,
+              "distanceErrorMeters": 5.5
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.4,
+              "distanceErrorMeters": 1.3
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 1.4,
+              "distanceErrorMeters": 9.2
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.9,
+              "distanceErrorMeters": -63.0
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 46.4,
+              "distanceErrorMeters": 4.8
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 1.0,
+              "distanceErrorMeters": -7.3
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Work 5",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 108.4,
+              "distanceErrorMeters": 6.4
+            },
+            {
+              "rowIndex": 11,
+              "rowLabel": "Recovery 5",
+              "fitLapIndex": 11,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.1,
+              "distanceErrorMeters": 42.4
+            },
+            {
+              "rowIndex": 12,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 12,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 16.3,
+              "distanceErrorMeters": 19.0
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 12,
+          "labelAgreementRows": 12,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 110.1,
+          "maxAbsDistanceErrorMeters": 7.6,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.6
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 3.8
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 5.3
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 4.1
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 62.9,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 4.9
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 110.1,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Work 5",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.2
+            },
+            {
+              "rowIndex": 11,
+              "rowLabel": "Recovery 5",
+              "fitLapIndex": 11,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -0.1
+            },
+            {
+              "rowIndex": 12,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 12,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "8BF85190-5583-47BF-A975-576D77980137",
+      "startDate": "2026-05-01T12:07:44Z",
+      "classification": "structured interval workout",
+      "goal": "5 km",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 4,
+        "fitWorkoutStepRows": 4,
+        "plannedRows": 4,
+        "currentRows": 5,
+        "candidateRows": 5,
+        "fallbackReason": "open_tail_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 4,
+          "fitWorkoutStepRows": 4,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": false
+        },
+        "currentVsFITLaps": {
+          "rowCount": 4,
+          "labelAgreementRows": 4,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 139.6,
+          "maxAbsDistanceErrorMeters": 5.6,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -2.1,
+              "distanceErrorMeters": 3.9
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.5,
+              "distanceErrorMeters": 0.6
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 139.6,
+              "distanceErrorMeters": 2.4
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 93.9,
+              "distanceErrorMeters": 5.6
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 4,
+          "labelAgreementRows": 4,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 141.0,
+          "maxAbsDistanceErrorMeters": 9.1,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 9.1
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 141.0,
+              "distanceErrorMeters": 5.7
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 91.8,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "2941455F-F0BE-444B-80FB-2054CA20D8B4",
+      "startDate": "2026-05-06T12:02:13Z",
+      "classification": "structured interval workout",
+      "goal": "1 km",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 14,
+        "fitWorkoutStepRows": 11,
+        "plannedRows": 14,
+        "currentRows": 14,
+        "candidateRows": 14,
+        "fallbackReason": "repeat_block_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 14,
+          "fitWorkoutStepRows": 11,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": true
+        },
+        "currentVsFITLaps": {
+          "rowCount": 14,
+          "labelAgreementRows": 14,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 122.5,
+          "maxAbsDistanceErrorMeters": 9.1,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 122.5,
+              "distanceErrorMeters": 4.1
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 1.4,
+              "distanceErrorMeters": 9.1
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.8,
+              "distanceErrorMeters": 2.4
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.5,
+              "distanceErrorMeters": 7.9
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -0.4
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.3,
+              "distanceErrorMeters": 1.6
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.6,
+              "distanceErrorMeters": 4.3
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.1,
+              "distanceErrorMeters": 2.6
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.6,
+              "distanceErrorMeters": 1.5
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.6,
+              "distanceErrorMeters": 7.1
+            },
+            {
+              "rowIndex": 11,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 11,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.9,
+              "distanceErrorMeters": 1.9
+            },
+            {
+              "rowIndex": 12,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 12,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.1,
+              "distanceErrorMeters": 7.4
+            },
+            {
+              "rowIndex": 13,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 13,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.1,
+              "distanceErrorMeters": -4.8
+            },
+            {
+              "rowIndex": 14,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 14,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.6,
+              "distanceErrorMeters": -6.8
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 14,
+          "labelAgreementRows": 14,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 126.4,
+          "maxAbsDistanceErrorMeters": 8.1,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 126.4,
+              "distanceErrorMeters": 7.8
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 5.0
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 4.0
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.3
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 8.1
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.2
+            },
+            {
+              "rowIndex": 11,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 11,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 12,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 12,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.4
+            },
+            {
+              "rowIndex": 13,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 13,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -0.1
+            },
+            {
+              "rowIndex": 14,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 14,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "C3CD1346-60D3-4F3A-9F7D-8A8ADBDBC68E",
+      "startDate": "2026-05-08T11:55:07Z",
+      "classification": "structured interval workout",
+      "goal": "2 km",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 6,
+        "fitWorkoutStepRows": 5,
+        "plannedRows": 6,
+        "currentRows": 6,
+        "candidateRows": 6,
+        "fallbackReason": "repeat_block_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 6,
+          "fitWorkoutStepRows": 5,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": true
+        },
+        "currentVsFITLaps": {
+          "rowCount": 6,
+          "labelAgreementRows": 6,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 3.6,
+          "maxAbsDistanceErrorMeters": 7.3,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -3.6,
+              "distanceErrorMeters": 4.8
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.8,
+              "distanceErrorMeters": 7.3
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.4
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.3,
+              "distanceErrorMeters": 7.2
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.4,
+              "distanceErrorMeters": 0.1
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 2.0,
+              "distanceErrorMeters": -0.2
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 6,
+          "labelAgreementRows": 6,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 0.0,
+          "maxAbsDistanceErrorMeters": 7.4,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.4
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 5.6
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.3
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "75C27BC6-E833-4BC4-B5A1-1DEDB1F0BC37",
+      "startDate": "2026-05-13T11:52:06Z",
+      "classification": "structured interval workout",
+      "goal": "400 m",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 18,
+        "fitWorkoutStepRows": 5,
+        "plannedRows": 18,
+        "currentRows": 18,
+        "candidateRows": 18,
+        "fallbackReason": "repeat_block_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 18,
+          "fitWorkoutStepRows": 5,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": true
+        },
+        "currentVsFITLaps": {
+          "rowCount": 18,
+          "labelAgreementRows": 18,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 35.6,
+          "maxAbsDistanceErrorMeters": 66.4,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -4.2,
+              "distanceErrorMeters": 3.2
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.4,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.6,
+              "distanceErrorMeters": 6.7
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.8,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.2,
+              "distanceErrorMeters": 6.7
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.4,
+              "distanceErrorMeters": 1.3
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.1,
+              "distanceErrorMeters": 3.8
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 3.1,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.8,
+              "distanceErrorMeters": 2.4
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Work 5",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -2.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 11,
+              "rowLabel": "Recovery 5",
+              "fitLapIndex": 11,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.2,
+              "distanceErrorMeters": 0.6
+            },
+            {
+              "rowIndex": 12,
+              "rowLabel": "Work 6",
+              "fitLapIndex": 12,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.6,
+              "distanceErrorMeters": 3.4
+            },
+            {
+              "rowIndex": 13,
+              "rowLabel": "Recovery 6",
+              "fitLapIndex": 13,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.7,
+              "distanceErrorMeters": 1.6
+            },
+            {
+              "rowIndex": 14,
+              "rowLabel": "Work 7",
+              "fitLapIndex": 14,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -1.4,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 15,
+              "rowLabel": "Recovery 7",
+              "fitLapIndex": 15,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.6,
+              "distanceErrorMeters": -66.4
+            },
+            {
+              "rowIndex": 16,
+              "rowLabel": "Work 8",
+              "fitLapIndex": 16,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 35.6,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 17,
+              "rowLabel": "Recovery 8",
+              "fitLapIndex": 17,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.5,
+              "distanceErrorMeters": 56.7
+            },
+            {
+              "rowIndex": 18,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 18,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 19.4,
+              "distanceErrorMeters": 20.6
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 18,
+          "labelAgreementRows": 18,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 52.6,
+          "maxAbsDistanceErrorMeters": 11.2,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.6
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.3
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 8.1
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.3
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -11.2
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Work 5",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.7
+            },
+            {
+              "rowIndex": 11,
+              "rowLabel": "Recovery 5",
+              "fitLapIndex": 11,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 12,
+              "rowLabel": "Work 6",
+              "fitLapIndex": 12,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.1,
+              "distanceErrorMeters": 4.9
+            },
+            {
+              "rowIndex": 13,
+              "rowLabel": "Recovery 6",
+              "fitLapIndex": 13,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 14,
+              "rowLabel": "Work 7",
+              "fitLapIndex": 14,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 4.7
+            },
+            {
+              "rowIndex": 15,
+              "rowLabel": "Recovery 7",
+              "fitLapIndex": 15,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 52.6,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 16,
+              "rowLabel": "Work 8",
+              "fitLapIndex": 16,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.0
+            },
+            {
+              "rowIndex": 17,
+              "rowLabel": "Recovery 8",
+              "fitLapIndex": 17,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 18,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 18,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "4947444A-1965-413A-ABC5-886041756F09",
+      "startDate": "2026-05-15T12:00:12Z",
+      "classification": "structured interval workout",
+      "goal": "1.60 km",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 8,
+        "fitWorkoutStepRows": 5,
+        "plannedRows": 8,
+        "currentRows": 8,
+        "candidateRows": 8,
+        "fallbackReason": "repeat_block_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 8,
+          "fitWorkoutStepRows": 5,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": true
+        },
+        "currentVsFITLaps": {
+          "rowCount": 8,
+          "labelAgreementRows": 8,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 5.5,
+          "maxAbsDistanceErrorMeters": 8.1,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -5.5,
+              "distanceErrorMeters": 0.4
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 2.3,
+              "distanceErrorMeters": 8.1
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.1,
+              "distanceErrorMeters": 1.4
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 4.3,
+              "distanceErrorMeters": 6.5
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.7,
+              "distanceErrorMeters": -2.3
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -2.6,
+              "distanceErrorMeters": 1.2
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.5,
+              "distanceErrorMeters": -2.9
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.3,
+              "distanceErrorMeters": -3.0
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 8,
+          "labelAgreementRows": 8,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 0.0,
+          "maxAbsDistanceErrorMeters": 9.8,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.5
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 4.2
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -9.8
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.4
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "7F742555-48CB-403A-8916-58661DA98555",
+      "startDate": "2026-05-20T11:43:00Z",
+      "classification": "structured interval workout",
+      "goal": "1 km",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 10,
+        "fitWorkoutStepRows": 5,
+        "plannedRows": 10,
+        "currentRows": 10,
+        "candidateRows": 10,
+        "fallbackReason": "repeat_block_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 10,
+          "fitWorkoutStepRows": 5,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": true
+        },
+        "currentVsFITLaps": {
+          "rowCount": 10,
+          "labelAgreementRows": 10,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 4.3,
+          "maxAbsDistanceErrorMeters": 8.2,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -4.3,
+              "distanceErrorMeters": 2.9
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 1.7,
+              "distanceErrorMeters": 7.1
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.9,
+              "distanceErrorMeters": 2.8
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.4,
+              "distanceErrorMeters": 6.8
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.1,
+              "distanceErrorMeters": -0.5
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -1.9,
+              "distanceErrorMeters": 3.3
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 1.0,
+              "distanceErrorMeters": 2.7
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.3,
+              "distanceErrorMeters": 8.2
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -0.5
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 2.3,
+              "distanceErrorMeters": -0.4
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 10,
+          "labelAgreementRows": 10,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 0.0,
+          "maxAbsDistanceErrorMeters": 8.7,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.9
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 2.2
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 5.6
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 8.2
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 8.7
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "A10FBDC7-042C-4FF7-AB20-A6C2A82B1651",
+      "startDate": "2026-05-22T11:55:11Z",
+      "classification": "structured interval workout",
+      "goal": "2.50 km",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 6,
+        "fitWorkoutStepRows": 5,
+        "plannedRows": 6,
+        "currentRows": 6,
+        "candidateRows": 6,
+        "fallbackReason": "repeat_block_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 6,
+          "fitWorkoutStepRows": 5,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": true
+        },
+        "currentVsFITLaps": {
+          "rowCount": 6,
+          "labelAgreementRows": 6,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 3.6,
+          "maxAbsDistanceErrorMeters": 6.1,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -3.6,
+              "distanceErrorMeters": 4.9
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.8,
+              "distanceErrorMeters": 6.1
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.5,
+              "distanceErrorMeters": 1.1
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 2.0,
+              "distanceErrorMeters": 4.7
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.2,
+              "distanceErrorMeters": -4.4
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -4.0
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 6,
+          "labelAgreementRows": 6,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 0.0,
+          "maxAbsDistanceErrorMeters": 7.2,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.2
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 4.4
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -3.2
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "B0DB0318-7B7F-4F4F-B583-7684D660FC29",
+      "startDate": "2026-05-27T11:45:47Z",
+      "classification": "structured interval workout",
+      "goal": "400 m",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 22,
+        "fitWorkoutStepRows": 5,
+        "plannedRows": 22,
+        "currentRows": 22,
+        "candidateRows": 22,
+        "fallbackReason": "repeat_block_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 22,
+          "fitWorkoutStepRows": 5,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": true
+        },
+        "currentVsFITLaps": {
+          "rowCount": 22,
+          "labelAgreementRows": 22,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 55.2,
+          "maxAbsDistanceErrorMeters": 22.4,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -3.4,
+              "distanceErrorMeters": 5.4
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.6,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.3,
+              "distanceErrorMeters": 9.5
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.8,
+              "distanceErrorMeters": 1.3
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.7,
+              "distanceErrorMeters": 5.3
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 1.4,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.6,
+              "distanceErrorMeters": 0.2
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -2.4,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.6,
+              "distanceErrorMeters": 5.2
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Work 5",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -1.3,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 11,
+              "rowLabel": "Recovery 5",
+              "fitLapIndex": 11,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.1,
+              "distanceErrorMeters": 8.3
+            },
+            {
+              "rowIndex": 12,
+              "rowLabel": "Work 6",
+              "fitLapIndex": 12,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.1,
+              "distanceErrorMeters": 3.0
+            },
+            {
+              "rowIndex": 13,
+              "rowLabel": "Recovery 6",
+              "fitLapIndex": 13,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.6,
+              "distanceErrorMeters": 8.3
+            },
+            {
+              "rowIndex": 14,
+              "rowLabel": "Work 7",
+              "fitLapIndex": 14,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.3,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 15,
+              "rowLabel": "Recovery 7",
+              "fitLapIndex": 15,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.8,
+              "distanceErrorMeters": 5.5
+            },
+            {
+              "rowIndex": 16,
+              "rowLabel": "Work 8",
+              "fitLapIndex": 16,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.9,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 17,
+              "rowLabel": "Recovery 8",
+              "fitLapIndex": 17,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.8,
+              "distanceErrorMeters": -22.4
+            },
+            {
+              "rowIndex": 18,
+              "rowLabel": "Work 9",
+              "fitLapIndex": 18,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 55.2,
+              "distanceErrorMeters": 3.0
+            },
+            {
+              "rowIndex": 19,
+              "rowLabel": "Recovery 9",
+              "fitLapIndex": 19,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.9,
+              "distanceErrorMeters": 20.3
+            },
+            {
+              "rowIndex": 20,
+              "rowLabel": "Work 10",
+              "fitLapIndex": 20,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 1.3,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 21,
+              "rowLabel": "Recovery 10",
+              "fitLapIndex": 21,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.8,
+              "distanceErrorMeters": 15.6
+            },
+            {
+              "rowIndex": 22,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 22,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 6.4,
+              "distanceErrorMeters": 3.7
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 22,
+          "labelAgreementRows": 22,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 60.8,
+          "maxAbsDistanceErrorMeters": 11.4,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 7.4
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 5.0
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 11.4
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -3.4
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 8.4
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Work 5",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 8.0
+            },
+            {
+              "rowIndex": 11,
+              "rowLabel": "Recovery 5",
+              "fitLapIndex": 11,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 12,
+              "rowLabel": "Work 6",
+              "fitLapIndex": 12,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 10.7
+            },
+            {
+              "rowIndex": 13,
+              "rowLabel": "Recovery 6",
+              "fitLapIndex": 13,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 14,
+              "rowLabel": "Work 7",
+              "fitLapIndex": 14,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.9
+            },
+            {
+              "rowIndex": 15,
+              "rowLabel": "Recovery 7",
+              "fitLapIndex": 15,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 16,
+              "rowLabel": "Work 8",
+              "fitLapIndex": 16,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.6
+            },
+            {
+              "rowIndex": 17,
+              "rowLabel": "Recovery 8",
+              "fitLapIndex": 17,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 60.8,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 18,
+              "rowLabel": "Work 9",
+              "fitLapIndex": 18,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -1.2
+            },
+            {
+              "rowIndex": 19,
+              "rowLabel": "Recovery 9",
+              "fitLapIndex": 19,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 20,
+              "rowLabel": "Work 10",
+              "fitLapIndex": 20,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 9.5
+            },
+            {
+              "rowIndex": 21,
+              "rowLabel": "Recovery 10",
+              "fitLapIndex": 21,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": -0.1
+            },
+            {
+              "rowIndex": 22,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 22,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "5243F1B1-AF84-4A91-A647-9EE742E5A329",
+      "startDate": "2026-05-29T11:49:28Z",
+      "classification": "warmup/work/cooldown special",
+      "goal": "3 km",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 3,
+        "fitWorkoutStepRows": 3,
+        "plannedRows": 3,
+        "currentRows": 3,
+        "candidateRows": 3,
+        "fallbackReason": "row_level_inconclusive",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 3,
+          "fitWorkoutStepRows": 3,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": false
+        },
+        "currentVsFITLaps": {
+          "rowCount": 3,
+          "labelAgreementRows": 3,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 161.1,
+          "maxAbsDistanceErrorMeters": 11.5,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -1.2,
+              "distanceErrorMeters": 11.5
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.9,
+              "distanceErrorMeters": 1.3
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 161.1,
+              "distanceErrorMeters": -1.1
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 3,
+          "labelAgreementRows": 3,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 158.9,
+          "maxAbsDistanceErrorMeters": 6.6,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 4.7
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.6
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 158.9,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "F6D47A51-9510-4C7A-9186-6BAFE3C128C9",
+      "startDate": "2026-06-03T11:45:08Z",
+      "classification": "structured interval workout",
+      "goal": "1 km",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 8,
+        "fitWorkoutStepRows": 5,
+        "plannedRows": 8,
+        "currentRows": 8,
+        "candidateRows": 8,
+        "fallbackReason": "repeat_block_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 8,
+          "fitWorkoutStepRows": 5,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": true
+        },
+        "currentVsFITLaps": {
+          "rowCount": 8,
+          "labelAgreementRows": 8,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 4.9,
+          "maxAbsDistanceErrorMeters": 8.6,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -4.9,
+              "distanceErrorMeters": 1.5
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.3,
+              "distanceErrorMeters": 1.9
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 1.0,
+              "distanceErrorMeters": 8.6
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 1.7
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.1,
+              "distanceErrorMeters": 2.9
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.5,
+              "distanceErrorMeters": 4.0
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.2,
+              "distanceErrorMeters": 2.0
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 2.9,
+              "distanceErrorMeters": 0.5
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 8,
+          "labelAgreementRows": 8,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 0.0,
+          "maxAbsDistanceErrorMeters": 8.6,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 8.6
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 5.1
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 5.2
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 3.9
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "9C09006E-9850-435C-95F5-A0AA0BE42A33",
+      "startDate": "2026-06-05T11:53:53Z",
+      "classification": "warmup/work/cooldown special",
+      "goal": "2 km",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 3,
+        "fitWorkoutStepRows": 3,
+        "plannedRows": 3,
+        "currentRows": 4,
+        "candidateRows": 4,
+        "fallbackReason": "open_tail_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 3,
+          "fitWorkoutStepRows": 3,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": false
+        },
+        "currentVsFITLaps": {
+          "rowCount": 3,
+          "labelAgreementRows": 3,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 3.9,
+          "maxAbsDistanceErrorMeters": 11.1,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -3.5,
+              "distanceErrorMeters": 5.5
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 1.4,
+              "distanceErrorMeters": 8.6
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 3.9,
+              "distanceErrorMeters": 11.1
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 3,
+          "labelAgreementRows": 3,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 0.0,
+          "maxAbsDistanceErrorMeters": 6.6,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.6
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 5.1
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "workoutID": "EDD82D4A-5683-4C60-A561-CED12D24DF0A",
+      "startDate": "2026-06-10T11:27:51Z",
+      "classification": "structured interval workout",
+      "goal": "400 m",
+      "rowLevelEvidence": {
+        "available": true,
+        "source": "gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.json",
+        "fitLapRows": 10,
+        "fitWorkoutStepRows": 5,
+        "plannedRows": 10,
+        "currentRows": 11,
+        "candidateRows": 11,
+        "fallbackReason": "open_tail_needs_rule",
+        "tailAmbiguity": null,
+        "fitLapVsWorkoutStepRelationship": {
+          "fitLapRows": 10,
+          "fitWorkoutStepRows": 5,
+          "matchesExpandedPlan": true,
+          "workoutStepsAreUnexpandedPlanEvidence": true
+        },
+        "currentVsFITLaps": {
+          "rowCount": 10,
+          "labelAgreementRows": 10,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 3.6,
+          "maxAbsDistanceErrorMeters": 8.4,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -3.6,
+              "distanceErrorMeters": 5.3
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.3,
+              "distanceErrorMeters": 2.6
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.9,
+              "distanceErrorMeters": 5.3
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -1.6,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.3,
+              "distanceErrorMeters": 6.6
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.8,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.8,
+              "distanceErrorMeters": 8.4
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": -0.2,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.7,
+              "distanceErrorMeters": 7.9
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 1.0,
+              "distanceErrorMeters": 1.3
+            }
+          ]
+        },
+        "candidateVsFITLaps": {
+          "rowCount": 10,
+          "labelAgreementRows": 10,
+          "labelDisagreementRows": 0,
+          "maxAbsTimeErrorSeconds": 0.0,
+          "maxAbsDistanceErrorMeters": 8.9,
+          "rows": [
+            {
+              "rowIndex": 1,
+              "rowLabel": "Warmup",
+              "fitLapIndex": 1,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 8.0
+            },
+            {
+              "rowIndex": 2,
+              "rowLabel": "Work 1",
+              "fitLapIndex": 2,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 5.7
+            },
+            {
+              "rowIndex": 3,
+              "rowLabel": "Recovery 1",
+              "fitLapIndex": 3,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 4,
+              "rowLabel": "Work 2",
+              "fitLapIndex": 4,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 8.9
+            },
+            {
+              "rowIndex": 5,
+              "rowLabel": "Recovery 2",
+              "fitLapIndex": 5,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 6,
+              "rowLabel": "Work 3",
+              "fitLapIndex": 6,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 8.8
+            },
+            {
+              "rowIndex": 7,
+              "rowLabel": "Recovery 3",
+              "fitLapIndex": 7,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 8,
+              "rowLabel": "Work 4",
+              "fitLapIndex": 8,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 6.5
+            },
+            {
+              "rowIndex": 9,
+              "rowLabel": "Recovery 4",
+              "fitLapIndex": 9,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            },
+            {
+              "rowIndex": 10,
+              "rowLabel": "Cooldown",
+              "fitLapIndex": 10,
+              "labelMatchesFITInference": true,
+              "timeErrorSeconds": 0.0,
+              "distanceErrorMeters": 0.0
+            }
+          ]
+        }
+      }
+    }
+  ],
   "productionBehaviorChanged": false,
   "swiftSourceChanged": false,
   "gateBTotal": 25,
@@ -65,7 +4909,8 @@
     "openExtraTailCount": 3,
     "repeatBlockNeedsRuleCount": 18,
     "labelMappingNeedsRuleCount": 20,
-    "decision": "blocked_pending_gate_b_row_level_fit_scoring"
+    "rowLevelEvidenceAvailableCount": 20,
+    "decision": "blocked_pending_exact_shape_rules"
   },
   "warmupWorkCooldownFindings": {
     "total": 5,
@@ -94,14 +4939,15 @@
     "openExtraTailCount": 1,
     "repeatBlockNeedsRuleCount": 0,
     "labelMappingNeedsRuleCount": 5,
-    "decision": "blocked_pending_gate_b_row_level_fit_scoring"
+    "rowLevelEvidenceAvailableCount": 5,
+    "decision": "blocked_pending_exact_shape_rules"
   },
   "comparisonSummary": {
     "candidateBetterCount": 0,
     "currentBetterCount": 0,
     "equivalentCount": 21,
     "inconclusiveCount": 4,
-    "reason": "Gate B rollup has count/tail/current-vs-candidate deltas, but not full row-level FIT label/error extraction."
+    "reason": "Gate B rollup is paired with the row-level FIT boundary scorecard for label, timing, distance, tail, and fallback review."
   },
   "openExtraTailFindings": {
     "totalWithOpenExtraTail": 4,
@@ -206,6 +5052,7 @@
   "labelMappingFindings": {
     "labelMappingNeedsRule": true,
     "rowsNeedingLabelMappingRule": 25,
+    "rowLevelEvidenceAvailableCount": 25,
     "ruleNeeded": "Map labels from WorkoutKit planned step order, including Warmup, Work, Recovery, Cooldown, Open, and Extra; do not infer production labels from FIT at runtime."
   },
   "safeSubclasses": [],
@@ -213,12 +5060,12 @@
     {
       "shape": "structured intervals with activityCount == plannedStepCount == FIT lap count and no material current/candidate shift",
       "count": 18,
-      "blockedReason": "needs row-level FIT label/error extraction and repeat-block label rules"
+      "blockedReason": "row-level FIT extraction is available; still needs repeat-block label rules"
     },
     {
       "shape": "three-step warmup/work/cooldown with activityCount == plannedStepCount == FIT lap count and no Open/Extra tail",
       "count": 3,
-      "blockedReason": "needs label mapping proof for Warmup, Work, and Cooldown"
+      "blockedReason": "row-level FIT extraction is available; still needs label/tail rule approval for Warmup, Work, and Cooldown"
     }
   ],
   "blockedSubclasses": [
@@ -226,14 +5073,14 @@
     "structured_interval_work_recovery_mapping",
     "warmup_work_cooldown_label_mapping",
     "warmup_work_cooldown_open_or_extra_tail_after_cooldown",
-    "any_gate_b_case_without_row_level_fit_label_error_extraction"
+    "any_gate_b_case_without_row_level_fit_label_error_review"
   ],
   "gateBDecision": {
     "supportsAnyFuturePrototype": true,
     "futurePrototypeScope": "debug-only Gate B scorer/prototype may be useful for class-specific validation",
     "approvesProductionPromotion": false,
     "approvesSwiftPrototypeNow": false,
-    "reason": "Counts align strongly, but row-level FIT label/error extraction is not available yet for Gate B."
+    "reason": "Counts align strongly, and row-level FIT label/error extraction is now available for review, but Gate B still needs exact-shape rules before production promotion."
   },
   "materialRows": [
     {
