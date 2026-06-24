@@ -498,9 +498,17 @@ public enum DiagnosticsExport {
         | Strategy | \(markdownCell(summary.strategyID)) |
         | Rule status | \(markdownCell(summary.ruleStatus)) |
         | Candidate row count | \(summary.candidateRowCount) |
+        | Planned expanded row count | \(summary.plannedExpandedRowCount) |
         | Open tail row count | \(summary.openTailRowCount) |
         | Paired pause count | \(summary.pairedPauseCount) |
         | Total paired pause | \(optionalSeconds(summary.totalPairedPauseSeconds)) |
+        | Fixed row exhaustion | \(markdownCell(summary.fixedRowExhaustionStatus)) |
+        | Tail status | \(markdownCell(summary.tailStatus)) |
+        | Tail duration | \(summary.tailElapsedDurationSeconds.map(optionalSeconds) ?? "Unavailable") |
+        | Tail distance | \(summary.tailDistanceMeters.map(optionalMeters) ?? "Unavailable") |
+        | Fallback reasons | \(markdownCell(summary.fallbackReasons.joined(separator: " "))) |
+        | Safety flags | \(markdownCell(summary.safetyFlags.joined(separator: " "))) |
+        | FIT validation | \(markdownCell(summary.fitValidationStatus)) |
         | Scoreable | \(summary.isScoreable ? "Yes" : "No") |
         | Not scoreable reason | \(markdownCell(summary.notScoreableReason ?? "n/a")) |
         | Production UI warning | \(markdownCell(summary.productionUIWarning)) |
@@ -521,10 +529,13 @@ public enum DiagnosticsExport {
                 "\(row.index)",
                 markdownCell(row.label),
                 markdownCell(row.mappingStatus),
+                row.startOffsetSeconds.map(optionalSeconds) ?? "Unavailable",
+                row.endOffsetSeconds.map(optionalSeconds) ?? "Unavailable",
                 row.elapsedDurationSeconds.map(optionalSeconds) ?? "Unavailable",
                 optionalSeconds(row.pauseOverlapSeconds),
                 row.activeDurationSeconds.map(optionalSeconds) ?? "Unavailable",
                 row.distanceMeters.map(optionalMeters) ?? "Unavailable",
+                markdownCell(row.durationDisplayRule),
                 markdownCell(row.durationRule),
                 markdownCell(row.candidateConfidence),
                 markdownCell(row.caveats.joined(separator: " "))
@@ -534,8 +545,8 @@ public enum DiagnosticsExport {
         return """
         \(summaryTable)
 
-        | Row | Label | Mapping | Elapsed | Pause overlap | Active time | Distance | Duration rule | Confidence | Caveats |
-        |---:|---|---|---:|---:|---:|---:|---|---|---|
+        | Row | Label | Mapping | Start offset | End offset | Elapsed | Pause overlap | Active time | Distance | Display rule | Duration rule | Confidence | Caveats |
+        |---:|---|---|---:|---:|---:|---:|---:|---:|---|---|---|---|
         \(rows)
 
         Caveats: \(summary.caveats.map(markdownCell).joined(separator: " · "))
@@ -1200,10 +1211,13 @@ public enum DiagnosticsExport {
                 label: row.label,
                 stepType: row.stepType,
                 mappingStatus: row.mappingStatus,
+                startOffsetSeconds: row.startOffsetSeconds,
+                endOffsetSeconds: row.endOffsetSeconds,
                 elapsedDurationSeconds: elapsedDuration,
                 pauseOverlapSeconds: pauseOverlap,
                 activeDurationSeconds: activeDuration,
                 distanceMeters: row.distanceMeters,
+                durationDisplayRule: durationRule,
                 durationRule: durationRule,
                 isOpenTail: isOpenTail,
                 candidateConfidence: row.candidateConfidence,
@@ -1213,15 +1227,43 @@ public enum DiagnosticsExport {
         }
 
         let openTailCount = rows.filter(\.isOpenTail).count
+        let openTailRow = rows.last(where: \.isOpenTail)
         let totalPairedPause = pairedPauses.map(\.durationSeconds).reduce(0, +)
         let isScoreable = activityCandidate.summary.isScoreable && !rows.isEmpty
+        let fixedRowExhaustionStatus: String
+        if rows.isEmpty {
+            fixedRowExhaustionStatus = "no-candidate-rows"
+        } else if openTailCount > 0 && activityCandidate.summary.isScoreable {
+            fixedRowExhaustionStatus = "fixed-rows-exhausted-before-tail"
+        } else if activityCandidate.summary.isScoreable {
+            fixedRowExhaustionStatus = "fixed-rows-mapped-no-tail"
+        } else {
+            fixedRowExhaustionStatus = "fixed-row-exhaustion-unresolved"
+        }
+        let tailStatus: String
+        if openTailCount > 0 {
+            tailStatus = "open-extra-tail-present"
+        } else if activityCandidate.summary.isScoreable {
+            tailStatus = "open-extra-tail-absent"
+        } else {
+            tailStatus = "open-extra-tail-unresolved"
+        }
+        let fallbackReasons = [activityCandidate.summary.notScoreableReason].compactMap { $0 }
         return RawDebugCustomWorkoutCandidateRuleScore(
             summary: RawDebugCustomWorkoutCandidateRuleSummary(
                 ruleStatus: isScoreable ? "candidate-rule-scoreable" : "candidate-rule-not-scoreable",
                 candidateRowCount: rows.count,
+                plannedExpandedRowCount: activityCandidate.summary.plannedStepCount,
                 openTailRowCount: openTailCount,
                 pairedPauseCount: pairedPauses.count,
                 totalPairedPauseSeconds: totalPairedPause,
+                fixedRowExhaustionStatus: fixedRowExhaustionStatus,
+                tailStatus: tailStatus,
+                tailElapsedDurationSeconds: openTailRow?.elapsedDurationSeconds,
+                tailDistanceMeters: openTailRow?.distanceMeters,
+                fallbackReasons: fallbackReasons,
+                safetyFlags: baseCaveats,
+                fitValidationStatus: "offline-evidence-only-not-runtime-truth",
                 isScoreable: isScoreable,
                 notScoreableReason: isScoreable ? nil : activityCandidate.summary.notScoreableReason ?? "Activity-boundary candidate rows are unavailable.",
                 caveats: baseCaveats,
@@ -2253,9 +2295,17 @@ private struct RawDebugCustomWorkoutCandidateRuleSummary: Codable {
     var scope: String = "debug/export-only"
     var ruleStatus: String
     var candidateRowCount: Int
+    var plannedExpandedRowCount: Int
     var openTailRowCount: Int
     var pairedPauseCount: Int
     var totalPairedPauseSeconds: Double
+    var fixedRowExhaustionStatus: String
+    var tailStatus: String
+    var tailElapsedDurationSeconds: Double?
+    var tailDistanceMeters: Double?
+    var fallbackReasons: [String]
+    var safetyFlags: [String]
+    var fitValidationStatus: String
     var isScoreable: Bool
     var notScoreableReason: String?
     var caveats: [String]
@@ -2272,10 +2322,13 @@ private struct RawDebugCustomWorkoutCandidateRuleRow: Codable {
     var label: String
     var stepType: String
     var mappingStatus: String
+    var startOffsetSeconds: Double?
+    var endOffsetSeconds: Double?
     var elapsedDurationSeconds: Double?
     var pauseOverlapSeconds: Double
     var activeDurationSeconds: Double?
     var distanceMeters: Double?
+    var durationDisplayRule: String
     var durationRule: String
     var isOpenTail: Bool
     var candidateConfidence: String

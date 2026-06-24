@@ -110,6 +110,60 @@ Keep these shapes blocked from normal detail and interval-row analytics:
 - duplicate workouts, no-plan workouts, same-day extras, summary-only exports, and guard-unknown workouts,
 - any case needing FIT, screenshots, or file imports as runtime truth.
 
+## Narrow Debug/Export Candidate
+
+Candidate shape for a paused repeat fixed-tail `Open / Extra` prototype:
+
+`Warmup(2 km) > repeated Work/Recovery rows > fixed final Cooldown > inferred Open / Extra`
+
+This is docs/debug-only. It is not normal workout detail behavior, interval-row analytics, broad Gate B promotion, FIT runtime ingestion, or HealthFit dependency.
+
+Required guards:
+
+- WorkoutKit plan expands the repeat block into ordered `Warmup`, numbered `Work`/`Recovery`, and a fixed final `Cooldown`; repeat count, labels, goals, and final cooldown fixed distance or duration are visible.
+- Every expanded `Work`/`Recovery` row and the final fixed `Cooldown` maps one-to-one to a complete contiguous HealthKit activity row with distance and elapsed boundary evidence.
+- The final fixed `Cooldown` has a resolved end boundary from planned fixed-row shape plus mapped HealthKit activity evidence; it is not inferred only from session leftover distance or time.
+- The residual tail starts strictly after the resolved final cooldown boundary, is positive and above the tail threshold, and does not overlap any planned `Work`, `Recovery`, or `Cooldown` row.
+- Pause events are absent, or all pause/resume windows are paired, assigned to exact row windows, and covered by the approved active/timer pause-overlap rule; no pause overlap may cross a planned-row boundary.
+- FIT may confirm row-level labels, distances, and residuals inside Gate B tolerance, but cannot create runtime truth or rescue missing WorkoutKit/HealthKit evidence.
+
+Fallback reasons to preserve:
+
+- `repeat-expansion-unresolved`
+- `repeat-row-map-incomplete`
+- `repeat-label-order-conflict`
+- `final-row-open-cooldown`
+- `final-fixed-row-unresolved`
+- `cooldown-map-incomplete`
+- `tail-below-threshold`
+- `tail-overlaps-planned-row`
+- `open-tail-healthkit-evidence-missing`
+- `paused-cooldown-timer-unapproved`
+- `fit-tail-residual-conflict`
+- `fit-row-validation-conflict`
+- `healthkit-activity-row-missing`
+- `workoutkit-plan-missing`
+- `guard-unknown-repeat-tail`
+
+Positive fixtures before Swift changes:
+
+- A known clean no-pause repeat fixed-cooldown tail fixture, currently June 10, must stay supported and show expanded repeat rows, fixed final `Cooldown`, and post-final-row `Open / Extra`.
+- At least one true paused repeat fixed-tail candidate must show paired pause windows, active/timer diagnostics, final fixed cooldown exhaustion, and a post-final-row tail that stays above threshold without row overlap.
+- If the paused candidate includes Recovery rows, evidence must prove those Recovery rows remain planned repeat rows and are not reclassified as tail.
+
+Negative controls before Swift changes:
+
+- Open final cooldown repeat fixtures, currently May 20 and June 3, must stay `Cooldown` through workout end and must not invent `Open / Extra`.
+- Unresolved fixed-cooldown, missing HealthKit activity row, summary-only, duplicate/no-plan/same-day-extra, guard-unknown, below-threshold residual, and FIT-conflict cases must produce stable blocked fallback reasons.
+- Broad recovery-containing tails outside a named narrow gate remain blocked.
+
+Evidence that must be visible before Swift changes:
+
+- Raw HealthKit Debug or parity packet rows showing WorkoutKit expanded plan order, planned row goals, repeat indexes, mapped HealthKit activity boundaries, distance, elapsed duration, pause overlap, active/timer duration, and fallback reasons.
+- Row-level FIT scorecard output showing label and boundary agreement or the exact conflict reason; FIT remains offline validation evidence only.
+- Open-cooldown controls and unresolved/ambiguous controls in the same review packet so the candidate cannot pass by broad tail inference.
+- A short review note naming the exact candidate workout IDs, positive fixtures, negative controls, tolerance used, and any remaining blocker.
+
 ## Scoring Script
 
 After any Gate B scoring, fallback, or rollup change that uses these rules, rerun:

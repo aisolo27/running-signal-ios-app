@@ -57,7 +57,6 @@ import Testing
         activityRows: [activityRow()],
         rowLevelSupport: true
     )
-
     #expect(comparison.status == .supported)
     #expect(comparison.rows.count == 1)
     #expect(comparison.rows[0].confidence == .supported)
@@ -699,6 +698,135 @@ import Testing
     expectDebugOnly(comparison)
 }
 
+@Test func debugCustomWorkoutComparisonBridgeSupportsPausedRepeatFixedTailOnlyAfterPausedRuleApproval() {
+    let start = Date(timeIntervalSince1970: 1_797_000_000)
+    let workout = bridgeWorkout(start: start, distanceMeters: 3_100, durationSeconds: 540)
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plannedSteps: pausedRepeatFixedTailPlannedSteps(),
+        activities: pausedRepeatFixedTailActivities(start: start),
+        workout: workout,
+        pausedRepeatTailRuleApproved: true,
+        pairedPauseCount: 1,
+        pauseEvidenceState: .paired
+    )
+
+    #expect(comparison.status == .supported)
+    #expect(comparison.fallbackReasons.isEmpty)
+    #expect(comparison.tailAmbiguity == .fixedCooldownFollowedByPossibleOpenExtraTail)
+    #expect(comparison.rows.map { $0.plannedRow?.role } == [.warmup, .work, .recovery, .work, .cooldown])
+    #expect(comparison.rows.allSatisfy { $0.confidence == .supported })
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonBridgeBlocksPausedRepeatFixedTailWithoutPairedPauseEvidence() {
+    let start = Date(timeIntervalSince1970: 1_797_000_000)
+    let workout = bridgeWorkout(start: start, distanceMeters: 3_100, durationSeconds: 540)
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plannedSteps: pausedRepeatFixedTailPlannedSteps(),
+        activities: pausedRepeatFixedTailActivities(start: start),
+        workout: workout,
+        pausedRepeatTailRuleApproved: true
+    )
+
+    #expect(comparison.status == .inconclusive)
+    #expect(comparison.fallbackReasons.contains(.unpairedPauseEvents))
+    #expect(comparison.rows.allSatisfy { $0.confidence == .inconclusive })
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonBridgeDoesNotTurnPausedRepeatOpenCooldownIntoOpenExtra() {
+    let start = Date(timeIntervalSince1970: 1_797_000_000)
+    let workout = bridgeWorkout(start: start, distanceMeters: 3_020, durationSeconds: 540)
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plannedSteps: pausedRepeatOpenCooldownPlannedSteps(),
+        activities: pausedRepeatFixedTailActivities(start: start),
+        workout: workout,
+        pausedRepeatTailRuleApproved: true,
+        pairedPauseCount: 1,
+        pauseEvidenceState: .paired
+    )
+
+    #expect(comparison.status == .inconclusive)
+    #expect(comparison.tailAmbiguity == .plannedOpenCooldownContinuesToWorkoutEnd)
+    #expect(comparison.fallbackReasons.contains(.finalRowOpenCooldown))
+    #expect(comparison.rows.allSatisfy { $0.activityCandidateRow?.role != .extra })
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonBridgeBlocksPausedRepeatFixedTailWhenRepeatExpansionMissing() {
+    let comparison = pausedRepeatFixedTailComparison(repeatExpansionResolved: false)
+
+    #expect(comparison.status == .inconclusive)
+    #expect(comparison.fallbackReasons.contains(.repeatExpansionUnresolved))
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonBridgeBlocksPausedRepeatFixedTailWhenActivityRowsMissing() {
+    let start = Date(timeIntervalSince1970: 1_797_000_000)
+    let workout = bridgeWorkout(start: start, distanceMeters: 3_100, durationSeconds: 540)
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plannedSteps: pausedRepeatFixedTailPlannedSteps(),
+        activities: Array(pausedRepeatFixedTailActivities(start: start).dropLast()),
+        workout: workout,
+        pausedRepeatTailRuleApproved: true,
+        pairedPauseCount: 1,
+        pauseEvidenceState: .paired
+    )
+
+    #expect(comparison.status == .missingRequiredEvidence)
+    #expect(comparison.fallbackReasons.contains(.repeatRowMapIncomplete))
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonBridgeBlocksPausedRepeatFixedTailWhenCooldownExhaustionMissing() {
+    let comparison = pausedRepeatFixedTailComparison(finalFixedCooldownExhausted: false)
+
+    #expect(comparison.status == .inconclusive)
+    #expect(comparison.fallbackReasons.contains(.finalFixedRowUnresolved))
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonBridgeBlocksPausedRepeatFixedTailBelowTailThreshold() {
+    let start = Date(timeIntervalSince1970: 1_797_000_000)
+    let workout = bridgeWorkout(start: start, distanceMeters: 3_000, durationSeconds: 500)
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plannedSteps: pausedRepeatFixedTailPlannedSteps(),
+        activities: pausedRepeatFixedTailActivities(start: start),
+        workout: workout,
+        pausedRepeatTailRuleApproved: true,
+        pairedPauseCount: 1,
+        pauseEvidenceState: .paired
+    )
+
+    #expect(comparison.status == .inconclusive)
+    #expect(comparison.fallbackReasons.contains(.tailBelowThreshold))
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonBridgeBlocksPausedRepeatFixedTailWhenTailOverlapsPlannedRow() {
+    let comparison = pausedRepeatFixedTailComparison(tailOverlapsPlannedRow: true)
+
+    #expect(comparison.status == .inconclusive)
+    #expect(comparison.fallbackReasons.contains(.tailOverlapsPlannedRow))
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonBridgeBlocksPausedRepeatFixedTailWithCrossRowPause() {
+    let comparison = pausedRepeatFixedTailComparison(pauseEvidenceState: .crossRow)
+
+    #expect(comparison.status == .inconclusive)
+    #expect(comparison.fallbackReasons.contains(.crossRowPauseOverlap))
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonBridgeBlocksPausedRepeatFixedTailWhenFitWouldBeRuntimeTruth() {
+    let comparison = pausedRepeatFixedTailComparison(fitRuntimeTruthDisallowed: true)
+
+    #expect(comparison.status == .inconclusive)
+    #expect(comparison.fallbackReasons.contains(.fitRuntimeTruthDisallowed))
+    expectDebugOnly(comparison)
+}
+
 private func singleWorkPlan() -> CustomWorkoutStepModel {
     CustomWorkoutStepModel(
         blocks: [
@@ -738,6 +866,59 @@ private func repeatTailActivities(start: Date) -> [WorkoutEvidenceActivity] {
         evidenceActivity(index: 3, start: start.addingTimeInterval(180), end: start.addingTimeInterval(300), distance: 400),
         evidenceActivity(index: 4, start: start.addingTimeInterval(300), end: start.addingTimeInterval(360), distance: 100)
     ]
+}
+
+private func pausedRepeatFixedTailPlannedSteps() -> [PlannedWorkoutStep] {
+    [
+        plannedStep(index: 1, label: "Warmup", stepType: .warmup, goalType: .distance, goalValue: 2_000),
+        plannedStep(index: 2, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, goalType: .distance, goalValue: 400),
+        plannedStep(index: 3, label: "Recovery 1", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 1, goalType: .time, goalValue: 60),
+        plannedStep(index: 4, label: "Work 2", stepType: .work, repeatBlockIndex: 1, repeatIndex: 2, goalType: .distance, goalValue: 400),
+        plannedStep(index: 5, label: "Cooldown", stepType: .cooldown, goalType: .distance, goalValue: 100)
+    ]
+}
+
+private func pausedRepeatOpenCooldownPlannedSteps() -> [PlannedWorkoutStep] {
+    [
+        plannedStep(index: 1, label: "Warmup", stepType: .warmup, goalType: .distance, goalValue: 2_000),
+        plannedStep(index: 2, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, goalType: .distance, goalValue: 400),
+        plannedStep(index: 3, label: "Recovery 1", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 1, goalType: .time, goalValue: 60),
+        plannedStep(index: 4, label: "Work 2", stepType: .work, repeatBlockIndex: 1, repeatIndex: 2, goalType: .distance, goalValue: 400),
+        plannedStep(index: 5, label: "Cooldown", stepType: .cooldown, goalType: .open)
+    ]
+}
+
+private func pausedRepeatFixedTailActivities(start: Date) -> [WorkoutEvidenceActivity] {
+    [
+        evidenceActivity(index: 1, start: start, end: start.addingTimeInterval(240), distance: 2_000),
+        evidenceActivity(index: 2, start: start.addingTimeInterval(240), end: start.addingTimeInterval(360), distance: 400),
+        evidenceActivity(index: 3, start: start.addingTimeInterval(360), end: start.addingTimeInterval(420), distance: 100),
+        evidenceActivity(index: 4, start: start.addingTimeInterval(420), end: start.addingTimeInterval(480), distance: 400),
+        evidenceActivity(index: 5, start: start.addingTimeInterval(480), end: start.addingTimeInterval(500), distance: 100)
+    ]
+}
+
+private func pausedRepeatFixedTailComparison(
+    repeatExpansionResolved: Bool = true,
+    finalFixedCooldownExhausted: Bool = true,
+    tailOverlapsPlannedRow: Bool = false,
+    pauseEvidenceState: CustomWorkoutPauseEvidenceState = .paired,
+    fitRuntimeTruthDisallowed: Bool = false
+) -> DebugCustomWorkoutComparison {
+    let start = Date(timeIntervalSince1970: 1_797_000_000)
+    let workout = bridgeWorkout(start: start, distanceMeters: 3_100, durationSeconds: 540)
+    return DebugCustomWorkoutComparisonBuilder.comparison(
+        plannedSteps: pausedRepeatFixedTailPlannedSteps(),
+        activities: pausedRepeatFixedTailActivities(start: start),
+        workout: workout,
+        pausedRepeatTailRuleApproved: true,
+        pairedPauseCount: 1,
+        repeatExpansionResolved: repeatExpansionResolved,
+        finalFixedCooldownExhausted: finalFixedCooldownExhausted,
+        tailOverlapsPlannedRow: tailOverlapsPlannedRow,
+        pauseEvidenceState: pauseEvidenceState,
+        fitRuntimeTruthDisallowed: fitRuntimeTruthDisallowed
+    )
 }
 
 private func planStep(

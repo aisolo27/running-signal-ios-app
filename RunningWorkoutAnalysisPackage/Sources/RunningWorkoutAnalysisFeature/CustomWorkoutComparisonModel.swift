@@ -20,6 +20,17 @@ enum CustomWorkoutFallbackReason: String, Codable, Equatable, Sendable {
     case labelMappingAmbiguous
     case openExtraTailAmbiguous
     case noRowLevelEvidence
+    case repeatExpansionUnresolved
+    case repeatRowMapIncomplete
+    case finalRowOpenCooldown
+    case finalFixedRowUnresolved
+    case cooldownMapIncomplete
+    case tailBelowThreshold
+    case tailOverlapsPlannedRow
+    case openTailHealthKitEvidenceMissing
+    case unpairedPauseEvents
+    case crossRowPauseOverlap
+    case fitRuntimeTruthDisallowed
 }
 
 extension CustomWorkoutFallbackReason {
@@ -43,8 +54,37 @@ extension CustomWorkoutFallbackReason {
             "Open / Extra tail handling is ambiguous for this workout shape."
         case .noRowLevelEvidence:
             "Row-level HealthKit evidence is missing."
+        case .repeatExpansionUnresolved:
+            "WorkoutKit repeat expansion is unresolved."
+        case .repeatRowMapIncomplete:
+            "WorkoutKit repeat rows are not fully mapped to HealthKit activity rows."
+        case .finalRowOpenCooldown:
+            "Final Cooldown is already Open and must not create Open / Extra."
+        case .finalFixedRowUnresolved:
+            "Final fixed Cooldown exhaustion is unresolved."
+        case .cooldownMapIncomplete:
+            "Final Cooldown row is not fully mapped to HealthKit activity evidence."
+        case .tailBelowThreshold:
+            "Open / Extra tail is below the supported residual threshold."
+        case .tailOverlapsPlannedRow:
+            "Open / Extra tail overlaps a planned row."
+        case .openTailHealthKitEvidenceMissing:
+            "Open / Extra tail requires HealthKit residual evidence."
+        case .unpairedPauseEvents:
+            "Pause/resume evidence is unpaired."
+        case .crossRowPauseOverlap:
+            "Pause overlap crosses planned row boundaries."
+        case .fitRuntimeTruthDisallowed:
+            "FIT evidence is validation-only and cannot be runtime truth."
         }
     }
+}
+
+enum CustomWorkoutPauseEvidenceState: String, Codable, Equatable, Sendable {
+    case none
+    case paired
+    case unpaired
+    case crossRow
 }
 
 enum CustomWorkoutTailAmbiguity: String, Codable, Equatable, Sendable {
@@ -134,7 +174,13 @@ enum DebugCustomWorkoutComparisonBuilder {
         pausedRepeatBlockRuleApproved: Bool = false,
         recoveryContainingOpenTailRuleApproved: Bool = false,
         repeatTailRuleApproved: Bool = false,
-        pairedPauseCount: Int = 0
+        pausedRepeatTailRuleApproved: Bool = false,
+        pairedPauseCount: Int = 0,
+        repeatExpansionResolved: Bool = true,
+        finalFixedCooldownExhausted: Bool = true,
+        tailOverlapsPlannedRow: Bool = false,
+        pauseEvidenceState: CustomWorkoutPauseEvidenceState = .none,
+        fitRuntimeTruthDisallowed: Bool = false
     ) -> DebugCustomWorkoutComparison {
         let sortedSteps = plannedSteps.sorted { $0.index < $1.index }
         let sortedActivities = activities.sorted { $0.startDate < $1.startDate }
@@ -180,12 +226,25 @@ enum DebugCustomWorkoutComparisonBuilder {
                 workout: workout,
                 pairedPauseCount: pairedPauseCount
             )
+        let pausedRepeatTailRuleIsScoreable = pausedRepeatTailRuleApproved
+            && isPausedRepeatTailPrototypeCandidate(
+                plannedSteps: sortedSteps,
+                activities: sortedActivities,
+                workout: workout,
+                pairedPauseCount: pairedPauseCount,
+                repeatExpansionResolved: repeatExpansionResolved,
+                finalFixedCooldownExhausted: finalFixedCooldownExhausted,
+                tailOverlapsPlannedRow: tailOverlapsPlannedRow,
+                pauseEvidenceState: pauseEvidenceState,
+                fitRuntimeTruthDisallowed: fitRuntimeTruthDisallowed
+            )
         let openTailIsScoreable = !tailAmbiguity.needsOpenTailRule
             || openTailRuleApproved
             || simpleWorkOpenRuleIsScoreable
             || recoveryContainingOpenTailRuleIsScoreable
             || repeatTailRuleIsScoreable
-        let repeatBlockIsScoreable = baseRepeatBlockIsScoreable || repeatTailRuleIsScoreable
+            || pausedRepeatTailRuleIsScoreable
+        let repeatBlockIsScoreable = baseRepeatBlockIsScoreable || repeatTailRuleIsScoreable || pausedRepeatTailRuleIsScoreable
         let rowsAreScoreable = hasCoreRowEvidence
             && openTailIsScoreable
             && repeatBlockIsScoreable
@@ -205,6 +264,13 @@ enum DebugCustomWorkoutComparisonBuilder {
             recoveryContainingOpenTailRuleApproved: recoveryContainingOpenTailRuleIsScoreable,
             pausedRepeatBlockRuleApproved: pausedRepeatBlockRuleIsScoreable,
             repeatTailRuleApproved: repeatTailRuleIsScoreable,
+            pausedRepeatTailRuleApproved: pausedRepeatTailRuleApproved,
+            repeatExpansionResolved: repeatExpansionResolved,
+            finalFixedCooldownExhausted: finalFixedCooldownExhausted,
+            tailOverlapsPlannedRow: tailOverlapsPlannedRow,
+            pairedPauseCount: pairedPauseCount,
+            pauseEvidenceState: pauseEvidenceState,
+            fitRuntimeTruthDisallowed: fitRuntimeTruthDisallowed,
             repeatBlockNeedsRule: hasRepeatBlock
         )
     }
@@ -225,6 +291,13 @@ enum DebugCustomWorkoutComparisonBuilder {
         recoveryContainingOpenTailRuleApproved: Bool = false,
         pausedRepeatBlockRuleApproved: Bool = false,
         repeatTailRuleApproved: Bool = false,
+        pausedRepeatTailRuleApproved: Bool = false,
+        repeatExpansionResolved: Bool = true,
+        finalFixedCooldownExhausted: Bool = true,
+        tailOverlapsPlannedRow: Bool = false,
+        pairedPauseCount: Int = 0,
+        pauseEvidenceState: CustomWorkoutPauseEvidenceState = .none,
+        fitRuntimeTruthDisallowed: Bool = false,
         repeatBlockNeedsRule: Bool? = nil
     ) -> DebugCustomWorkoutComparison {
         let plannedRows = plan?.expandedSteps ?? []
@@ -239,7 +312,14 @@ enum DebugCustomWorkoutComparisonBuilder {
             openTailRuleApproved: openTailRuleApproved,
             simpleWorkOpenRuleApproved: simpleWorkOpenRuleApproved,
             recoveryContainingOpenTailRuleApproved: recoveryContainingOpenTailRuleApproved,
-            repeatTailRuleApproved: repeatTailRuleApproved
+            repeatTailRuleApproved: repeatTailRuleApproved,
+            pausedRepeatTailRuleApproved: pausedRepeatTailRuleApproved,
+            repeatExpansionResolved: repeatExpansionResolved,
+            finalFixedCooldownExhausted: finalFixedCooldownExhausted,
+            tailOverlapsPlannedRow: tailOverlapsPlannedRow,
+            pairedPauseCount: pairedPauseCount,
+            pauseEvidenceState: pauseEvidenceState,
+            fitRuntimeTruthDisallowed: fitRuntimeTruthDisallowed
         )
         let status = status(
             plan: plan,
@@ -255,6 +335,7 @@ enum DebugCustomWorkoutComparisonBuilder {
             recoveryContainingOpenTailRuleApproved: recoveryContainingOpenTailRuleApproved,
             pausedRepeatBlockRuleApproved: pausedRepeatBlockRuleApproved,
             repeatTailRuleApproved: repeatTailRuleApproved,
+            pausedRepeatTailRuleApproved: pausedRepeatTailRuleApproved,
             repeatBlockNeedsRule: repeatBlockNeedsRule ?? (plan?.blocks.contains(where: { $0.iterationCount > 1 }) == true)
         )
 
@@ -283,7 +364,14 @@ enum DebugCustomWorkoutComparisonBuilder {
         openTailRuleApproved: Bool,
         simpleWorkOpenRuleApproved: Bool,
         recoveryContainingOpenTailRuleApproved: Bool,
-        repeatTailRuleApproved: Bool
+        repeatTailRuleApproved: Bool,
+        pausedRepeatTailRuleApproved: Bool,
+        repeatExpansionResolved: Bool,
+        finalFixedCooldownExhausted: Bool,
+        tailOverlapsPlannedRow: Bool,
+        pairedPauseCount: Int,
+        pauseEvidenceState: CustomWorkoutPauseEvidenceState,
+        fitRuntimeTruthDisallowed: Bool
     ) -> [CustomWorkoutFallbackReason] {
         var reasons: [CustomWorkoutFallbackReason] = []
 
@@ -312,13 +400,64 @@ enum DebugCustomWorkoutComparisonBuilder {
             && !openTailRuleApproved
             && !simpleWorkOpenRuleApproved
             && !recoveryContainingOpenTailRuleApproved
-            && !repeatTailRuleApproved {
+            && !repeatTailRuleApproved
+            && !pausedRepeatTailRuleApproved {
             reasons.append(.openExtraTailAmbiguous)
         }
         if !plannedRows.isEmpty,
            !activityRows.isEmpty,
            plannedRows.count != activityRows.count {
             reasons.append(.activityCountMismatch)
+        }
+
+        if pausedRepeatTailRuleApproved {
+            if !repeatExpansionResolved {
+                reasons.append(.repeatExpansionUnresolved)
+            }
+
+            if plannedRows.count != activityRows.count {
+                reasons.append(.repeatRowMapIncomplete)
+            }
+
+            if plannedRows.last?.role == .cooldown,
+               plannedRows.last?.goalType == .open {
+                reasons.append(.finalRowOpenCooldown)
+            }
+
+            if !finalFixedCooldownExhausted {
+                reasons.append(.finalFixedRowUnresolved)
+            }
+
+            if activityRows.last?.endOffsetSeconds == nil {
+                reasons.append(.cooldownMapIncomplete)
+            }
+
+            if !tailAmbiguity.needsOpenTailRule {
+                reasons.append(.tailBelowThreshold)
+            }
+
+            if tailOverlapsPlannedRow {
+                reasons.append(.tailOverlapsPlannedRow)
+            }
+
+            if pairedPauseCount <= 0 {
+                reasons.append(.unpairedPauseEvents)
+            }
+
+            switch pauseEvidenceState {
+            case .none:
+                break
+            case .unpaired:
+                reasons.append(.unpairedPauseEvents)
+            case .crossRow:
+                reasons.append(.crossRowPauseOverlap)
+            case .paired:
+                break
+            }
+
+            if fitRuntimeTruthDisallowed {
+                reasons.append(.fitRuntimeTruthDisallowed)
+            }
         }
 
         return unique(reasons)
@@ -338,6 +477,7 @@ enum DebugCustomWorkoutComparisonBuilder {
         recoveryContainingOpenTailRuleApproved: Bool,
         pausedRepeatBlockRuleApproved: Bool,
         repeatTailRuleApproved: Bool,
+        pausedRepeatTailRuleApproved: Bool,
         repeatBlockNeedsRule: Bool
     ) -> CustomWorkoutComparisonStatus {
         if fallbackReasons.contains(.missingPlannedSteps)
@@ -350,6 +490,9 @@ enum DebugCustomWorkoutComparisonBuilder {
             || fallbackReasons.contains(.missingEndBoundary) {
             return .inconclusive
         }
+        if fallbackReasons.contains(where: pausedRepeatTailBlockingReasons.contains) {
+            return .inconclusive
+        }
         if fallbackReasons.contains(.labelMappingAmbiguous) {
             return .labelMappingNeedsRule
         }
@@ -357,11 +500,12 @@ enum DebugCustomWorkoutComparisonBuilder {
             && !openTailRuleApproved
             && !simpleWorkOpenRuleApproved
             && !recoveryContainingOpenTailRuleApproved
-            && !repeatTailRuleApproved {
+            && !repeatTailRuleApproved
+            && !pausedRepeatTailRuleApproved {
             return .openTailNeedsRule
         }
         if repeatBlockNeedsRule {
-            if !repeatBlockRuleApproved && !pausedRepeatBlockRuleApproved && !repeatTailRuleApproved {
+            if !repeatBlockRuleApproved && !pausedRepeatBlockRuleApproved && !repeatTailRuleApproved && !pausedRepeatTailRuleApproved {
                 return .repeatBlockNeedsRule
             }
         }
@@ -422,6 +566,20 @@ enum DebugCustomWorkoutComparisonBuilder {
         var seen: Set<CustomWorkoutFallbackReason> = []
         return reasons.filter { seen.insert($0).inserted }
     }
+
+    private static let pausedRepeatTailBlockingReasons: Set<CustomWorkoutFallbackReason> = [
+        .repeatExpansionUnresolved,
+        .repeatRowMapIncomplete,
+        .finalRowOpenCooldown,
+        .finalFixedRowUnresolved,
+        .cooldownMapIncomplete,
+        .tailBelowThreshold,
+        .tailOverlapsPlannedRow,
+        .openTailHealthKitEvidenceMissing,
+        .unpairedPauseEvents,
+        .crossRowPauseOverlap,
+        .fitRuntimeTruthDisallowed
+    ]
 
     private static func tailAmbiguity(
         plannedSteps: [PlannedWorkoutStep],
@@ -506,6 +664,47 @@ enum DebugCustomWorkoutComparisonBuilder {
               let lastStep = plannedSteps.last,
               lastStep.plannedGoalType == .distance || lastStep.plannedGoalType == .time,
               pairedPauseCount == 0,
+              let lastActivity = activities.last,
+              let lastActivityEnd = lastActivity.endDate,
+              lastActivityEnd > lastActivity.startDate,
+              activities.allSatisfy({ $0.endDate != nil && activityDistanceMeters($0) != nil }),
+              activityRowsAreContiguous(activities) else {
+            return false
+        }
+
+        let mappedDistance = activities.compactMap(activityDistanceMeters).reduce(0, +)
+        let remainingSeconds = workout.endDate.timeIntervalSince(lastActivityEnd)
+        let remainingMeters = workout.distanceMeters.map { max(0, $0 - mappedDistance) } ?? 0
+        return remainingSeconds > 0.5 || remainingMeters > 0.5
+    }
+
+    private static func isPausedRepeatTailPrototypeCandidate(
+        plannedSteps: [PlannedWorkoutStep],
+        activities: [WorkoutEvidenceActivity],
+        workout: CanonicalWorkout,
+        pairedPauseCount: Int,
+        repeatExpansionResolved: Bool = true,
+        finalFixedCooldownExhausted: Bool = true,
+        tailOverlapsPlannedRow: Bool = false,
+        pauseEvidenceState: CustomWorkoutPauseEvidenceState = .none,
+        fitRuntimeTruthDisallowed: Bool = false
+    ) -> Bool {
+        guard !plannedSteps.isEmpty,
+              repeatExpansionResolved,
+              finalFixedCooldownExhausted,
+              !tailOverlapsPlannedRow,
+              pauseEvidenceState == .paired,
+              !fitRuntimeTruthDisallowed,
+              plannedSteps.count == activities.count,
+              pairedPauseCount > 0,
+              plannedSteps.first?.stepType == .warmup,
+              plannedSteps.contains(where: { ($0.repeatIndex ?? 1) > 1 }),
+              plannedSteps.contains(where: { $0.stepType == .work && $0.repeatBlockIndex != nil }),
+              plannedSteps.contains(where: { $0.stepType == .recovery && $0.repeatBlockIndex != nil }),
+              plannedSteps.allSatisfy({ $0.stepType != .unknown }),
+              let lastStep = plannedSteps.last,
+              lastStep.stepType == .cooldown,
+              lastStep.plannedGoalType == .distance || lastStep.plannedGoalType == .time,
               let lastActivity = activities.last,
               let lastActivityEnd = lastActivity.endDate,
               lastActivityEnd > lastActivity.startDate,
