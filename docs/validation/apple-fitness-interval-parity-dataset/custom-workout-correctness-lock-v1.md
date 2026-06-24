@@ -1,6 +1,6 @@
 # Custom Workout Correctness Lock v1
 
-Last updated: 2026-06-23
+Last updated: 2026-06-24
 
 ## Goal
 
@@ -47,6 +47,16 @@ Everything else stays blocked, debug-only, or whole-workout-only until its exact
 | Unresolved ambiguous repeat-tail cases | Blocked from normal-detail interval promotion; the June 10 clean no-pause fixed-cooldown tail is already covered by the approved clean repeat-tail gate above | `ambiguous-repeat-tail-rule-2026-06-15.md` defines the taxonomy and docs/debug separator rule; `ambiguous-repeat-tail-evidence-decision-2026-06-23.md` decides AIS-25 should harden fallback/tests rather than add a new broad gate; `repeat-tail-tests-and-proof-closure-2026-06-23.md` closes AIS-26 with docs-only validation | Keep debug/Parity Lab evidence visible; normal detail should fall back or show blocked placeholder for unresolved cases | Focused fallback tests now lock unapproved repeat fixed-cooldown/Open-tail fallback and paused fixed-cooldown repeat-tail fallback; future broadening still needs new exact-shape evidence |
 | Timer-drift or pause-heavy outliers | Blocked unless covered by an approved narrow gate | Gate B timer-drift docs classify pause-explained timer drift as not a material boundary error when elapsed matches, paired pause overlap matches elapsed-minus-timer drift, and repeat/tail/shape blockers remain separate | Preserve elapsed, timer, active/timer, and pause diagnostics; avoid collapsing to one derived duration | Timer materiality policy is defined, but per-shape approval is still required before any broader UI promotion |
 | No-plan, duplicate, same-day extra, or guard-unknown workouts | Excluded from approval scoring | Not reliable promotion evidence | Treat as normal workouts or debug evidence only, depending on available HealthKit detail | Keep excluded unless a later task reclassifies the workout with fresh evidence |
+
+### Warmup/Work/Cooldown Gate B Subclasses
+
+Keep these Gate B warmup/work/cooldown classes separate:
+
+| Subclass | Current status | Routing note |
+| --- | --- | --- |
+| No-tail `Warmup(2 km) > one Work step > Cooldown(Open)` | Debug-candidate only; not broad production-approved | March 5 and April 24 are the clean examples. March 19 stays blocked as a 24.0 m warmup distance-drift reject. |
+| Paused `Warmup > Work > Cooldown(Open)` | Blocked from broad W/W/C promotion | May 29 is paused-timer-specific evidence only until a paused W/W/C timer rule is separately approved. |
+| `Warmup > Work > fixed Cooldown > Open / Extra` | Internally gated only for the clean fixed-cooldown tail subclass | June 5-style fixed-cooldown tail handling stays separate from no-tail W/W/C and from repeat-tail rules. |
 
 ## Execution Order
 

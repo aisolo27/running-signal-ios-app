@@ -133,13 +133,13 @@ Two warmup/work/cooldown special workouts remain `row_level_inconclusive`.
 
 | Start | Shape | Rows current/candidate/FIT/plan/FIT step | Current max error | Candidate max error | Why inconclusive |
 | --- | --- | --- | ---: | ---: | --- |
-| 2026-03-19T16:51:00Z | `Warmup(2 km) > Work(1500 s) > Cooldown(Open)` | 3/3/3/3/3 | 5.6s / 19.5m | 0.0s / 24.0m | Candidate timing aligns, but distance error is too high and there is no FIT inferred tail |
-| 2026-05-29T11:49:28Z | `Warmup(2 km) > Work(3 km) > Cooldown(Open)` | 3/3/3/3/3 | 161.1s / 11.5m | 158.9s / 6.6m | Distance is close, but timing shift is far outside tolerance |
+| 2026-03-19T16:51:00Z | `Warmup(2 km) > Work(1500 s) > Cooldown(Open)` | 3/3/3/3/3 | 5.6s / 19.5m | 0.0s / 24.0m | Candidate timing aligns, but the warmup distance drifts by 24.0 m against FIT and stays a distance-drift reject |
+| 2026-05-29T11:49:28Z | `Warmup(2 km) > Work(3 km) > Cooldown(Open)` | 3/3/3/3/3 | 161.1s / 11.5m | 158.9s / 6.6m | Distance and labels are close, but this is paused-timer-specific evidence only until a paused W/W/C timer rule is approved |
 
 Manual review before any Phase 3 prototype:
 
-- Review the 2026-03-19 and 2026-05-29 workouts against raw diagnostics and Apple Fitness screenshots if available.
-- Determine whether the drift is caused by plan goal interpretation, FIT lap labeling, HealthKit activity boundaries, pause/timer time, or stale/summary evidence.
+- Treat 2026-03-19 as blocked unless renewed evidence resolves the 24.0 m warmup distance drift.
+- Treat 2026-05-29 as a paused-timer-rule candidate only; do not mix it into the no-pause warmup/work/open-cooldown candidate class.
 - Do not include these shapes in a future prototype candidate list until their row-level cause is understood.
 
 ## Recommended next decision

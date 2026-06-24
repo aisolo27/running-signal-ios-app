@@ -151,7 +151,7 @@ All six must stay excluded from any safe subclass or production-approval scoring
 | --- | --- | --- | --- |
 | Narrow no-tail warmup/work/open-cooldown support | `2026-03-05`, `2026-04-24` | exact counts, labels, timing, distance pass | future debug-only discussion candidate |
 | Warmup/work/cooldown distance drift | `2026-03-19` | candidate warmup distance error `24.0 m` | excluded |
-| Timer-vs-elapsed ambiguity | `2026-05-29`, high-error repeat outliers | large timing error with clean labels and close distances | excluded pending elapsed/timer diagnostics |
+| Pause-explained timer drift requiring a shape-specific rule | `2026-05-29`, high-error repeat outliers | large elapsed-vs-timer gap with clean labels and close distances | excluded from broad promotion; candidate only for a future paused timer-rule task |
 | Repeat-block expansion rule missing | 17 repeat-block rows | FIT steps unexpanded, FIT laps expanded | blocked until explicit rule |
 | Open/Extra tail rule missing | 4 tail rows | no explicit FIT tail lap; session-minus-lap only | blocked until explicit rule |
 | Count alignment overclaim risk | most Gate B rows | counts can align while rules remain incomplete | never approve from counts alone |

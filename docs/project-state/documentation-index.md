@@ -1,6 +1,6 @@
 # Documentation Index
 
-Last updated: 2026-06-23
+Last updated: 2026-06-24
 
 ## Active Docs To Read First
 
@@ -43,6 +43,7 @@ Keep active validation lean. Once a date-specific parity investigation is comple
 - `docs/validation/apple-fitness-interval-parity-dataset/interval-analytics-readiness-handoff-2026-06-23.md`: AIS-46 handoff; parks interval-row analytics until supported and blocked workout styles have stable rows, diagnostics agreement, and regression fixtures.
 - `docs/validation/apple-fitness-interval-parity-dataset/ambiguous-repeat-tail-rule-2026-06-15.md`: repeat-tail taxonomy and docs/debug separator rule; separates the approved clean no-pause fixed-cooldown repeat-tail gate from unresolved ambiguous cases that still require fixed final-row exhaustion, tail threshold, and open-cooldown guards.
 - `docs/validation/apple-fitness-interval-parity-dataset/ambiguous-repeat-tail-evidence-decision-2026-06-23.md`: AIS-24 decision; no new broad repeat-tail gate, clean June 10-style shape is already closed, and AIS-25 should harden fallback/tests for unresolved cases.
+- `docs/validation/apple-fitness-interval-parity-dataset/ambiguous-repeat-tail-decision-rules-2026-06-24.md`: AIS-47 operational decision rules for repeat-block end detection, fixed cooldown exhaustion, Open/Extra tail inference, tie-breakers, fallback reasons, and scoring commands.
 - `docs/validation/apple-fitness-interval-parity-dataset/repeat-tail-tests-and-proof-closure-2026-06-23.md`: AIS-26 closure; AIS-25 was test/docs-only, existing June 10 plus May 20/June 3 physical proof remains sufficient, and no new app artifacts are required.
 - `docs/validation/apple-fitness-interval-parity-dataset/simple-work-open-prototype-decision-2026-06-15.md`: Gate A boundary for exactly one fixed-distance Work step plus Open/Extra tail; this exact shape now has narrow normal-detail support while broader shapes remain blocked.
 - `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-shape-coverage-audit-2026-03-to-2026-06.md`: generated docs/debug custom-workout shape inventory across easy, tempo, interval, tail, and pause/timer cases.
