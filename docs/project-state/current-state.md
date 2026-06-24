@@ -47,6 +47,8 @@ Paused timing semantics now use a pause-window state machine for explicit pause/
 
 `DerivedAnalyticsEngine.intervalCandidates` is a separate raw HealthKit event-marker path. It uses elapsed event-window duration and does not consume `WorkoutIntervalReconstruction` or the pause-window resolver, so it must not be treated as trusted custom-workout interval analytics or a pause-adjusted active-duration source until the interval analytics gate is explicitly reopened.
 
+Derived interval-candidate caveats backfill lazily on the next derived-analysis recompute; `DerivedWorkoutAnalysis.currentVersion` was not bumped because this only labels existing elapsed-duration semantics and does not change metrics, confidence, filtering, or schema.
+
 Gate A simple fixed-distance `Work > Open / Extra` is promoted only for the exact one-step shape with one complete HealthKit activity row and positive Open/Extra tail. It must not broaden into structured/special workouts, paused workouts, recovery rows, repeat rows, or missing-evidence cases.
 
 Gate B remains blocked for broad production promotion and for any new Swift prototype. Row-level FIT label, timing, distance, tail, and fallback evidence is available through `gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.*` and is linked from `gate-b-custom-workout-fit-scorecard-2026-03-to-2026-06.*`, but exact-shape label/tail/fallback rules are still required.

@@ -10,6 +10,8 @@ Implementation note: `DerivedAnalyticsEngine.intervalCandidates` currently reads
 
 Current raw candidate outputs carry this caveat in each row: duration and pace use elapsed HealthKit event-window time, and pause overlap is not subtracted.
 
+This caveat backfills lazily on the next derived-analysis recompute. `DerivedWorkoutAnalysis.currentVersion` was not bumped because the change only labels existing elapsed-duration semantics and does not change metrics, confidence, filtering, or schema.
+
 The custom-workout correctness lock now has eight frozen normal-detail gates and explicit blocked boundaries for ambiguous repeat tails, true paused repeat fixed-tail `Open / Extra`, and broad recovery-tail behavior. That is enough to keep current normal detail stable, but not enough to add per-row coaching or analysis across all custom workout styles.
 
 ## Ready Inputs
