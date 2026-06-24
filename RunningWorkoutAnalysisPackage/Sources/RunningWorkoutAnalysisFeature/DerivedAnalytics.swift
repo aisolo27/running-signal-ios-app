@@ -433,6 +433,7 @@ public enum DerivedAnalyticsEngine {
             case .appleFitnessIntervalCandidate:
                 break
             }
+            caveats.append("Duration and pace use elapsed HealthKit event-window time; pause overlap is not subtracted.")
             if distance == nil {
                 caveats.append("Distance series is unavailable for this event window.")
             }

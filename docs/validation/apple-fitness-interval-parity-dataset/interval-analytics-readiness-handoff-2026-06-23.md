@@ -8,6 +8,8 @@ Do not start interval-row analytics yet.
 
 Implementation note: `DerivedAnalyticsEngine.intervalCandidates` currently reads raw HealthKit event windows directly, computes duration as elapsed `event.endDate - event.startDate`, and does not call `WorkoutIntervalReconstruction` or the pause-window resolver. Treat those rows as raw candidates only. They are not the pause-adjusted, normal-detail custom-workout reconstruction path and should not be used as Tier 3 interval analytics until this gate is reopened with explicit evidence and tests.
 
+Current raw candidate outputs carry this caveat in each row: duration and pace use elapsed HealthKit event-window time, and pause overlap is not subtracted.
+
 The custom-workout correctness lock now has eight frozen normal-detail gates and explicit blocked boundaries for ambiguous repeat tails, true paused repeat fixed-tail `Open / Extra`, and broad recovery-tail behavior. That is enough to keep current normal detail stable, but not enough to add per-row coaching or analysis across all custom workout styles.
 
 ## Ready Inputs

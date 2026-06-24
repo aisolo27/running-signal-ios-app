@@ -1103,6 +1103,7 @@ import Testing
     #expect(candidates[0].distanceMeters == 2_000)
     #expect(candidates[0].durationSeconds == 750)
     #expect(candidates[0].paceSecondsPerKm == 375)
+    #expect(candidates[0].caveats.contains("Duration and pace use elapsed HealthKit event-window time; pause overlap is not subtracted."))
     #expect(candidates[0].averageHeartRateBpm == 130)
     #expect(candidates[0].startOffsetSeconds == 0)
     #expect(candidates[0].endOffsetSeconds == 750)
@@ -3007,6 +3008,7 @@ import Testing
     #expect(candidates[0].confidence == .limited)
     #expect(candidates[0].caveats.contains("HealthKit did not expose an Apple Fitness interval label for this event."))
     #expect(candidates[0].caveats.contains("This event window matches a split-like distance marker, not an Apple Fitness interval row."))
+    #expect(candidates[0].caveats.contains("Duration and pace use elapsed HealthKit event-window time; pause overlap is not subtracted."))
 }
 
 @Test func derivedIntervalCandidatesFlagOverlappingRawSegments() {
