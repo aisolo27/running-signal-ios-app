@@ -45,7 +45,7 @@ Normal workout detail currently supports eight physically proven narrow classes:
 
 Paused timing semantics now use a pause-window state machine for explicit pause/resume, motion pause/resume, and `pauseOrResumeRequest` toggle events. Duplicate, dangling, unpaired, cross-row, or otherwise caveated pause streams stay blocked from normal-detail promotion.
 
-`DerivedAnalyticsEngine.intervalCandidates` is a separate raw HealthKit event-marker path. It does not consume `WorkoutIntervalReconstruction` or the pause-window resolver, so it must not be treated as trusted custom-workout interval analytics or a pause-adjusted active-duration source until the interval analytics gate is explicitly reopened.
+`DerivedAnalyticsEngine.intervalCandidates` is a separate raw HealthKit event-marker path. It uses elapsed event-window duration and does not consume `WorkoutIntervalReconstruction` or the pause-window resolver, so it must not be treated as trusted custom-workout interval analytics or a pause-adjusted active-duration source until the interval analytics gate is explicitly reopened.
 
 Gate A simple fixed-distance `Work > Open / Extra` is promoted only for the exact one-step shape with one complete HealthKit activity row and positive Open/Extra tail. It must not broaden into structured/special workouts, paused workouts, recovery rows, repeat rows, or missing-evidence cases.
 

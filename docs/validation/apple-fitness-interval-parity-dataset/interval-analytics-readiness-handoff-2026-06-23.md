@@ -6,7 +6,7 @@ Last updated: 2026-06-23
 
 Do not start interval-row analytics yet.
 
-Implementation note: `DerivedAnalyticsEngine.intervalCandidates` currently reads raw HealthKit event windows directly and does not call `WorkoutIntervalReconstruction` or the pause-window resolver. Treat those rows as raw candidates only. They are not the pause-adjusted, normal-detail custom-workout reconstruction path and should not be used as Tier 3 interval analytics until this gate is reopened with explicit evidence and tests.
+Implementation note: `DerivedAnalyticsEngine.intervalCandidates` currently reads raw HealthKit event windows directly, computes duration as elapsed `event.endDate - event.startDate`, and does not call `WorkoutIntervalReconstruction` or the pause-window resolver. Treat those rows as raw candidates only. They are not the pause-adjusted, normal-detail custom-workout reconstruction path and should not be used as Tier 3 interval analytics until this gate is reopened with explicit evidence and tests.
 
 The custom-workout correctness lock now has eight frozen normal-detail gates and explicit blocked boundaries for ambiguous repeat tails, true paused repeat fixed-tail `Open / Extra`, and broad recovery-tail behavior. That is enough to keep current normal detail stable, but not enough to add per-row coaching or analysis across all custom workout styles.
 
@@ -35,6 +35,15 @@ Do not build analytics that depend on:
 - Unpaired, duplicate, dangling, cross-row, or otherwise caveated pause streams.
 - Raw `DerivedAnalyticsEngine.intervalCandidates` rows, unless they have been replaced or backed by the approved reconstruction path.
 - FIT, HealthFit, screenshots, or file imports as runtime data.
+
+## Open Follow-Up
+
+Before any Tier 3 or interval-row analytics work starts, decide the fate of `DerivedAnalyticsEngine.intervalCandidates`:
+
+- If it remains a raw debug/audit candidate path, keep elapsed-duration semantics explicit and do not use its pace or confidence as trusted custom-workout row analytics.
+- If it becomes an analytics input, replace or back it with approved reconstructed rows, pause-window resolution, active/timer duration, caveats, and regression tests for paused, malformed, and no-pause streams.
+
+This is separate from the `ReconstructedWorkoutInterval.activeDurationSeconds` fix. That fix improves diagnostics and the approved normal-detail reconstruction path, but it does not by itself clear the broader interval analytics gate.
 
 ## Analytics Gate
 

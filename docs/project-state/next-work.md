@@ -62,6 +62,7 @@ Last updated: 2026-06-23
 - For month-scale review, refresh selected-month evidence before exporting monthly diagnostics.
 - Later analytics can reuse reconstructed interval windows to analyze per-row HR, power, cadence, and pace streams only after the `custom-workout-correctness-lock-v1.md` Interval Analytics Readiness Gate is met. Keep whole-workout execution ideas parked as future product notes; do not add analytics for only one run style or expand the current parity slice into coaching or categorization yet.
 - Interval analytics readiness handoff lives in `docs/validation/apple-fitness-interval-parity-dataset/interval-analytics-readiness-handoff-2026-06-23.md`; keep analytics whole-workout-level until supported and blocked custom-workout styles have stable rows, diagnostics agreement, and regression fixtures.
+- Before any Tier 3 or interval-row analytics work, explicitly decide whether `DerivedAnalyticsEngine.intervalCandidates` remains a raw elapsed-duration debug/audit path or is replaced/backed by approved reconstructed rows with pause-window resolution, active/timer duration, caveats, and regression tests.
 - Before interval-row analytics start, require the relevant workout-style rows in `custom-workout-correctness-lock-v1.md` to be either supported with evidence or intentionally blocked with stable fallback behavior.
 
 ## Blocked
