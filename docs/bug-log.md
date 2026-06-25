@@ -82,6 +82,8 @@ Use this as a selective lookup, not required full-context reading. Read the inde
 - Rule: a stopped-early single fixed-distance Work custom workout can still be a valid partial Work row when one planned Work step maps to one complete HealthKit activity row and FIT offline evidence shows the same one-step/one-lap shape. Keep this separate from the normal completed Work/Open gate and from broad Work/Open promotion.
 - Rule: plain open Watch runs can have FIT split laps and HealthKit activity rows but zero WorkoutKit planned steps. Treat them as readable workouts with splits/whole-run analysis, not custom interval workouts.
 - Rule: HealthFit FIT session elapsed duration may decode as `0.0 s` through the lightweight docs parser even when lap rows and session timer duration are valid. For offline validation, keep lap rows and timer duration visible and do not score these files from session elapsed alone.
+- Rule: fresh physical proof exports must come from the current installed build. If `validate_parity_export_consistency.py --require-readable-fallback-labels <proof-folder>` fails because `fallbackReasons` is non-empty and `fallbackReasonLabels` is absent, reinstall or run the latest app build on the iPhone and re-export before treating the folder as current-build proof.
+- Rule: `summarize_parity_proof_folder.py` is strict about readable fallback labels for fresh proof by default; use `--allow-missing-readable-fallback-labels` only when intentionally scanning older archives that predate those fields.
 
 ## Milestones And Docs
 

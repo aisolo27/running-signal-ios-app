@@ -49,6 +49,7 @@ enum CustomWorkoutFallbackReason: String, Codable, Equatable, Sendable {
     case tailBelowThreshold
     case tailOverlapsPlannedRow
     case openTailHealthKitEvidenceMissing
+    case noPauseEvidence
     case unpairedPauseEvents
     case crossRowPauseOverlap
     case fitRuntimeTruthDisallowed
@@ -91,6 +92,8 @@ extension CustomWorkoutFallbackReason {
             "Open / Extra tail overlaps a planned row."
         case .openTailHealthKitEvidenceMissing:
             "Open / Extra tail requires HealthKit residual evidence."
+        case .noPauseEvidence:
+            "Pause/resume evidence is missing."
         case .unpairedPauseEvents:
             "Pause/resume evidence is unpaired."
         case .crossRowPauseOverlap:
@@ -478,13 +481,13 @@ enum DebugCustomWorkoutComparisonBuilder {
                 reasons.append(.tailOverlapsPlannedRow)
             }
 
-            if pairedPauseCount <= 0 {
+            if pairedPauseCount <= 0 && pauseEvidenceState != .none {
                 reasons.append(.unpairedPauseEvents)
             }
 
             switch pauseEvidenceState {
             case .none:
-                break
+                reasons.append(.noPauseEvidence)
             case .unpaired:
                 reasons.append(.unpairedPauseEvents)
             case .crossRow:
@@ -614,6 +617,7 @@ enum DebugCustomWorkoutComparisonBuilder {
         .tailBelowThreshold,
         .tailOverlapsPlannedRow,
         .openTailHealthKitEvidenceMissing,
+        .noPauseEvidence,
         .unpairedPauseEvents,
         .crossRowPauseOverlap,
         .fitRuntimeTruthDisallowed

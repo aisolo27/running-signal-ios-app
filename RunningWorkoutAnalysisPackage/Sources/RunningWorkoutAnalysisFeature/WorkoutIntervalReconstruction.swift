@@ -1012,7 +1012,7 @@ public enum CustomWorkoutNormalDetailGate {
         evidence: WorkoutEvidence
     ) -> WorkoutIntervalReconstructionResult? {
         guard let audit = evidence.workoutPlanAudit,
-              WorkoutPauseTimingSemantics.pairedPauseCount(in: evidence.events) == 0 else { return nil }
+              !WorkoutPauseTimingSemantics.hasPauseOrResumeEvents(in: evidence.events) else { return nil }
         let plannedSteps = audit.plannedSteps.sorted { $0.index < $1.index }
         let activities = evidence.activities.sorted { $0.startDate < $1.startDate }
         let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
@@ -1039,7 +1039,7 @@ public enum CustomWorkoutNormalDetailGate {
         evidence: WorkoutEvidence
     ) -> WorkoutIntervalReconstructionResult? {
         guard let audit = evidence.workoutPlanAudit,
-              WorkoutPauseTimingSemantics.pairedPauseCount(in: evidence.events) == 0 else { return nil }
+              !WorkoutPauseTimingSemantics.hasPauseOrResumeEvents(in: evidence.events) else { return nil }
         let plannedSteps = audit.plannedSteps.sorted { $0.index < $1.index }
         let activities = evidence.activities.sorted { $0.startDate < $1.startDate }
         let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
@@ -1083,7 +1083,7 @@ public enum CustomWorkoutNormalDetailGate {
               let result = WorkoutIntervalReconstructionEngine.reconstructFromActivityBoundaries(workout: workout, evidence: evidence),
               result.intervals.count == 3,
               result.intervals.map(\.stepType) == [.warmup, .work, .cooldown],
-              hasNoPairedPausesWhenTimeGoalsArePromoted(plannedSteps: plannedSteps, evidence: evidence) else {
+              !WorkoutPauseTimingSemantics.hasPauseOrResumeEvents(in: evidence.events) else {
             return nil
         }
 
@@ -1095,7 +1095,7 @@ public enum CustomWorkoutNormalDetailGate {
         evidence: WorkoutEvidence
     ) -> WorkoutIntervalReconstructionResult? {
         guard let audit = evidence.workoutPlanAudit,
-              WorkoutPauseTimingSemantics.pairedPauseCount(in: evidence.events) == 0 else { return nil }
+              !WorkoutPauseTimingSemantics.hasPauseOrResumeEvents(in: evidence.events) else { return nil }
         let plannedSteps = audit.plannedSteps.sorted { $0.index < $1.index }
         let activities = evidence.activities.sorted { $0.startDate < $1.startDate }
         let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
@@ -1143,7 +1143,7 @@ public enum CustomWorkoutNormalDetailGate {
               result.intervals.count == 4,
               result.intervals.map(\.stepType) == [.warmup, .work, .cooldown, .open],
               result.intervals.last?.tailDiagnostics != nil,
-              hasNoPairedPausesWhenTimeGoalsArePromoted(plannedSteps: plannedSteps, evidence: evidence) else {
+              !WorkoutPauseTimingSemantics.hasPauseOrResumeEvents(in: evidence.events) else {
             return nil
         }
 
@@ -1196,7 +1196,7 @@ public enum CustomWorkoutNormalDetailGate {
         evidence: WorkoutEvidence
     ) -> WorkoutIntervalReconstructionResult? {
         guard let audit = evidence.workoutPlanAudit,
-              WorkoutPauseTimingSemantics.pairedPauseCount(in: evidence.events) == 0 else { return nil }
+              !WorkoutPauseTimingSemantics.hasPauseOrResumeEvents(in: evidence.events) else { return nil }
         let plannedSteps = audit.plannedSteps.sorted { $0.index < $1.index }
         let activities = evidence.activities.sorted { $0.startDate < $1.startDate }
         let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
@@ -1480,16 +1480,6 @@ public enum CustomWorkoutNormalDetailGate {
             simpleWorkOpenRuleApproved: true,
             recoveryContainingOpenTailRuleApproved: isNarrowRecoveryContainingFixedCooldownOpenTail(plannedSteps)
         )
-    }
-
-    private static func hasNoPairedPausesWhenTimeGoalsArePromoted(
-        plannedSteps: [PlannedWorkoutStep],
-        evidence: WorkoutEvidence
-    ) -> Bool {
-        guard plannedSteps.contains(where: { $0.plannedGoalType == .time }) else {
-            return true
-        }
-        return !WorkoutPauseTimingSemantics.hasPauseOrResumeEvents(in: evidence.events)
     }
 
     private static func activityRowsMatchReconstructedRows(

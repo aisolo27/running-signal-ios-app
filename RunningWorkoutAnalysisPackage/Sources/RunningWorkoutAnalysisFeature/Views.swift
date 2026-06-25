@@ -1602,6 +1602,8 @@ enum IntervalRowTimingText {
 }
 
 struct RawHealthKitWorkoutDebugView: View {
+    static let unavailableCustomIntervalsMessage = "Whole-run stats are still available. Custom interval rows need a supported public WorkoutKit and HealthKit evidence pattern before RunSignal can show them."
+
     var store: RunningAnalysisStore
     let workout: CanonicalWorkout
     @State private var selectedDiagnosticsMonth = Date()
@@ -1972,7 +1974,7 @@ struct RawHealthKitWorkoutDebugView: View {
         } else {
             NoticeCard(
                 title: "Unavailable",
-                message: "RunSignal needs a WorkoutKit plan and HealthKit distance/time evidence before it can reconstruct custom workout intervals."
+                message: Self.unavailableCustomIntervalsMessage
             )
         }
     }
@@ -1996,7 +1998,7 @@ struct RawHealthKitWorkoutDebugView: View {
                     MetricItem(title: "Open tails", value: "\(result.rows.filter(\.isOpenTail).count)", detail: "Inferred"),
                     MetricItem(title: "Pauses", value: "\(result.pairedPauseCount)", detail: RunFormatters.duration(result.totalPairedPauseSeconds)),
                     MetricItem(title: "Scope", value: "Debug", detail: "No production change"),
-                    MetricItem(title: "Normal UI", value: "Blocked", detail: "Separate proof required")
+                    MetricItem(title: "Parity scope", value: "Debug only", detail: "Normal UI unchanged")
                 ])
 
                 ForEach(result.rows) { row in
@@ -2145,7 +2147,7 @@ struct RawHealthKitWorkoutDebugView: View {
 
         return ParityLabCandidateRowsResult(
             rows: rows,
-            structuredStatus: comparison.status.rawValue,
+            structuredStatus: comparison.status.normalDetailBlockedReasonLabel,
             fallbackReasons: comparison.fallbackReasons.map(\.normalDetailBlockedReasonLabel),
             pairedPauseCount: pauses.count,
             totalPairedPauseSeconds: pauses.map(\.durationSeconds).reduce(0, +)
@@ -2202,7 +2204,7 @@ struct RawHealthKitWorkoutDebugView: View {
     private struct ParityLabCandidateRowsResult {
         var rows: [ParityLabCandidateRow] = []
         var unavailableReason: String?
-        var structuredStatus: String = CustomWorkoutComparisonStatus.missingRequiredEvidence.rawValue
+        var structuredStatus: String = CustomWorkoutComparisonStatus.missingRequiredEvidence.normalDetailBlockedReasonLabel
         var fallbackReasons: [String] = []
         var pairedPauseCount: Int = 0
         var totalPairedPauseSeconds: Double = 0

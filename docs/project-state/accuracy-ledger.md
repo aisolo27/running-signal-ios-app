@@ -159,8 +159,10 @@ Latest rung check, 2026-06-25:
 - Promotion rung attempted: rung 2, `Evidence Available`.
 - Result: not promoted. Current archived paused-repeat proof covers the open-cooldown control shape, not true fixed-tail `Open / Extra`. FIT tail scorecards remain offline evidence only and do not replace a current Raw HealthKit Debug export plus parity packet for this exact paused row.
 - Archive audit: parsed 64 debug/parity payloads; 36 were repeat-like, 4 had repeat-tail `Open / Extra`, and 32 had paired paused-repeat evidence, but 0 had both paired pauses and a cooldown-before-`Open / Extra` tail. Existing archives do not satisfy this exact row.
+- June 25 user-supplied `Thursday Interval 5km` evidence is archived in `docs/validation/apple-fitness-interval-parity-dataset/user-supplied-repeat-tail-review-2026-06-25/`. The current-build re-export passes the fresh readable-label validator and the FIT file confirms an offline session-minus-laps tail residual, but it reports `pairedPauseCount == 0`, so it is not rung 2 paired-pause evidence.
+- HealthFit Jan-Jun FIT scan: `docs/validation/apple-fitness-interval-parity-dataset/healthfit-jan-jun-fit-candidate-scan-2026-06-25.md` parsed 124 outdoor running FITs from January 1 through June 30, 2026 and found 0 exact paired-pause fixed-tail repeat matches. June 10 and June 25 are no-pause fixed-tail controls, not paired-pause evidence.
 - Evidence hardening added: fresh exact-shape proof folders should pass `docs/validation/apple-fitness-interval-parity-dataset/validate_parity_export_consistency.py --require-readable-fallback-labels <proof-folder>` before rung 2 is considered satisfied.
-- Next action: collect or locate 1-2 qualifying exact-shape workouts with paired pauses and an unambiguous post-fixed-row tail before any Swift prototype or debug-supported claim.
+- Next action: collect 1-2 future qualifying exact-shape workouts with paired pauses and an unambiguous post-fixed-row tail before any Swift prototype or debug-supported claim.
 
 ## Replacement And Archive Policy
 

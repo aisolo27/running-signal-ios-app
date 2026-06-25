@@ -4,11 +4,14 @@ import Testing
 
 @Test func customWorkoutFallbackReasonNormalDetailBlockedLabelsAvoidRawEnumNames() {
     let fallbackLabel = CustomWorkoutFallbackReason.openExtraTailAmbiguous.normalDetailBlockedReasonLabel
+    let noPauseLabel = CustomWorkoutFallbackReason.noPauseEvidence.normalDetailBlockedReasonLabel
     let statusLabel = CustomWorkoutComparisonStatus.openTailNeedsRule.normalDetailBlockedReasonLabel
     let tailLabel = CustomWorkoutTailAmbiguity.fixedCooldownFollowedByPossibleOpenExtraTail.normalDetailBlockedReasonLabel
 
     #expect(fallbackLabel == "Open / Extra tail handling is ambiguous for this workout shape.")
     #expect(!fallbackLabel.contains("openExtraTailAmbiguous"))
+    #expect(noPauseLabel == "Pause/resume evidence is missing.")
+    #expect(!noPauseLabel.contains("noPauseEvidence"))
     #expect(statusLabel == "Open / Extra tail handling needs an approved rule.")
     #expect(!statusLabel.contains("open-tail-needs-rule"))
     #expect(tailLabel == "Fixed Cooldown may be followed by an Open / Extra tail.")
@@ -735,7 +738,8 @@ import Testing
     )
 
     #expect(comparison.status == .inconclusive)
-    #expect(comparison.fallbackReasons.contains(.unpairedPauseEvents))
+    #expect(comparison.fallbackReasons.contains(.noPauseEvidence))
+    #expect(!comparison.fallbackReasons.contains(.unpairedPauseEvents))
     #expect(comparison.rows.allSatisfy { $0.confidence == .inconclusive })
     expectDebugOnly(comparison)
 }
@@ -822,6 +826,15 @@ import Testing
 
     #expect(comparison.status == .inconclusive)
     #expect(comparison.fallbackReasons.contains(.crossRowPauseOverlap))
+    expectDebugOnly(comparison)
+}
+
+@Test func debugCustomWorkoutComparisonBridgeBlocksPausedRepeatFixedTailWithUnpairedPauseState() {
+    let comparison = pausedRepeatFixedTailComparison(pauseEvidenceState: .unpaired)
+
+    #expect(comparison.status == .inconclusive)
+    #expect(comparison.fallbackReasons.contains(.unpairedPauseEvents))
+    #expect(!comparison.fallbackReasons.contains(.noPauseEvidence))
     expectDebugOnly(comparison)
 }
 

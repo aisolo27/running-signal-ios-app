@@ -25,6 +25,13 @@ FALLBACK_REASONS_KEY = "fallbackReasons"
 FALLBACK_REASON_LABELS_KEY = "fallbackReasonLabels"
 RELEVANT_KEYS = (SUMMARY_KEY, ROWS_KEY, COMPARISON_KEY)
 TEXT_EXPORT_SUFFIXES = {".md", ".txt"}
+VALID_ROW_CONFIDENCES = {
+    "supported",
+    "equivalent",
+    "inconclusive",
+    "needsRule",
+    "missingEvidence",
+}
 
 
 def load_json(path: Path) -> Any:
@@ -45,6 +52,8 @@ def markdown_payloads(path: Path, allow_whole_file_json: bool = False) -> list[A
             raise ValueError(f"invalid JSON fence containing parity export fields: {error}") from error
     if payloads or not allow_whole_file_json or not any(key in text for key in RELEVANT_KEYS):
         return payloads
+    if not text.lstrip().startswith(("{", "[")):
+        return payloads
     try:
         payloads.append(json.loads(text))
     except json.JSONDecodeError as error:
@@ -64,6 +73,18 @@ def candidate_row_count(payload: dict[str, Any]) -> int | None:
     rows = payload.get(ROWS_KEY)
     if not isinstance(rows, list):
         raise ValueError(f"{ROWS_KEY} must be an array when {SUMMARY_KEY} is present")
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise ValueError(f"{ROWS_KEY}[{index}] must be an object")
+        is_open_tail = row.get("isOpenTail")
+        if not isinstance(is_open_tail, bool):
+            raise ValueError(f"{ROWS_KEY}[{index}].isOpenTail must be a boolean")
+        if "index" in row and not isinstance(row["index"], int):
+            raise ValueError(f"{ROWS_KEY}[{index}].index must be an integer")
+        if "label" in row and not isinstance(row["label"], str):
+            raise ValueError(f"{ROWS_KEY}[{index}].label must be a string")
+        if "stepType" in row and not isinstance(row["stepType"], str):
+            raise ValueError(f"{ROWS_KEY}[{index}].stepType must be a string")
 
     expected = summary.get("candidateRowCount")
     if expected != len(rows):
@@ -71,7 +92,7 @@ def candidate_row_count(payload: dict[str, Any]) -> int | None:
             f"candidateRowCount is {expected}, but {ROWS_KEY} has {len(rows)} rows"
         )
 
-    open_tail_count = sum(1 for row in rows if isinstance(row, dict) and row.get("isOpenTail") is True)
+    open_tail_count = sum(1 for row in rows if row.get("isOpenTail") is True)
     expected_open_tail_count = summary.get("openTailRowCount")
     if expected_open_tail_count != open_tail_count:
         raise ValueError(
@@ -144,6 +165,12 @@ def comparison_row_count(
     row_confidences = summary.get("rowConfidences")
     if not isinstance(row_confidences, list):
         raise ValueError(f"{COMPARISON_KEY}.rowConfidences must be an array")
+    for index, confidence in enumerate(row_confidences):
+        if not isinstance(confidence, str) or confidence not in VALID_ROW_CONFIDENCES:
+            raise ValueError(
+                f"{COMPARISON_KEY}.rowConfidences[{index}] must be one of "
+                f"{', '.join(sorted(VALID_ROW_CONFIDENCES))}"
+            )
 
     expected = summary.get("rowCount")
     if expected != len(row_confidences):
@@ -186,7 +213,7 @@ def validate_path(path: Path, require_readable_fallback_labels: bool) -> tuple[i
         if path.suffix == ".json":
             payloads = [load_json(path)]
         elif path.suffix in TEXT_EXPORT_SUFFIXES:
-            payloads = markdown_payloads(path, allow_whole_file_json=path.suffix == ".txt")
+            payloads = markdown_payloads(path, allow_whole_file_json=True)
         else:
             return 0, []
     except (OSError, json.JSONDecodeError, ValueError) as error:
@@ -204,7 +231,7 @@ def validate_path(path: Path, require_readable_fallback_labels: bool) -> tuple[i
     return checked, failures
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Validate debug-only custom workout row counts in proof-folder JSON and text exports."
     )
@@ -225,7 +252,7 @@ def main() -> int:
             "can still be scanned without this flag."
         ),
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     paths = iter_paths([path.resolve() for path in args.paths])
     checked_payloads = 0

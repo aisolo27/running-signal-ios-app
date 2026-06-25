@@ -401,7 +401,7 @@ public enum DiagnosticsExport {
         workout: CanonicalWorkout
     ) -> String {
         guard let result, !result.intervals.isEmpty else {
-            return "Unavailable. RunSignal needs a WorkoutKit plan and HealthKit distance/time evidence before it can reconstruct custom workout intervals."
+            return "Unavailable. Custom interval rows need a supported public WorkoutKit and HealthKit evidence pattern before RunSignal can show them."
         }
 
         let rows = result.intervals.map { interval in
@@ -558,12 +558,16 @@ public enum DiagnosticsExport {
         | Field | Value |
         |---|---|
         | Status | \(markdownCell(summary.status)) |
+        | Status label | \(markdownCell(summary.statusLabel)) |
         | Fallback reasons | \(markdownCell(summary.fallbackReasonLabels.isEmpty ? "None" : summary.fallbackReasonLabels.joined(separator: ", "))) |
+        | Primary fallback | \(markdownCell(summary.primaryFallbackReasonLabel ?? "None")) |
         | Row count | \(summary.rowCount) |
         | Row confidences | \(markdownCell(summary.rowConfidences.isEmpty ? "None" : summary.rowConfidences.joined(separator: ", "))) |
         | Tail ambiguity | \(markdownCell(summary.tailAmbiguity)) |
         | Promotes production behavior | \(summary.promotesProductionBehavior ? "Yes" : "No") |
         | Scope | \(markdownCell(summary.scope)) |
+        | Normal workout UI changed | \(summary.normalWorkoutUIChanged ? "Yes" : "No") |
+        | Uses FIT runtime truth | \(summary.usesFITRuntimeTruth ? "Yes" : "No") |
         """
     }
 
@@ -2361,8 +2365,10 @@ private struct RawDebugCustomWorkoutCandidateRuleRow: Codable {
 
 private struct RawDebugCustomWorkoutComparisonSummary: Codable {
     var status: String
+    var statusLabel: String
     var fallbackReasons: [String]
     var fallbackReasonLabels: [String]
+    var primaryFallbackReasonLabel: String?
     var rowCount: Int
     var rowConfidences: [String]
     var tailAmbiguity: String
@@ -2374,8 +2380,10 @@ private struct RawDebugCustomWorkoutComparisonSummary: Codable {
 
     init(comparison: DebugCustomWorkoutComparison) {
         status = comparison.status.rawValue
+        statusLabel = comparison.status.normalDetailBlockedReasonLabel
         fallbackReasons = comparison.fallbackReasons.map(\.rawValue)
         fallbackReasonLabels = comparison.fallbackReasons.map(\.normalDetailBlockedReasonLabel)
+        primaryFallbackReasonLabel = comparison.fallbackReasons.first?.normalDetailBlockedReasonLabel
         rowCount = comparison.rows.count
         rowConfidences = comparison.rows.map { $0.confidence.rawValue }
         tailAmbiguity = comparison.tailAmbiguity.rawValue
