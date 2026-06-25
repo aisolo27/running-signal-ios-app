@@ -1,6 +1,6 @@
 # RunSignal Current State
 
-Last updated: 2026-06-24
+Last updated: 2026-06-25
 
 ## Product Direction
 
@@ -9,6 +9,8 @@ RunSignal is a native iPhone SwiftUI app for evidence-grounded completed running
 Coaching expansion, backend sync, AI calls, FIT import, HealthFit import/export, and file-based workout ingestion remain out of scope.
 
 The active milestone is `Custom Workout Correctness Lock v1`: keep the eight physically proven normal-detail gates stable, use the workout-style acceptance matrix for future validation/prototype decisions, and defer interval-row analytics until custom workout structure is stable.
+
+The first-read roadmap for this milestone is `docs/project-state/accuracy-ledger.md`. Use it as the mission-control map for workout-shape status, promotion rungs, blocked classes, and which older validation docs it supersedes for day-to-day planning.
 
 ## Runtime Data Contract
 
@@ -69,8 +71,9 @@ The remaining blocked workout-style classes have explicit boundary docs:
 
 ## Current Next Steps
 
+- Use `docs/project-state/accuracy-ledger.md` first for the workout-shape status board, numeric promotion bars, and active blocker sequence.
 - Use `docs/project-state/next-work.md` for the short current priority list.
-- Use `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-correctness-lock-v1.md` as the acceptance matrix before approving new debug prototypes, normal-detail interval rows, or interval-row analytics.
+- Use `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-correctness-lock-v1.md` as the detailed acceptance matrix before approving new debug prototypes, normal-detail interval rows, or interval-row analytics.
 - Continue Gate B work by approving or rejecting exact repeat-block, Open/Extra tail, warmup/work/cooldown, and fallback rules from the row-level evidence.
 - Use `docs/validation/apple-fitness-interval-parity-dataset/ambiguous-repeat-tail-decision-rules-2026-06-24.md` before repeat-tail prototype or scorecard work; it keeps broad repeat tails blocked and defines tie-breakers/fallback reasons for docs/debug scoring.
 - Use `docs/validation/apple-fitness-interval-parity-dataset/paused-repeat-open-extra-debug-prototype-plan-2026-06-24.md` for the paused repeat fixed-tail `Open / Extra` debug/export prototype; Raw HealthKit Debug/parity output and the in-app Parity Lab status now expose row/tail/pause/fallback diagnostics and mark the exact paired-pause repeat fixed-tail shape debug-supported, while normal-detail promotion remains blocked pending separate proof.

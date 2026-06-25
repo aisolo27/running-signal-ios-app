@@ -1,11 +1,13 @@
 # Documentation Index
 
-Last updated: 2026-06-24
+Last updated: 2026-06-25
 
 ## Active Docs To Read First
 
 - `docs/project-state/current-state.md`: first project-context file for every task.
+- `docs/project-state/accuracy-ledger.md`: first-read workout-shape accuracy map, promotion ladder, active blockers, and replacement/archive policy for scattered validation planning docs.
 - `docs/project-state/next-work.md`: short priority list and out-of-scope guardrails.
+- `docs/project-state/daily-learning-review.md`: dated automation summaries for useful lower-confidence or already-codified conversation lessons.
 - `AGENTS.md`: repo rules, tool routing, and context-loading policy.
 - `docs/bug-log.md`: selective gotcha index; read only the relevant section.
 - `docs/claude-runsignal-architecture-handoff.md`: Claude-oriented app architecture, HealthKit data map, analytics/UI handoff, and review prompts.
@@ -13,7 +15,7 @@ Last updated: 2026-06-24
 
 ## Active Validation Docs
 
-Keep active validation lean. Once a date-specific parity investigation is complete, move it to `docs/archive/old-validation/` unless it is still the latest active investigation, latest active evidence review, or current blocker.
+Keep active validation lean. For custom-workout status and roadmap questions, start with `docs/project-state/accuracy-ledger.md`; use the files below as source evidence only when the ledger row or task names them. Once a date-specific parity investigation is complete, move it to `docs/archive/old-validation/` unless it is still the latest active investigation, latest active evidence review, or current blocker.
 
 - `docs/validation/2026-06-10-apple-fitness-parity.md`: current Jun 10 Apple Fitness parity note.
 - `docs/validation/apple-fitness-interval-model-research.md`: current WorkoutKit/HealthKit interval reconstruction research.

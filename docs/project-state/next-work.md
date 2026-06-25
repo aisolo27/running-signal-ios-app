@@ -1,9 +1,11 @@
 # Next Work
 
-Last updated: 2026-06-24
+Last updated: 2026-06-25
 
 ## Priority 1
 
+- Start with `docs/project-state/accuracy-ledger.md` for the active workout-shape map. Any Swift change, normal-detail promotion, or interval-row analytics task must name the ledger row it moves and the promotion rung it satisfies.
+- Treat the older validation planning docs as source evidence, not the first-read roadmap, unless the ledger points to them for the exact shape under discussion.
 - Keep production interval behavior unchanged until a later task explicitly approves a prototype.
 - Use FIT as the automated offline validation oracle for boundary scoring.
 - Keep Apple Fitness screenshots/manual rows optional; they are no longer the main validation gate.
@@ -22,10 +24,10 @@ Last updated: 2026-06-24
 
 ## Priority 2
 
-- Review `docs/validation/apple-fitness-interval-parity-dataset/gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.md` before any Gate B implementation discussion.
-- Review `docs/validation/apple-fitness-interval-parity-dataset/gate-b-phase-3-readiness-review.md` before any Phase 3 prototype discussion.
-- Review `docs/validation/apple-fitness-interval-parity-dataset/gate-b-agent-findings-2026-03-to-2026-06.md` and the derived repeat-block, Open/Extra tail, and narrow candidate scorecards before any further Gate B rule work.
-- Review `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-shape-coverage-audit-2026-03-to-2026-06.md` before any Phase 3 prototype or narrow evidence collection plan; collect balanced easy, tempo, interval, tail, and pause/timer evidence instead of only more narrow warmup/work/open-cooldown rows.
+- Use `docs/project-state/accuracy-ledger.md` before opening Gate B planning docs. The ledger now owns day-to-day status, promotion bars, and the active blocker sequence.
+- Read `docs/validation/apple-fitness-interval-parity-dataset/gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.md` only when the active ledger row needs Gate B row-level FIT evidence.
+- Read `docs/validation/apple-fitness-interval-parity-dataset/gate-b-phase-3-readiness-review.md`, `docs/validation/apple-fitness-interval-parity-dataset/gate-b-agent-findings-2026-03-to-2026-06.md`, and `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-shape-coverage-audit-2026-03-to-2026-06.md` as source evidence, not as parallel roadmaps.
+- Use `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-shape-coverage-audit-2026-03-to-2026-06.md` only when collecting new balanced evidence across easy, tempo, interval, tail, and pause/timer classes.
 - Use `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-balanced-evidence-collection-plan.md` when collecting new custom workout evidence; it defines minimum and better targets, Apple Watch templates, screenshot/export checklists, and subclass acceptance criteria.
 - Use `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-evidence-collection-tracker.md` as the refreshed AIS-30 tracker for completed proof, blocked classes, optional future collection, and the do-not-recollect list.
 - Use `docs/validation/apple-fitness-interval-parity-dataset/apple-fitness-screenshot-confirmed-scorecard-2026-03-to-2026-06.md` before any debug-only rule proposal based on screenshot-confirmed Apple Fitness rows.
