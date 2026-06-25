@@ -1393,6 +1393,7 @@ import Testing
     #expect(markdown.contains("\"tailElapsedDurationSeconds\""))
     #expect(markdown.contains("\"tailDistanceMeters\""))
     #expect(markdown.contains("\"fallbackReasons\""))
+    #expect(markdown.contains("\"fallbackReasonLabels\""))
     #expect(markdown.contains("\"safetyFlags\""))
     #expect(markdown.contains("\"fitValidationStatus\" : \"offline-evidence-only-not-runtime-truth\""))
     #expect(markdown.contains("\"durationDisplayRule\""))
@@ -2675,7 +2676,7 @@ import Testing
 
     let blockedReasons = CustomWorkoutNormalDetailGate.blockedReasons(workout: workout, evidence: evidence)
     #expect(blockedReasons.contains { $0.contains("pause-adjusted timer logic") })
-    #expect(blockedReasons.contains { $0.contains("Tail status is fixedCooldownFollowedByPossibleOpenExtraTail") })
+    #expect(blockedReasons.contains { $0.contains("Fixed Cooldown may be followed by an Open / Extra tail") })
 }
 
 @Test func parityPacketExportSupportsPausedRepeatFixedCooldownOpenTailAsDebugOnly() throws {
@@ -2797,6 +2798,7 @@ import Testing
     )
     #expect(unpairedPauseSummary["status"] as? String != "supported")
     #expect((unpairedPauseSummary["fallbackReasons"] as? [String])?.isEmpty == false)
+    #expect((unpairedPauseSummary["fallbackReasonLabels"] as? [String])?.isEmpty == false)
 
     var missingRecoverySteps = baseSteps
     missingRecoverySteps[2] = PlannedWorkoutStep(index: 3, label: "Work 1 extra", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .time, plannedGoalValue: 105, plannedGoalDisplayText: "105 s")
@@ -2880,9 +2882,9 @@ import Testing
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: repeatTailWorkout, evidence: repeatTailEvidence) == nil)
 
     let repeatTailBlockedReasons = CustomWorkoutNormalDetailGate.blockedReasons(workout: repeatTailWorkout, evidence: repeatTailEvidence)
-    #expect(repeatTailBlockedReasons.contains { $0.contains("Structured comparison status is open-tail-needs-rule") })
+    #expect(repeatTailBlockedReasons.contains { $0.contains("Open / Extra tail handling needs an approved rule") })
     #expect(repeatTailBlockedReasons.contains { $0.contains("Open / Extra tail handling is ambiguous") })
-    #expect(repeatTailBlockedReasons.contains { $0.contains("Tail status is fixedCooldownFollowedByPossibleOpenExtraTail") })
+    #expect(repeatTailBlockedReasons.contains { $0.contains("Fixed Cooldown may be followed by an Open / Extra tail") })
     #expect(CustomWorkoutNormalDetailGate.blockedReasons(workout: repeatWorkout, evidence: repeatEvidence).contains {
         $0.contains("outside the approved")
     })

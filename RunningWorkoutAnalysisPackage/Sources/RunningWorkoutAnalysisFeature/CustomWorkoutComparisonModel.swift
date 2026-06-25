@@ -10,6 +10,27 @@ enum CustomWorkoutComparisonStatus: String, Codable, Equatable, Sendable {
     case missingRequiredEvidence = "missing-required-evidence"
 }
 
+extension CustomWorkoutComparisonStatus {
+    var normalDetailBlockedReasonLabel: String {
+        switch self {
+        case .supported:
+            "Structured comparison is supported."
+        case .equivalent:
+            "Structured comparison is equivalent but not approved for normal detail."
+        case .inconclusive:
+            "Structured comparison is inconclusive."
+        case .repeatBlockNeedsRule:
+            "Repeat-block rows need an approved rule."
+        case .openTailNeedsRule:
+            "Open / Extra tail handling needs an approved rule."
+        case .labelMappingNeedsRule:
+            "Custom workout label mapping needs an approved rule."
+        case .missingRequiredEvidence:
+            "Structured comparison is missing required evidence."
+        }
+    }
+}
+
 enum CustomWorkoutFallbackReason: String, Codable, Equatable, Sendable {
     case missingPlannedSteps
     case missingActivityRows
@@ -93,6 +114,23 @@ enum CustomWorkoutTailAmbiguity: String, Codable, Equatable, Sendable {
     case fixedCooldownFollowedByPossibleOpenExtraTail
     case postPlanActivityCandidate
     case ambiguous
+}
+
+extension CustomWorkoutTailAmbiguity {
+    var normalDetailBlockedReasonLabel: String {
+        switch self {
+        case .none:
+            "No tail ambiguity."
+        case .plannedOpenCooldownContinuesToWorkoutEnd:
+            "Final open Cooldown continues through workout end."
+        case .fixedCooldownFollowedByPossibleOpenExtraTail:
+            "Fixed Cooldown may be followed by an Open / Extra tail."
+        case .postPlanActivityCandidate:
+            "Post-plan activity needs an explicit Open / Extra rule."
+        case .ambiguous:
+            "Tail status is ambiguous."
+        }
+    }
 }
 
 enum CustomWorkoutRowConfidence: String, Codable, Equatable, Sendable {

@@ -989,13 +989,13 @@ public enum CustomWorkoutNormalDetailGate {
 
         let comparison = approvedComparison(plannedSteps: plannedSteps, activities: activities, workout: workout)
         if comparison.status != .supported {
-            reasons.append("Structured comparison status is \(comparison.status.rawValue).")
+            reasons.append(comparison.status.normalDetailBlockedReasonLabel)
         }
         for fallback in comparison.fallbackReasons {
             reasons.append(fallback.normalDetailBlockedReasonLabel)
         }
         if comparison.tailAmbiguity != .none {
-            reasons.append("Tail status is \(comparison.tailAmbiguity.rawValue).")
+            reasons.append(comparison.tailAmbiguity.normalDetailBlockedReasonLabel)
         }
 
         if isApprovedNormalDetailShape(plannedSteps),

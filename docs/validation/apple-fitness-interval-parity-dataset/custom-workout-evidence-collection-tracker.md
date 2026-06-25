@@ -1,6 +1,6 @@
 # Custom Workout Evidence Collection Tracker
 
-Last updated: 2026-06-23
+Last updated: 2026-06-25
 
 ## Purpose
 
@@ -50,6 +50,10 @@ Use this only when new workouts naturally occur. Do not create abnormal workouts
 | Future paused warmup/work/open-cooldown | 1-2 | Useful only if a later task proposes that exact timer-rule subclass. |
 | Future true paused repeat fixed-tail Open/Extra | 1-2 | Useful only if collected workout has paired pauses and an unambiguous post-fixed-row tail. |
 | Future broad recovery-tail variants | 1-2 | Useful only after a later task defines the exact subclass. |
+
+2026-06-25 ledger check: the exact paused repeat fixed-tail `Open / Extra` row is named, but it does not yet satisfy `Evidence Available`; existing paused-repeat proof is the open-cooldown control shape, and FIT session-minus-lap tail evidence is offline validation only. Fresh exact-shape proof folders should pass `validate_parity_export_consistency.py --require-readable-fallback-labels <proof-folder>` before they are treated as rung 2 evidence.
+
+2026-06-25 archive audit: 64 parsed debug/parity payloads contained 36 repeat-like payloads, 4 repeat-tail `Open / Extra` payloads, and 32 paired paused-repeat payloads, but 0 payloads with both paired pauses and a cooldown-before-`Open / Extra` tail.
 
 ## Do Not Recollect
 

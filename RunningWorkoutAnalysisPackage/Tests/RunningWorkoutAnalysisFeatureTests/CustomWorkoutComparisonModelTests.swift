@@ -3,10 +3,16 @@ import Testing
 @testable import RunningWorkoutAnalysisFeature
 
 @Test func customWorkoutFallbackReasonNormalDetailBlockedLabelsAvoidRawEnumNames() {
-    let label = CustomWorkoutFallbackReason.openExtraTailAmbiguous.normalDetailBlockedReasonLabel
+    let fallbackLabel = CustomWorkoutFallbackReason.openExtraTailAmbiguous.normalDetailBlockedReasonLabel
+    let statusLabel = CustomWorkoutComparisonStatus.openTailNeedsRule.normalDetailBlockedReasonLabel
+    let tailLabel = CustomWorkoutTailAmbiguity.fixedCooldownFollowedByPossibleOpenExtraTail.normalDetailBlockedReasonLabel
 
-    #expect(label == "Open / Extra tail handling is ambiguous for this workout shape.")
-    #expect(!label.contains("openExtraTailAmbiguous"))
+    #expect(fallbackLabel == "Open / Extra tail handling is ambiguous for this workout shape.")
+    #expect(!fallbackLabel.contains("openExtraTailAmbiguous"))
+    #expect(statusLabel == "Open / Extra tail handling needs an approved rule.")
+    #expect(!statusLabel.contains("open-tail-needs-rule"))
+    #expect(tailLabel == "Fixed Cooldown may be followed by an Open / Extra tail.")
+    #expect(!tailLabel.contains("fixedCooldownFollowedByPossibleOpenExtraTail"))
 }
 
 @Test func debugCustomWorkoutComparisonMissingPlannedRowsReturnsMissingRequiredEvidence() {

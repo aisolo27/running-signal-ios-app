@@ -558,7 +558,7 @@ public enum DiagnosticsExport {
         | Field | Value |
         |---|---|
         | Status | \(markdownCell(summary.status)) |
-        | Fallback reasons | \(markdownCell(summary.fallbackReasons.isEmpty ? "None" : summary.fallbackReasons.joined(separator: ", "))) |
+        | Fallback reasons | \(markdownCell(summary.fallbackReasonLabels.isEmpty ? "None" : summary.fallbackReasonLabels.joined(separator: ", "))) |
         | Row count | \(summary.rowCount) |
         | Row confidences | \(markdownCell(summary.rowConfidences.isEmpty ? "None" : summary.rowConfidences.joined(separator: ", "))) |
         | Tail ambiguity | \(markdownCell(summary.tailAmbiguity)) |
@@ -2362,6 +2362,7 @@ private struct RawDebugCustomWorkoutCandidateRuleRow: Codable {
 private struct RawDebugCustomWorkoutComparisonSummary: Codable {
     var status: String
     var fallbackReasons: [String]
+    var fallbackReasonLabels: [String]
     var rowCount: Int
     var rowConfidences: [String]
     var tailAmbiguity: String
@@ -2374,6 +2375,7 @@ private struct RawDebugCustomWorkoutComparisonSummary: Codable {
     init(comparison: DebugCustomWorkoutComparison) {
         status = comparison.status.rawValue
         fallbackReasons = comparison.fallbackReasons.map(\.rawValue)
+        fallbackReasonLabels = comparison.fallbackReasons.map(\.normalDetailBlockedReasonLabel)
         rowCount = comparison.rows.count
         rowConfidences = comparison.rows.map { $0.confidence.rawValue }
         tailAmbiguity = comparison.tailAmbiguity.rawValue

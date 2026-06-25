@@ -17,10 +17,14 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent
 JSON_FENCE_RE = re.compile(r"```json\s*\n(.*?)\n```", re.DOTALL)
+LOWER_CAMEL_RE = re.compile(r"^[a-z]+(?:[A-Z][A-Za-z0-9]*)+$")
 SUMMARY_KEY = "customWorkoutCandidateRuleSummary"
 ROWS_KEY = "customWorkoutCandidateRuleRows"
 COMPARISON_KEY = "customWorkoutComparisonSummary"
+FALLBACK_REASONS_KEY = "fallbackReasons"
+FALLBACK_REASON_LABELS_KEY = "fallbackReasonLabels"
 RELEVANT_KEYS = (SUMMARY_KEY, ROWS_KEY, COMPARISON_KEY)
+TEXT_EXPORT_SUFFIXES = {".md", ".txt"}
 
 
 def load_json(path: Path) -> Any:
@@ -28,7 +32,7 @@ def load_json(path: Path) -> Any:
         return json.load(handle)
 
 
-def markdown_payloads(path: Path) -> list[Any]:
+def markdown_payloads(path: Path, allow_whole_file_json: bool = False) -> list[Any]:
     text = path.read_text(encoding="utf-8")
     payloads: list[Any] = []
     for match in JSON_FENCE_RE.finditer(text):
@@ -39,6 +43,14 @@ def markdown_payloads(path: Path) -> list[Any]:
             payloads.append(json.loads(raw))
         except json.JSONDecodeError as error:
             raise ValueError(f"invalid JSON fence containing parity export fields: {error}") from error
+    if payloads or not allow_whole_file_json or not any(key in text for key in RELEVANT_KEYS):
+        return payloads
+    try:
+        payloads.append(json.loads(text))
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            f"text contains parity export fields but is not fenced JSON or whole-file JSON: {error}"
+        ) from error
     return payloads
 
 
@@ -69,7 +81,60 @@ def candidate_row_count(payload: dict[str, Any]) -> int | None:
     return len(rows)
 
 
-def comparison_row_count(payload: dict[str, Any]) -> int | None:
+def validate_fallback_reason_labels(
+    summary: dict[str, Any],
+    require_readable_fallback_labels: bool,
+) -> None:
+    reasons = summary.get(FALLBACK_REASONS_KEY)
+    labels = summary.get(FALLBACK_REASON_LABELS_KEY)
+
+    if reasons is None:
+        if labels is not None:
+            raise ValueError(
+                f"{COMPARISON_KEY}.{FALLBACK_REASON_LABELS_KEY} is present without "
+                f"{FALLBACK_REASONS_KEY}"
+            )
+        return
+    if not isinstance(reasons, list):
+        raise ValueError(f"{COMPARISON_KEY}.{FALLBACK_REASONS_KEY} must be an array")
+
+    if labels is None:
+        if require_readable_fallback_labels and reasons:
+            raise ValueError(
+                f"{COMPARISON_KEY}.{FALLBACK_REASON_LABELS_KEY} is required when "
+                f"{FALLBACK_REASONS_KEY} is non-empty"
+            )
+        return
+    if not isinstance(labels, list):
+        raise ValueError(f"{COMPARISON_KEY}.{FALLBACK_REASON_LABELS_KEY} must be an array")
+    if len(labels) != len(reasons):
+        raise ValueError(
+            f"{COMPARISON_KEY}.{FALLBACK_REASON_LABELS_KEY} has {len(labels)} labels, "
+            f"but {FALLBACK_REASONS_KEY} has {len(reasons)} reasons"
+        )
+
+    for index, label in enumerate(labels):
+        if not isinstance(label, str) or not label.strip():
+            raise ValueError(
+                f"{COMPARISON_KEY}.{FALLBACK_REASON_LABELS_KEY}[{index}] must be a non-empty string"
+            )
+        reason = reasons[index]
+        if isinstance(reason, str) and label == reason:
+            raise ValueError(
+                f"{COMPARISON_KEY}.{FALLBACK_REASON_LABELS_KEY}[{index}] repeats raw "
+                f"fallback reason {reason!r}"
+            )
+        if LOWER_CAMEL_RE.fullmatch(label):
+            raise ValueError(
+                f"{COMPARISON_KEY}.{FALLBACK_REASON_LABELS_KEY}[{index}] looks like a raw "
+                f"fallback enum value: {label!r}"
+            )
+
+
+def comparison_row_count(
+    payload: dict[str, Any],
+    require_readable_fallback_labels: bool,
+) -> int | None:
     summary = payload.get(COMPARISON_KEY)
     if summary is None:
         return None
@@ -86,10 +151,11 @@ def comparison_row_count(payload: dict[str, Any]) -> int | None:
             f"comparison rowCount is {expected}, but rowConfidences has {len(row_confidences)} rows"
         )
 
+    validate_fallback_reason_labels(summary, require_readable_fallback_labels)
     return len(row_confidences)
 
 
-def validate_payload(payload: Any) -> bool:
+def validate_payload(payload: Any, require_readable_fallback_labels: bool) -> bool:
     if not isinstance(payload, dict):
         return False
     if not any(key in payload for key in RELEVANT_KEYS):
@@ -99,7 +165,7 @@ def validate_payload(payload: Any) -> bool:
         raise ValueError(f"{ROWS_KEY} is present without {SUMMARY_KEY}")
 
     candidate_row_count(payload)
-    comparison_row_count(payload)
+    comparison_row_count(payload, require_readable_fallback_labels)
     return True
 
 
@@ -109,18 +175,18 @@ def iter_paths(roots: list[Path]) -> list[Path]:
         if root.is_file():
             paths.append(root)
             continue
-        for suffix in ("*.json", "*.md"):
+        for suffix in ("*.json", "*.md", "*.txt"):
             paths.extend(root.rglob(suffix))
     return sorted(set(paths))
 
 
-def validate_path(path: Path) -> tuple[int, list[str]]:
+def validate_path(path: Path, require_readable_fallback_labels: bool) -> tuple[int, list[str]]:
     payloads: list[Any]
     try:
         if path.suffix == ".json":
             payloads = [load_json(path)]
-        elif path.suffix == ".md":
-            payloads = markdown_payloads(path)
+        elif path.suffix in TEXT_EXPORT_SUFFIXES:
+            payloads = markdown_payloads(path, allow_whole_file_json=path.suffix == ".txt")
         else:
             return 0, []
     except (OSError, json.JSONDecodeError, ValueError) as error:
@@ -130,17 +196,17 @@ def validate_path(path: Path) -> tuple[int, list[str]]:
     failures: list[str] = []
     for index, payload in enumerate(payloads, start=1):
         try:
-            if validate_payload(payload):
+            if validate_payload(payload, require_readable_fallback_labels):
                 checked += 1
         except ValueError as error:
-            suffix = f" JSON fence #{index}" if path.suffix == ".md" else ""
+            suffix = f" JSON fence #{index}" if path.suffix in TEXT_EXPORT_SUFFIXES else ""
             failures.append(f"{path}{suffix}: {error}")
     return checked, failures
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Validate debug-only custom workout row counts in proof-folder JSON and markdown exports."
+        description="Validate debug-only custom workout row counts in proof-folder JSON and text exports."
     )
     parser.add_argument(
         "paths",
@@ -148,6 +214,16 @@ def main() -> int:
         type=Path,
         default=[ROOT],
         help="Files or folders to scan. Defaults to the parity dataset folder.",
+    )
+    parser.add_argument(
+        "--require-readable-fallback-labels",
+        action="store_true",
+        help=(
+            "Require customWorkoutComparisonSummary fallbackReasonLabels when "
+            "fallbackReasons is non-empty. Use this for fresh proof folders exported "
+            "by builds that include readable fallback labels; older archived exports "
+            "can still be scanned without this flag."
+        ),
     )
     args = parser.parse_args()
 
@@ -157,7 +233,7 @@ def main() -> int:
     failures: list[str] = []
 
     for path in paths:
-        checked, path_failures = validate_path(path)
+        checked, path_failures = validate_path(path, args.require_readable_fallback_labels)
         if checked:
             checked_files += 1
             checked_payloads += checked
@@ -171,7 +247,7 @@ def main() -> int:
     skipped_files = len(paths) - checked_files
     print(
         f"Validated {checked_payloads} parity export payload(s) in {checked_files} file(s); "
-        f"skipped {skipped_files} JSON/Markdown file(s) without debug parity fields."
+        f"skipped {skipped_files} JSON/text file(s) without debug parity fields."
     )
     return 0
 

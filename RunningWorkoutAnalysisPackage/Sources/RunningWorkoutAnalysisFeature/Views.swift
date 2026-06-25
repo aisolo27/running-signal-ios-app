@@ -2146,7 +2146,7 @@ struct RawHealthKitWorkoutDebugView: View {
         return ParityLabCandidateRowsResult(
             rows: rows,
             structuredStatus: comparison.status.rawValue,
-            fallbackReasons: comparison.fallbackReasons.map { $0.rawValue },
+            fallbackReasons: comparison.fallbackReasons.map(\.normalDetailBlockedReasonLabel),
             pairedPauseCount: pauses.count,
             totalPairedPauseSeconds: pauses.map(\.durationSeconds).reduce(0, +)
         )
