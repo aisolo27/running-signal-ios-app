@@ -3204,6 +3204,231 @@ import Testing
     }
 }
 
+@Test func approvedNormalDetailGateFamiliesRejectAdjacentShapes() throws {
+    func fixture(
+        id: String,
+        startOffset: TimeInterval,
+        distanceMeters: Double,
+        durationSeconds: TimeInterval,
+        plannedSteps: [PlannedWorkoutStep],
+        activityWindows: [(start: TimeInterval, end: TimeInterval, distance: Double)],
+        distancePoints: [(offset: TimeInterval, distance: Double)],
+        events: [WorkoutEvidenceEvent] = []
+    ) -> (workout: CanonicalWorkout, evidence: WorkoutEvidence) {
+        let start = Date(timeIntervalSince1970: startOffset)
+        let workout = testWorkout(id: id, start: start, distanceMeters: distanceMeters, durationSeconds: durationSeconds)
+        return (
+            workout,
+            normalDetailGateEvidence(
+                workout: workout,
+                plannedSteps: plannedSteps,
+                activityWindows: activityWindows,
+                distancePoints: distancePoints,
+                events: events
+            )
+        )
+    }
+
+    func singleWorkStep(
+        plannedDistance: Double,
+        repeatIndex: Int? = 1
+    ) -> PlannedWorkoutStep {
+        PlannedWorkoutStep(
+            index: 1,
+            label: repeatIndex == 2 ? "Work 2" : "Work 1",
+            stepType: .work,
+            repeatBlockIndex: repeatIndex == nil ? nil : 1,
+            repeatIndex: repeatIndex,
+            plannedGoalType: .distance,
+            plannedGoalValue: plannedDistance,
+            plannedGoalDisplayText: "\(Int(plannedDistance)) m"
+        )
+    }
+
+    func warmupWorkCooldownSteps(finalCooldownGoal: PlannedWorkoutGoalType) -> [PlannedWorkoutStep] {
+        [
+            PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km"),
+            PlannedWorkoutStep(
+                index: 3,
+                label: "Cooldown",
+                stepType: .cooldown,
+                plannedGoalType: finalCooldownGoal,
+                plannedGoalValue: finalCooldownGoal == .distance ? 1_000 : nil,
+                plannedGoalDisplayText: finalCooldownGoal == .distance ? "1 km" : "Open"
+            )
+        ]
+    }
+
+    func repeatSteps(finalCooldownGoal: PlannedWorkoutGoalType) -> [PlannedWorkoutStep] {
+        [
+            PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .distance, plannedGoalValue: 400, plannedGoalDisplayText: "400 m"),
+            PlannedWorkoutStep(index: 3, label: "Recovery 1", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 1, plannedGoalType: .time, plannedGoalValue: 120, plannedGoalDisplayText: "120 s"),
+            PlannedWorkoutStep(index: 4, label: "Work 2", stepType: .work, repeatBlockIndex: 1, repeatIndex: 2, plannedGoalType: .distance, plannedGoalValue: 400, plannedGoalDisplayText: "400 m"),
+            PlannedWorkoutStep(index: 5, label: "Recovery 2", stepType: .recovery, repeatBlockIndex: 1, repeatIndex: 2, plannedGoalType: .time, plannedGoalValue: 120, plannedGoalDisplayText: "120 s"),
+            PlannedWorkoutStep(
+                index: 6,
+                label: "Cooldown",
+                stepType: .cooldown,
+                plannedGoalType: finalCooldownGoal,
+                plannedGoalValue: finalCooldownGoal == .distance ? 1_000 : nil,
+                plannedGoalDisplayText: finalCooldownGoal == .distance ? "1 km" : "Open"
+            )
+        ]
+    }
+
+    let stoppedEarly = fixture(
+        id: "guard-audit-stopped-early-single-work",
+        startOffset: 10_800,
+        distanceMeters: 3_026,
+        durationSeconds: 733.8,
+        plannedSteps: [singleWorkStep(plannedDistance: 5_000)],
+        activityWindows: [(start: 0, end: 733.8, distance: 3_026)],
+        distancePoints: [(733.8, 3_026)]
+    )
+    let simpleWorkOpen = fixture(
+        id: "guard-audit-simple-work-open",
+        startOffset: 10_810,
+        distanceMeters: 5_050,
+        durationSeconds: 1_930,
+        plannedSteps: [singleWorkStep(plannedDistance: 5_000)],
+        activityWindows: [(start: 0, end: 1_900, distance: 5_000)],
+        distancePoints: [(1_900, 5_000), (1_930, 5_050)]
+    )
+    let trueRepeatSingleWork = fixture(
+        id: "guard-audit-simple-work-open-true-repeat",
+        startOffset: 10_820,
+        distanceMeters: 450,
+        durationSeconds: 190,
+        plannedSteps: [singleWorkStep(plannedDistance: 400, repeatIndex: 2)],
+        activityWindows: [(start: 0, end: 180, distance: 400)],
+        distancePoints: [(180, 400), (190, 450)]
+    )
+
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowSingleFixedDistanceWorkStoppedEarly(workout: stoppedEarly.workout, evidence: stoppedEarly.evidence) != nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowSimpleFixedDistanceWorkOpenTail(workout: stoppedEarly.workout, evidence: stoppedEarly.evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowSimpleFixedDistanceWorkOpenTail(workout: simpleWorkOpen.workout, evidence: simpleWorkOpen.evidence) != nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowSingleFixedDistanceWorkStoppedEarly(workout: simpleWorkOpen.workout, evidence: simpleWorkOpen.evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowSimpleFixedDistanceWorkOpenTail(workout: trueRepeatSingleWork.workout, evidence: trueRepeatSingleWork.evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: trueRepeatSingleWork.workout, evidence: trueRepeatSingleWork.evidence) == nil)
+
+    let warmupWorkOpenCooldown = fixture(
+        id: "guard-audit-wwc-open-cooldown",
+        startOffset: 10_830,
+        distanceMeters: 3_500,
+        durationSeconds: 1_500,
+        plannedSteps: warmupWorkCooldownSteps(finalCooldownGoal: .open),
+        activityWindows: [(start: 0, end: 800, distance: 2_000), (start: 800, end: 1_400, distance: 1_250), (start: 1_400, end: 1_500, distance: 250)],
+        distancePoints: [(800, 2_000), (1_400, 3_250), (1_500, 3_500)]
+    )
+    let warmupWorkFixedCooldownTail = fixture(
+        id: "guard-audit-wwc-fixed-cooldown-tail",
+        startOffset: 10_840,
+        distanceMeters: 4_050,
+        durationSeconds: 1_700,
+        plannedSteps: warmupWorkCooldownSteps(finalCooldownGoal: .distance),
+        activityWindows: [(start: 0, end: 800, distance: 2_000), (start: 800, end: 1_200, distance: 1_000), (start: 1_200, end: 1_600, distance: 1_000)],
+        distancePoints: [(800, 2_000), (1_200, 3_000), (1_600, 4_000), (1_700, 4_050)]
+    )
+    let pausedWWCStart = Date(timeIntervalSince1970: 10_850)
+    let pausedWarmupWorkOpenCooldown = fixture(
+        id: "guard-audit-wwc-paused-timer-outlier",
+        startOffset: 10_850,
+        distanceMeters: 3_500,
+        durationSeconds: 1_500,
+        plannedSteps: warmupWorkCooldownSteps(finalCooldownGoal: .open),
+        activityWindows: [(start: 0, end: 800, distance: 2_000), (start: 800, end: 1_400, distance: 1_250), (start: 1_400, end: 1_500, distance: 250)],
+        distancePoints: [(800, 2_000), (1_400, 3_250), (1_500, 3_500)],
+        events: [
+            WorkoutEvidenceEvent(startDate: pausedWWCStart.addingTimeInterval(900), endDate: pausedWWCStart.addingTimeInterval(900), type: "HKWorkoutEventType(rawValue: 1)", label: "Pause"),
+            WorkoutEvidenceEvent(startDate: pausedWWCStart.addingTimeInterval(960), endDate: pausedWWCStart.addingTimeInterval(960), type: "HKWorkoutEventType(rawValue: 2)", label: "Resume")
+        ]
+    )
+
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkOpenCooldown(workout: warmupWorkOpenCooldown.workout, evidence: warmupWorkOpenCooldown.evidence) != nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkFixedCooldownOpenTail(workout: warmupWorkOpenCooldown.workout, evidence: warmupWorkOpenCooldown.evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkFixedCooldownOpenTail(workout: warmupWorkFixedCooldownTail.workout, evidence: warmupWorkFixedCooldownTail.evidence) != nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowWarmupWorkOpenCooldown(workout: warmupWorkFixedCooldownTail.workout, evidence: warmupWorkFixedCooldownTail.evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowSimpleFixedDistanceWorkOpenTail(workout: warmupWorkFixedCooldownTail.workout, evidence: warmupWorkFixedCooldownTail.evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: pausedWarmupWorkOpenCooldown.workout, evidence: pausedWarmupWorkOpenCooldown.evidence) == nil)
+
+    let repeatOpenCooldown = fixture(
+        id: "guard-audit-repeat-open-cooldown",
+        startOffset: 10_860,
+        distanceMeters: 4_800,
+        durationSeconds: 1_600,
+        plannedSteps: repeatSteps(finalCooldownGoal: .open),
+        activityWindows: [(start: 0, end: 700, distance: 2_000), (start: 700, end: 820, distance: 400), (start: 820, end: 940, distance: 100), (start: 940, end: 1_060, distance: 400), (start: 1_060, end: 1_180, distance: 100), (start: 1_180, end: 1_600, distance: 1_800)],
+        distancePoints: [(700, 2_000), (820, 2_400), (940, 2_500), (1_060, 2_900), (1_180, 3_000), (1_600, 4_800)]
+    )
+    let repeatFixedCooldownTail = fixture(
+        id: "guard-audit-repeat-fixed-cooldown-tail",
+        startOffset: 10_870,
+        distanceMeters: 4_050,
+        durationSeconds: 1_500,
+        plannedSteps: repeatSteps(finalCooldownGoal: .distance),
+        activityWindows: [(start: 0, end: 700, distance: 2_000), (start: 700, end: 820, distance: 400), (start: 820, end: 940, distance: 100), (start: 940, end: 1_060, distance: 400), (start: 1_060, end: 1_180, distance: 100), (start: 1_180, end: 1_400, distance: 1_000)],
+        distancePoints: [(700, 2_000), (820, 2_400), (940, 2_500), (1_060, 2_900), (1_180, 3_000), (1_400, 4_000), (1_500, 4_050)]
+    )
+    let danglingPauseRepeatTailStart = Date(timeIntervalSince1970: 10_880)
+    let danglingPauseRepeatTail = fixture(
+        id: "guard-audit-repeat-fixed-cooldown-tail-dangling-pause",
+        startOffset: 10_880,
+        distanceMeters: 4_050,
+        durationSeconds: 1_500,
+        plannedSteps: repeatSteps(finalCooldownGoal: .distance),
+        activityWindows: [(start: 0, end: 700, distance: 2_000), (start: 700, end: 820, distance: 400), (start: 820, end: 940, distance: 100), (start: 940, end: 1_060, distance: 400), (start: 1_060, end: 1_180, distance: 100), (start: 1_180, end: 1_400, distance: 1_000)],
+        distancePoints: [(700, 2_000), (820, 2_400), (940, 2_500), (1_060, 2_900), (1_180, 3_000), (1_400, 4_000), (1_500, 4_050)],
+        events: [
+            WorkoutEvidenceEvent(startDate: danglingPauseRepeatTailStart.addingTimeInterval(1_000), endDate: danglingPauseRepeatTailStart.addingTimeInterval(1_000), type: "HKWorkoutEventType(rawValue: 1)", label: "Pause")
+        ]
+    )
+
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowNoPauseRepeatBlockOpenCooldown(workout: repeatOpenCooldown.workout, evidence: repeatOpenCooldown.evidence) != nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowNoPauseRepeatBlockFixedCooldownOpenTail(workout: repeatOpenCooldown.workout, evidence: repeatOpenCooldown.evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowNoPauseRepeatBlockFixedCooldownOpenTail(workout: repeatFixedCooldownTail.workout, evidence: repeatFixedCooldownTail.evidence) != nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowNoPauseRepeatBlockOpenCooldown(workout: repeatFixedCooldownTail.workout, evidence: repeatFixedCooldownTail.evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowSimpleFixedDistanceWorkOpenTail(workout: repeatFixedCooldownTail.workout, evidence: repeatFixedCooldownTail.evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: danglingPauseRepeatTail.workout, evidence: danglingPauseRepeatTail.evidence) == nil)
+
+    let pausedRepeatOpenCooldown = pausedRepeatOpenCooldownFixture(id: "guard-audit-paused-repeat-open-cooldown")
+    let pausedRepeatFixedTailStart = Date(timeIntervalSince1970: 10_890)
+    let pausedRepeatFixedTail = fixture(
+        id: "guard-audit-paused-repeat-fixed-tail",
+        startOffset: 10_890,
+        distanceMeters: 4_050,
+        durationSeconds: 1_500,
+        plannedSteps: repeatSteps(finalCooldownGoal: .distance),
+        activityWindows: [(start: 0, end: 700, distance: 2_000), (start: 700, end: 820, distance: 400), (start: 820, end: 940, distance: 100), (start: 940, end: 1_060, distance: 400), (start: 1_060, end: 1_180, distance: 100), (start: 1_180, end: 1_400, distance: 1_000)],
+        distancePoints: [(700, 2_000), (820, 2_400), (940, 2_500), (1_060, 2_900), (1_180, 3_000), (1_400, 4_000), (1_500, 4_050)],
+        events: [
+            WorkoutEvidenceEvent(startDate: pausedRepeatFixedTailStart.addingTimeInterval(1_000), endDate: pausedRepeatFixedTailStart.addingTimeInterval(1_000), type: "HKWorkoutEventType(rawValue: 1)", label: "Pause"),
+            WorkoutEvidenceEvent(startDate: pausedRepeatFixedTailStart.addingTimeInterval(1_090), endDate: pausedRepeatFixedTailStart.addingTimeInterval(1_090), type: "HKWorkoutEventType(rawValue: 2)", label: "Resume")
+        ]
+    )
+
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowPausedRepeatBlockOpenCooldown(workout: pausedRepeatOpenCooldown.workout, evidence: pausedRepeatOpenCooldown.evidence) != nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowNoPauseRepeatBlockOpenCooldown(workout: pausedRepeatOpenCooldown.workout, evidence: pausedRepeatOpenCooldown.evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowPausedRepeatBlockOpenCooldown(workout: repeatOpenCooldown.workout, evidence: repeatOpenCooldown.evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowPausedRepeatBlockOpenCooldown(workout: pausedRepeatFixedTail.workout, evidence: pausedRepeatFixedTail.evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: pausedRepeatFixedTail.workout, evidence: pausedRepeatFixedTail.evidence) == nil)
+
+    let recoveryTail = recoveryTailNormalDetailFixture(id: "guard-audit-recovery-containing-tail")
+    var broadRecoveryOpenCooldownSteps = recoveryTailPlannedSteps()
+    broadRecoveryOpenCooldownSteps[3] = PlannedWorkoutStep(index: 4, label: "Cooldown", stepType: .cooldown, plannedGoalType: .open, plannedGoalDisplayText: "Open")
+    let broadRecoveryOpenCooldown = recoveryTailNormalDetailFixture(
+        id: "guard-audit-recovery-containing-open-cooldown",
+        plannedSteps: broadRecoveryOpenCooldownSteps
+    )
+
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowRecoveryContainingFixedCooldownOpenTail(workout: recoveryTail.workout, evidence: recoveryTail.evidence) != nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowRecoveryContainingFixedCooldownOpenTail(workout: warmupWorkFixedCooldownTail.workout, evidence: warmupWorkFixedCooldownTail.evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowRecoveryContainingFixedCooldownOpenTail(workout: repeatFixedCooldownTail.workout, evidence: repeatFixedCooldownTail.evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedNarrowRecoveryContainingFixedCooldownOpenTail(workout: broadRecoveryOpenCooldown.workout, evidence: broadRecoveryOpenCooldown.evidence) == nil)
+    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: broadRecoveryOpenCooldown.workout, evidence: broadRecoveryOpenCooldown.evidence) == nil)
+}
+
 @Test func healthKitSegmentMarkersAreNotUsedAsWorkoutKitReconstructedIntervals() throws {
     let start = Date(timeIntervalSince1970: 10_700)
     let workout = testWorkout(id: "segment-markers-not-used", start: start, distanceMeters: 1_000, durationSeconds: 600)

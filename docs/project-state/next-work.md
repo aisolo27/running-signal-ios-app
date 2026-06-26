@@ -1,6 +1,6 @@
 # Next Work
 
-Last updated: 2026-06-25
+Last updated: 2026-06-26
 
 ## Priority 1
 
@@ -19,7 +19,7 @@ Last updated: 2026-06-25
 - Gate A: simple fixed-distance Work + Open now has a narrow normal-detail promotion for the exact one fixed-distance Work step + one complete HealthKit activity row + positive Open/Extra tail shape. It must not broaden into structured/special workouts, paused workouts, recovery rows, repeat rows, or missing-evidence cases.
 - Gate B: structured interval workouts remain broadly blocked; row-level FIT extraction exists, and three repeat-block classes are physically proven in normal detail: clean no-pause `Warmup(2 km) > repeated Work/Recovery rows > Cooldown(Open)`, clean no-pause `Warmup(2 km) > repeated Work/Recovery rows > fixed Cooldown > inferred Open / Extra tail`, and narrow paused-repeat `Warmup(2 km) > repeated Work/Recovery rows > Cooldown(Open)` with active/timer display for paused rows. The narrow May 1-style recovery-containing fixed-cooldown/Open tail is also physically proven. True Open/Extra paused-repeat tails, ambiguous repeat-tail cases, and broad recovery-containing Open/Extra tail cases are not production-approved.
 - Gate B: warmup/work/cooldown specials remain blocked for broad promotion; 2 no-tail rows are candidate row-level supported, 1 fixed-cooldown-plus-tail subclass is internally gated, and AIS-28 outlier review keeps March 19 blocked by distance drift while treating May 29 as paused-timer-specific only.
-- Production interval behavior remains unchanged while custom workout reconstruction rules are being defined. Phase 1 internal expanded-step model types and Phase 2 debug comparison model types exist for validation/debug use only.
+- Broad production interval behavior remains unchanged outside the eight physically proven narrow normal-detail gates while remaining custom workout reconstruction rules are being defined. Phase 1 internal expanded-step model types and Phase 2 debug comparison model types exist for validation/debug use only.
 - Duplicate, no-plan, same-day extra, and drift/guard-unknown workouts remain excluded from production approval scoring.
 
 ## Priority 2
@@ -57,7 +57,8 @@ Last updated: 2026-06-25
 - Regenerated physical-iPhone Parity Lab structured exports from March 5, 2026 and April 24, 2026 now report the narrow `Warmup(2 km) > one Work step > Cooldown(Open)` class as supported, with April 22 and May 1 still blocked by expected fallback statuses.
 - June 14 evidence capture in `docs/validation/apple-fitness-interval-parity-dataset/2026-06-14-stopped-early-and-open-run/` adds a stopped-early single fixed-distance `Work(5 km)` custom workout and a plain open Watch run. Matching FIT files were copied locally and decoded: the stopped-early custom run has one FIT lap and one active 5000 m workout step, while the open run has zero workout steps and normal split laps. A narrow normal-detail gate now maps the stopped-early single Work shape to partial `Work`; plain open Watch runs remain readable workouts without custom intervals.
 - Internal-gated normal workout detail integration now exists for eight physically proven gates: stopped-early single fixed-distance Work, simple fixed-distance Work/Open, no-tail warmup/work/open-cooldown, clean fixed-cooldown Open/Extra tail, clean no-pause repeat open-cooldown, clean no-pause repeat fixed-cooldown/Open tail, narrow paused-repeat open-cooldown, and narrow May 1-style recovery-containing fixed-cooldown/Open tail. Ambiguous repeat tails, true Open/Extra paused-repeat tails, broad recovery-tail behavior, and broad custom-workout promotion remain blocked. Normal-detail blocked reasons should keep using standardized fallback labels, not raw enum names.
-- Continue `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-implementation-plan.md` with Phase 3 only after a later task explicitly approves prototype work. Use the production-readiness plan as the gate between debug-only Parity Lab evidence, a possible debug prototype, and any later normal workout detail UI promotion.
+- Treat `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-implementation-plan.md` as a historical implementation handoff, not the current first-read roadmap. Phase 1, Phase 2, Phase 3A, and the eight narrow normal-detail gates are no longer pending prototype work.
+- Any future "Phase 3" approval must name the exact ledger row, promotion rung, likely files touched, and validation command. Approval means a new exact-shape docs/debug/export prototype for a still-blocked row unless it separately says normal-detail promotion is approved.
 - Preserve the current production reconstruction while Gate B is incomplete.
 - Archive completed date-specific validation evidence to `docs/archive/old-validation/` after it is no longer active.
 

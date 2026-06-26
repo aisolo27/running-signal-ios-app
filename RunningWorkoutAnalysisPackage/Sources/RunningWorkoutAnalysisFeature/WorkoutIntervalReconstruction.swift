@@ -687,7 +687,7 @@ public enum WorkoutIntervalReconstructionEngine {
             }
             return "Distance-goal boundary: \(boundaryResolution.strategy.label), adjustment \(signedSeconds(boundaryResolution.adjustmentSeconds)), overshoot \(metersLabel(boundaryResolution.overshootMeters))"
         case .time:
-            return "Time-goal window reconstructed from WorkoutKit duration; TODO pause-adjusted active duration"
+            return "Time-goal window reconstructed from WorkoutKit duration; active duration subtracts reliable paired pause overlap."
         case .open:
             return "Open step reconstructed from remaining workout tail"
         case .energy:

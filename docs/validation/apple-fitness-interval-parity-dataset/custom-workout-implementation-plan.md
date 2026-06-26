@@ -1,10 +1,12 @@
 # Custom Workout Implementation Plan
 
-Last updated: 2026-06-14
+Last updated: 2026-06-26
 
 ## Scope
 
-This is a future implementation plan only. Do not implement these phases until a later task explicitly approves Swift changes. Runtime source remains HealthKit/WorkoutKit. FIT remains offline validation only. Production behavior and normal workout UI remain unchanged.
+This is historical planning material for future implementation work. Do not implement or extend these phases until a later task explicitly approves Swift changes. Runtime source remains HealthKit/WorkoutKit. FIT remains offline validation only. At the time this plan was written, production behavior and normal workout UI were intended to remain unchanged unless a separate promotion later approved a narrow gate.
+
+Status note: this file started as a future-only plan. Since then, Phase 1/Phase 2 debug infrastructure, Phase 3A, and the eight narrow normal-detail gates have been implemented or closed elsewhere. Keep this file as historical shape/rule guidance; use `docs/project-state/accuracy-ledger.md` for current row status before treating any phase below as active work.
 
 Execution order for analytics is correctness-first: complete the workout-style read matrix and stable fallback reasons before adding analytics that depend on custom interval structure. Whole-workout analytics can remain evidence-gated, but interval-row analytics must wait until the relevant row windows are trusted.
 
@@ -65,6 +67,8 @@ Success criteria:
 - FIT values remain excluded from runtime and appear only in docs/offline validation scripts.
 
 ## Phase 3: Narrow Custom Workout Prototype Gate
+
+Current use: this generic gate is not a standing approval queue. The narrow `Warmup(2 km) > one Work step > Cooldown(Open)` class is already covered by an implemented normal-detail gate; future Phase 3 work must name a still-blocked exact ledger row and state whether the approved work is docs/debug/export-only or a separate normal-detail promotion.
 
 Prototype custom workout reconstruction only when all of these are true:
 
