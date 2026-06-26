@@ -1,6 +1,6 @@
 # RunSignal Accuracy Ledger
 
-Last updated: 2026-06-25
+Last updated: 2026-06-26
 
 ## Purpose
 
@@ -117,7 +117,7 @@ Concrete bar:
 
 | Shape | Status | Current allowed behavior | Missing bar before normal detail |
 | --- | --- | --- | --- |
-| True paused repeat fixed-tail `Open / Extra` exact shape | `Debug-only` implementation path, evidence-blocked | Raw HealthKit Debug, parity output, and Parity Lab status may expose row/tail/pause/fallback diagnostics and standardized fallback labels when an exact paired-pause repeat fixed-tail shape is available. | Current exact-shape Raw HealthKit Debug plus parity packet evidence, physical-iPhone proof from current build, positive and guard tests, open-cooldown control still blocking, no unpaired/cross-row pauses, no broad Gate B leakage |
+| True paused repeat fixed-tail `Open / Extra` exact shape | `Debug-only` implementation path, evidence available | Raw HealthKit Debug, parity output, and Parity Lab status may expose row/tail/pause/fallback diagnostics and standardized fallback labels for the exact paired-pause repeat fixed-tail shape. | Rung 3 decision on whether one proof is enough for this recurring shape or a second qualifying example is required; positive and guard tests; open-cooldown control still blocking; no unpaired/cross-row pauses; no broad Gate B leakage |
 | Broader no-tail warmup/work/cooldown candidate review | `Debug-only` | Use row-level evidence for future discussion of exact no-tail W/W/C shapes. | More proof or explicit decision that the current examples are enough; outliers such as March 19 and May 29 stay excluded |
 | Recovery-containing tail debug separator outside May 1 exact shape | `Debug-only` | Use debug output to preserve Recovery rows and explain fallback. | Exact new shape rule, fixed-row exhaustion proof, pause handling, guard coverage |
 
@@ -126,7 +126,7 @@ Concrete bar:
 | Shape | Status | Why blocked | Next action |
 | --- | --- | --- | --- |
 | Unresolved ambiguous repeat-tail cases | `Blocked` | Count alignment or FIT session-minus-lap residuals alone are not enough. Need expanded repeat mapping, fixed final-row exhaustion, tail threshold/status, and guard behavior. | Keep fallback tests locked; approve only a new exact narrow shape if future evidence supports it |
-| Broad paused repeat fixed-tail or ambiguous paused-tail cases | `Blocked` | Paired pause proof, active/timer semantics, fixed-row exhaustion, and tail ambiguity are not settled beyond the exact debug-supported path. | Finish exact paused repeat fixed-tail proof first; keep broad behavior blocked |
+| Broad paused repeat fixed-tail or ambiguous paused-tail cases | `Blocked` | Paired pause proof, active/timer semantics, fixed-row exhaustion, and tail ambiguity are not settled beyond the exact evidence-available path. | Review only the exact June 26 shape for debug-supported criteria; keep broad behavior blocked |
 | Broad recovery-containing `Open / Extra` tails | `Blocked` | Recovery rows must not be merged into residual movement. May 1-style is the only proven narrow recovery-tail gate. | Define exact shape rules one at a time or keep whole-run/debug fallback |
 | Paused warmup/work/cooldown timer outlier, including May 29-style cases | `Blocked` | Distance/labels may look close, but elapsed-vs-timer behavior needs a shape-specific paused W/W/C timer rule. | Create timer rule and guard tests before any promotion |
 | March 19-style warmup/work/cooldown distance drift | `Blocked` | Candidate timing aligns, but warmup distance drift remains too large for promotion. | Keep blocked unless renewed evidence resolves the distance drift |
@@ -148,21 +148,22 @@ Concrete bar:
 ## Current Execution Order
 
 1. Keep the `Proven` rows frozen unless evidence shows a real bug.
-2. Finish exact paused repeat fixed-tail `Open / Extra` proof only inside debug/export boundaries.
+2. Review exact paused repeat fixed-tail `Open / Extra` debug-supported/prototype criteria inside debug/export boundaries only.
 3. Keep ambiguous repeat tails, broad recovery tails, and paused W/W/C timer outliers blocked unless a later task names one exact shape and walks the promotion ladder.
 4. Before any interval-row analytics task, check the ledger row for the workout shape being analyzed.
 5. If a task cannot point to one ledger row, split the task before coding.
 
-Latest rung check, 2026-06-25:
+Latest rung check, 2026-06-26:
 
 - Exact row: `Warmup(2 km) > repeated Work/Recovery rows > fixed final Cooldown > inferred Open / Extra`, with paired pause evidence.
 - Promotion rung attempted: rung 2, `Evidence Available`.
-- Result: not promoted. Current archived paused-repeat proof covers the open-cooldown control shape, not true fixed-tail `Open / Extra`. FIT tail scorecards remain offline evidence only and do not replace a current Raw HealthKit Debug export plus parity packet for this exact paused row.
+- Result: rung 2 satisfied, not promoted. June 26 proof in `docs/validation/apple-fitness-interval-parity-dataset/physical-iphone-paused-repeat-fixed-tail-open-extra-proof-2026-06-26/` provides current Raw HealthKit Debug, parity packet, Apple Fitness screenshots, and FIT offline evidence for the exact paired-pause fixed-tail `Open / Extra` row.
 - Archive audit: parsed 64 debug/parity payloads; 36 were repeat-like, 4 had repeat-tail `Open / Extra`, and 32 had paired paused-repeat evidence, but 0 had both paired pauses and a cooldown-before-`Open / Extra` tail. Existing archives do not satisfy this exact row.
 - June 25 user-supplied `Thursday Interval 5km` evidence is archived in `docs/validation/apple-fitness-interval-parity-dataset/user-supplied-repeat-tail-review-2026-06-25/`. The current-build re-export passes the fresh readable-label validator and the FIT file confirms an offline session-minus-laps tail residual, but it reports `pairedPauseCount == 0`, so it is not rung 2 paired-pause evidence.
 - HealthFit Jan-Jun FIT scan: `docs/validation/apple-fitness-interval-parity-dataset/healthfit-jan-jun-fit-candidate-scan-2026-06-25.md` parsed 124 outdoor running FITs from January 1 through June 30, 2026 and found 0 exact paired-pause fixed-tail repeat matches. June 10 and June 25 are no-pause fixed-tail controls, not paired-pause evidence.
+- June 26 proof summary: `TARGET EVIDENCE PRESENT`, `plannedExpandedRowCount == 12`, `candidateRowCount == 13`, `openTailRowCount == 1`, `pairedPauseCount == 3`, fixed cooldown exhausted before tail, `comparison status == supported`, readable fallback labels present, and `usesFITRuntimeTruth == false`.
 - Evidence hardening added: fresh exact-shape proof folders should pass `docs/validation/apple-fitness-interval-parity-dataset/validate_parity_export_consistency.py --require-readable-fallback-labels <proof-folder>` before rung 2 is considered satisfied.
-- Next action: collect 1-2 future qualifying exact-shape workouts with paired pauses and an unambiguous post-fixed-row tail before any Swift prototype or debug-supported claim.
+- Next action: decide whether the exact row now meets rung 3 `Debug-Supported` criteria or whether the recurring-shape bar needs a second qualifying physical example, plus adjacent guard coverage, before any Swift prototype or normal-detail promotion. Guard coverage should include zero-pause same-template control, cross-boundary pause rejection, and an open-cooldown counter-case where `Cooldown(Open)` must not become `Open / Extra`.
 
 ## Replacement And Archive Policy
 

@@ -1,6 +1,6 @@
 # Custom Workout Evidence Collection Tracker
 
-Last updated: 2026-06-25
+Last updated: 2026-06-26
 
 ## Purpose
 
@@ -25,14 +25,14 @@ Eight narrow normal-detail gates are already implemented and physically proven. 
 | Paused repeat ending in `Cooldown(Open)` | Complete | `physical-iphone-paused-repeat-normal-detail-promotion-proof-2026-06-23/` | Apr 22, Apr 29, May 6, May 13, and May 27 prove active/timer display for paused rows. |
 | May 1-style recovery-containing fixed cooldown plus `Open / Extra` | Complete | `physical-iphone-recovery-tail-normal-detail-promotion-proof-2026-06-23/` | Preserves planned Recovery row and infers Open/Extra only after fixed planned rows. |
 
-## Still Blocked
+## Still Blocked Or Not Promoted
 
-These are not collection gaps by themselves. They need explicit rule decisions or implementation tasks before new artifacts become useful.
+These are not first-evidence collection gaps by themselves. They need explicit rule decisions, guard tests, debug-supported/prototype review, or implementation tasks before new artifacts become useful.
 
 | Class | Current status | Useful future evidence |
 | --- | --- | --- |
 | Broad Gate B structured intervals | Blocked | Only after a task approves a debug prototype or a specific subclass. |
-| True Open/Extra paused-repeat tails | Blocked | A real paused repeat with fixed final row and unambiguous post-final-row Open/Extra tail, plus Raw HealthKit Debug export, parity packet, FIT, and Apple Fitness rows. The June 25 user-supplied tail run had `pairedPauseCount == 0`, so it does not qualify for this row. |
+| True Open/Extra paused-repeat tails | Evidence available, still blocked from normal detail | June 26 proof in `physical-iphone-paused-repeat-fixed-tail-open-extra-proof-2026-06-26/` provides a real paused repeat with fixed final row, unambiguous post-final-row Open/Extra tail, Raw HealthKit Debug export, parity packet, FIT, and Apple Fitness rows. It closes first evidence only; debug-supported/prototype review and promotion work remain separate. |
 | Ambiguous repeat-tail cases outside the clean June 10 shape | Blocked | Only if a later task names a new exact candidate shape. |
 | Broad recovery-containing tails outside May 1 style | Blocked | Only if a later task defines a narrower recovery-tail subclass. |
 | March 19 distance-drift warmup/work/cooldown | Blocked | Re-capture only if a later distance-drift task needs exact Apple Fitness Work-row distance. |
@@ -48,16 +48,16 @@ Use this only when new workouts naturally occur. Do not create abnormal workouts
 | Plain open-run controls | 2 more | Confirms custom-workout gates do not leak into ordinary runs. |
 | Clean no-pause easy Work/Open controls | Optional | Gate A already has sufficient proof; collect only if a future edit touches Gate A. |
 | Future paused warmup/work/open-cooldown | 1-2 | Useful only if a later task proposes that exact timer-rule subclass. |
-| Future true paused repeat fixed-tail Open/Extra | 1-2 | Useful only if collected workout has paired pauses and an unambiguous post-fixed-row tail. |
+| Future true paused repeat fixed-tail Open/Extra | 0-1 | Optional only if the recurring-shape bar requires a second qualifying physical example before debug-supported/prototype review. |
 | Future broad recovery-tail variants | 1-2 | Useful only after a later task defines the exact subclass. |
 
-2026-06-25 ledger check: the exact paused repeat fixed-tail `Open / Extra` row is named, but it does not yet satisfy `Evidence Available`; existing paused-repeat proof is the open-cooldown control shape, and FIT session-minus-lap tail evidence is offline validation only. Fresh exact-shape proof folders should pass `validate_parity_export_consistency.py --require-readable-fallback-labels <proof-folder>` before they are treated as rung 2 evidence.
+2026-06-26 ledger check: the exact paused repeat fixed-tail `Open / Extra` row now satisfies rung 2 `Evidence Available` via `physical-iphone-paused-repeat-fixed-tail-open-extra-proof-2026-06-26/`. The proof folder reports `TARGET EVIDENCE PRESENT`, `pairedPauseCount == 3`, one inferred `Open / Extra` tail, fixed cooldown exhausted before tail, `comparison status == supported`, and no FIT runtime truth. This does not promote normal detail or broaden Gate B. This is one qualifying positive example for the exact shape, not recurring-shape rung 3 coverage; rung 3 still needs the ledger-required second-example decision and adjacent guard coverage.
 
 2026-06-25 archive audit: 64 parsed debug/parity payloads contained 36 repeat-like payloads, 4 repeat-tail `Open / Extra` payloads, and 32 paired paused-repeat payloads, but 0 payloads with both paired pauses and a cooldown-before-`Open / Extra` tail.
 
 2026-06-25 user-supplied review: `user-supplied-repeat-tail-review-2026-06-25/` archives Raw HealthKit Debug, parity packet, Apple Fitness screenshots, and FIT for `Thursday Interval 5km`. The current-build re-export passes strict readable-label validation. The candidate scorer reports 12 planned rows, 13 candidate rows, 1 Open/Extra tail, and 0 paired pauses; FIT offline evidence shows 12 laps, 5 unexpanded workout steps, and an 8.255 s session-minus-laps tail. This is useful no-pause tail context but not active paired-pause fixed-tail evidence.
 
-2026-06-25 HealthFit Jan-Jun scan: `healthfit-jan-jun-fit-candidate-scan-2026-06-25.md` parsed 124 outdoor running FIT files from January 1 through June 30, 2026. It found 0 exact paired-pause fixed-tail repeat matches. June 10 and June 25 are the only repeat fixed-cooldown tail near matches, and both have `pairedPauseCount == 0`; the paired-pause exact shape still needs a future deliberate workout.
+2026-06-25 HealthFit Jan-Jun scan: `healthfit-jan-jun-fit-candidate-scan-2026-06-25.md` parsed 124 outdoor running FIT files from January 1 through June 30, 2026. It found 0 exact paired-pause fixed-tail repeat matches in the pre-June-26 archive. June 10 and June 25 are no-pause fixed-cooldown tail near matches with `pairedPauseCount == 0`; June 26 is the first qualifying app-side exact-shape proof.
 
 ## Do Not Recollect
 
