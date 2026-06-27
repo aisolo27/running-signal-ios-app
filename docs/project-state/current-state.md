@@ -16,7 +16,8 @@ The first-read roadmap for this milestone is `docs/project-state/accuracy-ledger
 
 - HealthKit is the runtime source of truth for completed running workouts.
 - HealthKit access is read-only.
-- VO2 Max and Resting Heart Rate are requested/read as optional whole-run Health Context signals for readiness evidence and Data/Today tiles; missing values use neutral unavailable wording, not permission-denied claims.
+- VO2 Max and Resting Heart Rate are requested/read as optional whole-run Health Context signals for readiness evidence and Data/Today tiles; missing values use neutral physical-iPhone check wording, not permission-denied claims.
+- Whole-run HealthKit review is an explicit safe lane: completed-run distance, duration, pace, route, splits, broad Health Context, and whole-run stats remain usable even when custom interval rows are blocked.
 - WorkoutKit `HKWorkout.workoutPlan` is the planned-structure source when available.
 - HealthKit samples and `HKWorkout.workoutActivities` are the measured-stats and boundary evidence sources.
 - HealthKit segment markers stay raw/debug-only.
@@ -34,6 +35,8 @@ The first-read roadmap for this milestone is `docs/project-state/accuracy-ledger
 ## Current Validation State
 
 Broad production interval behavior remains frozen outside the explicitly approved narrow normal-detail gates. Debug validation models and Parity Lab exports may expose candidate rows, comparison summaries, fallback reasons, pause overlap, active/timer duration, and Open/Extra tail diagnostics, but they do not approve production UI by themselves.
+
+Non-interval app surfaces now include a whole-run status card, Health Context verification cards in Today/Data, and clearer Raw HealthKit Debug review-packet guardrails. These changes do not promote any custom interval row, do not add interval-row analytics, and do not change the eight narrow normal-detail gates.
 
 Normal workout detail currently supports eight physically proven narrow classes:
 

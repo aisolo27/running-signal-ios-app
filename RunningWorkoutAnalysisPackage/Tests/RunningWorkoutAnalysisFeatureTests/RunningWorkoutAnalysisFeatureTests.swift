@@ -9,6 +9,47 @@ import Testing
     #expect(!RawHealthKitWorkoutDebugView.unavailableCustomIntervalsMessage.contains("distance/time evidence"))
     #expect(RawHealthKitWorkoutDebugView.reviewPacketScopeMessage.contains("External HealthFit/FIT archives stay offline validation evidence"))
     #expect(RawHealthKitWorkoutDebugView.reviewPacketScopeMessage.contains("do not treat them as app input"))
+    #expect(RawHealthKitWorkoutDebugView.reviewPacketScopeMessage.contains("does not change normal workout detail"))
+}
+
+@Test func wholeRunSummaryStaysUsefulWhenIntervalsAreBlocked() {
+    let summary = WholeRunHealthKitSummary.make(
+        workouts: SampleData.workouts,
+        authorizationState: .authorized,
+        usesSampleData: false
+    )
+
+    #expect(summary.title == "Whole-Run Review Ready")
+    #expect(summary.status == .moderate)
+    #expect(summary.detail.contains("safe whole-run stats"))
+    #expect(summary.detail.contains("custom interval rows are blocked"))
+}
+
+@Test func wholeRunSummaryKeepsSampleDataOutOfProofLane() {
+    let summary = WholeRunHealthKitSummary.make(
+        workouts: SampleData.workouts,
+        authorizationState: .authorized,
+        usesSampleData: true
+    )
+
+    #expect(summary.title == "Sample Data")
+    #expect(summary.status == .limited)
+    #expect(summary.detail.contains("not HealthKit proof"))
+    #expect(summary.detail.contains("should not be compared with Apple Fitness"))
+}
+
+@Test func healthContextVerificationIsAvailabilityBasedNotPermissionDenied() {
+    let missing = HealthContextVerification(context: HealthContext())
+    #expect(missing.title == "Physical iPhone Check Needed")
+    #expect(missing.status == .unavailable)
+    #expect(missing.detail.contains("physical iPhone"))
+    #expect(!missing.detail.localizedCaseInsensitiveContains("denied"))
+
+    let verified = HealthContextVerification(context: HealthContext(vo2Max: 52.1, restingHeartRate: 48))
+    #expect(verified.title == "Health Context Verified")
+    #expect(verified.status == .moderate)
+    #expect(verified.hasVO2Max)
+    #expect(verified.hasRestingHeartRate)
 }
 
 @Test func paceMathUsesSecondsPerKilometer() {

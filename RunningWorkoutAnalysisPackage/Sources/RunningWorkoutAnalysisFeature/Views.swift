@@ -13,6 +13,14 @@ struct RunsView: View {
         runs.first
     }
 
+    private var wholeRunSummary: WholeRunHealthKitSummary {
+        WholeRunHealthKitSummary.make(
+            workouts: store.workouts,
+            authorizationState: store.authorizationState,
+            usesSampleData: store.usesSampleData
+        )
+    }
+
     var body: some View {
         List {
             Section {
@@ -21,6 +29,8 @@ struct RunsView: View {
                 } else {
                     NoticeCard(title: "HealthKit Loaded", message: "\(runs.count) completed running workouts are available. Duplicate-like workouts are hidden from this v1 list.")
                 }
+
+                WholeRunStatusCard(summary: wholeRunSummary)
             }
             .listRowSeparator(.hidden)
 
@@ -216,6 +226,7 @@ struct TodayView: View {
                 ])
 
                 MetricGrid(items: HealthContextMetrics.todayItems(for: store.healthContext))
+                HealthContextVerificationCard(verification: HealthContextVerification(context: store.healthContext))
 
                 InsightCard(insight: store.snapshot.fitnessTrend)
 
@@ -492,9 +503,10 @@ struct DataView: View {
 
                 SectionHeader("Health Context")
                 MetricGrid(items: HealthContextMetrics.dataItems(for: store.healthContext))
+                HealthContextVerificationCard(verification: HealthContextVerification(context: store.healthContext))
                 NoticeCard(
                     title: "Broad HealthKit context",
-                    message: "Average HR, max HR, and active energy here come from available HealthKit samples, not workout-scoped analyzer evidence."
+                    message: "Average HR, max HR, active energy, VO2 Max, and Resting HR come from available read-only Apple Health samples, not custom interval reconstruction."
                 )
 
                 SectionHeader("Caveats")
@@ -1603,7 +1615,7 @@ enum IntervalRowTimingText {
 
 struct RawHealthKitWorkoutDebugView: View {
     static let unavailableCustomIntervalsMessage = "Whole-run stats are still safe to review. Custom interval rows are hidden until RunSignal sees a supported public WorkoutKit and HealthKit evidence pattern."
-    static let reviewPacketScopeMessage = "Use this debug review packet to share Raw HealthKit Debug, the parity packet, WorkoutKit plan audit, HealthKit activity rows, candidate rows, fallback labels, pause/tail diagnostics, and source metadata. External HealthFit/FIT archives stay offline validation evidence; attach or reference them separately and do not treat them as app input."
+    static let reviewPacketScopeMessage = "Use this debug review packet to share Raw HealthKit Debug, the parity packet, WorkoutKit plan audit, HealthKit activity rows, candidate rows, fallback labels, pause/tail diagnostics, and source metadata. External HealthFit/FIT archives stay offline validation evidence; attach or reference them separately and do not treat them as app input. Debug support does not change normal workout detail."
 
     var store: RunningAnalysisStore
     let workout: CanonicalWorkout
@@ -2573,6 +2585,58 @@ struct ShapeMeter: View {
     }
 }
 
+struct WholeRunStatusCard: View {
+    let summary: WholeRunHealthKitSummary
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "figure.run.circle")
+                .foregroundStyle(.blue)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(summary.title)
+                        .font(.headline)
+                    Spacer()
+                    ConfidencePill(text: summary.status.label, confidence: summary.status)
+                }
+                Text(summary.detail)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding()
+        .background(.blue.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+struct HealthContextVerificationCard: View {
+    let verification: HealthContextVerification
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: verification.status == .unavailable ? "iphone.gen3" : "heart.text.square")
+                .foregroundStyle(verification.status == .unavailable ? .orange : .green)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(verification.title)
+                        .font(.headline)
+                    Spacer()
+                    ConfidencePill(text: verification.status.label, confidence: verification.status)
+                }
+                Text(verification.detail)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding()
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
 struct WorkoutSummaryCard: View {
     let workout: CanonicalWorkout
 
@@ -2786,15 +2850,15 @@ struct MetricItem: Identifiable {
 enum HealthContextMetrics {
     static func todayItems(for context: HealthContext) -> [MetricItem] {
         [
-            MetricItem(title: "VO2 max", value: RunFormatters.number(context.vo2Max, decimals: 1), detail: context.vo2Max == nil ? "Unavailable in Apple Health" : "Latest Apple Health value"),
-            MetricItem(title: "Resting HR", value: RunFormatters.number(context.restingHeartRate, suffix: " bpm"), detail: context.restingHeartRate == nil ? "Unavailable in Apple Health" : "Latest Apple Health value")
+            MetricItem(title: "VO2 max", value: RunFormatters.number(context.vo2Max, decimals: 1), detail: context.vo2Max == nil ? "Physical-iPhone check needed" : "Latest Apple Health value"),
+            MetricItem(title: "Resting HR", value: RunFormatters.number(context.restingHeartRate, suffix: " bpm"), detail: context.restingHeartRate == nil ? "Physical-iPhone check needed" : "Latest Apple Health value")
         ]
     }
 
     static func dataItems(for context: HealthContext) -> [MetricItem] {
         [
-            MetricItem(title: "VO2 max", value: RunFormatters.number(context.vo2Max, decimals: 1), detail: context.vo2Max == nil ? "Unavailable in Apple Health" : "Latest Apple Health value"),
-            MetricItem(title: "Resting HR", value: RunFormatters.number(context.restingHeartRate, suffix: " bpm"), detail: context.restingHeartRate == nil ? "Unavailable in Apple Health" : "Latest Apple Health value"),
+            MetricItem(title: "VO2 max", value: RunFormatters.number(context.vo2Max, decimals: 1), detail: context.vo2Max == nil ? "Physical-iPhone check needed" : "Latest Apple Health value"),
+            MetricItem(title: "Resting HR", value: RunFormatters.number(context.restingHeartRate, suffix: " bpm"), detail: context.restingHeartRate == nil ? "Physical-iPhone check needed" : "Latest Apple Health value"),
             MetricItem(title: "Avg HR", value: RunFormatters.number(context.averageHeartRate, suffix: " bpm"), detail: "Broad HealthKit"),
             MetricItem(title: "Max HR", value: RunFormatters.number(context.maxHeartRate, suffix: " bpm"), detail: "Broad HealthKit"),
             MetricItem(title: "Active energy", value: RunFormatters.calories(context.activeEnergyKilocaloriesTotal), detail: "Broad HealthKit")

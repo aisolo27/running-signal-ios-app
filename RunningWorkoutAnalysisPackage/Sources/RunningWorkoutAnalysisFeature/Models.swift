@@ -175,6 +175,82 @@ public struct HealthContext: Equatable, Sendable {
     }
 }
 
+public struct HealthContextVerification: Equatable, Sendable {
+    public var title: String
+    public var status: ConfidenceLevel
+    public var detail: String
+    public var hasVO2Max: Bool
+    public var hasRestingHeartRate: Bool
+
+    public init(context: HealthContext) {
+        hasVO2Max = context.vo2Max != nil
+        hasRestingHeartRate = context.restingHeartRate != nil
+
+        switch (hasVO2Max, hasRestingHeartRate) {
+        case (true, true):
+            title = "Health Context Verified"
+            status = .moderate
+            detail = "VO2 Max and Resting HR are available from read-only Apple Health context."
+        case (true, false):
+            title = "VO2 Max Available"
+            status = .limited
+            detail = "VO2 Max is available. Resting HR still needs a physical-iPhone Apple Health check or may simply be unavailable."
+        case (false, true):
+            title = "Resting HR Available"
+            status = .limited
+            detail = "Resting HR is available. VO2 Max still needs a physical-iPhone Apple Health check or may simply be unavailable."
+        case (false, false):
+            title = "Physical iPhone Check Needed"
+            status = .unavailable
+            detail = "VO2 Max and Resting HR are unavailable here. Verify on the physical iPhone after granting Apple Health read access."
+        }
+    }
+}
+
+public struct WholeRunHealthKitSummary: Equatable, Sendable {
+    public var title: String
+    public var status: ConfidenceLevel
+    public var detail: String
+
+    public static func make(
+        workouts: [CanonicalWorkout],
+        authorizationState: AuthorizationState,
+        usesSampleData: Bool
+    ) -> WholeRunHealthKitSummary {
+        let completedCount = V1WorkoutFilters.completedRuns(from: workouts).count
+
+        if usesSampleData {
+            return WholeRunHealthKitSummary(
+                title: "Sample Data",
+                status: .limited,
+                detail: "Placeholder runs keep the app usable, but they are not HealthKit proof and should not be compared with Apple Fitness."
+            )
+        }
+
+        guard authorizationState == .authorized || authorizationState == .partial else {
+            return WholeRunHealthKitSummary(
+                title: "HealthKit Not Loaded",
+                status: .unavailable,
+                detail: "Grant read-only Apple Health access to load completed running workouts."
+            )
+        }
+
+        if completedCount == 0 {
+            return WholeRunHealthKitSummary(
+                title: "No Completed Runs",
+                status: .limited,
+                detail: "HealthKit is reachable, but no completed running workouts are available for the current filters."
+            )
+        }
+
+        return WholeRunHealthKitSummary(
+            title: "Whole-Run Review Ready",
+            status: .moderate,
+            detail: "\(completedCount) completed runs can show distance, duration, pace, route, splits, and safe whole-run stats even when custom interval rows are blocked."
+        )
+    }
+}
+
 public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
     public var id: String
     public var sourceID: String

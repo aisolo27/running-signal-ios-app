@@ -6,6 +6,8 @@ private let rawDebugReviewPacketScopeMarkdown = """
 This packet bundles Raw HealthKit Debug, WorkoutKit plan audit, HealthKit activity rows, Parity Lab candidate rows, structured comparison, fallback labels, pause/tail diagnostics, source metadata, and boundary warnings. It is debug/export-only and does not approve normal workout detail behavior.
 
 Whole-run stats remain usable when custom interval rows are blocked. External HealthFit/FIT archives stay offline validation evidence; attach or reference them separately and do not treat FIT as app input or runtime truth.
+
+Blocked custom interval diagnostics are review aids only. A supported Parity Lab status, readable fallback label, or exported candidate row does not change normal workout detail unless the exact ledger row separately reaches the normal-detail promotion rung.
 """
 
 public enum DiagnosticsExport {
@@ -21,7 +23,8 @@ public enum DiagnosticsExport {
                 "fallback reason labels",
                 "pause and tail diagnostics",
                 "source metadata",
-                "boundary source warnings"
+                "boundary source warnings",
+                "blocked interval guardrails"
             ],
             externalEvidencePolicy: "External HealthFit/FIT archives are offline validation evidence only. Reference or attach them separately; RunSignal does not import or use FIT as runtime truth.",
             normalWorkoutUIChanged: false,
