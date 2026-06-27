@@ -1602,7 +1602,8 @@ enum IntervalRowTimingText {
 }
 
 struct RawHealthKitWorkoutDebugView: View {
-    static let unavailableCustomIntervalsMessage = "Whole-run stats are still available. Custom interval rows need a supported public WorkoutKit and HealthKit evidence pattern before RunSignal can show them."
+    static let unavailableCustomIntervalsMessage = "Whole-run stats are still safe to review. Custom interval rows are hidden until RunSignal sees a supported public WorkoutKit and HealthKit evidence pattern."
+    static let reviewPacketScopeMessage = "Use this debug review packet to share Raw HealthKit Debug, the parity packet, WorkoutKit plan audit, HealthKit activity rows, candidate rows, fallback labels, pause/tail diagnostics, and source metadata. External HealthFit/FIT archives stay offline validation evidence; attach or reference them separately and do not treat them as app input."
 
     var store: RunningAnalysisStore
     let workout: CanonicalWorkout
@@ -1614,6 +1615,11 @@ struct RawHealthKitWorkoutDebugView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HeaderBlock(title: "Raw HealthKit Debug", subtitle: "Per-workout fields and evidence counts.")
+
+                NoticeCard(
+                    title: "Review packet scope",
+                    message: Self.reviewPacketScopeMessage
+                )
 
                 Button {
                     Task {
@@ -1640,7 +1646,7 @@ struct RawHealthKitWorkoutDebugView: View {
                 .buttonStyle(.bordered)
 
                 ShareLink(item: rawDebugExportMarkdown) {
-                    Label("Share raw debug export", systemImage: "doc.text.magnifyingglass")
+                    Label("Share review packet markdown", systemImage: "doc.text.magnifyingglass")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -2780,15 +2786,15 @@ struct MetricItem: Identifiable {
 enum HealthContextMetrics {
     static func todayItems(for context: HealthContext) -> [MetricItem] {
         [
-            MetricItem(title: "VO2 max", value: RunFormatters.number(context.vo2Max, decimals: 1), detail: "Latest available"),
-            MetricItem(title: "Resting HR", value: RunFormatters.number(context.restingHeartRate, suffix: " bpm"), detail: "Latest available")
+            MetricItem(title: "VO2 max", value: RunFormatters.number(context.vo2Max, decimals: 1), detail: context.vo2Max == nil ? "Unavailable in Apple Health" : "Latest Apple Health value"),
+            MetricItem(title: "Resting HR", value: RunFormatters.number(context.restingHeartRate, suffix: " bpm"), detail: context.restingHeartRate == nil ? "Unavailable in Apple Health" : "Latest Apple Health value")
         ]
     }
 
     static func dataItems(for context: HealthContext) -> [MetricItem] {
         [
-            MetricItem(title: "VO2 max", value: RunFormatters.number(context.vo2Max, decimals: 1), detail: "Latest available"),
-            MetricItem(title: "Resting HR", value: RunFormatters.number(context.restingHeartRate, suffix: " bpm"), detail: "Latest available"),
+            MetricItem(title: "VO2 max", value: RunFormatters.number(context.vo2Max, decimals: 1), detail: context.vo2Max == nil ? "Unavailable in Apple Health" : "Latest Apple Health value"),
+            MetricItem(title: "Resting HR", value: RunFormatters.number(context.restingHeartRate, suffix: " bpm"), detail: context.restingHeartRate == nil ? "Unavailable in Apple Health" : "Latest Apple Health value"),
             MetricItem(title: "Avg HR", value: RunFormatters.number(context.averageHeartRate, suffix: " bpm"), detail: "Broad HealthKit"),
             MetricItem(title: "Max HR", value: RunFormatters.number(context.maxHeartRate, suffix: " bpm"), detail: "Broad HealthKit"),
             MetricItem(title: "Active energy", value: RunFormatters.calories(context.activeEnergyKilocaloriesTotal), detail: "Broad HealthKit")

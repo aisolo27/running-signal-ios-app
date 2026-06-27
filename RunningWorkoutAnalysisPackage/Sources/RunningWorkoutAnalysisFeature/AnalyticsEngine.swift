@@ -1,14 +1,24 @@
 import Foundation
 
 public enum AnalyticsEngine {
-    public static func snapshot(for workouts: [CanonicalWorkout], now: Date = Date()) -> AnalysisSnapshot {
+    public static func snapshot(
+        for workouts: [CanonicalWorkout],
+        healthContext: HealthContext = HealthContext(),
+        now: Date = Date()
+    ) -> AnalysisSnapshot {
         let included = workouts.filter { !$0.isDuplicate }
         let dataQuality = makeDataQualityReport(workouts)
         let weekly = totalDistance(included, from: daysBefore(now, 7), through: now)
         let previousWeekly = totalDistance(included, from: daysBefore(now, 14), through: daysBefore(now, 7))
         let balance = intensityBalance(included, from: daysBefore(now, 28), through: now)
         let bestEfforts = makeBestEfforts(included)
-        let readiness = makeReadiness(workouts: included, bestEfforts: bestEfforts, dataQuality: dataQuality, now: now)
+        let readiness = makeReadiness(
+            workouts: included,
+            bestEfforts: bestEfforts,
+            dataQuality: dataQuality,
+            healthContext: healthContext,
+            now: now
+        )
 
         return AnalysisSnapshot(
             weeklyVolumeKm: weekly / 1_000,
@@ -160,6 +170,7 @@ public enum AnalyticsEngine {
         workouts: [CanonicalWorkout],
         bestEfforts: [BestEffort],
         dataQuality: DataQualityReport,
+        healthContext: HealthContext = HealthContext(),
         now: Date = Date()
     ) -> ReadinessSummary {
         let fiveK = bestEfforts.first { $0.label == "5K" }
@@ -194,6 +205,12 @@ public enum AnalyticsEngine {
                 value: "\(consistencyWeeks) weeks",
                 detail: consistencyWeeks >= 4 ? "Recent frequency is stable enough to trust trends." : "Readiness will sharpen after more consistent weeks.",
                 confidence: consistencyWeeks >= 4 ? .moderate : .limited
+            ),
+            Insight(
+                title: "Health context",
+                value: healthContextSignalValue(healthContext),
+                detail: "Optional read-only Apple Health VO2 Max and resting heart-rate signals.",
+                confidence: healthContext.vo2Max == nil && healthContext.restingHeartRate == nil ? .unavailable : .limited
             )
         ]
 
@@ -386,5 +403,12 @@ public enum AnalyticsEngine {
         case .blocked: "Required running evidence is missing for this claim."
         case .unavailable: "No reliable running sample is available yet."
         }
+    }
+
+    private static func healthContextSignalValue(_ context: HealthContext) -> String {
+        let vo2 = context.vo2Max.map { "VO2 \(RunFormatters.number($0, decimals: 1))" }
+        let resting = context.restingHeartRate.map { "RHR \(RunFormatters.number($0, suffix: " bpm"))" }
+        let values = [vo2, resting].compactMap { $0 }
+        return values.isEmpty ? "Unavailable" : values.joined(separator: " / ")
     }
 }

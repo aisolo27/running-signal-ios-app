@@ -36,7 +36,7 @@ public struct HealthKitPermissionItem: Identifiable, Equatable, Sendable {
 }
 
 public enum HealthKitPermissionCatalog {
-    public static let permissionExplanation = "RunSignal reads completed running workouts from HealthKit, including workout summaries, routes, heart rate, pace, power, cadence, running mechanics, and workout calories. Health data is used only for this read-only workout viewer and is not used for advertising or sold."
+    public static let permissionExplanation = "RunSignal reads completed running workouts from HealthKit, including workout summaries, routes, heart rate, VO2 Max, resting heart rate, pace, power, cadence, running mechanics, and workout calories. Health data is used only for this read-only workout viewer and is not used for advertising or sold."
 
     public static let readItems: [HealthKitPermissionItem] = [
         item("Workouts", "HKWorkoutTypeIdentifier", .coreRunning, "Find completed running workouts and preserve workout identity, source, duration, distance, and events.", workout: true),
@@ -44,6 +44,8 @@ public enum HealthKitPermissionCatalog {
         item("Walking + Running Distance", "HKQuantityTypeIdentifierDistanceWalkingRunning", .coreRunning, "Validate workout distance, derive splits, and compare summary distance to associated samples.", workout: true),
         item("Step Count", "HKQuantityTypeIdentifierStepCount", .coreRunning, "Estimate cadence in full steps per minute when running cadence samples are unavailable.", workout: true),
         item("Heart Rate", "HKQuantityTypeIdentifierHeartRate", .coreRunning, "Calculate workout average/max heart rate, drift, and future time-in-zone analysis.", workout: true),
+        item("VO2 Max", "HKQuantityTypeIdentifierVO2Max", .recovery, "Show optional whole-run fitness context when Apple Health has a recent value.", context: true),
+        item("Resting Heart Rate", "HKQuantityTypeIdentifierRestingHeartRate", .recovery, "Show optional whole-run recovery context when Apple Health has a recent value.", context: true),
         item("Active Energy", "HKQuantityTypeIdentifierActiveEnergyBurned", .calories, "Show active calories separately and compare workout summary calories to associated samples.", workout: true),
         item("Basal Energy", "HKQuantityTypeIdentifierBasalEnergyBurned", .calories, "Support total-calorie comparisons when HealthKit provides enough evidence; never invent missing total calories.", context: true),
         item("Running Speed", "HKQuantityTypeIdentifierRunningSpeed", .coreRunning, "Support pacing-shape, split, and best-effort validation when available.", workout: true),
@@ -67,8 +69,6 @@ public enum HealthKitPermissionCatalog {
         "Rowing metrics",
         "Wheelchair metrics",
         "Unrelated mobility metrics",
-        "VO2 Max",
-        "Resting Heart Rate",
         "Heart Rate Variability",
         "Sleep Analysis",
         "Profile characteristics",

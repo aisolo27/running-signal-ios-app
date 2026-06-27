@@ -5,8 +5,10 @@ import Testing
 
 @MainActor
 @Test func rawHealthKitDebugUnavailableCustomIntervalsCopyIsEvidencePatternBased() {
-    #expect(RawHealthKitWorkoutDebugView.unavailableCustomIntervalsMessage == "Whole-run stats are still available. Custom interval rows need a supported public WorkoutKit and HealthKit evidence pattern before RunSignal can show them.")
+    #expect(RawHealthKitWorkoutDebugView.unavailableCustomIntervalsMessage == "Whole-run stats are still safe to review. Custom interval rows are hidden until RunSignal sees a supported public WorkoutKit and HealthKit evidence pattern.")
     #expect(!RawHealthKitWorkoutDebugView.unavailableCustomIntervalsMessage.contains("distance/time evidence"))
+    #expect(RawHealthKitWorkoutDebugView.reviewPacketScopeMessage.contains("External HealthFit/FIT archives stay offline validation evidence"))
+    #expect(RawHealthKitWorkoutDebugView.reviewPacketScopeMessage.contains("do not treat them as app input"))
 }
 
 @Test func paceMathUsesSecondsPerKilometer() {
@@ -185,6 +187,45 @@ import Testing
 
     #expect(readiness.status == .unavailable)
     #expect(readiness.bestFiveKSeconds == nil)
+}
+
+@Test func healthContextPermissionsIncludeVO2MaxAndRestingHeartRate() {
+    let identifiers = Set(HealthKitPermissionCatalog.readItems.map(\.healthKitIdentifier))
+
+    #expect(identifiers.contains("HKQuantityTypeIdentifierVO2Max"))
+    #expect(identifiers.contains("HKQuantityTypeIdentifierRestingHeartRate"))
+    #expect(!HealthKitPermissionCatalog.intentionallySkipped.contains("VO2 Max"))
+    #expect(!HealthKitPermissionCatalog.intentionallySkipped.contains("Resting Heart Rate"))
+}
+
+@Test func readinessSurfacesHealthContextAsOptionalEvidence() {
+    let readiness = AnalyticsEngine.makeReadiness(
+        workouts: SampleData.workouts,
+        bestEfforts: AnalyticsEngine.makeBestEfforts(SampleData.workouts),
+        dataQuality: AnalyticsEngine.makeDataQualityReport(SampleData.workouts),
+        healthContext: HealthContext(vo2Max: 49.2, restingHeartRate: 47)
+    )
+
+    let healthContext = readiness.evidence.first { $0.title == "Health context" }
+
+    #expect(healthContext?.value.contains("VO2 49.2") == true)
+    #expect(healthContext?.value.contains("RHR 47 bpm") == true)
+    #expect(healthContext?.confidence == .limited)
+}
+
+@Test func readinessUsesNeutralHealthContextUnavailableWording() {
+    let readiness = AnalyticsEngine.makeReadiness(
+        workouts: [],
+        bestEfforts: [],
+        dataQuality: AnalyticsEngine.makeDataQualityReport([]),
+        healthContext: HealthContext()
+    )
+
+    let healthContext = readiness.evidence.first { $0.title == "Health context" }
+
+    #expect(healthContext?.value == "Unavailable")
+    #expect(healthContext?.detail.contains("denied") == false)
+    #expect(healthContext?.confidence == .unavailable)
 }
 
 @Test func markdownExportIncludesConfidenceAndGoal() {
@@ -1354,6 +1395,9 @@ import Testing
     let markdown = DiagnosticsExport.rawHealthKitDebugMarkdown(workout: workout, generatedAt: start)
 
     #expect(markdown.contains("# RunSignal Raw HealthKit Debug Export"))
+    #expect(markdown.contains("## Review Packet Scope"))
+    #expect(markdown.contains("Whole-run stats remain usable when custom interval rows are blocked."))
+    #expect(markdown.contains("External HealthFit/FIT archives stay offline validation evidence"))
     #expect(markdown.contains("## WorkoutKit Reconstructed Intervals"))
     #expect(markdown.contains("| 1 | Warmup | 2 km"))
     #expect(markdown.contains("## HKWorkoutActivity Boundary Candidate Intervals"))
@@ -1430,8 +1474,17 @@ import Testing
     #expect(markdown.contains("\"plannedStepBoundaryComparisons\""))
     #expect(markdown.contains("\"boundarySourceWarnings\""))
     #expect(markdown.contains("\"workoutKitPlanAudit\""))
+    #expect(markdown.contains("\"reviewPacket\""))
+    #expect(markdown.contains("\"externalEvidencePolicy\""))
+    #expect(markdown.contains("\"fitArchiveReference\" : \"external-reference-only\""))
 
     let payload = try rawDebugPayloadObject(from: markdown)
+    let reviewPacket = try #require(payload["reviewPacket"] as? [String: Any])
+    #expect(reviewPacket["scope"] as? String == "debug/export-only")
+    #expect(reviewPacket["normalWorkoutUIChanged"] as? Bool == false)
+    #expect(reviewPacket["usesFITRuntimeTruth"] as? Bool == false)
+    #expect((reviewPacket["includedArtifacts"] as? [String])?.contains("fallback reason labels") == true)
+    #expect((reviewPacket["externalEvidencePolicy"] as? String)?.contains("offline validation evidence only") == true)
     let candidateSummary = try #require(payload["customWorkoutCandidateRuleSummary"] as? [String: Any])
     let candidateRows = try #require(payload["customWorkoutCandidateRuleRows"] as? [[String: Any]])
     let openTailRows = candidateRows.filter { ($0["isOpenTail"] as? Bool) == true }
@@ -1511,6 +1564,10 @@ import Testing
     let json = DiagnosticsExport.parityPacketJSON(workout: workout, forceReenrichResult: forceResult, generatedAt: start)
 
     #expect(json.contains("\"packetVersion\" : 1"))
+    #expect(json.contains("\"reviewPacket\""))
+    #expect(json.contains("\"includedArtifacts\""))
+    #expect(json.contains("offline validation evidence only"))
+    #expect(json.contains("\"fitArchiveReference\" : \"external-reference-only\""))
     #expect(json.contains("\"cacheStatus\""))
     #expect(json.contains("\"evidenceSource\" : \"freshQuery\""))
     #expect(json.contains("\"forceReenrichResult\""))
@@ -2804,6 +2861,11 @@ import Testing
     #expect(comparisonSummary["scope"] as? String == "debug/export-only")
     #expect(comparisonSummary["normalWorkoutUIChanged"] as? Bool == false)
     #expect(comparisonSummary["usesFITRuntimeTruth"] as? Bool == false)
+    let reviewPacket = try #require(object["reviewPacket"] as? [String: Any])
+    #expect(reviewPacket["scope"] as? String == "debug/export-only")
+    #expect(reviewPacket["normalWorkoutUIChanged"] as? Bool == false)
+    #expect(reviewPacket["usesFITRuntimeTruth"] as? Bool == false)
+    #expect((reviewPacket["externalEvidencePolicy"] as? String)?.contains("offline validation evidence only") == true)
     #expect(candidateSummary["pairedPauseCount"] as? Int == 1)
     #expect(candidateSummary["tailStatus"] as? String == "open-extra-tail-present")
     #expect(candidateSummary["tailElapsedDurationSeconds"] as? Double == 10)

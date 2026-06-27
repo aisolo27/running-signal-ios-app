@@ -573,7 +573,7 @@ public final class RunningAnalysisStore {
         hydrateCachedEvidence()
         workouts = DuplicateDetector.markDuplicates(workouts)
         runTypeReconciliation = RunTypeReviewBridge.reconcile(reviews: reviewedRunTypes, workouts: workouts)
-        snapshot = AnalyticsEngine.snapshot(for: workouts)
+        snapshot = AnalyticsEngine.snapshot(for: workouts, healthContext: healthContext)
         refreshEvidenceQueueSummary()
         refreshDerivedAnalyses()
     }

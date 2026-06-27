@@ -66,3 +66,36 @@ Scope: reviewed seven completed Codex session logs whose `session_meta.payload.c
 
 - Updated `docs/bug-log.md` with durable June 25 audit lessons around HealthKit authorization/provenance, refresh cache safety, and proof summarizer/validator contracts.
 - Added this June 25 daily review note. No `AGENTS.md`, `docs/project-state/current-state.md`, `docs/project-state/next-work.md`, or `docs/project-state/documentation-index.md` changes were needed because current routing already reflects the stable blocker and validation state.
+
+## 2026-06-26
+
+Scope: reviewed 15 Codex session logs whose `session_meta.payload.cwd` exactly matched this repo for June 26 local work. The day was dominated by external-review/Claude closeout checks, multi-agent consensus, and proof-folder/state-doc hardening around the paused repeat fixed-tail `Open / Extra` case.
+
+### Completed Work
+
+- Added June 26 physical-iPhone proof for the exact paired-pause repeat fixed-tail `Open / Extra` row in `docs/validation/apple-fitness-interval-parity-dataset/physical-iphone-paused-repeat-fixed-tail-open-extra-proof-2026-06-26/`.
+- Updated the project state docs to route that proof as rung 2 `Evidence Available` only: evidence is strong for the exact shape, but it does not promote normal detail, broaden Gate B, or change Swift behavior.
+- Added normal-detail guard audit tests and landed the proof/state-doc work on `main` in commits `7cafb35` and `283f349`.
+- Used external-review and multi-agent passes to check Claude closeout feedback; consensus was to keep the patch lightweight, cite the proof folder and negative-scope docs, and avoid converting reviewer suggestions into broad promotion.
+
+### Pending Work
+
+- Decide whether the exact June 26 row is enough for rung 3 `Debug-Supported`, or whether a second qualifying physical example is required before Swift prototype work.
+- Keep adjacent guard coverage explicit before any promotion attempt: zero-pause same-template control, cross-boundary pause rejection, and `Cooldown(Open)` counter-case.
+- Continue treating ambiguous repeat tails, broad recovery tails, and paused warmup/work/cooldown timer outliers as blocked unless a later task names one exact shape and walks the promotion ladder.
+
+### Mistakes, Fixes, Friction
+
+- Review friction came from citation asymmetry: positive proof was easy to cite, but negative scope needed explicit links back to blocked ambiguity/recovery/outlier docs so Claude-style feedback could not be read as promotion approval.
+- The repeated lesson is to label June 26 as `Evidence Available`, not `Debug-Supported`, and to keep FIT/HealthFit evidence validation-only rather than runtime truth.
+
+### Workflow Improvements
+
+- Faster future closeouts should start with `docs/project-state/accuracy-ledger.md`, then the proof-folder `README.md`, then `current-state.md`/`next-work.md`; avoid reopening broad validation archives unless the exact proof folder or ledger points there.
+- For outside review packets, include both the exact positive row and the negative-scope citations in the same packet so reviewer feedback cannot drift into broad Gate B claims.
+
+### Docs Updated
+
+- Added this June 26 daily review note.
+- No new `docs/bug-log.md` entry was needed: June 26 reinforced existing proof validation, pause-gating, and scope-control lessons already captured in the bug log.
+- No `AGENTS.md`, `docs/project-state/current-state.md`, `docs/project-state/next-work.md`, or `docs/project-state/documentation-index.md` changes were needed during this review because those docs already reflect the stable June 26 rung 2 state and routing.

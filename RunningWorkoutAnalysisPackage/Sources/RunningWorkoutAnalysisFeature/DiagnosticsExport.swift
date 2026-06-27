@@ -1,6 +1,35 @@
 import Foundation
 
+private let rawDebugReviewPacketScopeMarkdown = """
+## Review Packet Scope
+
+This packet bundles Raw HealthKit Debug, WorkoutKit plan audit, HealthKit activity rows, Parity Lab candidate rows, structured comparison, fallback labels, pause/tail diagnostics, source metadata, and boundary warnings. It is debug/export-only and does not approve normal workout detail behavior.
+
+Whole-run stats remain usable when custom interval rows are blocked. External HealthFit/FIT archives stay offline validation evidence; attach or reference them separately and do not treat FIT as app input or runtime truth.
+"""
+
 public enum DiagnosticsExport {
+    private static var reviewPacketMetadata: ReviewPacketMetadata {
+        ReviewPacketMetadata(
+            scope: "debug/export-only",
+            includedArtifacts: [
+                "Raw HealthKit Debug",
+                "WorkoutKit plan audit",
+                "HealthKit workout activities",
+                "Parity Lab candidate rows",
+                "structured comparison summary",
+                "fallback reason labels",
+                "pause and tail diagnostics",
+                "source metadata",
+                "boundary source warnings"
+            ],
+            externalEvidencePolicy: "External HealthFit/FIT archives are offline validation evidence only. Reference or attach them separately; RunSignal does not import or use FIT as runtime truth.",
+            normalWorkoutUIChanged: false,
+            usesFITRuntimeTruth: false,
+            fitArchiveReference: "external-reference-only"
+        )
+    }
+
     public static func markdown(
         workouts: [CanonicalWorkout],
         snapshot: AnalysisSnapshot,
@@ -112,6 +141,8 @@ public enum DiagnosticsExport {
         # RunSignal Raw HealthKit Debug Export
 
         Generated: \(generatedAt.ISO8601Format())
+
+        \(rawDebugReviewPacketScopeMarkdown)
 
         ## Workout
 
@@ -278,6 +309,7 @@ public enum DiagnosticsExport {
         let payload = ParityPacketPayload(
             packetVersion: 1,
             generatedAt: generatedAt.ISO8601Format(),
+            reviewPacket: reviewPacketMetadata,
             workout: RawDebugWorkout(
                 id: workout.id,
                 sourceName: workout.sourceName,
@@ -401,7 +433,7 @@ public enum DiagnosticsExport {
         workout: CanonicalWorkout
     ) -> String {
         guard let result, !result.intervals.isEmpty else {
-            return "Unavailable. Custom interval rows need a supported public WorkoutKit and HealthKit evidence pattern before RunSignal can show them."
+            return "Unavailable. Whole-run stats remain safe to review, but custom interval rows need a supported public WorkoutKit and HealthKit evidence pattern before RunSignal can show them."
         }
 
         let rows = result.intervals.map { interval in
@@ -856,6 +888,7 @@ public enum DiagnosticsExport {
         )
         return RawDebugPayload(
             generatedAt: generatedAt.ISO8601Format(),
+            reviewPacket: reviewPacketMetadata,
             workout: RawDebugWorkout(
                 id: workout.id,
                 sourceName: workout.sourceName,
@@ -2105,6 +2138,7 @@ private struct MonthlyDiagnosticsSummary {
 
 private struct RawDebugPayload: Codable {
     var generatedAt: String
+    var reviewPacket: ReviewPacketMetadata
     var workout: RawDebugWorkout
     var evidenceCounts: RawDebugEvidenceCounts
     var rawWorkoutEvents: [RawDebugWorkoutEvent]
@@ -2127,6 +2161,7 @@ private struct RawDebugPayload: Codable {
 private struct ParityPacketPayload: Codable {
     var packetVersion: Int
     var generatedAt: String
+    var reviewPacket: ReviewPacketMetadata
     var workout: RawDebugWorkout
     var cacheStatus: ParityPacketCacheStatus
     var forceReenrichResult: ParityPacketForceReenrichResult?
@@ -2144,6 +2179,15 @@ private struct ParityPacketPayload: Codable {
     var boundarySourceWarnings: [String]
     var diagnosticsWarnings: [String]
     var sourceNotes: [String]
+}
+
+private struct ReviewPacketMetadata: Codable {
+    var scope: String
+    var includedArtifacts: [String]
+    var externalEvidencePolicy: String
+    var normalWorkoutUIChanged: Bool
+    var usesFITRuntimeTruth: Bool
+    var fitArchiveReference: String
 }
 
 private struct ParityPacketCacheStatus: Codable {

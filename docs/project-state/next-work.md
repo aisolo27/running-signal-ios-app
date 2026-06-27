@@ -1,6 +1,6 @@
 # Next Work
 
-Last updated: 2026-06-26
+Last updated: 2026-06-27
 
 ## Priority 1
 
@@ -14,6 +14,7 @@ Last updated: 2026-06-26
 - Current milestone is `Custom Workout Correctness Lock v1`; use `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-correctness-lock-v1.md` as the acceptance matrix before any new debug prototype, normal-detail interval promotion, or interval-row analytics work.
 - Current promotion-readiness decision is `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-promotion-readiness-review-2026-06-15.md`; its Gate A simple fixed-distance `Work > Open / Extra` normal-detail promotion is now implemented and has physical-iPhone June 12 post-promotion proof.
 - Analytics implementation order is correctness-first: validate workout-style reading and fallback behavior across custom, stopped-early, repeat-block, tail, paused, and plain open-run controls before adding interval-row analytics or structure-specific conclusions.
+- Health Context follow-up: verify VO2 Max and Resting Heart Rate on the physical iPhone after granting Apple Health read access. Treat nil values as unavailable Apple Health data, not proof of denied permission.
 - Run `docs/validation/apple-fitness-interval-parity-dataset/score_fit_backed_two_gate_validation.py` after rollup changes.
 - Run `docs/validation/apple-fitness-interval-parity-dataset/score_gate_b_custom_workout_fit.py` after Gate B rollup changes. AIS-41 now links the count-level Gate B scorecard to row-level FIT label/error evidence; Gate B remains blocked pending exact-shape label/tail/fallback rule approval.
 - Gate A: simple fixed-distance Work + Open now has a narrow normal-detail promotion for the exact one fixed-distance Work step + one complete HealthKit activity row + positive Open/Extra tail shape. It must not broaden into structured/special workouts, paused workouts, recovery rows, repeat rows, or missing-evidence cases.

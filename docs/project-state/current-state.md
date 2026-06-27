@@ -1,6 +1,6 @@
 # RunSignal Current State
 
-Last updated: 2026-06-26
+Last updated: 2026-06-27
 
 ## Product Direction
 
@@ -16,6 +16,7 @@ The first-read roadmap for this milestone is `docs/project-state/accuracy-ledger
 
 - HealthKit is the runtime source of truth for completed running workouts.
 - HealthKit access is read-only.
+- VO2 Max and Resting Heart Rate are requested/read as optional whole-run Health Context signals for readiness evidence and Data/Today tiles; missing values use neutral unavailable wording, not permission-denied claims.
 - WorkoutKit `HKWorkout.workoutPlan` is the planned-structure source when available.
 - HealthKit samples and `HKWorkout.workoutActivities` are the measured-stats and boundary evidence sources.
 - HealthKit segment markers stay raw/debug-only.
