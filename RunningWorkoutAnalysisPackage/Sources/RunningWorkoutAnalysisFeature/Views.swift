@@ -13,6 +13,10 @@ struct RunsView: View {
         runs.first
     }
 
+    private var allTimeBestEfforts: [PersonalBestEffortRecord] {
+        PersonalBestEffortEngine.summarize(workouts: store.includedWorkouts).allTime
+    }
+
     private var wholeRunSummary: WholeRunHealthKitSummary {
         WholeRunHealthKitSummary.make(
             workouts: store.workouts,
@@ -40,6 +44,16 @@ struct RunsView: View {
                         WorkoutDetailView(store: store, workoutID: latestRun.id)
                     } label: {
                         FeaturedRunRow(workout: latestRun)
+                    }
+                }
+            }
+
+            Section("All-Time Best Efforts") {
+                if allTimeBestEfforts.isEmpty {
+                    EmptyStateView(title: "No best efforts", message: "Need runs with distance and duration before best efforts can be calculated.")
+                } else {
+                    ForEach(allTimeBestEfforts, id: \.bucket) { effort in
+                        PersonalBestEffortRow(effort: effort, titleFont: .headline)
                     }
                 }
             }
