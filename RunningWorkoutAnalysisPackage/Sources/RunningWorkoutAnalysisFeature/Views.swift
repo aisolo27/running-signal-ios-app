@@ -284,6 +284,18 @@ struct LatestRunView: View {
 struct RaceGoalView: View {
     var store: RunningAnalysisStore
 
+    private var allTimeBestEfforts: [PersonalBestEffortRecord] {
+        PersonalBestEffortEngine.summarize(workouts: store.includedWorkouts).allTime
+    }
+
+    private var allTimeFiveK: PersonalBestEffortRecord? {
+        allTimeBestEfforts.first { $0.bucket == .fiveKilometer }
+    }
+
+    private var bestFiveKPaceGapSecondsPerKm: Double? {
+        allTimeFiveK.flatMap(\.paceSecondsPerKm).map { $0 - RunningGoal.sub20FiveK.targetPaceSecondsPerKm }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -299,8 +311,8 @@ struct RaceGoalView: View {
                 MetricGrid(items: [
                     MetricItem(title: "Race date", value: "Oct 17", detail: "2026"),
                     MetricItem(title: "Goal pace", value: RunFormatters.pace(RunningGoal.sub20FiveK.targetPaceSecondsPerKm), detail: "Sub-20 5K"),
-                    MetricItem(title: "Best 5K", value: RunFormatters.duration(store.snapshot.readiness.bestFiveKSeconds), detail: "Available evidence"),
-                    MetricItem(title: "Pace gap", value: paceGapText(store.snapshot.readiness.paceGapSecondsPerKm), detail: "Seconds per km")
+                    MetricItem(title: "Best 5K", value: RunFormatters.duration(allTimeFiveK?.durationSeconds), detail: allTimeFiveK.map(personalBestEffortStatus) ?? "Missing"),
+                    MetricItem(title: "Pace gap", value: paceGapText(bestFiveKPaceGapSecondsPerKm), detail: "Seconds per km")
                 ])
 
                 SectionHeader("Evidence")
@@ -308,32 +320,13 @@ struct RaceGoalView: View {
                     InsightCard(insight: insight)
                 }
 
-                SectionHeader("Best efforts")
-                if store.snapshot.bestEfforts.isEmpty {
-                    EmptyStateView(title: "No best efforts", message: "Need workouts with distance and duration before best efforts can be estimated.")
+                SectionHeader("All-Time Best Efforts")
+                if allTimeBestEfforts.isEmpty {
+                    EmptyStateView(title: "No best efforts", message: "Need workouts with distance and duration before best efforts can be calculated.")
                 } else {
                     VStack(spacing: 10) {
-                        ForEach(store.snapshot.bestEfforts) { effort in
-                            HStack {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(effort.label)
-                                        .font(.headline)
-                                    Text(RunFormatters.shortDate.string(from: effort.date))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                VStack(alignment: .trailing, spacing: 3) {
-                                    Text(RunFormatters.duration(effort.durationSeconds))
-                                        .font(.headline.monospacedDigit())
-                                    Text(RunFormatters.pace(effort.paceSecondsPerKm))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            .padding()
-                            .background(.background)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        ForEach(allTimeBestEfforts, id: \.bucket) { effort in
+                            PersonalBestEffortRow(effort: effort, titleFont: .headline)
                         }
                     }
                 }
@@ -347,6 +340,87 @@ struct RaceGoalView: View {
         guard let value else { return "Missing" }
         if value <= 0 { return "At pace" }
         return "+\(Int(value.rounded()))"
+    }
+}
+
+struct PersonalBestEffortRow: View {
+    let effort: PersonalBestEffortRecord
+    let titleFont: Font
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(effort.bucket.label)
+                    .font(titleFont)
+                Text(personalBestEffortDetail(effort))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 3) {
+                Text(primaryValue)
+                    .font(titleFont.monospacedDigit())
+                Text(RunFormatters.pace(effort.paceSecondsPerKm))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(10)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var primaryValue: String {
+        if effort.bucket == .longestRun {
+            return RunFormatters.compactDistance(effort.distanceMeters)
+        }
+        return RunFormatters.duration(effort.durationSeconds)
+    }
+}
+
+private func personalBestEffortDetail(_ effort: PersonalBestEffortRecord) -> String {
+    var parts = [
+        personalBestEffortStatus(effort),
+        RunFormatters.shortDate.string(from: effort.date)
+    ]
+    let caveats = effort.caveats.map(personalBestEffortCaveatLabel)
+    if !caveats.isEmpty {
+        parts.append(caveats.joined(separator: ", "))
+    }
+    return parts.joined(separator: " · ")
+}
+
+private func personalBestEffortStatus(_ effort: PersonalBestEffortRecord) -> String {
+    switch effort.confidence {
+    case .exact:
+        return "Exact"
+    case .estimated:
+        return "Estimated"
+    case .exactTotal:
+        return "Exact total"
+    case .unavailable:
+        return "Unavailable"
+    }
+}
+
+private func personalBestEffortCaveatLabel(_ caveat: PersonalBestEffortCaveat) -> String {
+    switch caveat {
+    case .summaryOnlyEstimate:
+        return "whole-run estimate"
+    case .indoorDeviceDerivedDistance:
+        return "indoor/device distance"
+    case .routeMissing:
+        return "route missing"
+    case .pauseOverlap:
+        return "pause overlap"
+    case .sampleGap:
+        return "sample gap"
+    case .shortBucketDensityLimited:
+        return "short-bucket density limited"
+    case .distanceSeriesUnusable:
+        return "distance samples unusable"
     }
 }
 
@@ -2280,6 +2354,13 @@ struct ExecutionAnalysisCard: View {
     let workout: CanonicalWorkout
     let analysis: DerivedWorkoutAnalysis?
 
+    private var personalBestRecords: [PersonalBestEffortRecord] {
+        PersonalBestEffortEngine.records(for: workout)
+            .filter { $0.bucket != .longestRun }
+            .prefix(5)
+            .map { $0 }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
@@ -2315,31 +2396,11 @@ struct ExecutionAnalysisCard: View {
                     )
                 }
 
-                if !analysis.bestEffortEstimates.isEmpty {
-                    SectionHeader("Best Effort Estimates")
+                if !personalBestRecords.isEmpty {
+                    SectionHeader("Best Efforts")
                     VStack(spacing: 8) {
-                        ForEach(analysis.bestEffortEstimates.prefix(4), id: \.label) { effort in
-                            HStack {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(effort.label)
-                                        .font(.subheadline.bold())
-                                    Text(effort.source)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(2)
-                                }
-                                Spacer()
-                                VStack(alignment: .trailing, spacing: 3) {
-                                    Text(RunFormatters.duration(effort.durationSecondsEstimate))
-                                        .font(.subheadline.monospacedDigit().bold())
-                                    Text(RunFormatters.pace(effort.paceSecondsPerKmEstimate))
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            .padding(10)
-                            .background(.thinMaterial)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        ForEach(personalBestRecords, id: \.bucket) { effort in
+                            PersonalBestEffortRow(effort: effort, titleFont: .subheadline.bold())
                         }
                     }
                 }

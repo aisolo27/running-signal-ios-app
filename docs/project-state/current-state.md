@@ -38,6 +38,8 @@ Broad production interval behavior remains frozen outside the explicitly approve
 
 Non-interval app surfaces now include a whole-run status card, Health Context verification cards in Today/Data, and clearer Raw HealthKit Debug review-packet guardrails. These changes do not promote any custom interval row, do not add interval-row analytics, and do not change the eight narrow normal-detail gates.
 
+PR / Best Efforts now has a Swift computation engine and package tests for Strava-like buckets, exact rolling distance-window detection, whole-run estimates, longest run, all-time aggregation, and caveats for indoor/device-derived distance, route-missing distance, pauses, sample gaps, short-bucket density, and unusable distance series. Race Goal now shows all-time Best Efforts from this engine, and workout detail uses the same engine for per-run best efforts. Recent/90-day best efforts remain unexposed by design, and the legacy `DerivedWorkoutAnalysis.bestEffortEstimates` property is not the visible Best Efforts source.
+
 Normal workout detail currently supports eight physically proven narrow classes:
 
 - Stopped-early single fixed-distance `Work`.
