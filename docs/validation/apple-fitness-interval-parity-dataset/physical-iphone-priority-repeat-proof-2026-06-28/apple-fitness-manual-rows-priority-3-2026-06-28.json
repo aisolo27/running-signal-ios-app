@@ -1,0 +1,30 @@
+{
+  "source": "Apple Fitness screenshots",
+  "screenshotOverview": "screenshots/priority-3-overview-v1.png",
+  "screenshotIntervals": "screenshots/priority-3-intervals-v2.png",
+  "workoutId": "8B07CF82-0778-4A83-B862-486275CCA923",
+  "workoutTitle": "Priority 3 (no pause, open cooldown)",
+  "date": "2026-06-28",
+  "overview": {
+    "workoutTime": "0:35:19",
+    "distance": "4.95 km",
+    "averagePace": "7'08\"/km",
+    "averageHeartRate": "147 bpm",
+    "averageCadence": "159 spm",
+    "averagePower": "168 W",
+    "activeCalories": "361 cal",
+    "totalCalories": "413 cal"
+  },
+  "rows": [
+    { "index": 1, "label": "Warmup", "distance": "2.00 km", "time": "13:01", "pace": "6'31\"/km", "heartRate": "148 bpm" },
+    { "index": 2, "label": "Work", "distance": "400 m", "time": "02:37", "pace": "6'32\"/km", "heartRate": "152 bpm" },
+    { "index": 3, "label": "Recovery", "distance": "200 m", "time": "01:18", "pace": "6'32\"/km", "heartRate": "151 bpm" },
+    { "index": 4, "label": "Work", "distance": "400 m", "time": "02:32", "pace": "6'20\"/km", "heartRate": "152 bpm" },
+    { "index": 5, "label": "Recovery", "distance": "200 m", "time": "01:13", "pace": "6'06\"/km", "heartRate": "153 bpm" },
+    { "index": 6, "label": "Work", "distance": "400 m", "time": "02:40", "pace": "6'40\"/km", "heartRate": "153 bpm" },
+    { "index": 7, "label": "Recovery", "distance": "200 m", "time": "01:15", "pace": "6'16\"/km", "heartRate": "154 bpm" },
+    { "index": 8, "label": "Work", "distance": "400 m", "time": "02:32", "pace": "6'19\"/km", "heartRate": "157 bpm" },
+    { "index": 9, "label": "Recovery", "distance": "200 m", "time": "01:14", "pace": "6'12\"/km", "heartRate": "156 bpm" },
+    { "index": 10, "label": "Cooldown", "distance": "544 m", "time": "06:56", "pace": "12'45\"/km", "heartRate": "133 bpm" }
+  ]
+}

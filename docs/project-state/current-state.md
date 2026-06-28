@@ -1,6 +1,6 @@
 # RunSignal Current State
 
-Last updated: 2026-06-27
+Last updated: 2026-06-28
 
 ## Product Direction
 
@@ -8,7 +8,7 @@ RunSignal is a native iPhone SwiftUI app for evidence-grounded completed running
 
 Coaching expansion, backend sync, AI calls, FIT import, HealthFit import/export, and file-based workout ingestion remain out of scope.
 
-The active milestone is `Custom Workout Correctness Lock v1`: keep the eight physically proven normal-detail gates stable, use the workout-style acceptance matrix for future validation/prototype decisions, and defer interval-row analytics until custom workout structure is stable.
+The active milestone is `Custom Workout Correctness Lock v1`: keep the nine physically proven normal-detail gates stable, use the workout-style acceptance matrix for future validation/prototype decisions, and defer interval-row analytics until custom workout structure is stable.
 
 The first-read roadmap for this milestone is `docs/project-state/accuracy-ledger.md`. Use it as the mission-control map for workout-shape status, promotion rungs, blocked classes, and which older validation docs it supersedes for day-to-day planning.
 
@@ -36,13 +36,13 @@ The first-read roadmap for this milestone is `docs/project-state/accuracy-ledger
 
 Broad production interval behavior remains frozen outside the explicitly approved narrow normal-detail gates. Debug validation models and Parity Lab exports may expose candidate rows, comparison summaries, fallback reasons, pause overlap, active/timer duration, and Open/Extra tail diagnostics, but they do not approve production UI by themselves.
 
-Non-interval app surfaces now include a whole-run status card, Health Context verification cards in Today/Data, and clearer Raw HealthKit Debug review-packet guardrails. These changes do not promote any custom interval row, do not add interval-row analytics, and do not change the eight narrow normal-detail gates.
+Non-interval app surfaces now include a whole-run status card, Health Context verification cards in Today/Data, and clearer Raw HealthKit Debug review-packet guardrails. These changes do not promote any custom interval row, do not add interval-row analytics, and do not change the nine narrow normal-detail gates.
 
 Monthly evidence refresh and parity force re-enrich now fetch replacement HealthKit evidence before committing; failed, empty, unavailable, or no-evidence responses preserve existing loaded and persisted cached evidence. Monthly refresh also persists `EvidenceRefreshJob` and item checkpoints, dedupes active month jobs, marks interrupted running jobs paused on the next bootstrap, can retry failed month items without rerunning already successful items, and treats unsupported HealthKit refresh as blocked rather than retryable item failure. Refresh jobs persist interruption history so a later completed foreground resume still proves an interrupted relaunch happened. Raw HealthKit Debug now surfaces the selected-month refresh job status, progress, failed/pending counts, foreground Resume/Retry action, stale-derived recompute count/check state, interrupted-relaunch recovery proof text, and physical interruption proof checklist state when available. Monthly diagnostics exports include derived-analytics refresh metadata and structured refresh-job recovery/physical-proof metadata. Derived analytics now refresh when cached raw-evidence input signatures drift, not only when the calculation version changes, and the semantic input signature ignores `loadedAt` churn. Monthly refresh also emits lightweight OSLog diagnostics for month scope, per-workout start/end, HealthKit authorization/return count, cache preserve/commit decisions, recompute boundaries, job completion, and iOS memory warnings. App foreground/open now runs a throttled lightweight HealthKit sync only after bootstrap when cached real data, prior authorization, or a previous sync state makes it appropriate and a saved HealthKit sync anchor exists; this automatic path is single-flight, uses bounded anchored batches, and skips full recompute and evidence-queue maintenance so app activation does not run cache-heavy work while the user is scrolling. Initial full HealthKit workout load is also bounded to the newest workouts instead of using a no-limit workout query. Sample-only first launch still requires explicit user action.
 
 PR / Best Efforts now has a Swift computation engine and package tests for Strava-like buckets, exact rolling distance-window detection, whole-run estimates, longest run, all-time aggregation, and caveats for indoor/device-derived distance, route-missing distance, pauses, sample gaps, short-bucket density, and unusable distance series. The visible Runs tab now shows all-time Best Efforts from this engine, and standard segment rows require exact evidence-backed records; summary-only whole-run estimates do not populate official visible bests. Workout detail uses the same engine for per-run best efforts. The legacy `DerivedWorkoutAnalysis.bestEffortEstimates` property is not the visible Best Efforts source.
 
-Normal workout detail currently supports eight physically proven narrow classes:
+Normal workout detail currently supports nine physically proven narrow classes:
 
 - Stopped-early single fixed-distance `Work`.
 - Simple fixed-distance `Work > inferred Open / Extra`.
@@ -51,6 +51,7 @@ Normal workout detail currently supports eight physically proven narrow classes:
 - Clean no-pause repeat blocks shaped as `Warmup(2 km) > repeated Work/Recovery rows > Cooldown(Open)`.
 - Clean no-pause repeat blocks shaped as `Warmup(2 km) > repeated Work/Recovery rows > fixed Cooldown > inferred Open / Extra`.
 - Narrow paused-repeat `Warmup(2 km) > repeated Work/Recovery rows > Cooldown(Open)` with active/timer display for paused rows only.
+- Narrow paused-repeat `Warmup(2 km) > repeated Work/Recovery rows > fixed Cooldown > inferred Open / Extra` with paired pause windows assignable to one row and active/timer display for paused rows only.
 - Narrow May 1-style `Warmup > Recovery > Work > fixed Cooldown > inferred Open / Extra`.
 
 Paused timing semantics now use a pause-window state machine for explicit pause/resume, motion pause/resume, and `pauseOrResumeRequest` toggle events. Duplicate, dangling, unpaired, cross-row, or otherwise caveated pause streams stay blocked from normal-detail promotion.
@@ -98,3 +99,7 @@ The remaining blocked workout-style classes have explicit boundary docs:
 - `docs/validation/`: Apple Fitness parity, FIT-backed validation, or evidence-review work only.
 - `docs/milestones/09-healthkit-evidence-contract.md`: milestone status and Step 7 work only.
 - `docs/archive/`: historical context only.
+
+## June 28 Priority Repeat Proof
+
+- `docs/validation/apple-fitness-interval-parity-dataset/physical-iphone-priority-repeat-proof-2026-06-28/` partially archives the five-priority physical proof set. Priorities 1-3 have Apple Fitness screenshots, typed manual rows, and Raw HealthKit Debug/Parity Lab exports. Priority 1's exact paused fixed-cooldown/Open-tail shape is now normal-detail supported with active/timer display on paused rows; Priorities 2-3 remain clean no-pause controls. Priorities 4-5 remain pending, and this does not broaden Gate B or complete the five-run set.

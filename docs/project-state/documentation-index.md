@@ -1,6 +1,6 @@
 # Documentation Index
 
-Last updated: 2026-06-25
+Last updated: 2026-06-28
 
 ## Active Docs To Read First
 
@@ -101,6 +101,10 @@ Keep active validation lean. For custom-workout status and roadmap questions, st
 ## Needs Human Review
 
 - `README.md`: still contains useful setup details, but some template-era sections may be worth trimming later.
+
+## Recent Validation Archives
+
+- `docs/validation/apple-fitness-interval-parity-dataset/physical-iphone-priority-repeat-proof-2026-06-28/`: partial June 28 five-priority physical proof archive; priorities 1-3 have screenshots, typed Apple Fitness rows, and Raw HealthKit Debug/Parity Lab exports, priorities 4-5 pending.
 
 ## Intentionally Not Archived
 

@@ -1,0 +1,33 @@
+{
+  "source": "Apple Fitness screenshots",
+  "screenshotOverview": "screenshots/priority-1-overview-v1.png",
+  "screenshotIntervals": "screenshots/priority-1-intervals-v2.png",
+  "workoutId": "C75E6F78-0762-450A-94F6-72878DA8EC55",
+  "workoutTitle": "Priority 1 (pause work2, recovery3, cooldown)",
+  "date": "2026-06-28",
+  "overview": {
+    "workoutTime": "0:38:39",
+    "elapsedTime": "0:43:32",
+    "distance": "6.03 km",
+    "averagePace": "6'24\"/km",
+    "averageHeartRate": "134 bpm",
+    "averageCadence": "174 spm",
+    "averagePower": "187 W",
+    "activeCalories": "376 cal",
+    "totalCalories": "433 cal",
+    "elevationGain": "0 m"
+  },
+  "rows": [
+    { "index": 1, "label": "Warmup", "distance": "2.00 km", "time": "12:42", "pace": "6'21\"/km", "heartRate": "126 bpm" },
+    { "index": 2, "label": "Work", "distance": "400 m", "time": "02:34", "pace": "6'25\"/km", "heartRate": "136 bpm" },
+    { "index": 3, "label": "Recovery", "distance": "200 m", "time": "01:21", "pace": "6'43\"/km", "heartRate": "136 bpm" },
+    { "index": 4, "label": "Work", "distance": "400 m", "time": "02:32", "pace": "6'21\"/km", "heartRate": "134 bpm" },
+    { "index": 5, "label": "Recovery", "distance": "200 m", "time": "01:16", "pace": "6'20\"/km", "heartRate": "138 bpm" },
+    { "index": 6, "label": "Work", "distance": "400 m", "time": "02:34", "pace": "6'26\"/km", "heartRate": "138 bpm" },
+    { "index": 7, "label": "Recovery", "distance": "200 m", "time": "01:18", "pace": "6'29\"/km", "heartRate": "132 bpm" },
+    { "index": 8, "label": "Work", "distance": "400 m", "time": "02:31", "pace": "6'18\"/km", "heartRate": "135 bpm" },
+    { "index": 9, "label": "Recovery", "distance": "200 m", "time": "01:16", "pace": "6'19\"/km", "heartRate": "138 bpm" },
+    { "index": 10, "label": "Cooldown", "distance": "0.99 km", "time": "06:24", "pace": "6'26\"/km", "heartRate": "137 bpm" },
+    { "index": 11, "label": "Open", "distance": "630 m", "time": "04:11", "pace": "6'38\"/km", "heartRate": "143 bpm" }
+  ]
+}
