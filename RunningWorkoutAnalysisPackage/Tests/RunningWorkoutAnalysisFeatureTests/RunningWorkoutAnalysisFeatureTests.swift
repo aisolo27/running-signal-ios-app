@@ -1551,7 +1551,7 @@ import Testing
 }
 
 @MainActor
-@Test func storeHydratesCachedEvidenceForRouteRenderingOnBootstrap() async throws {
+@Test func storeSkipsCachedEvidenceHydrationOnBootstrap() async throws {
     let context = try inMemoryModelContext()
     let start = Date(timeIntervalSince1970: 3_500)
     var workout = testWorkout(
@@ -1575,8 +1575,10 @@ import Testing
 
     await store.bootstrap(modelContext: context)
 
-    #expect(store.workouts.first?.evidence?.route.count == 2)
+    #expect(PersistenceService.fetchEvidence(workoutID: workout.id, context: context)?.route.count == 2)
+    #expect(store.workouts.first?.evidence == nil)
     #expect(store.workouts.first?.routePointCount == 2)
+    #expect(store.evidenceQueueSummary.enrichedCount == 1)
 }
 
 @MainActor

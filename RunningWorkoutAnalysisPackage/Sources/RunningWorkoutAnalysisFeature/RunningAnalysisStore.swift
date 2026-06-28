@@ -290,7 +290,7 @@ public final class RunningAnalysisStore {
         reviewedRunTypes = RunTypeReviewImportService.loadSavedReviews()
         syncState = HealthKitSyncState(lastSyncAt: HealthKitSyncStateStore.loadLastSyncAt())
         applyReviewedRunTypes()
-        recompute(refreshDerivedAnalyses: false)
+        recompute(hydrateEvidence: false, refreshDerivedAnalyses: false)
         refreshEvidenceRefreshJobs()
     }
 
@@ -852,8 +852,13 @@ public final class RunningAnalysisStore {
         PersistenceService.upsert(workouts, context: modelContext)
     }
 
-    private func recompute(refreshDerivedAnalyses shouldRefreshDerivedAnalyses: Bool = true) {
-        hydrateCachedEvidence()
+    private func recompute(
+        hydrateEvidence shouldHydrateEvidence: Bool = true,
+        refreshDerivedAnalyses shouldRefreshDerivedAnalyses: Bool = true
+    ) {
+        if shouldHydrateEvidence {
+            hydrateCachedEvidence()
+        }
         workouts = DuplicateDetector.markDuplicates(workouts)
         runTypeReconciliation = RunTypeReviewBridge.reconcile(reviews: reviewedRunTypes, workouts: workouts)
         snapshot = AnalyticsEngine.snapshot(for: workouts, healthContext: healthContext)
