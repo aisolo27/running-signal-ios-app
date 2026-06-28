@@ -198,32 +198,25 @@ import Testing
         durationSeconds: 180
     )
 
-    let summary = PersonalBestEffortEngine.summarize(
-        workouts: [exact, estimated],
-        now: start.addingTimeInterval(2_000)
-    )
+    let summary = PersonalBestEffortEngine.summarize(workouts: [exact, estimated])
     let official = try #require(summary.allTime.first { $0.bucket == .oneKilometer })
-    let fastestEstimated = try #require(summary.fastestEstimated.first { $0.bucket == .oneKilometer })
 
     #expect(official.workoutID == "exact")
     #expect(official.confidence == .exact)
-    #expect(fastestEstimated.workoutID == "faster-estimate")
 }
 
-@Test func personalBestEffortsSeparateAllTimeAndNinetyDayRecent() throws {
-    let now = Date(timeIntervalSince1970: 10_000_000)
-    let oldStart = now.addingTimeInterval(-120 * 24 * 60 * 60)
-    let recentStart = now.addingTimeInterval(-20 * 24 * 60 * 60)
-    let old = personalBestWorkout(id: "old", start: oldStart, distanceMeters: 5_000, durationSeconds: 1_200)
-    let recent = personalBestWorkout(id: "recent", start: recentStart, distanceMeters: 5_000, durationSeconds: 1_500)
+@Test func personalBestEffortsKeepSummaryOnlyEstimatesOutOfOfficialBests() throws {
+    let start = Date(timeIntervalSince1970: 850)
+    let estimated = personalBestWorkout(
+        id: "summary-only",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_275
+    )
 
-    let summary = PersonalBestEffortEngine.summarize(workouts: [old, recent], now: now)
-    let allTime = try #require(summary.allTime.first { $0.bucket == .fiveKilometer })
-    let recentBest = try #require(summary.recent.first { $0.bucket == .fiveKilometer })
+    let summary = PersonalBestEffortEngine.summarize(workouts: [estimated])
 
-    #expect(summary.recentWindowDays == 90)
-    #expect(allTime.workoutID == "old")
-    #expect(recentBest.workoutID == "recent")
+    #expect(summary.allTime.first { $0.bucket == .fiveKilometer } == nil)
 }
 
 @Test func personalBestEffortsLongestRunUsesTotalDistanceAndCarriesSourceCaveat() throws {
@@ -249,10 +242,7 @@ import Testing
         durationSeconds: 3_600
     )
 
-    let summary = PersonalBestEffortEngine.summarize(
-        workouts: [indoor, outdoor],
-        now: start.addingTimeInterval(2_000)
-    )
+    let summary = PersonalBestEffortEngine.summarize(workouts: [indoor, outdoor])
     let longest = try #require(summary.allTime.first { $0.bucket == .longestRun })
 
     #expect(longest.workoutID == "indoor-long")

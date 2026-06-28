@@ -14,7 +14,7 @@ struct RunsView: View {
     }
 
     private var allTimeBestEfforts: [PersonalBestEffortRecord] {
-        PersonalBestEffortEngine.summarize(workouts: store.includedWorkouts).allTime
+        store.personalBestEffortSummary.allTime
     }
 
     private var wholeRunSummary: WholeRunHealthKitSummary {
@@ -50,7 +50,7 @@ struct RunsView: View {
 
             Section("All-Time Best Efforts") {
                 if allTimeBestEfforts.isEmpty {
-                    EmptyStateView(title: "No best efforts", message: "Need runs with distance and duration before best efforts can be calculated.")
+                    EmptyStateView(title: "No exact best efforts", message: "Need detailed HealthKit distance samples before official segment bests can be calculated.")
                 } else {
                     ForEach(allTimeBestEfforts, id: \.bucket) { effort in
                         PersonalBestEffortRow(effort: effort, titleFont: .headline)
@@ -336,7 +336,7 @@ struct RaceGoalView: View {
 
                 SectionHeader("All-Time Best Efforts")
                 if allTimeBestEfforts.isEmpty {
-                    EmptyStateView(title: "No best efforts", message: "Need workouts with distance and duration before best efforts can be calculated.")
+                    EmptyStateView(title: "No exact best efforts", message: "Need detailed HealthKit distance samples before official segment bests can be calculated.")
                 } else {
                     VStack(spacing: 10) {
                         ForEach(allTimeBestEfforts, id: \.bucket) { effort in

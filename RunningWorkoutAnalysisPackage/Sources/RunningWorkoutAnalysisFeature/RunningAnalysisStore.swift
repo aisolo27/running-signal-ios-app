@@ -17,6 +17,7 @@ public final class RunningAnalysisStore {
     public private(set) var runTypeReconciliation = RunTypeReconciliationSummary.empty
     public private(set) var syncState = HealthKitSyncState.empty
     public private(set) var evidenceQueueSummary = EvidenceEnrichmentQueueSummary.empty
+    public private(set) var personalBestEffortSummary = PersonalBestEffortEngine.summarize(workouts: [])
     public private(set) var derivedAnalysesByWorkoutID: [String: DerivedWorkoutAnalysis] = [:]
     public private(set) var parityForceReenrichResults: [String: ParityForceReenrichResult] = [:]
     public private(set) var monthlyEvidenceRefreshResults: [String: MonthlyEvidenceRefreshResult] = [:]
@@ -574,6 +575,7 @@ public final class RunningAnalysisStore {
         workouts = DuplicateDetector.markDuplicates(workouts)
         runTypeReconciliation = RunTypeReviewBridge.reconcile(reviews: reviewedRunTypes, workouts: workouts)
         snapshot = AnalyticsEngine.snapshot(for: workouts, healthContext: healthContext)
+        personalBestEffortSummary = PersonalBestEffortEngine.summarize(workouts: workouts)
         refreshEvidenceQueueSummary()
         refreshDerivedAnalyses()
     }

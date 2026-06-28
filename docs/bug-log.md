@@ -45,6 +45,8 @@ Use this as a selective lookup, not required full-context reading. Read the inde
 ## SwiftUI And Layout
 
 - Symptom: accessibility snapshot failed immediately after launch or keyboard focus. Cause: Simulator UI/keyboard had not settled. Fix: retry `snapshot_ui` after a short settle or use screenshot for visual verification.
+- Symptom: physical iPhone shows the black launch screen and returns to Home after a UI analytics change. Cause: simulator sample data can miss launch-time pressure from cached real HealthKit workouts. Fix: avoid heavy analytics computation directly in SwiftUI body paths; cache app-wide summaries in `RunningAnalysisStore.recompute()` and verify the current build on the physical iPhone after reinstall when the app was crashing.
+- Symptom: All-Time Best Efforts showed faster “Estimated” rows that did not match exact segment bests from validation sources. Cause: summary-only whole-run estimates were eligible for the visible official best-effort list when detailed HealthKit distance samples were missing. Fix: require exact evidence-backed records for visible segment bests and keep whole-run estimates out of the all-time summary.
 - Rule: verify all five tabs after meaningful UI changes: Today, Latest Run, Race Goal, History, Data.
 - Rule: after editing notes or labels, verify the detail view still opens and save does not crash.
 

@@ -101,26 +101,17 @@ public struct PersonalBestEffortRecord: Codable, Equatable, Sendable {
 
 public struct PersonalBestEffortSummary: Codable, Equatable, Sendable {
     public var allTime: [PersonalBestEffortRecord]
-    public var recent: [PersonalBestEffortRecord]
-    public var fastestEstimated: [PersonalBestEffortRecord]
-    public var recentWindowDays: Int
 }
 
 public enum PersonalBestEffortEngine {
     public static func summarize(
-        workouts: [CanonicalWorkout],
-        now: Date = Date(),
-        recentWindowDays: Int = 90
+        workouts: [CanonicalWorkout]
     ) -> PersonalBestEffortSummary {
         let included = workouts.filter { !$0.isDuplicate }
         let records = included.flatMap(records(for:))
-        let recentStart = now.addingTimeInterval(-Double(recentWindowDays) * 24 * 60 * 60)
 
         return PersonalBestEffortSummary(
-            allTime: bestRecords(from: records),
-            recent: bestRecords(from: records.filter { $0.date >= recentStart }),
-            fastestEstimated: fastestEstimatedRecords(from: records),
-            recentWindowDays: recentWindowDays
+            allTime: bestRecords(from: records)
         )
     }
 
@@ -312,15 +303,9 @@ public enum PersonalBestEffortEngine {
             if bucket == .longestRun {
                 return bucketRecords.max(by: longestRunLessPreferred)
             }
-            return bucketRecords.min(by: segmentLessPreferred)
-        }
-    }
-
-    private static func fastestEstimatedRecords(from records: [PersonalBestEffortRecord]) -> [PersonalBestEffortRecord] {
-        PersonalBestEffortBucket.allCases.compactMap { bucket in
-            records
-                .filter { $0.bucket == bucket && $0.confidence == .estimated }
-                .min(by: segmentLessPreferred)
+            let evidenceBackedRecords = bucketRecords.filter { $0.confidence != .estimated }
+            guard !evidenceBackedRecords.isEmpty else { return nil }
+            return evidenceBackedRecords.min(by: segmentLessPreferred)
         }
     }
 
