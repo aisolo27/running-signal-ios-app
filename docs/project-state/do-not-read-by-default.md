@@ -17,10 +17,10 @@ Historical context only. Load these only when the task explicitly asks for histo
 - Archived assistant-rule templates.
 - Generated combined reference packs.
 - Superseded implementation plans.
-- Historical parity investigations not listed in `docs/project-state/current-state.md` or `docs/project-state/next-work.md`.
+- Historical parity investigations not listed in `docs/project-state/project-status.md` or `docs/project-state/accuracy-ledger.md`.
 - Completed date-specific validation evidence.
 - Validation evidence older than the latest active parity investigation, latest active evidence review, or current blocker.
 
 ## Default Rule
 
-If a task needs current direction, read `docs/project-state/current-state.md` and `docs/project-state/next-work.md` instead.
+If a task needs current direction, read `docs/project-state/project-status.md` instead.

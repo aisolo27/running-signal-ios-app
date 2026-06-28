@@ -129,7 +129,7 @@ Physical proof is required only after app behavior changes. A real promotion tas
 6. Current-build parity packet export for the exact candidate workout.
 7. Proof that FIT appears only as offline validation evidence, not app input.
 8. A repo-local proof folder with README/review notes.
-9. `docs/project-state/current-state.md` and `docs/project-state/next-work.md` updates.
+9. `docs/project-state/project-status.md` and `docs/project-state/accuracy-ledger.md` updates.
 
 Normal detail remains blocked unless a later task separately approves promotion after the debug/export prototype, scorecards, regression checks, and physical proof all pass.
 

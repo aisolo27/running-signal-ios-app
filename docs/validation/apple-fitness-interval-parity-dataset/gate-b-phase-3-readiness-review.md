@@ -6,7 +6,7 @@ Last updated: 2026-06-26
 
 This June 13 review is historical source evidence, not the current roadmap. Since it was written, the narrow `Warmup(2 km) > one Work step > Cooldown(Open)` normal-detail gate and several other exact gates have been implemented, physically proven, and routed through `docs/project-state/accuracy-ledger.md`.
 
-Use `docs/project-state/accuracy-ledger.md` and `docs/project-state/next-work.md` for current status. The Phase 3 approval language below now applies only when reusing this review to define a new exact docs/debug/export prototype for a still-blocked ledger row. Evidence-in-hand cases such as the May 29 paused W/W/C timer outlier still need a shape-specific rule before any later promotion discussion.
+Use `docs/project-state/project-status.md` and `docs/project-state/accuracy-ledger.md` for current status. The Phase 3 approval language below now applies only when reusing this review to define a new exact docs/debug/export prototype for a still-blocked ledger row. Evidence-in-hand cases such as the May 29 paused W/W/C timer outlier still need a shape-specific rule before any later promotion discussion.
 
 ## Executive summary
 

@@ -1,10 +1,10 @@
 # AGENTS.md
 
-- Start each new task by reading `docs/project-state/current-state.md` and `docs/project-state/next-work.md`, then load only the additional docs that are directly relevant.
+- Start each new task by reading `docs/project-state/project-status.md`, then load only the additional docs that are directly relevant.
 - Native iPhone SwiftUI app. Open and build `RunningWorkoutAnalysis.xcworkspace`; primary implementation lives in `RunningWorkoutAnalysisPackage/Sources/RunningWorkoutAnalysisFeature/`, while the app target stays a thin shell.
 - Before any Xcode build/run/test, call XcodeBuildMCP `session_show_defaults`; use the `RunningWorkoutAnalysis` scheme with an iPhone simulator such as `iPhone 17`. Avoid macOS build/run tools for this project.
 - For simulator build/run/UI/log debugging, use the `build-ios-apps:ios-debugger-agent` skill. Use `build-ios-apps:ios-simulator-browser` only when the user asks to watch/interact through the browser, capture browser-visible proof, or iterate on SwiftUI previews.
-- Treat "push/run/install live to my iPhone" as a physical-device install/verification request, not git push/deploy. First run package tests plus a Simulator smoke check, then use device workflow if available or give exact Xcode run steps; clearly report whether proof came from Simulator or the physical iPhone.
+- Treat "push/run/install live to my iPhone" as a physical-device install/verification request, not git push/deploy. First run package tests plus a Simulator smoke check, then use device workflow if available or give exact Xcode run steps; clearly report whether proof came from Simulator or the physical iPhone. After a successful physical-iPhone install/run, include a 1-3 item app-visible smoke checklist tailored to the change, and mention when a fresh install requires `Settings > Load HealthKit Runs` or another manual bootstrap before data-dependent screens such as Best Efforts can be judged.
 - Package tests may run with `swift test --package-path RunningWorkoutAnalysisPackage`; keep `Package.swift` compatible with iOS 26 and macOS 14 so local package tests do not fail on SwiftUI/SwiftData availability.
 - HealthKit v1 is read-only and Simulator-safe: keep sample data fallback, do not mutate HealthKit, and treat real workout/permission verification as a physical-iPhone step.
 - Product data source is HealthKit-only. Do not add FIT file import, FIT backup, HealthFit export, or file-based workout ingestion unless the user explicitly reverses this direction.
@@ -16,8 +16,8 @@
 
 ## Context Loading and Documentation Policy
 
-- Start each new task by reading `docs/project-state/current-state.md`.
-- Read `docs/project-state/next-work.md` after `current-state.md` to understand current priorities and blocked work.
+- Start each new task by reading `docs/project-state/project-status.md`.
+- Read `docs/project-state/accuracy-ledger.md` after `project-status.md` only for workout-shape status, promotion, interval-row, or validation-status work.
 - Do not automatically read all docs.
 - Before reading any file, decide whether it is required for the task.
 - Read `README.md` only when project setup or architecture is unclear.
@@ -30,9 +30,9 @@
 - Do not open archived docs unless the task specifically asks for historical context.
 - Treat repo cleanup as a separate audit track. For cleanup requests, first inventory folders/files, classify current vs stale vs archive-candidate, and propose moves; do not delete evidence, screenshots, exports, generated scorecards, or historical docs without explicit approval.
 - Avoid broad reads of old validation fixture folders by default. Date-specific folders under `docs/validation/apple-fitness-interval-parity-dataset/`, screenshot archives, physical proof exports, `_nonfixture-exports`, `_future-*` templates, and `docs/archive/**` are evidence/history; read them only when the task names them, asks for cleanup, or the active project-state docs point to them.
-- Keep `docs/project-state/current-state.md` updated after meaningful project changes.
-- When a task changes project direction, validation status, known limitations, or next steps, update `docs/project-state/current-state.md` and/or `docs/project-state/next-work.md` before the final response.
-- Keep `current-state.md` concise. Do not let it become another long milestone document.
+- Keep `docs/project-state/project-status.md` updated after meaningful project changes.
+- When a task changes project direction, validation status, known limitations, or next steps, update `docs/project-state/project-status.md` before the final response.
+- Keep `project-status.md` concise. Do not let it become another long milestone document.
 - Prefer updating `docs/project-state/documentation-index.md` when docs are added, archived, or reclassified.
 
 ## Token and Tool-Efficiency Rules
