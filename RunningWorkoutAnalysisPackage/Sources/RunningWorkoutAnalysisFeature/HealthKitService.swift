@@ -20,6 +20,7 @@ public protocol HealthKitServicing: AnyObject, Sendable {
 public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
     private let store = HKHealthStore()
     public static let defaultDetailedEvidenceLimit = 20
+    public static let defaultWorkoutLoadLimit = 250
 
     public init() {}
 
@@ -103,7 +104,7 @@ public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
         HealthKitPermissionCatalog.readTypes
     }
 
-    private func queryRunningWorkouts() async throws -> [HKWorkout] {
+    private func queryRunningWorkouts(limit: Int = HealthKitService.defaultWorkoutLoadLimit) async throws -> [HKWorkout] {
         let predicate = HKQuery.predicateForWorkouts(with: .running)
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
 
@@ -111,7 +112,7 @@ public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
             let query = HKSampleQuery(
                 sampleType: HKObjectType.workoutType(),
                 predicate: predicate,
-                limit: HKObjectQueryNoLimit,
+                limit: limit,
                 sortDescriptors: [sort]
             ) { _, samples, error in
                 if let error {

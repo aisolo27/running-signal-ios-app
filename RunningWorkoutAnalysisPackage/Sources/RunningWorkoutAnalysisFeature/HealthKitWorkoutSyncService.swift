@@ -60,6 +60,7 @@ public protocol HealthKitWorkoutSyncServicing: AnyObject, Sendable {
 public final class HealthKitWorkoutSyncService: HealthKitWorkoutSyncServicing, @unchecked Sendable {
     private let store = HKHealthStore()
     private let healthKitService: any HealthKitServicing
+    public static let defaultSyncBatchLimit = 100
 
     public init(healthKitService: any HealthKitServicing = HealthKitService()) {
         self.healthKitService = healthKitService
@@ -91,7 +92,10 @@ public final class HealthKitWorkoutSyncService: HealthKitWorkoutSyncServicing, @
         }
     }
 
-    private func anchoredRunningWorkouts(from anchor: HKQueryAnchor?) async throws -> (workouts: [HKWorkout], deletedWorkoutIDs: [String], anchor: HKQueryAnchor?) {
+    private func anchoredRunningWorkouts(
+        from anchor: HKQueryAnchor?,
+        limit: Int = HealthKitWorkoutSyncService.defaultSyncBatchLimit
+    ) async throws -> (workouts: [HKWorkout], deletedWorkoutIDs: [String], anchor: HKQueryAnchor?) {
         let predicate = HKQuery.predicateForWorkouts(with: .running)
 
         return try await withCheckedThrowingContinuation { continuation in
@@ -99,7 +103,7 @@ public final class HealthKitWorkoutSyncService: HealthKitWorkoutSyncServicing, @
                 type: HKObjectType.workoutType(),
                 predicate: predicate,
                 anchor: anchor,
-                limit: HKObjectQueryNoLimit
+                limit: limit
             ) { _, samples, deletedObjects, newAnchor, error in
                 if let error {
                     continuation.resume(throwing: error)
@@ -128,6 +132,10 @@ public enum HealthKitSyncStateStore {
     public static func loadAnchor(defaults: UserDefaults = .standard) -> HKQueryAnchor? {
         guard let data = defaults.data(forKey: anchorKey) else { return nil }
         return try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: data)
+    }
+
+    public static func hasAnchor(defaults: UserDefaults = .standard) -> Bool {
+        loadAnchor(defaults: defaults) != nil
     }
 
     public static func saveAnchor(_ anchor: HKQueryAnchor?, defaults: UserDefaults = .standard) {

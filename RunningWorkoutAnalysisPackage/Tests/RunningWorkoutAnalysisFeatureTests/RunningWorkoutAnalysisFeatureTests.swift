@@ -1057,9 +1057,13 @@ import Testing
 
 @MainActor
 @Test func foregroundHealthKitSyncSkipsSampleOnlyFirstLaunch() async throws {
-    HealthKitSyncStateStore.reset()
+    let syncDefaults = isolatedDefaults()
+    defer { syncDefaults.reset() }
     let context = try inMemoryModelContext()
-    let store = RunningAnalysisStore(healthKitService: StubHealthKitService())
+    let store = RunningAnalysisStore(
+        healthKitService: StubHealthKitService(),
+        syncDefaults: syncDefaults.defaults
+    )
 
     await store.bootstrap(modelContext: context)
 
@@ -1068,8 +1072,9 @@ import Testing
 }
 
 @MainActor
-@Test func foregroundHealthKitSyncAllowedWhenCachedRealWorkoutsExist() async throws {
-    HealthKitSyncStateStore.reset()
+@Test func foregroundHealthKitSyncSkipsCachedRealWorkoutsWithoutAnchor() async throws {
+    let syncDefaults = isolatedDefaults()
+    defer { syncDefaults.reset() }
     let context = try inMemoryModelContext()
     PersistenceService.upsert([
         testWorkout(
@@ -1079,7 +1084,35 @@ import Testing
             durationSeconds: 1_500
         )
     ], context: context)
-    let store = RunningAnalysisStore(healthKitService: StubHealthKitService())
+    let store = RunningAnalysisStore(
+        healthKitService: StubHealthKitService(),
+        syncDefaults: syncDefaults.defaults
+    )
+
+    await store.bootstrap(modelContext: context)
+
+    #expect(!store.usesSampleData)
+    #expect(!store.shouldSyncHealthKitOnForeground)
+}
+
+@MainActor
+@Test func foregroundHealthKitSyncAllowedWhenCachedRealWorkoutsHaveAnchor() async throws {
+    let syncDefaults = isolatedDefaults()
+    defer { syncDefaults.reset() }
+    HealthKitSyncStateStore.saveAnchor(HKQueryAnchor(fromValue: 1), defaults: syncDefaults.defaults)
+    let context = try inMemoryModelContext()
+    PersistenceService.upsert([
+        testWorkout(
+            id: "cached-real-workout",
+            start: Date(timeIntervalSince1970: 3_500),
+            distanceMeters: 5_000,
+            durationSeconds: 1_500
+        )
+    ], context: context)
+    let store = RunningAnalysisStore(
+        healthKitService: StubHealthKitService(),
+        syncDefaults: syncDefaults.defaults
+    )
 
     await store.bootstrap(modelContext: context)
 
@@ -1089,7 +1122,9 @@ import Testing
 
 @MainActor
 @Test func foregroundHealthKitSyncIsThrottledAfterFirstRun() async throws {
-    HealthKitSyncStateStore.reset()
+    let syncDefaults = isolatedDefaults()
+    defer { syncDefaults.reset() }
+    HealthKitSyncStateStore.saveAnchor(HKQueryAnchor(fromValue: 1), defaults: syncDefaults.defaults)
     let context = try inMemoryModelContext()
     PersistenceService.upsert([
         testWorkout(
@@ -1102,7 +1137,8 @@ import Testing
     let syncService = StubHealthKitWorkoutSyncService()
     let store = RunningAnalysisStore(
         healthKitService: StubHealthKitService(),
-        syncService: syncService
+        syncService: syncService,
+        syncDefaults: syncDefaults.defaults
     )
 
     await store.bootstrap(modelContext: context)
@@ -1111,6 +1147,36 @@ import Testing
     await store.syncHealthKitChangesOnForeground(now: Date(timeIntervalSince1970: 10_301))
 
     #expect(syncService.syncCallCount == 2)
+}
+
+@MainActor
+@Test func foregroundHealthKitSyncIsSingleFlight() async throws {
+    let syncDefaults = isolatedDefaults()
+    defer { syncDefaults.reset() }
+    HealthKitSyncStateStore.saveAnchor(HKQueryAnchor(fromValue: 1), defaults: syncDefaults.defaults)
+    let context = try inMemoryModelContext()
+    PersistenceService.upsert([
+        testWorkout(
+            id: "cached-real-workout",
+            start: Date(timeIntervalSince1970: 3_600),
+            distanceMeters: 5_000,
+            durationSeconds: 1_500
+        )
+    ], context: context)
+    let syncService = StubHealthKitWorkoutSyncService(delayNanoseconds: 100_000_000)
+    let store = RunningAnalysisStore(
+        healthKitService: StubHealthKitService(),
+        syncService: syncService,
+        syncDefaults: syncDefaults.defaults
+    )
+
+    await store.bootstrap(modelContext: context)
+
+    async let first: Void = store.syncHealthKitChangesOnForeground(now: Date(timeIntervalSince1970: 10_000))
+    async let second: Void = store.syncHealthKitChangesOnForeground(now: Date(timeIntervalSince1970: 10_001))
+    _ = await (first, second)
+
+    #expect(syncService.syncCallCount == 1)
 }
 
 @MainActor
@@ -5498,6 +5564,22 @@ private func inMemoryModelContext() throws -> ModelContext {
     return ModelContext(container)
 }
 
+private struct IsolatedDefaults {
+    let suiteName: String
+    let defaults: UserDefaults
+
+    func reset() {
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+}
+
+private func isolatedDefaults() -> IsolatedDefaults {
+    let suiteName = "RunSignalTests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suiteName)!
+    defaults.removePersistentDomain(forName: suiteName)
+    return IsolatedDefaults(suiteName: suiteName, defaults: defaults)
+}
+
 private func testSeries(_ metric: WorkoutEvidenceMetric, value: Double, start: Date) -> WorkoutMetricSeries {
     WorkoutMetricSeries(
         metric: metric,
@@ -5568,13 +5650,18 @@ private final class StubHealthKitService: HealthKitServicing, @unchecked Sendabl
 private final class StubHealthKitWorkoutSyncService: HealthKitWorkoutSyncServicing, @unchecked Sendable {
     var results: [HealthKitWorkoutSyncResult]
     private(set) var syncCallCount = 0
+    private let delayNanoseconds: UInt64
 
-    init(results: [HealthKitWorkoutSyncResult] = []) {
+    init(results: [HealthKitWorkoutSyncResult] = [], delayNanoseconds: UInt64 = 0) {
         self.results = results
+        self.delayNanoseconds = delayNanoseconds
     }
 
     func syncRunningWorkouts(from anchor: HKQueryAnchor?) async -> HealthKitWorkoutSyncResult {
         syncCallCount += 1
+        if delayNanoseconds > 0 {
+            try? await Task.sleep(nanoseconds: delayNanoseconds)
+        }
         if results.isEmpty {
             return HealthKitWorkoutSyncResult(
                 authorizationState: .partial,

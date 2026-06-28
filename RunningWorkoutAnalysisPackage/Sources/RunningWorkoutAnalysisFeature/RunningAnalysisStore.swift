@@ -223,16 +223,20 @@ public final class RunningAnalysisStore {
 
     private let healthKitService: any HealthKitServicing
     private let syncService: any HealthKitWorkoutSyncServicing
+    private let syncDefaults: UserDefaults
     private var didBootstrap = false
     private var lastForegroundSyncAt: Date?
+    private var isForegroundSyncInFlight = false
     private weak var modelContext: ModelContext?
 
     public init(
         healthKitService: any HealthKitServicing = HealthKitService(),
-        syncService: (any HealthKitWorkoutSyncServicing)? = nil
+        syncService: (any HealthKitWorkoutSyncServicing)? = nil,
+        syncDefaults: UserDefaults = .standard
     ) {
         self.healthKitService = healthKitService
         self.syncService = syncService ?? HealthKitWorkoutSyncService(healthKitService: healthKitService)
+        self.syncDefaults = syncDefaults
     }
 
     public var authorizationState: AuthorizationState {
@@ -240,7 +244,8 @@ public final class RunningAnalysisStore {
     }
 
     public var shouldSyncHealthKitOnForeground: Bool {
-        !usesSampleData || healthKitStatus.authorizationState == .authorized || healthKitStatus.authorizationState == .partial || syncState.lastSyncAt != nil
+        guard HealthKitSyncStateStore.hasAnchor(defaults: syncDefaults) else { return false }
+        return !usesSampleData || healthKitStatus.authorizationState == .authorized || healthKitStatus.authorizationState == .partial || syncState.lastSyncAt != nil
     }
 
     public func bootstrap(modelContext: ModelContext) async {
@@ -288,7 +293,7 @@ public final class RunningAnalysisStore {
             }
         }
         reviewedRunTypes = RunTypeReviewImportService.loadSavedReviews()
-        syncState = HealthKitSyncState(lastSyncAt: HealthKitSyncStateStore.loadLastSyncAt())
+        syncState = HealthKitSyncState(lastSyncAt: HealthKitSyncStateStore.loadLastSyncAt(defaults: syncDefaults))
         applyReviewedRunTypes()
         recompute(hydrateEvidence: false, refreshDerivedAnalyses: false)
         refreshEvidenceRefreshJobs()
@@ -334,12 +339,12 @@ public final class RunningAnalysisStore {
         recompute()
     }
 
-    public func syncHealthKitChanges() async {
+    public func syncHealthKitChanges(includePostSyncMaintenance: Bool = true) async {
         isLoading = true
         defer { isLoading = false }
 
         let currentIDs = Set(workouts.map(\.id))
-        let result = await syncService.syncRunningWorkouts(from: HealthKitSyncStateStore.loadAnchor())
+        let result = await syncService.syncRunningWorkouts(from: HealthKitSyncStateStore.loadAnchor(defaults: syncDefaults))
         healthContext = result.healthContext
         updateHealthKitStatus(
             authorizationState: result.authorizationState,
@@ -347,19 +352,21 @@ public final class RunningAnalysisStore {
         )
 
         guard result.authorizationState == .authorized || result.authorizationState == .partial else {
-            recompute()
+            if includePostSyncMaintenance {
+                recompute()
+            }
             return
         }
 
         if let anchor = result.newAnchor {
-            HealthKitSyncStateStore.saveAnchor(anchor)
+            HealthKitSyncStateStore.saveAnchor(anchor, defaults: syncDefaults)
         }
 
         let insertedCount = result.fetchedWorkouts.filter { !currentIDs.contains($0.id) }.count
         let updatedCount = result.fetchedWorkouts.count - insertedCount
         let deletedCount = result.deletedWorkoutIDs.count
         let syncedAt = Date()
-        HealthKitSyncStateStore.saveLastSyncAt(syncedAt)
+        HealthKitSyncStateStore.saveLastSyncAt(syncedAt, defaults: syncDefaults)
 
         if !result.fetchedWorkouts.isEmpty {
             usesSampleData = false
@@ -368,7 +375,9 @@ public final class RunningAnalysisStore {
             applyReviewedRunTypes()
             persistCurrent()
         }
-        refreshEvidenceQueueSummary()
+        if includePostSyncMaintenance {
+            refreshEvidenceQueueSummary()
+        }
 
         syncState = HealthKitSyncState(
             lastSyncAt: syncedAt,
@@ -378,17 +387,22 @@ public final class RunningAnalysisStore {
             lastDeletedCount: deletedCount,
             lastEvidencePendingCount: evidenceQueueSummary.pendingCount
         )
-        recompute()
+        if includePostSyncMaintenance {
+            recompute()
+        }
     }
 
     public func syncHealthKitChangesOnForeground(now: Date = Date()) async {
+        guard !isForegroundSyncInFlight else { return }
         guard didBootstrap, !isLoading, !isEnrichingAudit else { return }
         guard shouldSyncHealthKitOnForeground else { return }
         if let lastForegroundSyncAt, now.timeIntervalSince(lastForegroundSyncAt) < 300 {
             return
         }
         lastForegroundSyncAt = now
-        await syncHealthKitChanges()
+        isForegroundSyncInFlight = true
+        defer { isForegroundSyncInFlight = false }
+        await syncHealthKitChanges(includePostSyncMaintenance: false)
     }
 
     public func enrichNextHealthKitAuditBatch(limit: Int = HealthKitService.defaultDetailedEvidenceLimit) async {
@@ -484,6 +498,11 @@ public final class RunningAnalysisStore {
     }
 
     public func refreshEvidenceForMonth(containing selectedMonth: Date, calendar: Calendar = .current) async {
+        guard !isEnrichingAudit else {
+            message = "HealthKit evidence refresh is already running."
+            return
+        }
+
         guard let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth) else {
             message = "Could not resolve the selected month for evidence refresh."
             return
@@ -621,10 +640,12 @@ public final class RunningAnalysisStore {
                 )
                 refreshEvidenceRefreshJobs()
             }
-            Self.refreshLogger.info("Monthly evidence refresh recompute started month=\(scopeKey, privacy: .public) workoutID=\(workout.id, privacy: .public)")
-            recompute()
-            Self.refreshLogger.info("Monthly evidence refresh recompute finished month=\(scopeKey, privacy: .public) workoutID=\(workout.id, privacy: .public)")
+            await Task.yield()
         }
+
+        Self.refreshLogger.info("Monthly evidence refresh recompute started month=\(scopeKey, privacy: .public)")
+        recompute()
+        Self.refreshLogger.info("Monthly evidence refresh recompute finished month=\(scopeKey, privacy: .public)")
 
         if let modelContext, let job {
             PersistenceService.finishEvidenceRefreshJob(jobID: job.jobID, context: modelContext)
