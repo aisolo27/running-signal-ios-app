@@ -8,7 +8,16 @@ public struct HealthKitLoadResult: Sendable {
     public var message: String?
 }
 
-public final class HealthKitService: @unchecked Sendable {
+public protocol HealthKitServicing: AnyObject, Sendable {
+    var isAvailable: Bool { get }
+
+    func requestAuthorization() async -> AuthorizationState
+    func loadRunningWorkouts() async -> HealthKitLoadResult
+    func enrichRunningWorkouts(ids: [String]) async -> HealthKitLoadResult
+    func loadHealthContext() async -> HealthContext
+}
+
+public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
     private let store = HKHealthStore()
     public static let defaultDetailedEvidenceLimit = 20
 

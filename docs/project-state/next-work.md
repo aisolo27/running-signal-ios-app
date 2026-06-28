@@ -91,3 +91,17 @@ Last updated: 2026-06-27
 - Race prediction.
 - FIT import, FIT backup, HealthFit export, or file-based workout ingestion.
 - HealthFit as a production dependency or FIT as runtime truth.
+
+## Best Efforts Follow-Up
+
+- Physical-iPhone reload check: after granting Apple Health read access, confirm the Settings/Data state leaves Sample mode and Health Context can query VO2 Max/Cardio Fitness plus Resting HR. The authorization sheet label "Cardio Fitness" maps to `HKQuantityTypeIdentifierVO2Max`.
+- All-time best efforts currently use `PersonalBestEffortEngine` exact distance-window records for visible official segment bests. Summary-only whole-run estimates must remain excluded from the visible all-time list.
+- The likely blocker for historical PRs such as the Apr 5 2026 5K is not the target-distance math first; it is detailed HealthKit distance evidence coverage. Initial load only enriches a limited batch, so older benchmark workouts may be summary-only until the evidence queue or a dedicated best-efforts enrichment pass loads associated distance samples.
+- Recommended next implementation: add a PR-candidate enrichment pass that prioritizes quality/race/older-benchmark outdoor runs across history, then recompute exact buckets 400m, 1/2 mile, 1K, 1 mile, 2 mile, 5K, 10K, 15K, 10 mile, 20K, half marathon, marathon, and longest run from HealthKit evidence only. Keep FIT/web results as offline comparison evidence, not runtime truth.
+
+## Refresh Architecture Follow-Up
+
+- Monthly evidence refresh is transactional and persists month-scoped job/item checkpoints. Backend retry now processes failed month items without rerunning successful items, app foreground/open runs throttled lightweight sync only when cached real data/prior authorization/previous sync state makes it appropriate, and Raw HealthKit Debug/monthly diagnostics now show selected-month progress, foreground Resume/Retry controls, structured interrupted-relaunch recovery proof metadata, physical interruption proof checklist, and lightweight OSLog refresh/memory-warning diagnostics. Next slice is actually running that proof on the physical iPhone and archiving the diagnostics output/logs.
+- Stale-derived detection now recomputes affected derived analytics when cached raw-evidence input signatures drift, ignores `loadedAt`-only churn, and Raw HealthKit Debug/monthly diagnostics now surface recompute count/check state.
+- Remaining refresh-architecture gaps from the original 16-phase plan: add MetricKit diagnostics if crash/jetsam evidence is needed, harden replacement validation beyond ID/evidence presence with duration and semantic evidence gates, reconcile deleted HealthKit records only after physical-device behavior is verified, add PR-candidate historical evidence backfill, and move long-running work out of `RunningAnalysisStore` only after the foreground resumable path is physically proven.
+- Keep observer delivery and background tasks blocked until physical-iPhone refresh interruption behavior is checked.

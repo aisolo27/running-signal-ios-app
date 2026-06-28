@@ -1,4 +1,5 @@
 import Foundation
+@preconcurrency import HealthKit
 import SwiftData
 import Testing
 @testable import RunningWorkoutAnalysisFeature
@@ -867,6 +868,689 @@ import Testing
 }
 
 @MainActor
+@Test func monthlyEvidenceRefreshFailurePreservesCachedEvidence() async throws {
+    let context = try inMemoryModelContext()
+    let calendar = fixedCalendar()
+    let start = calendar.date(from: DateComponents(year: 2026, month: 6, day: 4, hour: 7))!
+    var workout = testWorkout(
+        id: UUID().uuidString,
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_700
+    )
+    workout.evidence = monthlyEvidence(
+        workout: workout,
+        plannedSteps: [],
+        activityEndOffset: 1_700,
+        activityDistanceMeters: 5_000,
+        distancePoints: [(0, 0), (1_700, 5_000)]
+    )
+
+    PersistenceService.upsert([workout], context: context)
+    let cachedLoadedAt = try #require(PersistenceService.fetchEvidence(workoutID: workout.id, context: context)?.loadedAt)
+    let service = StubHealthKitService(
+        enrichResults: [
+            HealthKitLoadResult(
+                authorizationState: .partial,
+                workouts: [],
+                healthContext: HealthContext(),
+                message: "No matching HealthKit running workouts were found for enrichment."
+            )
+        ]
+    )
+    let store = RunningAnalysisStore(healthKitService: service)
+    await store.bootstrap(modelContext: context)
+
+    await store.refreshEvidenceForMonth(containing: start, calendar: calendar)
+
+    let persistedEvidence = try #require(PersistenceService.fetchEvidence(workoutID: workout.id, context: context))
+    let loadedWorkout = try #require(store.workouts.first { $0.id == workout.id })
+    let result = try #require(store.monthlyEvidenceRefreshResults[workout.id])
+
+    #expect(persistedEvidence.loadedAt == cachedLoadedAt)
+    #expect(loadedWorkout.evidence?.loadedAt == cachedLoadedAt)
+    #expect(result.refreshStatus == MonthlyEvidenceRefreshStatus.failed)
+    #expect(result.cacheWasPresent)
+    #expect(!result.invalidatedCache)
+    #expect(!result.freshQueryReturnedWorkout)
+}
+
+@MainActor
+@Test func persistenceStoresEvidenceRefreshJobState() throws {
+    let context = try inMemoryModelContext()
+    let startedAt = Date(timeIntervalSince1970: 3_100)
+    let job = PersistenceService.startEvidenceRefreshJob(
+        refreshKind: .monthlyEvidenceRefresh,
+        scopeType: .month,
+        scopeKey: "2026-06",
+        workoutIDs: ["a", "b"],
+        context: context,
+        at: startedAt
+    )
+
+    PersistenceService.markEvidenceRefreshItemRunning(
+        jobID: job.jobID,
+        workoutID: "a",
+        context: context,
+        at: startedAt.addingTimeInterval(1)
+    )
+    PersistenceService.finishEvidenceRefreshItem(
+        jobID: job.jobID,
+        workoutID: "a",
+        status: .success,
+        message: nil,
+        oldEvidencePreserved: false,
+        newEvidenceCommitted: true,
+        context: context,
+        at: startedAt.addingTimeInterval(2)
+    )
+    PersistenceService.finishEvidenceRefreshItem(
+        jobID: job.jobID,
+        workoutID: "b",
+        status: .failed,
+        message: "No evidence returned.",
+        oldEvidencePreserved: true,
+        newEvidenceCommitted: false,
+        context: context,
+        at: startedAt.addingTimeInterval(3)
+    )
+    PersistenceService.finishEvidenceRefreshJob(
+        jobID: job.jobID,
+        context: context,
+        at: startedAt.addingTimeInterval(4)
+    )
+
+    let persistedJob = try #require(PersistenceService.fetchEvidenceRefreshJobs(context: context).first)
+    let items = PersistenceService.fetchEvidenceRefreshItems(jobID: job.jobID, context: context)
+    let successItem = try #require(items.first { $0.workoutID == "a" })
+    let failedItem = try #require(items.first { $0.workoutID == "b" })
+
+    #expect(persistedJob.refreshKind == EvidenceRefreshKind.monthlyEvidenceRefresh)
+    #expect(persistedJob.scopeType == EvidenceRefreshScopeType.month)
+    #expect(persistedJob.scopeKey == "2026-06")
+    #expect(persistedJob.status == EvidenceRefreshJobStatus.failed)
+    #expect(persistedJob.totalCount == 2)
+    #expect(persistedJob.completedCount == 1)
+    #expect(persistedJob.failedCount == 1)
+    #expect(successItem.status == EvidenceRefreshJobItemStatus.success)
+    #expect(successItem.newEvidenceCommitted)
+    #expect(failedItem.status == EvidenceRefreshJobItemStatus.failed)
+    #expect(failedItem.oldEvidencePreserved)
+}
+
+@MainActor
+@Test func deleteEvidenceDoesNotDeleteRefreshJobHistory() throws {
+    let context = try inMemoryModelContext()
+    let start = Date(timeIntervalSince1970: 3_150)
+    var workout = testWorkout(
+        id: UUID().uuidString,
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_700
+    )
+    workout.evidence = monthlyEvidence(
+        workout: workout,
+        plannedSteps: [],
+        activityEndOffset: 1_700,
+        activityDistanceMeters: 5_000,
+        distancePoints: [(0, 0), (1_700, 5_000)]
+    )
+    PersistenceService.upsert([workout], context: context)
+    let job = PersistenceService.startEvidenceRefreshJob(
+        refreshKind: .monthlyEvidenceRefresh,
+        scopeType: .month,
+        scopeKey: "2026-06",
+        workoutIDs: [workout.id],
+        context: context,
+        at: start
+    )
+
+    PersistenceService.deleteEvidence(ids: [workout.id], context: context)
+
+    #expect(PersistenceService.fetchEvidence(workoutID: workout.id, context: context) == nil)
+    #expect(PersistenceService.fetchEvidenceRefreshJobs(context: context).first?.jobID == job.jobID)
+    #expect(PersistenceService.fetchEvidenceRefreshItems(jobID: job.jobID, context: context).first?.workoutID == workout.id)
+}
+
+@MainActor
+@Test func storeBootstrapPausesRunningEvidenceRefreshJobs() async throws {
+    let context = try inMemoryModelContext()
+    let start = Date(timeIntervalSince1970: 3_200)
+    var workout = testWorkout(
+        id: UUID().uuidString,
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_700
+    )
+    workout.evidence = monthlyEvidence(
+        workout: workout,
+        plannedSteps: [],
+        activityEndOffset: 1_700,
+        activityDistanceMeters: 5_000,
+        distancePoints: [(0, 0), (1_700, 5_000)]
+    )
+    PersistenceService.upsert([workout], context: context)
+    let job = PersistenceService.startEvidenceRefreshJob(
+        refreshKind: .monthlyEvidenceRefresh,
+        scopeType: .month,
+        scopeKey: "2026-06",
+        workoutIDs: [workout.id],
+        context: context,
+        at: start
+    )
+    #expect(job.status == EvidenceRefreshJobStatus.running)
+
+    let store = RunningAnalysisStore(healthKitService: StubHealthKitService())
+    await store.bootstrap(modelContext: context)
+
+    let pausedJob = try #require(store.evidenceRefreshJobs.first { $0.jobID == job.jobID })
+    #expect(pausedJob.status == EvidenceRefreshJobStatus.paused)
+    #expect(pausedJob.lastError == "Paused after app relaunch before completion.")
+
+    let summary = try #require(store.evidenceRefreshJobSummaries.first { $0.jobID == job.jobID })
+    #expect(summary.pausedAfterRelaunch)
+    #expect(summary.hasInterruptionHistory)
+    #expect(summary.interruptionCount == 1)
+    #expect(summary.canRecover)
+    #expect(summary.recoveryProofText == "Interrupted refresh was detected on app relaunch and preserved as a paused job.")
+}
+
+@MainActor
+@Test func foregroundHealthKitSyncSkipsSampleOnlyFirstLaunch() async throws {
+    HealthKitSyncStateStore.reset()
+    let context = try inMemoryModelContext()
+    let store = RunningAnalysisStore(healthKitService: StubHealthKitService())
+
+    await store.bootstrap(modelContext: context)
+
+    #expect(store.usesSampleData)
+    #expect(!store.shouldSyncHealthKitOnForeground)
+}
+
+@MainActor
+@Test func foregroundHealthKitSyncAllowedWhenCachedRealWorkoutsExist() async throws {
+    HealthKitSyncStateStore.reset()
+    let context = try inMemoryModelContext()
+    PersistenceService.upsert([
+        testWorkout(
+            id: "cached-real-workout",
+            start: Date(timeIntervalSince1970: 3_500),
+            distanceMeters: 5_000,
+            durationSeconds: 1_500
+        )
+    ], context: context)
+    let store = RunningAnalysisStore(healthKitService: StubHealthKitService())
+
+    await store.bootstrap(modelContext: context)
+
+    #expect(!store.usesSampleData)
+    #expect(store.shouldSyncHealthKitOnForeground)
+}
+
+@MainActor
+@Test func foregroundHealthKitSyncIsThrottledAfterFirstRun() async throws {
+    HealthKitSyncStateStore.reset()
+    let context = try inMemoryModelContext()
+    PersistenceService.upsert([
+        testWorkout(
+            id: "cached-real-workout",
+            start: Date(timeIntervalSince1970: 3_600),
+            distanceMeters: 5_000,
+            durationSeconds: 1_500
+        )
+    ], context: context)
+    let syncService = StubHealthKitWorkoutSyncService()
+    let store = RunningAnalysisStore(
+        healthKitService: StubHealthKitService(),
+        syncService: syncService
+    )
+
+    await store.bootstrap(modelContext: context)
+    await store.syncHealthKitChangesOnForeground(now: Date(timeIntervalSince1970: 10_000))
+    await store.syncHealthKitChangesOnForeground(now: Date(timeIntervalSince1970: 10_120))
+    await store.syncHealthKitChangesOnForeground(now: Date(timeIntervalSince1970: 10_301))
+
+    #expect(syncService.syncCallCount == 2)
+}
+
+@MainActor
+@Test func monthlyEvidenceRefreshSuccessReplacesCachedEvidence() async throws {
+    let context = try inMemoryModelContext()
+    let calendar = fixedCalendar()
+    let start = calendar.date(from: DateComponents(year: 2026, month: 6, day: 4, hour: 7))!
+    var cached = testWorkout(
+        id: UUID().uuidString,
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_700
+    )
+    cached.evidence = monthlyEvidence(
+        workout: cached,
+        plannedSteps: [],
+        activityEndOffset: 1_700,
+        activityDistanceMeters: 5_000,
+        distancePoints: [(0, 0), (1_700, 5_000)]
+    )
+    var refreshed = cached
+    refreshed.evidence = monthlyEvidence(
+        workout: refreshed,
+        plannedSteps: [],
+        activityEndOffset: 1_710,
+        activityDistanceMeters: 5_050,
+        distancePoints: [(0, 0), (1_710, 5_050)]
+    )
+    refreshed.seriesSampleCount = 2
+    refreshed.distanceSampleCount = 2
+
+    PersistenceService.upsert([cached], context: context)
+    let service = StubHealthKitService(
+        enrichResults: [
+            HealthKitLoadResult(
+                authorizationState: .authorized,
+                workouts: [refreshed],
+                healthContext: HealthContext(),
+                message: "Enriched 1 HealthKit running workouts."
+            )
+        ]
+    )
+    let store = RunningAnalysisStore(healthKitService: service)
+    await store.bootstrap(modelContext: context)
+
+    await store.refreshEvidenceForMonth(containing: start, calendar: calendar)
+
+    let persistedEvidence = try #require(PersistenceService.fetchEvidence(workoutID: cached.id, context: context))
+    let loadedWorkout = try #require(store.workouts.first { $0.id == cached.id })
+    let result = try #require(store.monthlyEvidenceRefreshResults[cached.id])
+
+    #expect(persistedEvidence.sampleCount(WorkoutEvidenceMetric.distance) == 2)
+    #expect(persistedEvidence.series[WorkoutEvidenceMetric.distance]?.points.last?.value == 5_050)
+    #expect(loadedWorkout.distanceMeters == 5_000)
+    #expect(loadedWorkout.evidence?.series[WorkoutEvidenceMetric.distance]?.points.last?.value == 5_050)
+    #expect(result.refreshStatus == MonthlyEvidenceRefreshStatus.success)
+    #expect(result.cacheWasPresent)
+    #expect(result.invalidatedCache)
+    #expect(result.freshQueryReturnedWorkout)
+    #expect(result.evidenceCounts?.distance == 2)
+}
+
+@MainActor
+@Test func monthlyEvidenceRefreshUnavailableIsBlockedNotRetryFailure() async throws {
+    let context = try inMemoryModelContext()
+    let calendar = fixedCalendar()
+    let start = calendar.date(from: DateComponents(year: 2026, month: 6, day: 4, hour: 7))!
+    var workout = testWorkout(
+        id: UUID().uuidString,
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_700
+    )
+    workout.evidence = monthlyEvidence(
+        workout: workout,
+        plannedSteps: [],
+        activityEndOffset: 1_700,
+        activityDistanceMeters: 5_000,
+        distancePoints: [(0, 0), (1_700, 5_000)]
+    )
+    PersistenceService.upsert([workout], context: context)
+    let service = StubHealthKitService(
+        enrichResults: [
+            HealthKitLoadResult(
+                authorizationState: .unavailable,
+                workouts: [],
+                healthContext: HealthContext(),
+                message: "HealthKit is not available on this device."
+            )
+        ]
+    )
+    let store = RunningAnalysisStore(healthKitService: service)
+    await store.bootstrap(modelContext: context)
+
+    await store.refreshEvidenceForMonth(containing: start, calendar: calendar)
+
+    let job = try #require(store.evidenceRefreshSummary(containing: start, calendar: calendar))
+    let persistedJob = try #require(store.evidenceRefreshJobs.first { $0.jobID == job.jobID })
+    let item = try #require(PersistenceService.fetchEvidenceRefreshItems(jobID: job.jobID, context: context).first)
+    let result = try #require(store.monthlyEvidenceRefreshResults[workout.id])
+
+    #expect(result.refreshStatus == MonthlyEvidenceRefreshStatus.unsupported)
+    #expect(!result.invalidatedCache)
+    #expect(item.status == EvidenceRefreshJobItemStatus.skipped)
+    #expect(item.oldEvidencePreserved)
+    #expect(!item.newEvidenceCommitted)
+    #expect(persistedJob.status == EvidenceRefreshJobStatus.blocked)
+    #expect(job.status == EvidenceRefreshJobStatus.blocked)
+    #expect(!job.canRecover)
+    #expect(job.recoveryProofText.contains("blocked until HealthKit is available"))
+}
+
+@Test func completedRefreshJobPreservesInterruptionProofAfterResume() {
+    let start = Date(timeIntervalSince1970: 3_250)
+    let job = PersistedEvidenceRefreshJob(
+        jobID: "resumed-interrupted-job",
+        refreshKind: .monthlyEvidenceRefresh,
+        scopeType: .month,
+        scopeKey: "2026-06",
+        createdAt: start,
+        totalCount: 1
+    )
+    job.markRunning(at: start)
+    job.markPaused(at: start.addingTimeInterval(30), message: EvidenceRefreshJobSummary.interruptedRelaunchMessage)
+    job.markRunning(at: start.addingTimeInterval(60))
+    job.updateCounts(completed: 1, failed: 0, skipped: 0, at: start.addingTimeInterval(90))
+    job.finish(status: .completed, at: start.addingTimeInterval(90))
+
+    let summary = EvidenceRefreshJobSummary(job: job)
+    let proof = RefreshInterruptionProofSummary.make(from: summary)
+
+    #expect(summary.status == .completed)
+    #expect(summary.hasInterruptionHistory)
+    #expect(!summary.pausedAfterRelaunch)
+    #expect(summary.recoveryProofText == "Interrupted refresh later completed after foreground resume.")
+    #expect(proof.statusTitle == "Proof complete")
+    #expect(proof.pendingSteps.isEmpty)
+}
+
+@MainActor
+@Test func monthlyEvidenceRefreshCheckpointsPersistedJobItems() async throws {
+    let context = try inMemoryModelContext()
+    let calendar = fixedCalendar()
+    let start = calendar.date(from: DateComponents(year: 2026, month: 6, day: 4, hour: 7))!
+    var success = testWorkout(
+        id: UUID().uuidString,
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_700
+    )
+    success.evidence = monthlyEvidence(
+        workout: success,
+        plannedSteps: [],
+        activityEndOffset: 1_700,
+        activityDistanceMeters: 5_000,
+        distancePoints: [(0, 0), (1_700, 5_000)]
+    )
+    var failed = testWorkout(
+        id: UUID().uuidString,
+        start: start.addingTimeInterval(3_600),
+        distanceMeters: 4_000,
+        durationSeconds: 1_500
+    )
+    failed.evidence = monthlyEvidence(
+        workout: failed,
+        plannedSteps: [],
+        activityEndOffset: 1_500,
+        activityDistanceMeters: 4_000,
+        distancePoints: [(0, 0), (1_500, 4_000)]
+    )
+    var refreshed = success
+    refreshed.evidence = monthlyEvidence(
+        workout: refreshed,
+        plannedSteps: [],
+        activityEndOffset: 1_710,
+        activityDistanceMeters: 5_050,
+        distancePoints: [(0, 0), (1_710, 5_050)]
+    )
+    refreshed.seriesSampleCount = 2
+    refreshed.distanceSampleCount = 2
+
+    PersistenceService.upsert([success, failed], context: context)
+    let service = StubHealthKitService(
+        enrichResults: [
+            HealthKitLoadResult(
+                authorizationState: .authorized,
+                workouts: [refreshed],
+                healthContext: HealthContext(),
+                message: "Enriched 1 HealthKit running workouts."
+            ),
+            HealthKitLoadResult(
+                authorizationState: .partial,
+                workouts: [],
+                healthContext: HealthContext(),
+                message: "No matching HealthKit running workouts were found for enrichment."
+            )
+        ]
+    )
+    let store = RunningAnalysisStore(healthKitService: service)
+    await store.bootstrap(modelContext: context)
+
+    await store.refreshEvidenceForMonth(containing: start, calendar: calendar)
+
+    let job = try #require(store.evidenceRefreshJobs.first { $0.scopeKey == "2026-06" })
+    let items = PersistenceService.fetchEvidenceRefreshItems(jobID: job.jobID, context: context)
+    let successItem = try #require(items.first { $0.workoutID == success.id })
+    let failedItem = try #require(items.first { $0.workoutID == failed.id })
+
+    #expect(job.status == EvidenceRefreshJobStatus.failed)
+    #expect(job.totalCount == 2)
+    #expect(job.completedCount == 1)
+    #expect(job.failedCount == 1)
+    let summary = try #require(store.evidenceRefreshSummary(containing: start, calendar: calendar))
+    #expect(summary.status == EvidenceRefreshJobStatus.failed)
+    #expect(summary.progressText == "2/2")
+    #expect(summary.failedCount == 1)
+    #expect(summary.pendingCount == 0)
+    #expect(summary.canRecover)
+    #expect(summary.actionTitle == "Retry failed refresh items")
+    #expect(successItem.status == EvidenceRefreshJobItemStatus.success)
+    #expect(successItem.newEvidenceCommitted)
+    #expect(!successItem.oldEvidencePreserved)
+    #expect(failedItem.status == EvidenceRefreshJobItemStatus.failed)
+    #expect(!failedItem.newEvidenceCommitted)
+    #expect(failedItem.oldEvidencePreserved)
+}
+
+@MainActor
+@Test func monthlyEvidenceRefreshRetrySkipsSuccessfulItemsAndRetriesFailures() async throws {
+    let context = try inMemoryModelContext()
+    let calendar = fixedCalendar()
+    let start = calendar.date(from: DateComponents(year: 2026, month: 6, day: 4, hour: 7))!
+    var success = testWorkout(
+        id: UUID().uuidString,
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_700
+    )
+    success.evidence = monthlyEvidence(
+        workout: success,
+        plannedSteps: [],
+        activityEndOffset: 1_700,
+        activityDistanceMeters: 5_000,
+        distancePoints: [(0, 0), (1_700, 5_000)]
+    )
+    var failed = testWorkout(
+        id: UUID().uuidString,
+        start: start.addingTimeInterval(3_600),
+        distanceMeters: 4_000,
+        durationSeconds: 1_500
+    )
+    failed.evidence = monthlyEvidence(
+        workout: failed,
+        plannedSteps: [],
+        activityEndOffset: 1_500,
+        activityDistanceMeters: 4_000,
+        distancePoints: [(0, 0), (1_500, 4_000)]
+    )
+    var refreshedSuccess = success
+    refreshedSuccess.evidence = monthlyEvidence(
+        workout: refreshedSuccess,
+        plannedSteps: [],
+        activityEndOffset: 1_710,
+        activityDistanceMeters: 5_050,
+        distancePoints: [(0, 0), (1_710, 5_050)]
+    )
+    var refreshedFailed = failed
+    refreshedFailed.evidence = monthlyEvidence(
+        workout: refreshedFailed,
+        plannedSteps: [],
+        activityEndOffset: 1_510,
+        activityDistanceMeters: 4_050,
+        distancePoints: [(0, 0), (1_510, 4_050)]
+    )
+
+    PersistenceService.upsert([success, failed], context: context)
+    let service = StubHealthKitService(
+        enrichResults: [
+            HealthKitLoadResult(
+                authorizationState: .authorized,
+                workouts: [refreshedSuccess],
+                healthContext: HealthContext(),
+                message: "Enriched 1 HealthKit running workouts."
+            ),
+            HealthKitLoadResult(
+                authorizationState: .partial,
+                workouts: [],
+                healthContext: HealthContext(),
+                message: "No matching HealthKit running workouts were found for enrichment."
+            ),
+            HealthKitLoadResult(
+                authorizationState: .authorized,
+                workouts: [refreshedFailed],
+                healthContext: HealthContext(),
+                message: "Enriched 1 HealthKit running workouts."
+            )
+        ]
+    )
+    let store = RunningAnalysisStore(healthKitService: service)
+    await store.bootstrap(modelContext: context)
+
+    await store.refreshEvidenceForMonth(containing: start, calendar: calendar)
+    await store.resumeEvidenceRefreshForMonth(containing: start, calendar: calendar)
+
+    let job = try #require(store.evidenceRefreshJobs.first { $0.scopeKey == "2026-06" })
+    let items = PersistenceService.fetchEvidenceRefreshItems(jobID: job.jobID, context: context)
+    let successItem = try #require(items.first { $0.workoutID == success.id })
+    let retriedItem = try #require(items.first { $0.workoutID == failed.id })
+
+    #expect(service.enrichedIDs == [[success.id], [failed.id], [failed.id]])
+    #expect(store.monthlyEvidenceRefreshResults[success.id]?.refreshStatus == MonthlyEvidenceRefreshStatus.skipped)
+    #expect(job.status == EvidenceRefreshJobStatus.completed)
+    #expect(job.completedCount == 2)
+    #expect(job.failedCount == 0)
+    let summary = try #require(store.evidenceRefreshSummary(containing: start, calendar: calendar))
+    #expect(summary.status == EvidenceRefreshJobStatus.completed)
+    #expect(summary.progressText == "2/2")
+    #expect(!summary.canRecover)
+    #expect(successItem.status == EvidenceRefreshJobItemStatus.success)
+    #expect(retriedItem.status == EvidenceRefreshJobItemStatus.success)
+    #expect(retriedItem.attemptCount == 2)
+}
+
+@MainActor
+@Test func completedMonthlyEvidenceRefreshCanRunAgainAsNewJob() async throws {
+    let context = try inMemoryModelContext()
+    let calendar = fixedCalendar()
+    let start = calendar.date(from: DateComponents(year: 2026, month: 6, day: 4, hour: 7))!
+    var workout = testWorkout(
+        id: UUID().uuidString,
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_700
+    )
+    workout.evidence = monthlyEvidence(
+        workout: workout,
+        plannedSteps: [],
+        activityEndOffset: 1_700,
+        activityDistanceMeters: 5_000,
+        distancePoints: [(0, 0), (1_700, 5_000)]
+    )
+    var firstRefresh = workout
+    firstRefresh.evidence = monthlyEvidence(
+        workout: firstRefresh,
+        plannedSteps: [],
+        activityEndOffset: 1_710,
+        activityDistanceMeters: 5_050,
+        distancePoints: [(0, 0), (1_710, 5_050)]
+    )
+    var secondRefresh = workout
+    secondRefresh.evidence = monthlyEvidence(
+        workout: secondRefresh,
+        plannedSteps: [],
+        activityEndOffset: 1_720,
+        activityDistanceMeters: 5_100,
+        distancePoints: [(0, 0), (1_720, 5_100)]
+    )
+
+    PersistenceService.upsert([workout], context: context)
+    let service = StubHealthKitService(
+        enrichResults: [
+            HealthKitLoadResult(
+                authorizationState: .authorized,
+                workouts: [firstRefresh],
+                healthContext: HealthContext(),
+                message: "Enriched 1 HealthKit running workouts."
+            ),
+            HealthKitLoadResult(
+                authorizationState: .authorized,
+                workouts: [secondRefresh],
+                healthContext: HealthContext(),
+                message: "Enriched 1 HealthKit running workouts."
+            )
+        ]
+    )
+    let store = RunningAnalysisStore(healthKitService: service)
+    await store.bootstrap(modelContext: context)
+
+    await store.refreshEvidenceForMonth(containing: start, calendar: calendar)
+    let firstJobID = try #require(store.evidenceRefreshSummary(containing: start, calendar: calendar)?.jobID)
+    await store.refreshEvidenceForMonth(containing: start, calendar: calendar)
+    let secondSummary = try #require(store.evidenceRefreshSummary(containing: start, calendar: calendar))
+
+    let jobs = PersistenceService.fetchEvidenceRefreshJobs(context: context).filter { $0.scopeKey == "2026-06" }
+    let persistedEvidence = try #require(PersistenceService.fetchEvidence(workoutID: workout.id, context: context))
+
+    #expect(service.enrichedIDs == [[workout.id], [workout.id]])
+    #expect(jobs.count == 2)
+    #expect(secondSummary.jobID != firstJobID)
+    #expect(secondSummary.status == EvidenceRefreshJobStatus.completed)
+    #expect(persistedEvidence.series[WorkoutEvidenceMetric.distance]?.points.last?.value == 5_100)
+}
+
+@MainActor
+@Test func parityForceReenrichFailurePreservesCachedEvidence() async throws {
+    let context = try inMemoryModelContext()
+    let start = Date(timeIntervalSince1970: 3_400)
+    var workout = testWorkout(
+        id: UUID().uuidString,
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_700
+    )
+    workout.evidence = monthlyEvidence(
+        workout: workout,
+        plannedSteps: [],
+        activityEndOffset: 1_700,
+        activityDistanceMeters: 5_000,
+        distancePoints: [(0, 0), (1_700, 5_000)]
+    )
+
+    PersistenceService.upsert([workout], context: context)
+    let cachedLoadedAt = try #require(PersistenceService.fetchEvidence(workoutID: workout.id, context: context)?.loadedAt)
+    let service = StubHealthKitService(
+        enrichResults: [
+            HealthKitLoadResult(
+                authorizationState: .partial,
+                workouts: [],
+                healthContext: HealthContext(),
+                message: "No matching HealthKit running workouts were found for enrichment."
+            )
+        ]
+    )
+    let store = RunningAnalysisStore(healthKitService: service)
+    await store.bootstrap(modelContext: context)
+
+    await store.forceReenrichEvidenceForParity(workoutID: workout.id)
+
+    let persistedEvidence = try #require(PersistenceService.fetchEvidence(workoutID: workout.id, context: context))
+    let loadedWorkout = try #require(store.workouts.first { $0.id == workout.id })
+    let result = try #require(store.parityForceReenrichResults[workout.id])
+
+    #expect(persistedEvidence.loadedAt == cachedLoadedAt)
+    #expect(loadedWorkout.evidence?.loadedAt == cachedLoadedAt)
+    #expect(result.cacheWasPresent)
+    #expect(!result.invalidatedCache)
+    #expect(!result.freshQueryReturnedWorkout)
+}
+
+@MainActor
 @Test func storeHydratesCachedEvidenceForRouteRenderingOnBootstrap() async throws {
     let context = try inMemoryModelContext()
     let start = Date(timeIntervalSince1970: 3_500)
@@ -990,6 +1674,181 @@ import Testing
     #expect(originalSignature != refreshedSignature)
     #expect(refreshedAnalysis?.inputSummary.seriesSampleCounts[WorkoutEvidenceMetric.heartRate.rawValue] == 4)
     #expect(PersistenceService.refreshDerivedAnalyses(context: context) == 1)
+}
+
+@MainActor
+@Test func staleDerivedAnalyticsRecomputeWhenEvidenceSignatureChanges() throws {
+    let context = try inMemoryModelContext()
+    let start = Date(timeIntervalSince1970: 5_200)
+    var workout = testWorkout(
+        id: "stale-derived-analysis",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    workout.evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .heartRate: testSeries(.heartRate, values: [140, 142], start: start)
+        ]
+    )
+    PersistenceService.upsert([workout], context: context)
+    let originalSignature = try #require(PersistenceService.fetchDerivedAnalysisSummaries(context: context).first?.inputSignature)
+    let evidenceRecord = try #require(PersistenceService.fetchEvidenceSummaries(context: context).first)
+    evidenceRecord.update(
+        evidence: WorkoutEvidence(
+            workoutID: workout.id,
+            loadedAt: start.addingTimeInterval(60),
+            series: [
+                .heartRate: testSeries(.heartRate, values: [145, 147, 149], start: start)
+            ]
+        ),
+        sourceSummary: "fresh evidence"
+    )
+    try context.save()
+
+    let staleIDs = PersistenceService.staleDerivedAnalysisIDs(context: context)
+    let refreshedCount = PersistenceService.refreshStaleDerivedAnalyses(context: context)
+    let refreshedSummary = try #require(PersistenceService.fetchDerivedAnalysisSummaries(context: context).first)
+
+    #expect(staleIDs == [workout.id])
+    #expect(refreshedCount == 1)
+    #expect(refreshedSummary.inputSignature != originalSignature)
+    #expect(refreshedSummary.analysis?.inputSummary.seriesSampleCounts["heartRate"] == 3)
+}
+
+@MainActor
+@Test func storeSurfacesStaleDerivedAnalyticsRefreshSummary() async throws {
+    let context = try inMemoryModelContext()
+    let start = Date(timeIntervalSince1970: 5_300)
+    var workout = testWorkout(
+        id: "store-stale-derived-analysis",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    workout.evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .heartRate: testSeries(.heartRate, values: [140, 142], start: start)
+        ]
+    )
+    PersistenceService.upsert([workout], context: context)
+    let evidenceRecord = try #require(PersistenceService.fetchEvidenceSummaries(context: context).first)
+    evidenceRecord.update(
+        evidence: WorkoutEvidence(
+            workoutID: workout.id,
+            loadedAt: start.addingTimeInterval(60),
+            series: [
+                .heartRate: testSeries(.heartRate, values: [145, 147, 149], start: start)
+            ]
+        ),
+        sourceSummary: "fresh evidence"
+    )
+    try context.save()
+
+    let store = RunningAnalysisStore(healthKitService: StubHealthKitService())
+    await store.bootstrap(modelContext: context)
+
+    #expect(store.derivedAnalysisRefreshSummary.refreshedWorkoutIDs == [workout.id])
+    #expect(store.derivedAnalysisRefreshSummary.refreshedCount == 1)
+    #expect(store.derivedAnalysisRefreshSummary.statusTitle == "Recomputed")
+}
+
+@MainActor
+@Test func storeReportsOutdatedAndStaleDerivedIDsAsRefreshed() async throws {
+    let context = try inMemoryModelContext()
+    let start = Date(timeIntervalSince1970: 5_400)
+    var staleVersion = testWorkout(
+        id: "old-derived-version",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    staleVersion.evidence = WorkoutEvidence(
+        workoutID: staleVersion.id,
+        loadedAt: start,
+        series: [
+            .heartRate: testSeries(.heartRate, values: [140, 142], start: start)
+        ]
+    )
+    var currentVersion = testWorkout(
+        id: "current-derived-version",
+        start: start.addingTimeInterval(3_600),
+        distanceMeters: 4_000,
+        durationSeconds: 1_400
+    )
+    currentVersion.evidence = WorkoutEvidence(
+        workoutID: currentVersion.id,
+        loadedAt: start.addingTimeInterval(3_600),
+        series: [
+            .heartRate: testSeries(.heartRate, values: [145, 147], start: start.addingTimeInterval(3_600))
+        ]
+    )
+    PersistenceService.upsert([staleVersion, currentVersion], context: context)
+    let outdatedRecord = try #require(PersistenceService.fetchDerivedAnalysisSummaries(context: context).first {
+        $0.workoutID == staleVersion.id
+    })
+    outdatedRecord.calculationVersion = "derived-workout-v1"
+    let staleEvidenceRecord = try #require(PersistenceService.fetchEvidenceSummaries(context: context).first {
+        $0.workoutID == currentVersion.id
+    })
+    staleEvidenceRecord.update(
+        evidence: WorkoutEvidence(
+            workoutID: currentVersion.id,
+            loadedAt: start.addingTimeInterval(3_900),
+            series: [
+                .heartRate: testSeries(.heartRate, values: [150, 152, 154], start: start.addingTimeInterval(3_600))
+            ]
+        ),
+        sourceSummary: "fresh evidence"
+    )
+    try context.save()
+
+    let store = RunningAnalysisStore(healthKitService: StubHealthKitService())
+    await store.bootstrap(modelContext: context)
+
+    #expect(PersistenceService.outdatedDerivedAnalysisVersionIDs(context: context).isEmpty)
+    #expect(store.derivedAnalysisRefreshSummary.refreshedWorkoutIDs == [currentVersion.id, staleVersion.id])
+    #expect(store.derivedAnalysisRefreshSummary.refreshedCount == 2)
+}
+
+@MainActor
+@Test func derivedAnalyticsSignatureIgnoresEvidenceLoadedAt() throws {
+    let context = try inMemoryModelContext()
+    let start = Date(timeIntervalSince1970: 5_500)
+    var workout = testWorkout(
+        id: "loaded-at-only-refresh",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    workout.evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .heartRate: testSeries(.heartRate, values: [140, 142], start: start)
+        ]
+    )
+    PersistenceService.upsert([workout], context: context)
+    let originalSignature = try #require(PersistenceService.fetchDerivedAnalysisSummaries(context: context).first?.inputSignature)
+    let evidenceRecord = try #require(PersistenceService.fetchEvidenceSummaries(context: context).first)
+    evidenceRecord.update(
+        evidence: WorkoutEvidence(
+            workoutID: workout.id,
+            loadedAt: start.addingTimeInterval(600),
+            series: [
+                .heartRate: testSeries(.heartRate, values: [140, 142], start: start)
+            ]
+        ),
+        sourceSummary: "same semantic evidence"
+    )
+    try context.save()
+
+    #expect(PersistenceService.staleDerivedAnalysisIDs(context: context).isEmpty)
+    #expect(PersistenceService.fetchDerivedAnalysisSummaries(context: context).first?.inputSignature == originalSignature)
 }
 
 @Test func derivedAnalyticsDowngradesPaceAndHeartRateWhenSeriesAreSparse() {
@@ -4075,6 +4934,87 @@ import Testing
     #expect(records.isEmpty)
 }
 
+@Test func monthlyDiagnosticsExportIncludesDerivedRefreshSummary() throws {
+    let calendar = fixedCalendar()
+    let month = calendar.date(from: DateComponents(year: 2026, month: 6, day: 1))!
+    let derivedSummary = DerivedAnalysisRefreshSummary(
+        refreshedWorkoutIDs: ["derived-refresh-workout"],
+        checkedAt: month
+    )
+
+    let json = DiagnosticsExport.monthlyDiagnosticsJSON(
+        workouts: [],
+        selectedMonth: month,
+        calendar: calendar,
+        derivedRefreshSummary: derivedSummary,
+        generatedAt: month
+    )
+    let object = try monthlyDiagnosticsObject(json)
+    let derived = try #require(object["derivedAnalytics"] as? [String: Any])
+
+    #expect(derived["status"] as? String == "Recomputed")
+    #expect(derived["refreshedCount"] as? Int == 1)
+    #expect(derived["refreshedWorkoutIDs"] as? [String] == ["derived-refresh-workout"])
+
+    let markdown = DiagnosticsExport.monthlyDiagnosticsMarkdown(
+        workouts: [],
+        selectedMonth: month,
+        calendar: calendar,
+        derivedRefreshSummary: derivedSummary,
+        generatedAt: month
+    )
+    #expect(markdown.contains("Derived analytics: Recomputed (1 refreshed)"))
+}
+
+@Test func monthlyDiagnosticsExportIncludesRefreshJobInterruptionProof() throws {
+    let calendar = fixedCalendar()
+    let month = calendar.date(from: DateComponents(year: 2026, month: 6, day: 1))!
+    let job = PersistedEvidenceRefreshJob(
+        jobID: "interrupted-job",
+        refreshKind: .monthlyEvidenceRefresh,
+        scopeType: .month,
+        scopeKey: "2026-06",
+        status: .paused,
+        createdAt: month,
+        totalCount: 3
+    )
+    job.markPaused(at: month.addingTimeInterval(30), message: EvidenceRefreshJobSummary.interruptedRelaunchMessage)
+    job.updateCounts(completed: 1, failed: 0, skipped: 0, at: month.addingTimeInterval(30))
+    let summary = EvidenceRefreshJobSummary(job: job)
+
+    let json = DiagnosticsExport.monthlyDiagnosticsJSON(
+        workouts: [],
+        selectedMonth: month,
+        calendar: calendar,
+        evidenceRefreshSummary: summary,
+        generatedAt: month
+    )
+    let object = try monthlyDiagnosticsObject(json)
+    let refreshJob = try #require(object["refreshJob"] as? [String: Any])
+
+    #expect(refreshJob["status"] as? String == "paused")
+    #expect(refreshJob["interruptionDetected"] as? Bool == true)
+    #expect(refreshJob["interruptionHistoryPresent"] as? Bool == true)
+    #expect(refreshJob["interruptionCount"] as? Int == 1)
+    #expect(refreshJob["canRecover"] as? Bool == true)
+    #expect(refreshJob["pendingCount"] as? Int == 2)
+    #expect(refreshJob["recoveryProof"] as? String == "Interrupted refresh was detected on app relaunch and preserved as a paused job.")
+    let proof = try #require(refreshJob["physicalInterruptionProof"] as? [String: Any])
+    #expect(proof["status"] as? String == "Proof pending")
+    #expect((proof["completedSteps"] as? [String])?.contains("Interrupted relaunch was recorded for this refresh job.") == true)
+
+    let markdown = DiagnosticsExport.monthlyDiagnosticsMarkdown(
+        workouts: [],
+        selectedMonth: month,
+        calendar: calendar,
+        evidenceRefreshSummary: summary,
+        generatedAt: month
+    )
+    #expect(markdown.contains("Refresh recovery: Paused, 1/3 processed"))
+    #expect(markdown.contains("Interrupted refresh was detected on app relaunch"))
+    #expect(markdown.contains("Physical proof:"))
+}
+
 @Test func monthlyDiagnosticsExportClassifiesNoPlanWithGoodHealthKitEvidenceAfterRefresh() throws {
     let calendar = fixedCalendar()
     let month = calendar.date(from: DateComponents(year: 2026, month: 6, day: 1))!
@@ -4543,6 +5483,8 @@ private func inMemoryModelContext() throws -> ModelContext {
         PersistedWorkout.self,
         PersistedWorkoutEvidence.self,
         PersistedEvidenceEnrichmentState.self,
+        PersistedEvidenceRefreshJob.self,
+        PersistedEvidenceRefreshJobItem.self,
         PersistedDerivedWorkoutAnalysis.self
     ])
     let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
@@ -4573,6 +5515,68 @@ private func testSeries(
             WorkoutEvidencePoint(date: start.addingTimeInterval(TimeInterval(index) * interval), value: value)
         }
     )
+}
+
+private final class StubHealthKitService: HealthKitServicing, @unchecked Sendable {
+    var loadResult = HealthKitLoadResult(
+        authorizationState: .authorized,
+        workouts: [],
+        healthContext: HealthContext(),
+        message: nil
+    )
+    var enrichResults: [HealthKitLoadResult]
+    private(set) var enrichedIDs: [[String]] = []
+
+    init(enrichResults: [HealthKitLoadResult] = []) {
+        self.enrichResults = enrichResults
+    }
+
+    var isAvailable: Bool { true }
+
+    func requestAuthorization() async -> AuthorizationState {
+        .authorized
+    }
+
+    func loadRunningWorkouts() async -> HealthKitLoadResult {
+        loadResult
+    }
+
+    func enrichRunningWorkouts(ids: [String]) async -> HealthKitLoadResult {
+        enrichedIDs.append(ids)
+        if enrichResults.isEmpty {
+            return HealthKitLoadResult(
+                authorizationState: .partial,
+                workouts: [],
+                healthContext: HealthContext(),
+                message: "No matching HealthKit running workouts were found for enrichment."
+            )
+        }
+        return enrichResults.removeFirst()
+    }
+
+    func loadHealthContext() async -> HealthContext {
+        loadResult.healthContext
+    }
+}
+
+private final class StubHealthKitWorkoutSyncService: HealthKitWorkoutSyncServicing, @unchecked Sendable {
+    var results: [HealthKitWorkoutSyncResult]
+    private(set) var syncCallCount = 0
+
+    init(results: [HealthKitWorkoutSyncResult] = []) {
+        self.results = results
+    }
+
+    func syncRunningWorkouts(from anchor: HKQueryAnchor?) async -> HealthKitWorkoutSyncResult {
+        syncCallCount += 1
+        if results.isEmpty {
+            return HealthKitWorkoutSyncResult(
+                authorizationState: .partial,
+                message: "No HealthKit changes."
+            )
+        }
+        return results.removeFirst()
+    }
 }
 
 private func testWorkout(

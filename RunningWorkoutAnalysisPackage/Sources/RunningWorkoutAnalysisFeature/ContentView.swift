@@ -3,6 +3,7 @@ import SwiftUI
 
 public struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @State private var store = RunningAnalysisStore()
     @State private var selectedTab = AppTab.runs
 
@@ -24,6 +25,13 @@ public struct ContentView: View {
         }
         .task {
             await store.bootstrap(modelContext: modelContext)
+            await store.syncHealthKitChangesOnForeground()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            Task {
+                await store.syncHealthKitChangesOnForeground()
+            }
         }
     }
 }

@@ -1561,6 +1561,8 @@ public enum DiagnosticsExport {
         calendar: Calendar = .current,
         forceReenrichResults: [String: ParityForceReenrichResult] = [:],
         monthlyRefreshResults: [String: MonthlyEvidenceRefreshResult] = [:],
+        derivedRefreshSummary: DerivedAnalysisRefreshSummary = .empty,
+        evidenceRefreshSummary: EvidenceRefreshJobSummary? = nil,
         generatedAt: Date = Date()
     ) -> String {
         let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth)
@@ -1640,6 +1642,13 @@ public enum DiagnosticsExport {
             "boundaryLogicChanged": false,
             "usesFITRuntimeTruth": false,
             "usesAppleFitnessManualRuntimeLogic": false,
+            "derivedAnalytics": [
+                "status": derivedRefreshSummary.statusTitle,
+                "refreshedCount": derivedRefreshSummary.refreshedCount,
+                "refreshedWorkoutIDs": derivedRefreshSummary.refreshedWorkoutIDs,
+                "checkedAt": derivedRefreshSummary.checkedAt?.ISO8601Format() ?? "Unavailable"
+            ],
+            "refreshJob": refreshJobObject(evidenceRefreshSummary),
             "records": records
         ]
 
@@ -1652,6 +1661,8 @@ public enum DiagnosticsExport {
         calendar: Calendar = .current,
         forceReenrichResults: [String: ParityForceReenrichResult] = [:],
         monthlyRefreshResults: [String: MonthlyEvidenceRefreshResult] = [:],
+        derivedRefreshSummary: DerivedAnalysisRefreshSummary = .empty,
+        evidenceRefreshSummary: EvidenceRefreshJobSummary? = nil,
         generatedAt: Date = Date()
     ) -> String {
         let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth)
@@ -1683,6 +1694,8 @@ public enum DiagnosticsExport {
 
         Generated: \(RunFormatters.date.string(from: generatedAt))
         Selected month: \(monthlyIdentifier(for: selectedMonth, calendar: calendar))
+        Derived analytics: \(derivedRefreshSummary.statusTitle) (\(derivedRefreshSummary.refreshedCount) refreshed)
+        Refresh recovery: \(refreshJobMarkdownSummary(evidenceRefreshSummary))
         Scope: debug/research-only. Production interval behavior, normal workout UI, and boundary logic are unchanged.
 
         | Start | Workout ID | Refresh | Evidence source | Classification | WorkoutKit plan | Activities | Reconstructed rows | Open / Extra tail | Caveat |
@@ -1696,6 +1709,54 @@ public enum DiagnosticsExport {
         let year = components.year ?? 0
         let month = components.month ?? 0
         return String(format: "%04d-%02d", year, month)
+    }
+
+    private static func refreshJobObject(_ summary: EvidenceRefreshJobSummary?) -> [String: Any] {
+        guard let summary else {
+            return [
+                "status": "unavailable",
+                "interruptionDetected": false,
+                "recoveryProof": "No persisted refresh job exists for the selected month."
+            ]
+        }
+        return [
+            "jobID": summary.jobID,
+            "scopeKey": summary.scopeKey,
+            "status": summary.status.rawValue,
+            "progress": summary.progressText,
+            "totalCount": summary.totalCount,
+            "completedCount": summary.completedCount,
+            "failedCount": summary.failedCount,
+            "skippedCount": summary.skippedCount,
+            "pendingCount": summary.pendingCount,
+            "interruptionCount": summary.interruptionCount,
+            "interruptionDetected": summary.pausedAfterRelaunch,
+            "interruptionHistoryPresent": summary.hasInterruptionHistory,
+            "canRecover": summary.canRecover,
+            "lastError": summary.lastError ?? "None",
+            "lastInterruptedAt": summary.lastInterruptedAt?.ISO8601Format() ?? "Unavailable",
+            "updatedAt": summary.updatedAt.ISO8601Format(),
+            "recoveryProof": summary.recoveryProofText,
+            "physicalInterruptionProof": refreshInterruptionProofObject(summary)
+        ]
+    }
+
+    private static func refreshInterruptionProofObject(_ summary: EvidenceRefreshJobSummary) -> [String: Any] {
+        let proof = RefreshInterruptionProofSummary.make(from: summary)
+        return [
+            "status": proof.statusTitle,
+            "detail": proof.detailText,
+            "completedSteps": proof.completedSteps,
+            "pendingSteps": proof.pendingSteps
+        ]
+    }
+
+    private static func refreshJobMarkdownSummary(_ summary: EvidenceRefreshJobSummary?) -> String {
+        guard let summary else {
+            return "No persisted refresh job for selected month."
+        }
+        let proof = RefreshInterruptionProofSummary.make(from: summary)
+        return "\(summary.statusTitle), \(summary.detailText). \(summary.recoveryProofText) Physical proof: \(proof.detailText)"
     }
 
     private static func parityPacketObject(

@@ -737,6 +737,208 @@ public final class PersistedEvidenceEnrichmentState {
     }
 }
 
+public enum EvidenceRefreshKind: String, Codable, CaseIterable, Sendable {
+    case monthlyEvidenceRefresh
+    case bestEffortBackfill
+    case latestRunRefresh
+}
+
+public enum EvidenceRefreshScopeType: String, Codable, CaseIterable, Sendable {
+    case month
+    case workout
+    case candidateSet
+}
+
+public enum EvidenceRefreshJobStatus: String, Codable, CaseIterable, Sendable {
+    case queued
+    case running
+    case paused
+    case completed
+    case failed
+    case blocked
+}
+
+public enum EvidenceRefreshJobItemStatus: String, Codable, CaseIterable, Sendable {
+    case pending
+    case running
+    case success
+    case failed
+    case skipped
+}
+
+@Model
+public final class PersistedEvidenceRefreshJob {
+    @Attribute(.unique) public var jobID: String
+    public var dedupKey: String
+    public var refreshKindRaw: String
+    public var scopeTypeRaw: String
+    public var scopeKey: String
+    public var statusRaw: String
+    public var priority: Int
+    public var createdAt: Date
+    public var startedAt: Date?
+    public var updatedAt: Date
+    public var completedAt: Date?
+    public var attemptCount: Int
+    public var lastError: String?
+    public var totalCount: Int
+    public var completedCount: Int
+    public var failedCount: Int
+    public var skippedCount: Int
+    public var interruptionCount: Int
+    public var lastInterruptedAt: Date?
+
+    public init(
+        jobID: String = UUID().uuidString,
+        refreshKind: EvidenceRefreshKind,
+        scopeType: EvidenceRefreshScopeType,
+        scopeKey: String,
+        status: EvidenceRefreshJobStatus = .queued,
+        priority: Int = 0,
+        createdAt: Date = Date(),
+        totalCount: Int = 0
+    ) {
+        self.jobID = jobID
+        self.refreshKindRaw = refreshKind.rawValue
+        self.scopeTypeRaw = scopeType.rawValue
+        self.scopeKey = scopeKey
+        self.dedupKey = Self.makeDedupKey(refreshKind: refreshKind, scopeType: scopeType, scopeKey: scopeKey)
+        self.statusRaw = status.rawValue
+        self.priority = priority
+        self.createdAt = createdAt
+        self.startedAt = nil
+        self.updatedAt = createdAt
+        self.completedAt = nil
+        self.attemptCount = 0
+        self.lastError = nil
+        self.totalCount = totalCount
+        self.completedCount = 0
+        self.failedCount = 0
+        self.skippedCount = 0
+        self.interruptionCount = 0
+        self.lastInterruptedAt = nil
+    }
+
+    public var refreshKind: EvidenceRefreshKind {
+        EvidenceRefreshKind(rawValue: refreshKindRaw) ?? .monthlyEvidenceRefresh
+    }
+
+    public var scopeType: EvidenceRefreshScopeType {
+        EvidenceRefreshScopeType(rawValue: scopeTypeRaw) ?? .month
+    }
+
+    public var status: EvidenceRefreshJobStatus {
+        EvidenceRefreshJobStatus(rawValue: statusRaw) ?? .queued
+    }
+
+    public func markRunning(at date: Date = Date()) {
+        statusRaw = EvidenceRefreshJobStatus.running.rawValue
+        startedAt = startedAt ?? date
+        updatedAt = date
+        completedAt = nil
+        attemptCount += 1
+        lastError = nil
+    }
+
+    public func markPaused(at date: Date = Date(), message: String? = nil) {
+        statusRaw = EvidenceRefreshJobStatus.paused.rawValue
+        updatedAt = date
+        lastError = message
+        if message == "Paused after app relaunch before completion." {
+            interruptionCount += 1
+            lastInterruptedAt = date
+        }
+    }
+
+    public func updateCounts(completed: Int, failed: Int, skipped: Int, at date: Date = Date()) {
+        completedCount = completed
+        failedCount = failed
+        skippedCount = skipped
+        updatedAt = date
+    }
+
+    public func finish(status: EvidenceRefreshJobStatus, message: String? = nil, at date: Date = Date()) {
+        statusRaw = status.rawValue
+        completedAt = date
+        updatedAt = date
+        lastError = message
+    }
+
+    public static func makeDedupKey(
+        refreshKind: EvidenceRefreshKind,
+        scopeType: EvidenceRefreshScopeType,
+        scopeKey: String
+    ) -> String {
+        "\(refreshKind.rawValue):\(scopeType.rawValue):\(scopeKey)"
+    }
+}
+
+@Model
+public final class PersistedEvidenceRefreshJobItem {
+    @Attribute(.unique) public var itemID: String
+    public var jobID: String
+    public var workoutID: String
+    public var statusRaw: String
+    public var attemptCount: Int
+    public var lastError: String?
+    public var startedAt: Date?
+    public var completedAt: Date?
+    public var oldEvidencePreserved: Bool
+    public var newEvidenceCommitted: Bool
+    public var updatedAt: Date
+
+    public init(
+        jobID: String,
+        workoutID: String,
+        status: EvidenceRefreshJobItemStatus = .pending,
+        createdAt: Date = Date()
+    ) {
+        self.jobID = jobID
+        self.workoutID = workoutID
+        self.itemID = Self.makeItemID(jobID: jobID, workoutID: workoutID)
+        self.statusRaw = status.rawValue
+        self.attemptCount = 0
+        self.lastError = nil
+        self.startedAt = nil
+        self.completedAt = nil
+        self.oldEvidencePreserved = false
+        self.newEvidenceCommitted = false
+        self.updatedAt = createdAt
+    }
+
+    public var status: EvidenceRefreshJobItemStatus {
+        EvidenceRefreshJobItemStatus(rawValue: statusRaw) ?? .pending
+    }
+
+    public func markRunning(at date: Date = Date()) {
+        statusRaw = EvidenceRefreshJobItemStatus.running.rawValue
+        startedAt = date
+        updatedAt = date
+        completedAt = nil
+        attemptCount += 1
+        lastError = nil
+    }
+
+    public func finish(
+        status: EvidenceRefreshJobItemStatus,
+        message: String? = nil,
+        oldEvidencePreserved: Bool,
+        newEvidenceCommitted: Bool,
+        at date: Date = Date()
+    ) {
+        statusRaw = status.rawValue
+        completedAt = date
+        updatedAt = date
+        lastError = message
+        self.oldEvidencePreserved = oldEvidencePreserved
+        self.newEvidenceCommitted = newEvidenceCommitted
+    }
+
+    public static func makeItemID(jobID: String, workoutID: String) -> String {
+        "\(jobID):\(workoutID)"
+    }
+}
+
 @Model
 public final class PersistedDerivedWorkoutAnalysis {
     @Attribute(.unique) public var workoutID: String
@@ -764,7 +966,7 @@ public final class PersistedDerivedWorkoutAnalysis {
         try? JSONDecoder().decode(DerivedWorkoutAnalysis.self, from: analysisData)
     }
 
-    private static func signature(for input: DerivedAnalyticsInputSummary) -> String {
+    public static func signature(for input: DerivedAnalyticsInputSummary) -> String {
         let counts = input.seriesSampleCounts
             .sorted { $0.key < $1.key }
             .map { "\($0.key)=\($0.value)" }
@@ -783,7 +985,6 @@ public final class PersistedDerivedWorkoutAnalysis {
             .joined(separator: "|")
         return [
             input.workoutID,
-            input.evidenceLoadedAt.ISO8601Format(),
             "route=\(input.routePointCount)",
             "routeSig=\(input.routeSignature)",
             "events=\(input.eventCount)",

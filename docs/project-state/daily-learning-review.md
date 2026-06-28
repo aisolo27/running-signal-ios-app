@@ -99,3 +99,35 @@ Scope: reviewed 15 Codex session logs whose `session_meta.payload.cwd` exactly m
 - Added this June 26 daily review note.
 - No new `docs/bug-log.md` entry was needed: June 26 reinforced existing proof validation, pause-gating, and scope-control lessons already captured in the bug log.
 - No `AGENTS.md`, `docs/project-state/current-state.md`, `docs/project-state/next-work.md`, or `docs/project-state/documentation-index.md` changes were needed during this review because those docs already reflect the stable June 26 rung 2 state and routing.
+
+## 2026-06-27
+
+Scope: reviewed 20 Codex session logs from June 27 whose `cwd` exactly matched the RunSignal iOS repo. Treated this as a docs-only learning review and did not run Xcode, device installs, HealthKit queries, or provider mutations.
+
+### Completed Work
+
+- Health Context work reached `main` in `d34d75f Add read-only health context signals`: VO2 Max/Cardio Fitness and Resting Heart Rate are optional read-only signals, neutral unavailable wording is in place, package tests passed, and the app was installed/launched on physical iPhone `AIS17PM`.
+- Physical-device follow-up found an important proof boundary: a successful `build_run_device` is not enough when the phone shows the black launch screen and returns Home. Treat that as a launch crash until logs or app-visible proof say otherwise.
+- Best Efforts work clarified that visible official PR buckets must come from exact evidence-backed records, while summary-only whole-run estimates stay out of the official all-time list. Historical PR misses can be evidence-coverage problems before they are math problems.
+- Cached-first HealthKit refresh work moved from critique/planning into implementation evidence: monthly refresh preserves existing cached evidence when replacement queries fail or return empty/no-evidence, persists month/job item checkpoints, retries failed items without rerunning successes, and recomputes stale derived analytics when cached raw-evidence signatures drift.
+- Raw HealthKit Debug/monthly diagnostics were expanded to expose refresh job state, progress/failure counts, resume/retry controls, derived refresh metadata, interrupted-relaunch recovery proof text, and a physical interruption proof checklist.
+
+### Pending Work
+
+- Verify VO2 Max/Cardio Fitness and Resting Heart Rate on the physical iPhone after Apple Health read access. Missing values remain unavailable Apple Health data, not proof of denied permission.
+- Run the refresh interruption proof on the physical iPhone and archive diagnostics/log evidence before claiming observer delivery, background tasks, or full lifecycle behavior.
+- Keep observer delivery and background refresh blocked until the cached-first foreground/resumable path has physical proof.
+- Add or confirm a PR-candidate enrichment path for older benchmark runs before changing visible Best Efforts math.
+- Address the read-only QA finding that repeated completed-month refresh behavior needs a clear contract: repeated completed runs should either create a new job intentionally or have documented idempotent reuse semantics.
+
+### Mistakes, Fixes, And Friction
+
+- Do not equate install/build success with app-visible physical proof. Black-screen-to-Home must be handled as a crash signal, especially when real HealthKit cache size can expose work the Simulator misses.
+- Avoid heavy analytics or refresh work directly in SwiftUI body paths; prefer cached store recompute/update paths.
+- Keep HealthKit runtime truth separate from FIT, HealthFit, screenshots, and web comparison evidence. June 27 work did not change the no-FIT-runtime-ingestion direction.
+- Multi-agent refresh review was useful, but broad raw transcript/search output can pull unrelated sessions. Future reviews should filter by exact `turn_context.cwd` before text searching for topic phrases.
+
+### Docs Updated By This Review
+
+- Added this June 27 section to `docs/project-state/daily-learning-review.md`.
+- Did not edit `docs/bug-log.md`, `docs/project-state/current-state.md`, `docs/project-state/next-work.md`, `AGENTS.md`, or `docs/project-state/documentation-index.md` in this review because those routing-critical docs already had uncommitted June 27 edits. The daily review records the durable lessons without overwriting unrelated work.

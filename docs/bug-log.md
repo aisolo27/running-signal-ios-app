@@ -27,6 +27,8 @@ Use this as a selective lookup, not required full-context reading. Read the inde
 
 ## HealthKit
 
+- Rule: monthly evidence refresh jobs should dedupe only active attempts. Completed attempts are refresh history and must not block a later manual refresh for the same month.
+
 - Symptom: route API compile errors around `HKDataTypeIdentifier`. Cause: wrong route type API for this toolchain. Fix: use `HKSeriesType.workoutRoute()`.
 - Rule: HealthKit v1 is read-only. Do not write workouts or mutate HealthKit data.
 - Rule: Simulator cannot prove real HealthKit permissions or real workout availability. Use sample fallback in Simulator and record physical-iPhone verification separately.
@@ -65,7 +67,11 @@ Use this as a selective lookup, not required full-context reading. Read the inde
 - Rule: distinguish planned open cooldowns from post-cooldown extra activity. A final WorkoutKit `Cooldown` step with an open goal should keep the `Cooldown` label through workout end; a fixed distance/time cooldown that completes and is followed by continued running should leave the remaining activity as `Open / Extra`.
 - Rule: Apple Fitness split times can still differ by a few seconds from RunSignal's HealthKit distance-series interpolation because Apple may use private smoothing, route/distance presentation, and rounding. Treat 3 seconds on a 1 km split as an acceptable parity tolerance unless repeated evidence shows a wider drift.
 - Rule: older workouts with zero detailed evidence should not be used for boundary tuning until Raw HealthKit Debug proves fresh evidence loading. Check for stale summary-only cached evidence or an empty-detail workout that was marked enriched; a future debug-only reload action should invalidate the selected workout's evidence cache before re-querying HealthKit.
+- Rule: all-time best efforts are only as complete as detailed distance-series enrichment. A historical workout can appear in Completed Runs from summary HealthKit data but still be absent or wrong in official PR buckets until associated distance samples are loaded and cached; do not change the PR math before checking evidence coverage.
 - Rule: refresh actions should not permanently clear cached debug evidence before a replacement HealthKit query succeeds. Fetch into a temporary result or restore the prior cache on failure; if clear-first behavior is intentional, label it clearly.
+- Rule: derived-refresh summaries should capture stale or outdated workout IDs before recompute. Reporting all derived rows after a broad version refresh overclaims what actually changed.
+- Rule: derived raw-evidence input signatures should ignore `loadedAt`; a reload timestamp alone is not semantic evidence drift and should not trigger stale-derived recompute.
+- Rule: unavailable HealthKit during monthly refresh is a blocked/unsupported job state, not a retryable per-workout evidence failure.
 - Rule: total calories can differ from Apple Fitness by about 1 kcal after refresh because active and basal energy may be summed from unrounded HealthKit evidence while Apple Fitness rounds display values. Treat 1 kcal as acceptable rounding tolerance.
 - Rule: docs-only FIT decoders should map `workout_step` to FIT global message `27`; global message `26` is `workout`. A wrong mapping can parse placeholder step rows and falsely classify repeat-block evidence.
 - Rule: Gate B row-level FIT timing must keep elapsed time and timer time visible. Large custom-workout errors can be pause/timer artifacts even when labels and distances look good, so do not approve repeat-block or warmup/work/cooldown subclasses from a single derived duration.

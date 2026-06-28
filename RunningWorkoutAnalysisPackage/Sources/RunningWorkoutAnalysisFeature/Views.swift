@@ -1759,6 +1759,18 @@ struct RawHealthKitWorkoutDebugView: View {
                 )
                 .datePickerStyle(.compact)
 
+                if let summary = store.evidenceRefreshSummary(containing: selectedDiagnosticsMonth) {
+                    EvidenceRefreshJobCard(
+                        summary: summary,
+                        derivedSummary: store.derivedAnalysisRefreshSummary,
+                        isRefreshing: store.isEnrichingAudit
+                    ) {
+                        Task {
+                            await store.resumeEvidenceRefreshForMonth(containing: selectedDiagnosticsMonth)
+                        }
+                    }
+                }
+
                 Button {
                     Task {
                         await store.refreshEvidenceForMonth(containing: selectedDiagnosticsMonth)
@@ -2863,6 +2875,118 @@ struct NoticeCard: View {
         .padding()
         .background(.orange.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+struct EvidenceRefreshJobCard: View {
+    let summary: EvidenceRefreshJobSummary
+    let derivedSummary: DerivedAnalysisRefreshSummary
+    let isRefreshing: Bool
+    let action: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: symbol)
+                    .foregroundStyle(color)
+                    .frame(width: 18)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Month evidence refresh")
+                        .font(.subheadline.bold())
+                    Text("\(summary.scopeKey) - \(summary.statusTitle) - \(summary.detailText)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                if isRefreshing {
+                    ProgressView()
+                }
+            }
+
+            MetricGrid(items: [
+                MetricItem(title: "Progress", value: summary.progressText, detail: "Processed"),
+                MetricItem(title: "Failed", value: "\(summary.failedCount)", detail: "Retryable"),
+                MetricItem(title: "Pending", value: "\(summary.pendingCount)", detail: "Not finished"),
+                MetricItem(title: "Derived", value: "\(derivedSummary.refreshedCount)", detail: derivedSummary.statusTitle),
+                MetricItem(title: "Interruptions", value: "\(summary.interruptionCount)", detail: interruptionProof.statusTitle),
+                MetricItem(title: "Updated", value: RunFormatters.date.string(from: summary.updatedAt), detail: "Local job"),
+                MetricItem(title: "Checked", value: derivedCheckedText, detail: "Derived analytics")
+            ])
+
+            if let lastError = summary.lastError, !lastError.isEmpty {
+                Text(lastError)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Text(summary.recoveryProofText)
+                .font(.caption)
+                .foregroundStyle(summary.pausedAfterRelaunch ? .orange : .secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if summary.canRecover {
+                Button(action: action) {
+                    Label(summary.actionTitle, systemImage: "arrow.triangle.2.circlepath")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .disabled(isRefreshing)
+            }
+
+            Text("Retry and resume preserve existing cached evidence unless HealthKit returns usable replacement evidence.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(derivedSummary.detailText)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("Physical proof: \(interruptionProof.detailText)")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding()
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var symbol: String {
+        switch summary.status {
+        case .completed:
+            return "checkmark.circle"
+        case .failed, .blocked:
+            return "exclamationmark.triangle"
+        case .paused:
+            return "pause.circle"
+        case .queued, .running:
+            return "arrow.triangle.2.circlepath"
+        }
+    }
+
+    private var color: Color {
+        switch summary.status {
+        case .completed:
+            return .green
+        case .failed, .blocked:
+            return .orange
+        case .paused:
+            return .blue
+        case .queued, .running:
+            return .secondary
+        }
+    }
+
+    private var derivedCheckedText: String {
+        derivedSummary.checkedAt.map { RunFormatters.date.string(from: $0) } ?? "Not checked"
+    }
+
+    private var interruptionProof: RefreshInterruptionProofSummary {
+        RefreshInterruptionProofSummary.make(from: summary)
     }
 }
 

@@ -53,11 +53,15 @@ public struct HealthKitWorkoutSyncResult: Sendable {
     }
 }
 
-public final class HealthKitWorkoutSyncService: @unchecked Sendable {
-    private let store = HKHealthStore()
-    private let healthKitService: HealthKitService
+public protocol HealthKitWorkoutSyncServicing: AnyObject, Sendable {
+    func syncRunningWorkouts(from anchor: HKQueryAnchor?) async -> HealthKitWorkoutSyncResult
+}
 
-    public init(healthKitService: HealthKitService = HealthKitService()) {
+public final class HealthKitWorkoutSyncService: HealthKitWorkoutSyncServicing, @unchecked Sendable {
+    private let store = HKHealthStore()
+    private let healthKitService: any HealthKitServicing
+
+    public init(healthKitService: any HealthKitServicing = HealthKitService()) {
         self.healthKitService = healthKitService
     }
 
