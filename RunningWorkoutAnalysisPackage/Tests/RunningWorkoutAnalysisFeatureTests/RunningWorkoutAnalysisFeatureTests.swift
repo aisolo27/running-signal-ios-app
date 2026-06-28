@@ -1719,7 +1719,7 @@ import Testing
 }
 
 @MainActor
-@Test func storeSurfacesStaleDerivedAnalyticsRefreshSummary() async throws {
+@Test func storeBootstrapDoesNotRunStaleDerivedAnalyticsRefresh() async throws {
     let context = try inMemoryModelContext()
     let start = Date(timeIntervalSince1970: 5_300)
     var workout = testWorkout(
@@ -1752,13 +1752,14 @@ import Testing
     let store = RunningAnalysisStore(healthKitService: StubHealthKitService())
     await store.bootstrap(modelContext: context)
 
-    #expect(store.derivedAnalysisRefreshSummary.refreshedWorkoutIDs == [workout.id])
-    #expect(store.derivedAnalysisRefreshSummary.refreshedCount == 1)
-    #expect(store.derivedAnalysisRefreshSummary.statusTitle == "Recomputed")
+    #expect(PersistenceService.staleDerivedAnalysisIDs(context: context) == [workout.id])
+    #expect(store.derivedAnalysisRefreshSummary.refreshedWorkoutIDs.isEmpty)
+    #expect(store.derivedAnalysisRefreshSummary.refreshedCount == 0)
+    #expect(store.derivedAnalysisRefreshSummary.statusTitle == "Current")
 }
 
 @MainActor
-@Test func storeReportsOutdatedAndStaleDerivedIDsAsRefreshed() async throws {
+@Test func storeBootstrapLoadsExistingDerivedAnalyticsWithoutRefreshingStaleRows() async throws {
     let context = try inMemoryModelContext()
     let start = Date(timeIntervalSince1970: 5_400)
     var staleVersion = testWorkout(
@@ -1810,9 +1811,12 @@ import Testing
     let store = RunningAnalysisStore(healthKitService: StubHealthKitService())
     await store.bootstrap(modelContext: context)
 
-    #expect(PersistenceService.outdatedDerivedAnalysisVersionIDs(context: context).isEmpty)
-    #expect(store.derivedAnalysisRefreshSummary.refreshedWorkoutIDs == [currentVersion.id, staleVersion.id])
-    #expect(store.derivedAnalysisRefreshSummary.refreshedCount == 2)
+    #expect(PersistenceService.outdatedDerivedAnalysisVersionIDs(context: context) == [staleVersion.id])
+    #expect(PersistenceService.staleDerivedAnalysisIDs(context: context).sorted() == [currentVersion.id, staleVersion.id])
+    #expect(store.derivedAnalysesByWorkoutID[staleVersion.id] != nil)
+    #expect(store.derivedAnalysesByWorkoutID[currentVersion.id] != nil)
+    #expect(store.derivedAnalysisRefreshSummary.refreshedWorkoutIDs.isEmpty)
+    #expect(store.derivedAnalysisRefreshSummary.refreshedCount == 0)
 }
 
 @MainActor

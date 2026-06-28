@@ -290,7 +290,7 @@ public final class RunningAnalysisStore {
         reviewedRunTypes = RunTypeReviewImportService.loadSavedReviews()
         syncState = HealthKitSyncState(lastSyncAt: HealthKitSyncStateStore.loadLastSyncAt())
         applyReviewedRunTypes()
-        recompute()
+        recompute(refreshDerivedAnalyses: false)
         refreshEvidenceRefreshJobs()
     }
 
@@ -852,14 +852,19 @@ public final class RunningAnalysisStore {
         PersistenceService.upsert(workouts, context: modelContext)
     }
 
-    private func recompute() {
+    private func recompute(refreshDerivedAnalyses shouldRefreshDerivedAnalyses: Bool = true) {
         hydrateCachedEvidence()
         workouts = DuplicateDetector.markDuplicates(workouts)
         runTypeReconciliation = RunTypeReviewBridge.reconcile(reviews: reviewedRunTypes, workouts: workouts)
         snapshot = AnalyticsEngine.snapshot(for: workouts, healthContext: healthContext)
         personalBestEffortSummary = PersonalBestEffortEngine.summarize(workouts: workouts)
         refreshEvidenceQueueSummary()
-        derivedAnalysisRefreshSummary = refreshDerivedAnalyses()
+        if shouldRefreshDerivedAnalyses {
+            derivedAnalysisRefreshSummary = refreshDerivedAnalyses()
+        } else {
+            loadPersistedDerivedAnalyses()
+            derivedAnalysisRefreshSummary = .empty
+        }
     }
 
     private func hydrateCachedEvidence() {
@@ -945,6 +950,19 @@ public final class RunningAnalysisStore {
         return DerivedAnalysisRefreshSummary(
             refreshedWorkoutIDs: refreshedWorkoutIDs,
             checkedAt: Date()
+        )
+    }
+
+    private func loadPersistedDerivedAnalyses() {
+        guard let modelContext else {
+            derivedAnalysesByWorkoutID = [:]
+            return
+        }
+        derivedAnalysesByWorkoutID = Dictionary(
+            uniqueKeysWithValues: PersistenceService.fetchDerivedAnalysisSummaries(context: modelContext).compactMap { record in
+                guard let analysis = record.analysis else { return nil }
+                return (record.workoutID, analysis)
+            }
         )
     }
 
