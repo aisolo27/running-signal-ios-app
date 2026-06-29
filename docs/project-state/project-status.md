@@ -8,7 +8,7 @@ RunSignal is a native iPhone SwiftUI app for evidence-grounded completed running
 
 Coaching expansion, backend sync, AI calls, FIT import, HealthFit import/export, and file-based workout ingestion remain out of scope.
 
-The active milestone is `Custom Workout Correctness Lock v1`: keep the nine physically proven normal-detail gates stable, use the workout-style acceptance matrix for future validation/prototype decisions, and defer interval-row analytics until custom workout structure is stable.
+The active milestone is `Custom Workout Correctness Lock v1`: promote generalized evidence-gated custom workout rows for normal detail when WorkoutKit planned rows and complete contiguous HealthKit activity rows agree, while keeping ambiguous or incomplete evidence on explicit fallback paths.
 
 ## First-Read Map
 
@@ -38,9 +38,9 @@ The active milestone is `Custom Workout Correctness Lock v1`: keep the nine phys
 
 ## Current Validation State
 
-Broad production interval behavior remains frozen outside the nine physically proven narrow normal-detail gates. Debug validation models and Parity Lab exports may expose candidate rows, comparison summaries, fallback reasons, pause overlap, active/timer duration, and `Open / Extra` tail diagnostics, but they do not approve production UI by themselves.
+Production custom workout intervals now use resolved candidate rows when the evidence gate passes: WorkoutKit planned rows are present and ordered, HealthKit activity rows are complete/contiguous and map to those rows, pause/resume events are paired and contained within one row, and any post-fixed-row tail is deterministic. The row boundary source is the former Parity Lab candidate path; HealthKit samples enrich those rows with average HR, max HR, average power, and cadence where available.
 
-Normal workout detail currently supports these nine narrow classes:
+Normal workout detail supports these resolved custom-workout row classes when the evidence gate passes:
 
 - Stopped-early single fixed-distance `Work`.
 - Simple fixed-distance `Work > inferred Open / Extra`.
@@ -58,12 +58,12 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 
 Gate A simple fixed-distance `Work > Open / Extra` is promoted only for the exact one-step shape with one complete HealthKit activity row and positive `Open / Extra` tail. It must not broaden into structured/special workouts, paused workouts, recovery rows, repeat rows, or missing-evidence cases.
 
-Gate B remains blocked for broad production promotion and for any new Swift prototype. Row-level FIT label, timing, distance, tail, and fallback evidence is available through `gate-b-row-level-fit-boundary-scorecard-2026-03-to-2026-06.*` and is linked from `gate-b-custom-workout-fit-scorecard-2026-03-to-2026-06.*`, but exact-shape label/tail/fallback rules are still required.
+Gate B broad shape-whitelist work has been replaced by the generalized resolved-row contract. FIT and Apple Fitness screenshots remain offline validation evidence; runtime truth remains WorkoutKit plus read-only HealthKit evidence.
 
 ## Current Next Work
 
-- Keep production interval behavior unchanged outside the nine proven narrow gates.
-- Continue Gate B work by approving or rejecting exact repeat-block, `Open / Extra` tail, warmup/work/cooldown, and fallback rules from the row-level evidence.
+- Keep resolved candidate-row behavior stable across the archived Apple Fitness fixtures and priority workouts.
+- Continue hardening fallback reasons for missing plans, incomplete activity rows, unpaired pauses, cross-row pauses, and stale summary-only evidence.
 - Run `docs/validation/apple-fitness-interval-parity-dataset/score_fit_backed_two_gate_validation.py` after rollup changes.
 - Run `docs/validation/apple-fitness-interval-parity-dataset/score_gate_b_custom_workout_fit.py` after Gate B rollup changes.
 - Use `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-correctness-lock-v1.md` as the detailed acceptance matrix before approving new debug prototypes, normal-detail interval rows, or interval-row analytics.
@@ -73,11 +73,9 @@ Gate B remains blocked for broad production promotion and for any new Swift prot
 
 ## Blocked
 
-- Broad production promotion of `HKWorkoutActivity` boundary rows is not approved.
-- Structured intervals are not approved through Gate A.
-- Warmup/work/cooldown specials are not approved through Gate A.
-- No broad Gate B subclass is approved for production.
-- Ambiguous repeat tails, broad recovery-tail behavior, broad custom-workout promotion, paused warmup/work/cooldown timer outliers, and March 19-style distance drift remain blocked.
+- Missing WorkoutKit plans, missing/non-contiguous/incomplete HealthKit activity rows, unpaired or cross-row pause streams, stale summary-only evidence, and partial repeat context remain blocked from custom interval rows.
+- HealthKit segment markers remain raw/debug-only and must not be treated as Apple Fitness row truth.
+- March 19-style material distance drift remains blocked until renewed evidence resolves the drift.
 - Duplicate, no-plan, same-day extra, drift/guard-unknown, stale summary-only, or missing-detail workouts remain excluded from production approval scoring.
 - Interval-row analytics remain blocked until the relevant workout-style rows are supported with evidence or intentionally blocked with stable fallback behavior.
 
@@ -95,3 +93,12 @@ Gate B remains blocked for broad production promotion and for any new Swift prot
 - Health Context follow-up: in-app Today/Data verification cards and neutral physical-iPhone check wording are implemented. Remaining proof is to verify VO2 Max and Resting Heart Rate on the physical iPhone after granting Apple Health read access.
 - Best Efforts follow-up: visible official segment bests use `PersonalBestEffortEngine` exact distance-window records. Summary-only whole-run estimates must remain excluded. The likely blocker for older benchmark PRs is detailed HealthKit distance evidence coverage.
 - Refresh architecture follow-up: monthly evidence refresh is transactional and persists month-scoped job/item checkpoints. Next proof is a physical-iPhone check for activation/scroll responsiveness, thermal behavior, and archived diagnostics/logs.
+## 2026-06-28 Interval UI Note
+
+- Paused reconstructed interval rows now expose elapsed row-window duration, paired pause overlap, active/timer duration, display basis, and matching pace basis so Priority-style review can compare normal detail, Raw Debug reconstructed intervals, Parity Lab candidate rows, and Apple Fitness screenshots without hidden duration-basis mismatches.
+
+## 2026-06-28 Resolved Custom Workout Rows
+
+- Normal detail now resolves custom workout interval rows from complete contiguous HealthKit activity boundaries mapped to expanded WorkoutKit planned steps. The primary row duration uses active/timer time when paired pause overlap exists; RunSignal also exposes pause and elapsed row-window duration visibly.
+- Resolved rows aggregate average HR, max HR, average running power, and cadence from HealthKit samples over the resolved row window.
+- Parity Lab candidate rows remain visible as evidence/debug inspection, but they are no longer categorically separate from production: they are the boundary source when evidence gates pass.

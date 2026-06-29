@@ -188,3 +188,27 @@ Archive candidates after explicit approval:
 ## One-Line Rule
 
 If a future task cannot say which ledger row it moves and which promotion rung it satisfies, it is not ready for Swift changes.
+
+
+## 2026-06-28 Generalized Resolved Row Contract
+
+Status: `Proven` for normal detail when the evidence gate passes.
+
+Resolved custom workout rows are no longer limited to a fixed shape whitelist. A custom running workout may show interval rows in normal detail when all of these are true:
+
+- WorkoutKit planned rows are available and expanded in order.
+- HealthKit activity rows are complete, contiguous, and map one-to-one to planned rows.
+- Partial repeat context is rejected; repeat evidence must include the full mapped expanded context.
+- Pause/resume streams are paired and every pause window is contained in exactly one resolved row.
+- Open / Extra tails are inferred only from the deterministic workout tail after mapped planned rows.
+- Missing plans, missing activity rows, non-contiguous rows, unpaired pauses, cross-row pauses, stale summary-only evidence, and material distance drift remain fallback/blocked paths.
+
+Boundary source: complete HealthKit activity rows mapped to WorkoutKit planned rows, matching the Parity Lab candidate-row formula validated against archived Apple Fitness screenshots/manual rows.
+
+Display semantics:
+
+- Primary row duration uses active/timer duration when pause overlap exists.
+- Pause overlap and elapsed row-window duration are shown as RunSignal-only detail.
+- Average HR, max HR, average running power, and cadence are aggregated from HealthKit samples over each resolved row window.
+
+Regression fixture families: Apr 22, Apr 29, May 27 paused repeat blocks; May 1 recovery/tail; May 13 paused repeat; Jun 25 and Jun 26 repeat-tail controls; Jun 28 priority 1-3.

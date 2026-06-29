@@ -1615,7 +1615,7 @@ struct SplitsAndEventsPanel: View {
                 }
             }
 
-            SectionHeader("Apple Fitness Intervals")
+            SectionHeader("Workout Intervals")
             if let supportedIntervals {
                 VStack(spacing: 8) {
                     ForEach(supportedIntervals.intervals, id: \.index) { interval in
@@ -1624,7 +1624,7 @@ struct SplitsAndEventsPanel: View {
                 }
             } else {
                 NoticeCard(
-                    title: segments.eventSummary.hasEvents ? "Not comparable yet" : "Unavailable",
+                    title: segments.eventSummary.hasEvents ? "Needs row evidence" : "Unavailable",
                     message: intervalMessage
                 )
             }
@@ -1642,9 +1642,9 @@ struct SplitsAndEventsPanel: View {
     private var intervalMessage: String {
         let baseMessage: String
         if !segments.eventSummary.hasEvents {
-            baseMessage = "HealthKit did not return workout events for this run. RunSignal cannot show Apple Fitness-style Warmup, Work, Recovery, Cooldown, or Open rows yet."
+            baseMessage = "HealthKit did not return enough public workout evidence for custom interval rows. Whole-run stats and splits remain safe to review."
         } else {
-            baseMessage = "HealthKit returned \(segments.eventSummary.healthKitSummary), but not the full Apple Fitness interval table with distance, time, pace, and heart rate. RunSignal hides those raw marker durations here because they are not the same as Apple Fitness Intervals. Use Raw HealthKit Debug if you need to inspect the raw events."
+            baseMessage = "HealthKit returned \(segments.eventSummary.healthKitSummary), but RunSignal needs complete WorkoutKit planned rows plus contiguous HealthKit activity rows before showing custom workout intervals here. Use Raw HealthKit Debug if you need to inspect the raw events."
         }
 
         guard let evidence = workout.evidence else { return baseMessage }
@@ -1682,10 +1682,15 @@ private struct IntervalRowView: View {
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
+            if let pausedTimingItems = IntervalRowTimingText.pausedTimingItems(for: interval) {
+                MetricGrid(items: pausedTimingItems)
+            }
             MetricGrid(items: [
-                MetricItem(title: "Pace", value: RunFormatters.pace(interval.actualPaceSecondsPerKm), detail: "Derived"),
+                MetricItem(title: "Pace", value: RunFormatters.pace(IntervalRowTimingText.displayPaceSecondsPerKm(for: interval)), detail: IntervalRowTimingText.displayPaceDetail(for: interval)),
                 MetricItem(title: "Avg HR", value: RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"), detail: "Window"),
-                MetricItem(title: "Power", value: RunFormatters.number(interval.averagePower, suffix: " W"), detail: "Avg")
+                MetricItem(title: "Max HR", value: RunFormatters.number(interval.maxHeartRateBpm, suffix: " bpm"), detail: "Window"),
+                MetricItem(title: "Power", value: RunFormatters.number(interval.averagePower, suffix: " W"), detail: "Avg"),
+                MetricItem(title: "Cadence", value: RunFormatters.number(interval.averageCadence, suffix: " spm"), detail: "Avg")
             ])
         }
         .padding(10)
@@ -1695,6 +1700,31 @@ private struct IntervalRowView: View {
 }
 
 enum IntervalRowTimingText {
+    static func displayPaceDetail(for interval: ReconstructedWorkoutInterval) -> String {
+        interval.durationDisplayRule == .activeTimer ? "Active timer" : "Elapsed window"
+    }
+
+    static func displayPaceSecondsPerKm(for interval: ReconstructedWorkoutInterval) -> Double? {
+        guard interval.durationDisplayRule == .activeTimer,
+              let distanceMeters = interval.actualDistanceMeters,
+              distanceMeters > 0
+        else {
+            return interval.actualPaceSecondsPerKm
+        }
+
+        return interval.activeTimerDurationSeconds / (distanceMeters / 1_000)
+    }
+
+    static func pausedTimingItems(for interval: ReconstructedWorkoutInterval) -> [MetricItem]? {
+        guard let pauseOverlap = interval.pauseOverlapSeconds, pauseOverlap > 0 else { return nil }
+        return [
+            MetricItem(title: "Elapsed", value: RunFormatters.duration(interval.elapsedRowWindowDurationSeconds), detail: "Row window"),
+            MetricItem(title: "Pause", value: RunFormatters.duration(pauseOverlap), detail: "Paired overlap"),
+            MetricItem(title: "Active", value: RunFormatters.duration(interval.activeTimerDurationSeconds), detail: "Timer duration"),
+            MetricItem(title: "Display", value: RunFormatters.duration(interval.displayDurationSeconds), detail: interval.durationDisplayRule == .activeTimer ? "Active timer" : "Elapsed window")
+        ]
+    }
+
     static func pausedTimingDetail(for interval: ReconstructedWorkoutInterval) -> String? {
         guard let pauseOverlap = interval.pauseOverlapSeconds, pauseOverlap > 0 else { return nil }
         return "Active \(RunFormatters.duration(interval.activeTimerDurationSeconds)) · elapsed \(RunFormatters.duration(interval.elapsedRowWindowDurationSeconds)) · paused \(RunFormatters.duration(pauseOverlap))"
@@ -1944,6 +1974,9 @@ struct RawHealthKitWorkoutDebugView: View {
 
     private var reconstructedIntervals: WorkoutIntervalReconstructionResult? {
         guard let evidence = currentWorkout.evidence else { return nil }
+        if let supportedIntervals = CustomWorkoutNormalDetailGate.supportedIntervals(workout: currentWorkout, evidence: evidence) {
+            return supportedIntervals
+        }
         return WorkoutIntervalReconstructionEngine.reconstruct(workout: currentWorkout, evidence: evidence)
     }
 
@@ -2065,11 +2098,19 @@ struct RawHealthKitWorkoutDebugView: View {
                             }
                         }
 
+                        if let pausedTimingItems = IntervalRowTimingText.pausedTimingItems(for: interval) {
+                            MetricGrid(items: pausedTimingItems)
+                        }
+                        if let parityTimingItems = parityTimingItems(for: interval) {
+                            MetricGrid(items: parityTimingItems)
+                        }
+
                         MetricGrid(items: [
-                            MetricItem(title: "Pace", value: RunFormatters.pace(interval.actualPaceSecondsPerKm), detail: "Derived"),
+                            MetricItem(title: "Pace", value: RunFormatters.pace(IntervalRowTimingText.displayPaceSecondsPerKm(for: interval)), detail: IntervalRowTimingText.displayPaceDetail(for: interval)),
                             MetricItem(title: "Avg HR", value: RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"), detail: "Window"),
                             MetricItem(title: "Max HR", value: RunFormatters.number(interval.maxHeartRateBpm, suffix: " bpm"), detail: "Window"),
-                            MetricItem(title: "Power", value: RunFormatters.number(interval.averagePower, suffix: " W"), detail: "Avg")
+                            MetricItem(title: "Power", value: RunFormatters.number(interval.averagePower, suffix: " W"), detail: "Avg"),
+                            MetricItem(title: "Cadence", value: RunFormatters.number(interval.averageCadence, suffix: " spm"), detail: "Avg")
                         ])
 
                         Text("\(interval.confidence.label) · \(interval.sourceNote)")
@@ -2097,13 +2138,28 @@ struct RawHealthKitWorkoutDebugView: View {
         }
     }
 
+    private func parityTimingItems(for interval: ReconstructedWorkoutInterval) -> [MetricItem]? {
+        guard (interval.pauseOverlapSeconds ?? 0) <= 0,
+              let row = parityLabCandidateRowsResult.rows.first(where: { $0.index == interval.index }),
+              row.pauseOverlapSeconds > 0 else {
+            return nil
+        }
+
+        return [
+            MetricItem(title: "Elapsed", value: RunFormatters.duration(row.elapsedDurationSeconds), detail: "Parity row"),
+            MetricItem(title: "Pause", value: RunFormatters.duration(row.pauseOverlapSeconds), detail: "Paired overlap"),
+            MetricItem(title: "Active", value: RunFormatters.duration(row.activeDurationSeconds), detail: row.durationRule),
+            MetricItem(title: "Distance", value: RunFormatters.distance(row.distanceMeters), detail: "Activity row")
+        ]
+    }
+
     @ViewBuilder
     private var parityLabCandidateRowsView: some View {
         let result = parityLabCandidateRowsResult
             VStack(alignment: .leading, spacing: 10) {
                 NoticeCard(
-                    title: "Debug-only",
-                    message: "Candidate rows are for Parity Lab inspection only. They do not approve or replace normal workout detail intervals."
+                    title: "Candidate boundary rows",
+                    message: "These rows show the HealthKit activity-boundary source used by resolved custom workout intervals when evidence gates pass."
                 )
 
             if let unavailableReason = result.unavailableReason {
@@ -2116,7 +2172,7 @@ struct RawHealthKitWorkoutDebugView: View {
                     MetricItem(title: "Open tails", value: "\(result.rows.filter(\.isOpenTail).count)", detail: "Inferred"),
                     MetricItem(title: "Pauses", value: "\(result.pairedPauseCount)", detail: RunFormatters.duration(result.totalPairedPauseSeconds)),
                     MetricItem(title: "Scope", value: "Debug", detail: "No production change"),
-                    MetricItem(title: "Parity scope", value: "Debug only", detail: "Normal UI unchanged")
+                    MetricItem(title: "Parity scope", value: "Evidence gated", detail: "Normal UI when resolved")
                 ])
 
                 ForEach(result.rows) { row in

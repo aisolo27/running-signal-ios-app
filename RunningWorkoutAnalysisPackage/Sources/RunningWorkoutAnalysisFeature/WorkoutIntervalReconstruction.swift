@@ -934,8 +934,10 @@ public enum CustomWorkoutNormalDetailGate {
         workout: CanonicalWorkout,
         evidence: WorkoutEvidence
     ) -> WorkoutIntervalReconstructionResult? {
+        CustomWorkoutResolvedIntervalRows.resolve(workout: workout, evidence: evidence)
+        ??
         supportedNarrowSingleFixedDistanceWorkStoppedEarly(workout: workout, evidence: evidence)
-            ?? supportedNarrowSimpleFixedDistanceWorkOpenTail(workout: workout, evidence: evidence)
+        ?? supportedNarrowSimpleFixedDistanceWorkOpenTail(workout: workout, evidence: evidence)
             ?? supportedNarrowWarmupWorkOpenCooldown(workout: workout, evidence: evidence)
             ?? supportedNarrowWarmupWorkFixedCooldownOpenTail(workout: workout, evidence: evidence)
             ?? supportedNarrowRecoveryContainingFixedCooldownOpenTail(workout: workout, evidence: evidence)
