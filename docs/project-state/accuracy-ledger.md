@@ -105,6 +105,7 @@ Concrete bar:
 | --- | --- | --- | --- | --- |
 | Plain open Watch run | `Whole-run only` | Show normal workout detail, splits, route, and whole-run stats. Do not invent custom interval rows. | Plain open-run controls have no WorkoutKit planned steps; FIT may contain split laps but not custom plan rows. | Custom Warmup/Work/Recovery/Cooldown rows |
 | Stopped-early single fixed-distance `Work` | `Proven` narrow, `rare-control` | Show one partial `Work` row only when one planned fixed-distance Work step maps to one complete partial HealthKit activity row. | June 14 stopped-early control with matching FIT one-lap/one-step evidence. | Completed Work/Open, repeat, paused, tail, or analytics behavior |
+| Stopped-early multi-step custom workout prefix | `Proven` narrow | Show only the complete contiguous HealthKit activity rows that map to the completed WorkoutKit planned prefix. Do not invent uncompleted planned rows or an `Open / Extra` tail. | Prove-it style early-stop regression and paused-repeat prefix guard. | Non-contiguous rows, rows exceeding planned count, unpaired/cross-row pauses, non-prefix partial context |
 | Simple fixed-distance `Work > Open / Extra` | `Proven` narrow | Show `Work 1` plus inferred `Open / Extra` only for exactly one fixed-distance Work step, one complete activity row, and positive tail. | Gate A March-June FIT support plus physical-iPhone June 12 post-promotion proof. | Structured/special workouts, paused workouts, recovery rows, repeat rows, missing evidence, broad `HKWorkoutActivity` promotion |
 | `Warmup(2 km) > one Work step > Cooldown(Open)` | `Proven` narrow | Show Warmup, Work, and final Cooldown rows when planned rows map one-to-one to complete contiguous HealthKit activity rows. | Narrow normal-detail gate and supported row-level examples such as March 5 and April 24. | Broad warmup/work/cooldown promotion or paused timer outliers |
 | `Warmup(2 km) > one Work step > fixed Cooldown > Open / Extra` | `Proven` narrow | Show planned rows plus final inferred `Open / Extra` only for the clean fixed-cooldown tail subclass. | Current narrow normal-detail gate and fixed-cooldown tail proof. | Recovery-containing tails, repeat tails, or ambiguous tails |
@@ -200,10 +201,10 @@ Resolved custom workout rows are no longer limited to a fixed shape whitelist. A
 - HealthKit activity rows are complete, contiguous, and map one-to-one to planned rows.
 - Partial repeat context is rejected; repeat evidence must include the full mapped expanded context.
 - Pause/resume streams are paired and every pause window is contained in exactly one resolved row.
-- Open / Extra tails are inferred only from the deterministic workout tail after mapped planned rows.
-- Missing plans, missing activity rows, non-contiguous rows, unpaired pauses, cross-row pauses, stale summary-only evidence, and material distance drift remain fallback/blocked paths.
+- Open / Extra tails are inferred only from the deterministic workout tail after all mapped planned rows are complete; stopped-early prefixes suppress Open / Extra tails.
+- Missing plans, missing activity rows, non-contiguous rows, rows exceeding planned row count, unpaired pauses, cross-row pauses, stale summary-only evidence, non-prefix partial context, and material distance drift remain fallback/blocked paths.
 
-Boundary source: complete HealthKit activity rows mapped to WorkoutKit planned rows, matching the Parity Lab candidate-row formula validated against archived Apple Fitness screenshots/manual rows.
+Boundary source: complete HealthKit activity rows mapped to WorkoutKit planned rows, or to the completed planned prefix for stopped-early workouts, matching the Parity Lab candidate-row formula validated against archived Apple Fitness screenshots/manual rows.
 
 Display semantics:
 
@@ -211,4 +212,4 @@ Display semantics:
 - Pause overlap and elapsed row-window duration are shown as RunSignal-only detail.
 - Average HR, max HR, average running power, and cadence are aggregated from HealthKit samples over each resolved row window.
 
-Regression fixture families: Apr 22, Apr 29, May 27 paused repeat blocks; May 1 recovery/tail; May 13 paused repeat; Jun 25 and Jun 26 repeat-tail controls; Jun 28 priority 1-3.
+Regression fixture families: Apr 22, Apr 29, May 27 paused repeat blocks; May 1 recovery/tail; May 13 paused repeat; Jun 25 and Jun 26 repeat-tail controls; Jun 28 priority 1-3; stopped-early multi-step prefix controls.

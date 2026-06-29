@@ -131,3 +131,34 @@ Scope: reviewed 20 Codex session logs from June 27 whose `cwd` exactly matched t
 
 - Added this June 27 section to `docs/project-state/daily-learning-review.md`.
 - Did not edit `docs/bug-log.md`, `docs/project-state/current-state.md`, `docs/project-state/next-work.md`, `AGENTS.md`, or `docs/project-state/documentation-index.md` in this review because those routing-critical docs already had uncommitted June 27 edits. The daily review records the durable lessons without overwriting unrelated work.
+
+## 2026-06-28
+
+Scope: reviewed 16 Codex session logs from June 28 whose `session_meta.payload.cwd` or `turn_context.cwd` exactly matched this RunSignal repo. Treated this as a docs-only learning review: no Xcode builds, device installs, HealthKit queries, provider mutations, commits, pushes, or broad repo scans.
+
+### Completed Work
+
+- Landed resumable HealthKit refresh in `ab3d97b`: month-scoped job/item checkpoints, resume/retry UI, diagnostics export fields, interrupted-relaunch proof text, and package tests for the new refresh flow.
+- Landed foreground HealthKit sync performance fixes in `31bb7a5`: app-active sync remains lightweight, bounded, and anchored instead of becoming an unbounded first-history query or full recompute path.
+- Landed paused repeat-tail normal-detail support in `5b5ce0e` with physical-iPhone Priority proof fixtures for the narrow fixed-cooldown `Open / Extra` class.
+- Consolidated `docs/project-state/current-state.md` and `docs/project-state/next-work.md` into `docs/project-state/project-status.md` in `3fa8e75`, then updated routing docs to point at the single project-status file.
+- Landed resolved custom-workout interval rows in `bd645f1`: normal detail can use generalized evidence-gated resolved rows while Parity Lab/debug views remain available for inspection.
+- Ran multiple read-only architecture/HealthKit/cache audits around thermal risk, background behavior, and foreground return behavior; consensus was that RunSignal has local cache, anchored incremental sync, resumable foreground refresh, prioritization, checkpointing, and derived recompute, but not a proven true iOS background-processing pipeline.
+
+### Pending Work
+
+- Run the refresh interruption and activation/scroll/thermal proof on the physical iPhone before promoting observer delivery, background tasks, or full lifecycle behavior.
+- Keep automatic foreground/open work limited to cheap anchored deltas and paused-job state repair; keep monthly evidence refresh, route/evidence backfill, parity re-enrichment, stale-derived recompute, failed-item retry, and debug/proof export behind explicit user-visible controls.
+- Finish or schedule the PR-candidate historical evidence backfill so older benchmark Best Efforts can move from summary-only gaps to exact HealthKit distance-window evidence.
+- Future background work should start as a separate, cancellable, checkpointed worker only after the foreground resumable path has physical proof.
+
+### Mistakes, Fixes, And Friction
+
+- Several prompts and prior daily-review wording still referenced the deleted `current-state.md`/`next-work.md` split. The current routing file is `docs/project-state/project-status.md`; future automations should start there unless this repo reintroduces split state docs.
+- The repeated performance lesson is that app launch/return must not do broad HealthKit history pulls, route loading, evidence normalization, monthly refresh, derived cache maintenance, or whole-store recompute by accident.
+- Read-only audit output can be useful but noisy when parent/subagent sessions and copied repo paths are mixed together. Exact `session_meta.payload.cwd`/`turn_context.cwd` filtering remains the right first pass.
+
+### Docs Updated By This Review
+
+- Added this June 28 section to `docs/project-state/daily-learning-review.md`.
+- Did not edit `docs/bug-log.md`, `docs/project-state/project-status.md`, `AGENTS.md`, or `docs/project-state/documentation-index.md` because the durable June 28 foreground-sync, refresh, interval-row, and routing lessons were already captured there by the June 28 implementation/doc commits.

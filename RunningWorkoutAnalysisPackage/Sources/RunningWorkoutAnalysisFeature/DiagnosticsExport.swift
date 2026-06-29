@@ -1086,7 +1086,7 @@ public enum DiagnosticsExport {
             )
         }
 
-        guard activities.count == plannedSteps.count else {
+        guard activities.count <= plannedSteps.count else {
             return RawDebugActivityBoundaryCandidate(
                 summary: RawDebugActivityBoundaryCandidateSummary(
                     mappingStatus: "activity/planned-step count mismatch",
@@ -1139,7 +1139,8 @@ public enum DiagnosticsExport {
             }
         }
 
-        let plannedRows = zip(plannedSteps, activities).enumerated().map { offset, pair -> RawDebugActivityBoundaryCandidateInterval in
+        let resolvedPlannedSteps = Array(plannedSteps.prefix(activities.count))
+        let plannedRows = zip(resolvedPlannedSteps, activities).enumerated().map { offset, pair -> RawDebugActivityBoundaryCandidateInterval in
             let (step, activity) = pair
             let distance = activityDistanceMeters(activity)
             let duration = activity.endDate?.timeIntervalSince(activity.startDate) ?? activity.durationSeconds
@@ -1170,7 +1171,8 @@ public enum DiagnosticsExport {
         let scoreablePlannedRows = plannedRows.allSatisfy { $0.notScoreableReason == nil }
         let totalActivityDistance = plannedRows.compactMap(\.distanceMeters).reduce(0, +)
         var rows = plannedRows
-        if let lastActivity = activities.last,
+        if activities.count == plannedSteps.count,
+           let lastActivity = activities.last,
            let lastActivityEnd = lastActivity.endDate {
             let remainingSeconds = workout.endDate.timeIntervalSince(lastActivityEnd)
             let remainingMeters = workout.distanceMeters.map { max(0, $0 - totalActivityDistance) }
@@ -1201,18 +1203,21 @@ public enum DiagnosticsExport {
             }
         }
 
+        let isCompletedPrefix = activities.count < plannedSteps.count
         let summaryCaveats = baseCaveats + [
             "Activities are generic HealthKit activity windows and labels are mapped from WorkoutKit planned step order.",
             "Missing or ambiguous activity rows must not replace current reconstruction."
-        ]
+        ] + (isCompletedPrefix ? [
+            "Workout ended before all planned rows completed; only completed HealthKit activity rows are mapped."
+        ] : [])
         return RawDebugActivityBoundaryCandidate(
             summary: RawDebugActivityBoundaryCandidateSummary(
-                mappingStatus: "mappedByPlannedStepOrder",
+                mappingStatus: isCompletedPrefix ? "mappedCompletedPrefixByPlannedStepOrder" : "mappedByPlannedStepOrder",
                 activityCount: activities.count,
                 plannedStepCount: plannedSteps.count,
                 isScoreable: scoreablePlannedRows,
                 notScoreableReason: scoreablePlannedRows ? nil : "One or more mapped activity rows lack required distance/time evidence.",
-                candidateConfidence: scoreablePlannedRows ? "activity boundary direct" : "activity mapping ambiguous",
+                candidateConfidence: scoreablePlannedRows ? (isCompletedPrefix ? "activity boundary completed prefix" : "activity boundary direct") : "activity mapping ambiguous",
                 caveats: summaryCaveats,
                 productionUIWarning: productionWarning
             ),

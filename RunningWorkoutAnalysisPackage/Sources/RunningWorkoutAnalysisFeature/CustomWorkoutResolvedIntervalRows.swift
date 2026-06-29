@@ -21,7 +21,7 @@ public enum CustomWorkoutResolvedIntervalRows {
             return nil
         }
         guard !activities.isEmpty,
-              activities.count == plannedSteps.count,
+              activities.count <= plannedSteps.count,
               activitiesAreCompleteAndContiguous(activities) else {
             return nil
         }
@@ -31,7 +31,8 @@ public enum CustomWorkoutResolvedIntervalRows {
             return nil
         }
 
-        var rows = zip(plannedSteps, activities).map { step, activity in
+        let resolvedPlannedSteps = Array(plannedSteps.prefix(activities.count))
+        var rows = zip(resolvedPlannedSteps, activities).map { step, activity in
             resolvedRow(
                 index: step.index,
                 label: step.label,
@@ -49,7 +50,9 @@ public enum CustomWorkoutResolvedIntervalRows {
             )
         }
 
-        appendOpenTailIfNeeded(to: &rows, workout: workout, activities: activities, pauses: pauses, evidence: evidence)
+        if activities.count == plannedSteps.count {
+            appendOpenTailIfNeeded(to: &rows, workout: workout, activities: activities, pauses: pauses, evidence: evidence)
+        }
 
         guard rows.allSatisfy({ $0.actualEndDate > $0.actualStartDate }) else {
             return nil
@@ -62,7 +65,9 @@ public enum CustomWorkoutResolvedIntervalRows {
             notes: [
                 "Resolved custom workout rows use HealthKit activity boundaries for row windows.",
                 "Displayed row duration uses active timer time when paired pause overlap is present."
-            ]
+            ] + (activities.count < plannedSteps.count ? [
+                "Workout ended before all planned rows completed; only completed HealthKit activity rows are shown."
+            ] : [])
         )
     }
 

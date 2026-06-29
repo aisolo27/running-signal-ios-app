@@ -3689,7 +3689,7 @@ import Testing
     #expect(IntervalRowTimingText.pausedTimingDetail(for: warmup) == nil)
 }
 
-@Test func normalDetailGateBlocksPausedRepeatBlockCountMismatch() {
+@Test func normalDetailGateShowsCompletedPrefixForStoppedEarlyPausedRepeatBlock() throws {
     let fixture = pausedRepeatOpenCooldownFixture(
         id: "normal-detail-paused-repeat-count-mismatch",
         activityWindows: [
@@ -3701,8 +3701,12 @@ import Testing
         ]
     )
 
-    #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: fixture.workout, evidence: fixture.evidence) == nil)
-    #expect(CustomWorkoutNormalDetailGate.blockedReasons(workout: fixture.workout, evidence: fixture.evidence).contains { $0.contains("Planned row count") })
+    let result = try #require(CustomWorkoutNormalDetailGate.supportedIntervals(workout: fixture.workout, evidence: fixture.evidence))
+
+    #expect(result.intervals.map(\.label) == ["Warmup", "Work 1", "Recovery 1", "Work 2", "Recovery 2"])
+    #expect(result.intervals.map(\.label).contains("Work 3") == false)
+    #expect(result.intervals.map(\.label).contains("Open / Extra") == false)
+    #expect(result.notes.contains("Workout ended before all planned rows completed; only completed HealthKit activity rows are shown."))
 }
 
 @Test func normalDetailGateBlocksPausedRepeatBlockNonContiguousRows() {
@@ -4131,6 +4135,46 @@ import Testing
     #expect(abs(result.intervals[0].actualDurationSeconds - 733.8) < 0.001)
     #expect(result.intervals[0].actualDistanceMeters == 3_026)
     #expect(result.intervals.map(\.label).contains("Open / Extra") == false)
+    assertElapsedTimingSemantics(result.intervals)
+}
+
+@Test func stoppedEarlyMultiStepWorkoutUsesCompletedActivityPrefix() throws {
+    let start = Date(timeIntervalSince1970: 10_692)
+    let workout = testWorkout(id: "stopped-early-multi-step", start: start, distanceMeters: 5_300, durationSeconds: 1_920)
+    let plannedSteps = [
+        PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km"),
+        PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km"),
+        PlannedWorkoutStep(index: 3, label: "Recovery 1", stepType: .recovery, plannedGoalType: .time, plannedGoalValue: 120, plannedGoalDisplayText: "120 s"),
+        PlannedWorkoutStep(index: 4, label: "Work 2", stepType: .work, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km"),
+        PlannedWorkoutStep(index: 5, label: "Recovery 2", stepType: .recovery, plannedGoalType: .time, plannedGoalValue: 120, plannedGoalDisplayText: "120 s"),
+        PlannedWorkoutStep(index: 6, label: "Work 3", stepType: .work, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km"),
+        PlannedWorkoutStep(index: 7, label: "Recovery 3", stepType: .recovery, plannedGoalType: .time, plannedGoalValue: 120, plannedGoalDisplayText: "120 s"),
+        PlannedWorkoutStep(index: 8, label: "Work 4", stepType: .work, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km"),
+        PlannedWorkoutStep(index: 9, label: "Recovery 4", stepType: .recovery, plannedGoalType: .time, plannedGoalValue: 120, plannedGoalDisplayText: "120 s"),
+        PlannedWorkoutStep(index: 10, label: "Work 5", stepType: .work, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km"),
+        PlannedWorkoutStep(index: 11, label: "Recovery 5", stepType: .recovery, plannedGoalType: .time, plannedGoalValue: 120, plannedGoalDisplayText: "120 s")
+    ]
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: plannedSteps,
+        activityWindows: [
+            (start: 0, end: 780, distance: 2_000),
+            (start: 780, end: 1_020, distance: 1_000),
+            (start: 1_020, end: 1_140, distance: 100),
+            (start: 1_140, end: 1_380, distance: 1_000),
+            (start: 1_380, end: 1_500, distance: 100),
+            (start: 1_500, end: 1_740, distance: 1_000),
+            (start: 1_740, end: 1_860, distance: 100)
+        ],
+        distancePoints: [(780, 2_000), (1_020, 3_000), (1_140, 3_100), (1_380, 4_100), (1_500, 4_200), (1_740, 5_200), (1_860, 5_300)]
+    )
+
+    let result = try #require(CustomWorkoutResolvedIntervalRows.resolve(workout: workout, evidence: evidence))
+
+    #expect(result.intervals.map(\.label) == ["Warmup", "Work 1", "Recovery 1", "Work 2", "Recovery 2", "Work 3", "Recovery 3"])
+    #expect(result.intervals.map(\.label).contains("Work 4") == false)
+    #expect(result.intervals.map(\.label).contains("Open / Extra") == false)
+    #expect(result.notes.contains("Workout ended before all planned rows completed; only completed HealthKit activity rows are shown."))
     assertElapsedTimingSemantics(result.intervals)
 }
 

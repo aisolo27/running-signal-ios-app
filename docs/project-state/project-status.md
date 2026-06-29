@@ -1,6 +1,6 @@
 # RunSignal Project Status
 
-Last updated: 2026-06-28
+Last updated: 2026-06-29
 
 ## Product Direction
 
@@ -38,11 +38,12 @@ The active milestone is `Custom Workout Correctness Lock v1`: promote generalize
 
 ## Current Validation State
 
-Production custom workout intervals now use resolved candidate rows when the evidence gate passes: WorkoutKit planned rows are present and ordered, HealthKit activity rows are complete/contiguous and map to those rows, pause/resume events are paired and contained within one row, and any post-fixed-row tail is deterministic. The row boundary source is the former Parity Lab candidate path; HealthKit samples enrich those rows with average HR, max HR, average power, and cadence where available.
+Production custom workout intervals now use resolved candidate rows when the evidence gate passes: WorkoutKit planned rows are present and ordered, HealthKit activity rows are complete/contiguous and map to those rows or to a completed prefix for stopped-early workouts, pause/resume events are paired and contained within one row, and any post-fixed-row tail is deterministic. The row boundary source is the former Parity Lab candidate path; HealthKit samples enrich those rows with average HR, max HR, average power, and cadence where available.
 
 Normal workout detail supports these resolved custom-workout row classes when the evidence gate passes:
 
 - Stopped-early single fixed-distance `Work`.
+- Stopped-early multi-step custom workouts when complete contiguous HealthKit activity rows map to the completed WorkoutKit planned prefix; uncompleted planned rows are not invented.
 - Simple fixed-distance `Work > inferred Open / Extra`.
 - `Warmup(2 km) > one Work step > Cooldown(Open)`.
 - `Warmup(2 km) > one Work step > fixed Cooldown > inferred Open / Extra`.
@@ -73,7 +74,7 @@ Gate B broad shape-whitelist work has been replaced by the generalized resolved-
 
 ## Blocked
 
-- Missing WorkoutKit plans, missing/non-contiguous/incomplete HealthKit activity rows, unpaired or cross-row pause streams, stale summary-only evidence, and partial repeat context remain blocked from custom interval rows.
+- Missing WorkoutKit plans, missing/non-contiguous/incomplete HealthKit activity rows, activity rows that exceed planned row count, unpaired or cross-row pause streams, stale summary-only evidence, and non-prefix partial repeat context remain blocked from custom interval rows.
 - HealthKit segment markers remain raw/debug-only and must not be treated as Apple Fitness row truth.
 - March 19-style material distance drift remains blocked until renewed evidence resolves the drift.
 - Duplicate, no-plan, same-day extra, drift/guard-unknown, stale summary-only, or missing-detail workouts remain excluded from production approval scoring.
@@ -102,3 +103,8 @@ Gate B broad shape-whitelist work has been replaced by the generalized resolved-
 - Normal detail now resolves custom workout interval rows from complete contiguous HealthKit activity boundaries mapped to expanded WorkoutKit planned steps. The primary row duration uses active/timer time when paired pause overlap exists; RunSignal also exposes pause and elapsed row-window duration visibly.
 - Resolved rows aggregate average HR, max HR, average running power, and cadence from HealthKit samples over the resolved row window.
 - Parity Lab candidate rows remain visible as evidence/debug inspection, but they are no longer categorically separate from production: they are the boundary source when evidence gates pass.
+
+## 2026-06-29 Stopped-Early Prefix Rows
+
+- Stopped-early custom workouts can now show the completed prefix of planned rows instead of blocking solely because planned row count is greater than HealthKit activity row count.
+- Parity Lab candidate rows and Raw Debug exports use the same completed-prefix mapping and suppress `Open / Extra` tails when planned rows remain uncompleted.

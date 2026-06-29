@@ -2222,7 +2222,7 @@ struct RawHealthKitWorkoutDebugView: View {
         guard !activities.isEmpty else {
             return ParityLabCandidateRowsResult(unavailableReason: "HealthKit workout activity rows are missing for this workout.")
         }
-        guard activities.count == plannedSteps.count else {
+        guard activities.count <= plannedSteps.count else {
             return ParityLabCandidateRowsResult(unavailableReason: "HealthKit activity row count does not match WorkoutKit planned step count.")
         }
         for index in activities.indices {
@@ -2260,8 +2260,9 @@ struct RawHealthKitWorkoutDebugView: View {
         } else {
             .none
         }
+        let resolvedPlannedSteps = Array(plannedSteps.prefix(activities.count))
         let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
-            plannedSteps: plannedSteps,
+            plannedSteps: resolvedPlannedSteps,
             activities: activities,
             workout: currentWorkout,
             simpleWorkOpenRuleApproved: true,
@@ -2272,7 +2273,7 @@ struct RawHealthKitWorkoutDebugView: View {
             pairedPauseCount: pauses.count,
             pauseEvidenceState: pauseEvidenceState
         )
-        var rows = zip(plannedSteps, activities).enumerated().map { offset, pair in
+        var rows = zip(resolvedPlannedSteps, activities).enumerated().map { offset, pair in
             let (step, activity) = pair
             let startOffset = activity.startDate.timeIntervalSince(currentWorkout.startDate)
             let endOffset = activity.endDate?.timeIntervalSince(currentWorkout.startDate)
@@ -2295,7 +2296,8 @@ struct RawHealthKitWorkoutDebugView: View {
         }
 
         let mappedDistance = rows.compactMap(\.distanceMeters).reduce(0, +)
-        if let lastEndDate = activities.last?.endDate {
+        if activities.count == plannedSteps.count,
+           let lastEndDate = activities.last?.endDate {
             let remainingSeconds = currentWorkout.endDate.timeIntervalSince(lastEndDate)
             let remainingMeters = currentWorkout.distanceMeters.map { max(0, $0 - mappedDistance) }
             if remainingSeconds > 0.5 || (remainingMeters ?? 0) > 0.5 {
