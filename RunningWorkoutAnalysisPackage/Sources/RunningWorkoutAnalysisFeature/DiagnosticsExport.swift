@@ -1139,12 +1139,13 @@ public enum DiagnosticsExport {
             }
         }
 
+        let isCompletedPrefix = activities.count < plannedSteps.count
         let resolvedPlannedSteps = Array(plannedSteps.prefix(activities.count))
         let plannedRows = zip(resolvedPlannedSteps, activities).enumerated().map { offset, pair -> RawDebugActivityBoundaryCandidateInterval in
             let (step, activity) = pair
             let distance = activityDistanceMeters(activity)
             let duration = activity.endDate?.timeIntervalSince(activity.startDate) ?? activity.durationSeconds
-            let rowCaveats = baseCaveats + [
+            let rowCaveats = [
                 "Mapped to WorkoutKit planned step order only.",
                 "Uses public HKWorkoutActivity statistics and date windows."
             ]
@@ -1156,7 +1157,7 @@ public enum DiagnosticsExport {
                 plannedGoalValue: step.plannedGoalValue,
                 plannedGoalDisplayText: step.plannedGoalDisplayText,
                 activityIndex: offset + 1,
-                mappingStatus: "mappedByPlannedStepOrder",
+                mappingStatus: isCompletedPrefix ? "mappedCompletedPrefixByPlannedStepOrder" : "mappedByPlannedStepOrder",
                 startOffsetSeconds: activity.startDate.timeIntervalSince(workout.startDate),
                 endOffsetSeconds: activity.endDate?.timeIntervalSince(workout.startDate),
                 durationSeconds: duration,
@@ -1203,7 +1204,6 @@ public enum DiagnosticsExport {
             }
         }
 
-        let isCompletedPrefix = activities.count < plannedSteps.count
         let summaryCaveats = baseCaveats + [
             "Activities are generic HealthKit activity windows and labels are mapped from WorkoutKit planned step order.",
             "Missing or ambiguous activity rows must not replace current reconstruction."
@@ -1266,7 +1266,7 @@ public enum DiagnosticsExport {
                 durationRule: durationRule,
                 isOpenTail: isOpenTail,
                 candidateConfidence: row.candidateConfidence,
-                caveats: baseCaveats + row.caveats,
+                caveats: row.caveats,
                 productionUIWarning: productionWarning
             )
         }
@@ -1346,9 +1346,15 @@ public enum DiagnosticsExport {
         } else {
             .none
         }
+        let comparisonPlannedSteps: [PlannedWorkoutStep]
+        if !activities.isEmpty, activities.count < plannedSteps.count {
+            comparisonPlannedSteps = Array(plannedSteps.prefix(activities.count))
+        } else {
+            comparisonPlannedSteps = plannedSteps
+        }
         return RawDebugCustomWorkoutComparisonSummary(
             comparison: DebugCustomWorkoutComparisonBuilder.comparison(
-                plannedSteps: plannedSteps,
+                plannedSteps: comparisonPlannedSteps,
                 activities: activities,
                 workout: workout,
                 simpleWorkOpenRuleApproved: true,

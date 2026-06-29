@@ -2168,12 +2168,16 @@ struct RawHealthKitWorkoutDebugView: View {
                 MetricGrid(items: [
                     MetricItem(title: "Status", value: result.structuredStatus, detail: "Structured gate"),
                     MetricItem(title: "Fallback", value: result.primaryFallbackReason ?? "None", detail: "Primary reason"),
-                    MetricItem(title: "Rows", value: "\(result.rows.count)", detail: "Candidate"),
+                    MetricItem(title: "Rows", value: "\(result.rows.count)", detail: result.rowCountDetail),
                     MetricItem(title: "Open tails", value: "\(result.rows.filter(\.isOpenTail).count)", detail: "Inferred"),
                     MetricItem(title: "Pauses", value: "\(result.pairedPauseCount)", detail: RunFormatters.duration(result.totalPairedPauseSeconds)),
                     MetricItem(title: "Scope", value: "Debug", detail: "No production change"),
                     MetricItem(title: "Parity scope", value: "Evidence gated", detail: "Normal UI when resolved")
                 ])
+
+                if let stoppedEarlyMessage = result.stoppedEarlyMessage {
+                    NoticeCard(title: "Workout stopped early", message: stoppedEarlyMessage)
+                }
 
                 ForEach(result.rows) { row in
                     VStack(alignment: .leading, spacing: 9) {
@@ -2290,7 +2294,7 @@ struct RawHealthKitWorkoutDebugView: View {
                 activeDurationSeconds: max(0, elapsed - pauseOverlap),
                 distanceMeters: activityDistanceMeters(activity),
                 durationRule: "Active duration",
-                mappingStatus: "Activity row \(offset + 1)",
+                mappingStatus: plannedSteps.count > activities.count ? "Completed planned prefix row \(offset + 1) of \(plannedSteps.count)" : "Activity row \(offset + 1)",
                 isOpenTail: false
             )
         }
@@ -2326,7 +2330,9 @@ struct RawHealthKitWorkoutDebugView: View {
             structuredStatus: comparison.status.normalDetailBlockedReasonLabel,
             fallbackReasons: comparison.fallbackReasons.map(\.normalDetailBlockedReasonLabel),
             pairedPauseCount: pauses.count,
-            totalPairedPauseSeconds: pauses.map(\.durationSeconds).reduce(0, +)
+            totalPairedPauseSeconds: pauses.map(\.durationSeconds).reduce(0, +),
+            plannedRowCount: plannedSteps.count,
+            completedRowCount: activities.count
         )
     }
 
@@ -2384,9 +2390,28 @@ struct RawHealthKitWorkoutDebugView: View {
         var fallbackReasons: [String] = []
         var pairedPauseCount: Int = 0
         var totalPairedPauseSeconds: Double = 0
+        var plannedRowCount: Int = 0
+        var completedRowCount: Int = 0
 
         var primaryFallbackReason: String? {
             fallbackReasons.first
+        }
+
+        var rowCountDetail: String {
+            guard plannedRowCount > 0, completedRowCount > 0 else {
+                return "Candidate"
+            }
+            if completedRowCount < plannedRowCount {
+                return "Completed prefix of \(plannedRowCount)"
+            }
+            return "Candidate"
+        }
+
+        var stoppedEarlyMessage: String? {
+            guard plannedRowCount > 0, completedRowCount > 0, completedRowCount < plannedRowCount else {
+                return nil
+            }
+            return "Showing \(completedRowCount) completed rows from \(plannedRowCount) planned rows."
         }
     }
 

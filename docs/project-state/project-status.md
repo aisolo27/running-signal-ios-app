@@ -40,6 +40,8 @@ The active milestone is `Custom Workout Correctness Lock v1`: promote generalize
 
 Production custom workout intervals now use resolved candidate rows when the evidence gate passes: WorkoutKit planned rows are present and ordered, HealthKit activity rows are complete/contiguous and map to those rows or to a completed prefix for stopped-early workouts, pause/resume events are paired and contained within one row, and any post-fixed-row tail is deterministic. The row boundary source is the former Parity Lab candidate path; HealthKit samples enrich those rows with average HR, max HR, average power, and cadence where available.
 
+Parity Lab/debug exports now label stopped-early rows as completed planned prefixes, show stopped-early row counts once at the section level, keep shared debug/FIT caveats at summary level, and report structured comparison status against the completed prefix instead of the full unfinished plan.
+
 Normal workout detail supports these resolved custom-workout row classes when the evidence gate passes:
 
 - Stopped-early single fixed-distance `Work`.

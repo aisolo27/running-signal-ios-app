@@ -3124,6 +3124,43 @@ import Testing
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence)?.intervals.first { $0.label == "Work 1" }?.durationDisplayRule == .activeTimer)
 }
 
+@Test func parityPacketStoppedEarlyCompletedPrefixComparisonIsSupported() throws {
+    let start = Date(timeIntervalSince1970: 10_655)
+    var workout = testWorkout(id: "stopped-early-prefix", start: start, distanceMeters: 2_400, durationSeconds: 920)
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, plannedGoalType: .time, plannedGoalValue: 120, plannedGoalDisplayText: "2 min"),
+            PlannedWorkoutStep(index: 3, label: "Recovery 1", stepType: .recovery, plannedGoalType: .time, plannedGoalValue: 120, plannedGoalDisplayText: "2 min"),
+            PlannedWorkoutStep(index: 4, label: "Cooldown", stepType: .cooldown, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km")
+        ],
+        activityWindows: [
+            (0, 800, 2_000),
+            (800, 920, 400)
+        ],
+        distancePoints: [(0, 0), (800, 2_000), (920, 2_400)]
+    )
+    workout.evidence = evidence
+
+    let json = DiagnosticsExport.parityPacketJSON(workout: workout, forceReenrichResult: nil, generatedAt: start)
+    let data = try #require(json.data(using: .utf8))
+    let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let comparisonSummary = try #require(object["customWorkoutComparisonSummary"] as? [String: Any])
+    let activitySummary = try #require(object["activityBoundaryCandidateSummary"] as? [String: Any])
+    let candidateRows = try #require(object["activityBoundaryCandidateIntervals"] as? [[String: Any]])
+    let ruleRows = try #require(object["customWorkoutCandidateRuleRows"] as? [[String: Any]])
+
+    #expect(comparisonSummary["status"] as? String == "supported")
+    #expect((comparisonSummary["fallbackReasons"] as? [Any])?.isEmpty == true)
+    #expect(activitySummary["mappingStatus"] as? String == "mappedCompletedPrefixByPlannedStepOrder")
+    #expect(candidateRows.count == 2)
+    #expect(candidateRows.first?["mappingStatus"] as? String == "mappedCompletedPrefixByPlannedStepOrder")
+    #expect((candidateRows.first?["caveats"] as? [String])?.contains("debug-only, not promoted") == false)
+    #expect((ruleRows.first?["caveats"] as? [String])?.contains("debug-only, not promoted") == false)
+    #expect((activitySummary["caveats"] as? [String])?.contains("debug-only, not promoted") == true)
+}
+
 @Test func normalDetailGateBlocksUnpairedPauseEvents() {
     let start = Date(timeIntervalSince1970: 10_655)
     let workout = testWorkout(id: "normal-detail-unpaired-pause", start: start, distanceMeters: 3_000, durationSeconds: 1_200)
