@@ -115,3 +115,4 @@ Gate B broad shape-whitelist work has been replaced by the generalized resolved-
 
 - Raw Debug labels resolved/activity-boundary rows versus legacy plan-derived reconstruction, exports use the same supported-row resolver as the app view, and derived interval analytics publish only resolved custom-workout rows when the gate passes.
 - Regression tests cover the repeated failure mode where row math is correct but a visible pace/duration tile still uses an older plan-derived or raw-marker source.
+- Priority 5 screen-recording follow-up fixed the Raw Debug fallback display so a blocked legacy reconstruction does not mix a plan-derived row header with activity-boundary candidate tiles. When candidate rows are available for a blocked shape, the debug/export surface shows candidate Work, Cooldown, and Open / Extra rows coherently while keeping normal-detail promotion unchanged.

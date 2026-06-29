@@ -134,6 +134,16 @@ public enum DiagnosticsExport {
             DerivedAnalyticsEngine.intervalCandidates(workout: workout, evidence: $0)
         } ?? []
         let plannedSteps = evidence?.workoutPlanAudit?.plannedSteps ?? []
+        let activityCandidate = activityBoundaryCandidate(
+            plannedSteps: plannedSteps,
+            activities: evidence?.activities ?? [],
+            workout: workout
+        )
+        let candidateRuleScore = customWorkoutCandidateRuleScore(
+            activityCandidate: activityCandidate,
+            events: evidence?.events ?? [],
+            workout: workout
+        )
         let payload = rawDebugPayload(
             workout: workout,
             evidence: evidence,
@@ -202,35 +212,19 @@ public enum DiagnosticsExport {
 
         Planned structure source: WorkoutKit when available. Measured stats source: HealthKit activity boundaries when the evidence gate passes; otherwise this section is legacy plan-derived debug reconstruction. Segment markers are not interval analytics rows.
 
-        \(reconstructedIntervalsMarkdown(reconstructedIntervals, workout: workout))
+        \(reconstructedIntervalsMarkdown(reconstructedIntervals, workout: workout, candidateRuleScore: candidateRuleScore))
 
         ## HKWorkoutActivity Boundary Candidate Intervals
 
         Debug-only alternate reconstruction for Parity Lab exports. These rows are not production interval logic and are not shown in the normal workout UI.
 
-        \(activityBoundaryCandidateMarkdown(
-            activityBoundaryCandidate(
-                plannedSteps: plannedSteps,
-                activities: evidence?.activities ?? [],
-                workout: workout
-            )
-        ))
+        \(activityBoundaryCandidateMarkdown(activityCandidate))
 
         ## Custom Workout Candidate Rule Scorer
 
         Debug-only Parity Lab scorer for active-time duration, pause overlap, and Open / Extra tail rows. These rows are not production interval logic, are not shown in the normal workout UI, and do not approve a normal-detail gate.
 
-        \(customWorkoutCandidateRuleMarkdown(
-            customWorkoutCandidateRuleScore(
-                activityCandidate: activityBoundaryCandidate(
-                    plannedSteps: plannedSteps,
-                    activities: evidence?.activities ?? [],
-                    workout: workout
-                ),
-                events: evidence?.events ?? [],
-                workout: workout
-            )
-        ))
+        \(customWorkoutCandidateRuleMarkdown(candidateRuleScore))
 
         ## Custom Workout Structured Comparison
 
@@ -436,10 +430,18 @@ public enum DiagnosticsExport {
 
     private static func reconstructedIntervalsMarkdown(
         _ result: WorkoutIntervalReconstructionResult?,
-        workout: CanonicalWorkout
+        workout: CanonicalWorkout,
+        candidateRuleScore: RawDebugCustomWorkoutCandidateRuleScore? = nil
     ) -> String {
         guard let result, !result.intervals.isEmpty else {
             return "Unavailable. Whole-run stats remain safe to review, but custom interval rows need a supported public WorkoutKit and HealthKit evidence pattern before RunSignal can show them."
+        }
+
+        if result.windowSource != .healthKitActivityBoundaries,
+           let candidateRuleScore,
+           candidateRuleScore.summary.isScoreable,
+           !candidateRuleScore.rows.isEmpty {
+            return candidateResolvedIntervalsMarkdown(candidateRuleScore)
         }
 
         let rows = result.intervals.map { interval in
@@ -475,6 +477,57 @@ public enum DiagnosticsExport {
 
         Notes: \(result.notes.map(markdownCell).joined(separator: " · "))
         """
+    }
+
+    private static func candidateResolvedIntervalsMarkdown(_ score: RawDebugCustomWorkoutCandidateRuleScore) -> String {
+        let rows = score.rows.map { row in
+            let displayDuration = candidateDisplayDurationSeconds(row)
+            let pace = candidatePaceSecondsPerKm(row)
+            return [
+                "\(row.index)",
+                markdownCell(row.label),
+                markdownCell(row.stepType),
+                markdownCell(row.mappingStatus),
+                RunFormatters.distance(row.distanceMeters),
+                row.elapsedDurationSeconds.map(RunFormatters.duration) ?? "Unavailable",
+                optionalSeconds(row.pauseOverlapSeconds),
+                row.activeDurationSeconds.map(RunFormatters.duration) ?? "Unavailable",
+                displayDuration.map(RunFormatters.duration) ?? "Unavailable",
+                markdownCell(row.durationDisplayRule),
+                RunFormatters.pace(pace),
+                row.startOffsetSeconds.map(RunFormatters.duration) ?? "Unavailable",
+                row.endOffsetSeconds.map(RunFormatters.duration) ?? "Unavailable",
+                markdownCell(row.candidateConfidence),
+                markdownCell(row.caveats.joined(separator: "; "))
+            ].joined(separator: " | ")
+        }.map { "| \($0) |" }.joined(separator: "\n")
+
+        return """
+        Candidate/debug activity-boundary rows shown because the normal resolved interval gate remains blocked: \(markdownCell(score.summary.notScoreableReason ?? score.summary.tailStatus)).
+
+        | Row | Label | Step Type | Mapping | Distance | Elapsed | Pause overlap | Active time | Display time | Duration rule | Pace | Start Offset | End Offset | Confidence | Notes |
+        |---:|---|---|---|---:|---:|---:|---:|---:|---|---:|---:|---:|---|---|
+        \(rows)
+
+        Notes: candidate/debug source only; normal-detail interval behavior is unchanged.
+        """
+    }
+
+    private static func candidateDisplayDurationSeconds(_ row: RawDebugCustomWorkoutCandidateRuleRow) -> Double? {
+        if row.pauseOverlapSeconds > 0, !row.isOpenTail {
+            return row.activeDurationSeconds
+        }
+        return row.elapsedDurationSeconds
+    }
+
+    private static func candidatePaceSecondsPerKm(_ row: RawDebugCustomWorkoutCandidateRuleRow) -> Double? {
+        guard let distanceMeters = row.distanceMeters,
+              distanceMeters > 0,
+              let durationSeconds = candidateDisplayDurationSeconds(row),
+              durationSeconds > 0 else {
+            return nil
+        }
+        return durationSeconds / (distanceMeters / 1_000)
     }
 
     private static func activityBoundaryCandidateMarkdown(_ candidate: RawDebugActivityBoundaryCandidate) -> String {

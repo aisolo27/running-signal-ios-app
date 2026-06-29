@@ -5725,6 +5725,128 @@ private struct IsolatedDefaults {
     }
 }
 
+@Test func rawDebugExportShowsCandidateCooldownAndOpenTailWhenLegacyReconstructionWouldCollapseRows() throws {
+    let start = Date(timeIntervalSince1970: 1_798_000_000)
+    var workout = testWorkout(
+        id: "priority-5-debug-candidate-rows",
+        start: start,
+        distanceMeters: 3_906.5,
+        durationSeconds: 1_687.7
+    )
+    workout.evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        events: [
+            WorkoutEvidenceEvent(
+                startDate: start.addingTimeInterval(685.0),
+                endDate: start.addingTimeInterval(685.0),
+                type: "HKWorkoutEventType(rawValue: 1)"
+            ),
+            WorkoutEvidenceEvent(
+                startDate: start.addingTimeInterval(793.2),
+                endDate: start.addingTimeInterval(793.2),
+                type: "HKWorkoutEventType(rawValue: 2)"
+            )
+        ],
+        activities: [
+            WorkoutEvidenceActivity(
+                id: "warmup-activity",
+                activityType: "HKWorkoutActivityTypeRunning",
+                startDate: start,
+                endDate: start.addingTimeInterval(386.1),
+                durationSeconds: 386.1,
+                statistics: [
+                    WorkoutEvidenceActivityStatistic(
+                        quantityType: "HKQuantityTypeIdentifierDistanceWalkingRunning",
+                        unit: "m",
+                        startDate: start,
+                        endDate: start.addingTimeInterval(386.1),
+                        sourceCount: 1,
+                        sum: 1_007.5,
+                        durationSeconds: 386.1
+                    )
+                ]
+            ),
+            WorkoutEvidenceActivity(
+                id: "work-activity",
+                activityType: "HKWorkoutActivityTypeRunning",
+                startDate: start.addingTimeInterval(386.1),
+                endDate: start.addingTimeInterval(954.7),
+                durationSeconds: 568.6,
+                statistics: [
+                    WorkoutEvidenceActivityStatistic(
+                        quantityType: "HKQuantityTypeIdentifierDistanceWalkingRunning",
+                        unit: "m",
+                        startDate: start.addingTimeInterval(386.1),
+                        endDate: start.addingTimeInterval(954.7),
+                        sourceCount: 1,
+                        sum: 1_211.8,
+                        durationSeconds: 568.6
+                    )
+                ]
+            ),
+            WorkoutEvidenceActivity(
+                id: "cooldown-activity",
+                activityType: "HKWorkoutActivityTypeRunning",
+                startDate: start.addingTimeInterval(954.7),
+                endDate: start.addingTimeInterval(1_345.3),
+                durationSeconds: 390.6,
+                statistics: [
+                    WorkoutEvidenceActivityStatistic(
+                        quantityType: "HKQuantityTypeIdentifierDistanceWalkingRunning",
+                        unit: "m",
+                        startDate: start.addingTimeInterval(954.7),
+                        endDate: start.addingTimeInterval(1_345.3),
+                        sourceCount: 1,
+                        sum: 998.8,
+                        durationSeconds: 390.6
+                    )
+                ]
+            )
+        ],
+        workoutPlanAudit: WorkoutPlanAudit(
+            status: .available,
+            planType: "Custom workout",
+            displayName: "Priority 5",
+            plannedSteps: [
+                PlannedWorkoutStep(
+                    index: 1,
+                    label: "Warmup",
+                    stepType: .warmup,
+                    plannedGoalType: .distance,
+                    plannedGoalValue: 1_000,
+                    plannedGoalDisplayText: "1 km"
+                ),
+                PlannedWorkoutStep(
+                    index: 2,
+                    label: "Work 1",
+                    stepType: .work,
+                    repeatIndex: 2,
+                    plannedGoalType: .distance,
+                    plannedGoalValue: 2_000,
+                    plannedGoalDisplayText: "2 km"
+                ),
+                PlannedWorkoutStep(
+                    index: 3,
+                    label: "Cooldown",
+                    stepType: .cooldown,
+                    plannedGoalType: .open,
+                    plannedGoalValue: nil,
+                    plannedGoalDisplayText: "Open"
+                )
+            ]
+        )
+    )
+
+    let markdown = DiagnosticsExport.rawHealthKitDebugMarkdown(workout: workout, generatedAt: start)
+
+    #expect(markdown.contains("Candidate/debug activity-boundary rows shown"))
+    #expect(markdown.contains("| 2 | Work 1 | work | mappedByPlannedStepOrder | 1.21 km | 9:29 | 108.2 s | 7:40 | 7:40"))
+    #expect(markdown.contains("| 3 | Cooldown | cooldown | mappedByPlannedStepOrder | 1.00 km | 6:31"))
+    #expect(markdown.contains("| 4 | Open / Extra | open | inferredOpenTailFromWorkoutEnd | 0.69 km | 5:42"))
+    #expect(!markdown.contains("| 2 | Work 1 | 2 km | Target unavailable | 2.00 km | 14:40"))
+}
+
 private func isolatedDefaults() -> IsolatedDefaults {
     let suiteName = "RunSignalTests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suiteName)!

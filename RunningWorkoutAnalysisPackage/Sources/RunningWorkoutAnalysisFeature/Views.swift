@@ -2072,61 +2072,72 @@ struct RawHealthKitWorkoutDebugView: View {
     @ViewBuilder
     private var reconstructedIntervalsView: some View {
         if let result = reconstructedIntervals {
+            let candidateDebugRows = candidateDebugRowsForResolvedSection(result)
+            let isUsingCandidateDebugRows = !candidateDebugRows.isEmpty
             VStack(alignment: .leading, spacing: 8) {
                 MetricGrid(items: [
                     MetricItem(title: "Plan source", value: result.planSource.label, detail: "Structure"),
-                    MetricItem(title: "Window source", value: result.windowSource.label, detail: "Segment markers not used")
+                    MetricItem(
+                        title: "Window source",
+                        value: isUsingCandidateDebugRows ? "Candidate activity boundaries" : result.windowSource.label,
+                        detail: isUsingCandidateDebugRows ? "Debug rows; normal gate blocked" : "Segment markers not used"
+                    )
                 ])
                 NoticeCard(
-                    title: result.windowSource == .healthKitActivityBoundaries ? "Resolved row source" : "Legacy debug reconstruction",
-                    message: result.windowSource == .healthKitActivityBoundaries
+                    title: isUsingCandidateDebugRows ? "Candidate debug rows" : (result.windowSource == .healthKitActivityBoundaries ? "Resolved row source" : "Legacy debug reconstruction"),
+                    message: isUsingCandidateDebugRows
+                    ? "These rows use HealthKit activity-boundary candidate evidence because the normal evidence gate is still blocked. They keep the visible header, duration, distance, and pace on the same debug basis."
+                    : (result.windowSource == .healthKitActivityBoundaries
                         ? "These rows are resolved from WorkoutKit planned steps and HealthKit activity boundaries. The duration, distance, and pace tiles should use this same row basis."
-                        : "These rows are plan-derived debug reconstruction only. Compare against candidate boundary rows before treating any duration, distance, or pace as UI truth."
+                        : "These rows are plan-derived debug reconstruction only. Compare against candidate boundary rows before treating any duration, distance, or pace as UI truth.")
                 )
 
-                ForEach(result.intervals, id: \.index) { interval in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(alignment: .top) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("\(interval.index). \(interval.label)")
-                                    .font(.subheadline.bold())
-                                Text("\(interval.plannedGoalDisplayText) · \(interval.plannedTargetDisplayText ?? "Target unavailable")")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 3) {
-                                Text(RunFormatters.duration(interval.displayDurationSeconds))
-                                    .font(.subheadline.monospacedDigit().bold())
-                                Text(RunFormatters.distance(interval.actualDistanceMeters))
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        if let pausedTimingItems = IntervalRowTimingText.pausedTimingItems(for: interval) {
-                            MetricGrid(items: pausedTimingItems)
-                        }
-                        if let parityTimingItems = parityTimingItems(for: interval) {
-                            MetricGrid(items: parityTimingItems)
-                        }
-
-                        MetricGrid(items: [
-                            debugPaceItem(for: interval),
-                            MetricItem(title: "Avg HR", value: RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"), detail: "Window"),
-                            MetricItem(title: "Max HR", value: RunFormatters.number(interval.maxHeartRateBpm, suffix: " bpm"), detail: "Window"),
-                            MetricItem(title: "Power", value: RunFormatters.number(interval.averagePower, suffix: " W"), detail: "Avg"),
-                            MetricItem(title: "Cadence", value: RunFormatters.number(interval.averageCadence, suffix: " spm"), detail: "Avg")
-                        ])
-
-                        Text("\(interval.confidence.label) · \(interval.sourceNote)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                if isUsingCandidateDebugRows {
+                    ForEach(candidateDebugRows) { row in
+                        candidateResolvedDebugRowView(row)
                     }
-                    .padding(10)
-                    .background(.background)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else {
+                    ForEach(result.intervals, id: \.index) { interval in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("\(interval.index). \(interval.label)")
+                                        .font(.subheadline.bold())
+                                    Text("\(interval.plannedGoalDisplayText) · \(interval.plannedTargetDisplayText ?? "Target unavailable")")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 3) {
+                                    Text(RunFormatters.duration(interval.displayDurationSeconds))
+                                        .font(.subheadline.monospacedDigit().bold())
+                                    Text(RunFormatters.distance(interval.actualDistanceMeters))
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+
+                            if let pausedTimingItems = IntervalRowTimingText.pausedTimingItems(for: interval) {
+                                MetricGrid(items: pausedTimingItems)
+                            }
+
+                            MetricGrid(items: [
+                                debugPaceItem(for: interval),
+                                MetricItem(title: "Avg HR", value: RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"), detail: "Window"),
+                                MetricItem(title: "Max HR", value: RunFormatters.number(interval.maxHeartRateBpm, suffix: " bpm"), detail: "Window"),
+                                MetricItem(title: "Power", value: RunFormatters.number(interval.averagePower, suffix: " W"), detail: "Avg"),
+                                MetricItem(title: "Cadence", value: RunFormatters.number(interval.averageCadence, suffix: " spm"), detail: "Avg")
+                            ])
+
+                            Text("\(interval.confidence.label) · \(interval.sourceNote)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(10)
+                        .background(.background)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
                 }
 
                 if !result.notes.isEmpty {
@@ -2142,6 +2153,69 @@ struct RawHealthKitWorkoutDebugView: View {
                 message: Self.unavailableCustomIntervalsMessage
             )
         }
+    }
+
+    private func candidateDebugRowsForResolvedSection(_ result: WorkoutIntervalReconstructionResult) -> [ParityLabCandidateRow] {
+        guard result.windowSource != .healthKitActivityBoundaries else {
+            return []
+        }
+        let candidateRows = parityLabCandidateRowsResult.rows
+        guard !candidateRows.isEmpty else {
+            return []
+        }
+        return candidateRows
+    }
+
+    @ViewBuilder
+    private func candidateResolvedDebugRowView(_ row: ParityLabCandidateRow) -> some View {
+        let displayDuration = row.pauseOverlapSeconds > 0 ? row.activeDurationSeconds : row.elapsedDurationSeconds
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("\(row.index). \(row.label)")
+                        .font(.subheadline.bold())
+                    Text(row.detail)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text(RunFormatters.duration(displayDuration))
+                        .font(.subheadline.monospacedDigit().bold())
+                    Text(RunFormatters.distance(row.distanceMeters))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            MetricGrid(items: [
+                MetricItem(title: "Elapsed", value: RunFormatters.duration(row.elapsedDurationSeconds), detail: "Activity row"),
+                MetricItem(title: "Pause", value: RunFormatters.duration(row.pauseOverlapSeconds), detail: "Paired overlap"),
+                MetricItem(title: "Active", value: RunFormatters.duration(row.activeDurationSeconds), detail: row.durationRule),
+                MetricItem(title: "Distance", value: RunFormatters.distance(row.distanceMeters), detail: row.mappingStatus),
+                candidateDebugPaceItem(for: row)
+            ])
+
+            Text("\(row.isOpenTail ? "Medium" : "High") · Candidate activity-boundary debug row")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func candidateDebugPaceItem(for row: ParityLabCandidateRow) -> MetricItem {
+        let displayDuration = row.pauseOverlapSeconds > 0 ? row.activeDurationSeconds : row.elapsedDurationSeconds
+        guard let distanceMeters = row.distanceMeters, distanceMeters > 0, displayDuration > 0 else {
+            return MetricItem(title: "Pace", value: "Unavailable", detail: row.pauseOverlapSeconds > 0 ? "Active timer" : "Elapsed row")
+        }
+        return MetricItem(
+            title: "Pace",
+            value: RunFormatters.pace(displayDuration / (distanceMeters / 1_000)),
+            detail: row.pauseOverlapSeconds > 0 ? "Active timer" : "Elapsed row"
+        )
     }
 
     private func parityTimingItems(for interval: ReconstructedWorkoutInterval) -> [MetricItem]? {
