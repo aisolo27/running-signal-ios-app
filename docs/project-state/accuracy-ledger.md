@@ -212,4 +212,4 @@ Display semantics:
 - Pause overlap and elapsed row-window duration are shown as RunSignal-only detail.
 - Average HR, max HR, average running power, and cadence are aggregated from HealthKit samples over each resolved row window.
 
-Regression fixture families: Apr 22, Apr 29, May 27 paused repeat blocks; May 1 recovery/tail; May 13 paused repeat; Jun 25 and Jun 26 repeat-tail controls; Jun 28 priority 1-3; stopped-early multi-step prefix controls.
+Regression fixture families: Apr 22, Apr 29, May 27 paused repeat blocks; May 1 recovery/tail; May 13 paused repeat; Jun 25 and Jun 26 repeat-tail controls; Jun 28-29 priority 1-5 including priority 5 paused/manual-skip guard; stopped-early multi-step prefix controls.

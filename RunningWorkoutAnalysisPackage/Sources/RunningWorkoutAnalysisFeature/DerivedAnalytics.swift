@@ -112,6 +112,7 @@ public enum DerivedIntervalLabel: String, Codable, Sendable {
 }
 
 public enum DerivedIntervalSource: String, Codable, Sendable {
+    case resolvedCustomWorkoutRow
     case healthKitLabeledEvent
     case healthKitSegmentPattern
     case inferredPattern
@@ -119,6 +120,7 @@ public enum DerivedIntervalSource: String, Codable, Sendable {
 
     public var displayName: String {
         switch self {
+        case .resolvedCustomWorkoutRow: "Resolved custom workout row"
         case .healthKitLabeledEvent: "HealthKit labeled event"
         case .healthKitSegmentPattern: "HealthKit segment pattern"
         case .inferredPattern: "Inferred pattern"
@@ -128,6 +130,7 @@ public enum DerivedIntervalSource: String, Codable, Sendable {
 }
 
 public enum DerivedIntervalMarkerKind: String, Codable, Sendable {
+    case resolvedActivityBoundaryRow
     case appleFitnessIntervalCandidate
     case splitMarker
     case overlappingSegmentMarker
@@ -135,6 +138,7 @@ public enum DerivedIntervalMarkerKind: String, Codable, Sendable {
 
     public var displayName: String {
         switch self {
+        case .resolvedActivityBoundaryRow: "Resolved activity-boundary row"
         case .appleFitnessIntervalCandidate: "Interval candidate"
         case .splitMarker: "Split marker"
         case .overlappingSegmentMarker: "Overlapping segment marker"
@@ -229,6 +233,7 @@ public enum DerivedAnalyticsEngine {
         if heartRateDrift == nil {
             caveats.append("Heart-rate drift is unavailable without enough heart-rate samples.")
         }
+        let resolvedRows = resolvedIntervalRows(workout: workout, evidence: evidence)
 
         return DerivedWorkoutAnalysis(
             workoutID: workout.id,
@@ -254,9 +259,9 @@ public enum DerivedAnalyticsEngine {
             ),
             splitEstimates: splitEstimates(workout: workout, evidence: evidence),
             executionSegments: executionSegments(heartRateSeries: heartRateSeries, speedSeries: speedSeries),
-            intervalCandidates: intervalCandidates(workout: workout, evidence: evidence),
+            intervalCandidates: resolvedRows.isEmpty ? nil : resolvedRows,
             intervalCount: evidence.events.count,
-            intervalConfidence: evidence.events.isEmpty ? .unavailable : .limited,
+            intervalConfidence: resolvedRows.isEmpty ? .unavailable : .moderate,
             readinessConfidence: minConfidence(coverage.confidence, paceConfidence),
             dataQualityConfidence: coverage.confidence,
             caveats: orderedUnique(caveats)
@@ -424,6 +429,8 @@ public enum DerivedAnalyticsEngine {
                 caveats.append("HealthKit did not expose an Apple Fitness interval label for this event.")
             }
             switch markerKind {
+            case .resolvedActivityBoundaryRow:
+                break
             case .splitMarker:
                 caveats.append("This event window matches a split-like distance marker, not an Apple Fitness interval row.")
             case .overlappingSegmentMarker:
@@ -469,6 +476,45 @@ public enum DerivedAnalyticsEngine {
                 source: label == .unknown ? .healthKitSegmentPattern : .healthKitLabeledEvent,
                 markerKind: markerKind,
                 confidence: confidence,
+                caveats: orderedUnique(caveats)
+            )
+        }
+    }
+
+    public static func resolvedIntervalRows(workout: CanonicalWorkout, evidence: WorkoutEvidence) -> [DerivedWorkoutInterval] {
+        guard let resolved = CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) else {
+            return []
+        }
+
+        return resolved.intervals.map { interval in
+            let duration = interval.displayDurationSeconds
+            let distance = interval.actualDistanceMeters
+            let pace = distance.flatMap { meters -> Double? in
+                guard meters > 0 else { return nil }
+                return duration / (meters / 1_000)
+            }
+            var caveats = [
+                "Resolved from WorkoutKit planned rows and HealthKit activity boundaries.",
+                "Segment markers were not used as interval analytics rows."
+            ]
+            if (interval.pauseOverlapSeconds ?? 0) > 0 {
+                caveats.append("Duration and pace use the row display basis: \(interval.durationDisplayRule == .activeTimer ? "active timer" : "elapsed row window").")
+            }
+
+            return DerivedWorkoutInterval(
+                index: interval.index,
+                label: interval.stepType,
+                startDate: interval.actualStartDate,
+                endDate: interval.actualEndDate,
+                startOffsetSeconds: interval.actualStartDate.timeIntervalSince(workout.startDate),
+                endOffsetSeconds: interval.actualEndDate.timeIntervalSince(workout.startDate),
+                durationSeconds: duration,
+                distanceMeters: distance,
+                paceSecondsPerKm: pace,
+                averageHeartRateBpm: interval.averageHeartRateBpm,
+                source: .resolvedCustomWorkoutRow,
+                markerKind: .resolvedActivityBoundaryRow,
+                confidence: interval.confidence.analyticsConfidence,
                 caveats: orderedUnique(caveats)
             )
         }
@@ -627,5 +673,20 @@ public enum DerivedAnalyticsEngine {
     private static func orderedUnique(_ values: [String]) -> [String] {
         var seen: Set<String> = []
         return values.filter { seen.insert($0).inserted }
+    }
+}
+
+private extension IntervalReconstructionConfidence {
+    var analyticsConfidence: ConfidenceLevel {
+        switch self {
+        case .high:
+            .strong
+        case .medium:
+            .moderate
+        case .low:
+            .limited
+        case .unavailable:
+            .unavailable
+        }
     }
 }

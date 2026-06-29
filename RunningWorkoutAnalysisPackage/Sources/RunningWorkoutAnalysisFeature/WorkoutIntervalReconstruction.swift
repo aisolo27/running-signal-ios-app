@@ -970,8 +970,15 @@ public enum CustomWorkoutNormalDetailGate {
         var reasons: [String] = []
         if activities.isEmpty {
             reasons.append(CustomWorkoutFallbackReason.missingActivityRows.normalDetailBlockedReasonLabel)
+            if !evidence.events.isEmpty || workout.distanceMeters != nil {
+                reasons.append("Only summary/event evidence is loaded; custom workout rows need fresh HealthKit activity rows.")
+            }
         } else if plannedSteps.count != activities.count {
-            reasons.append(CustomWorkoutFallbackReason.activityCountMismatch.normalDetailBlockedReasonLabel)
+            if activities.count < plannedSteps.count {
+                reasons.append("HealthKit activity rows do not map to the full plan or a supported completed planned prefix.")
+            } else {
+                reasons.append(CustomWorkoutFallbackReason.activityCountMismatch.normalDetailBlockedReasonLabel)
+            }
         }
         if activities.contains(where: { $0.endDate == nil }) {
             reasons.append(CustomWorkoutFallbackReason.missingEndBoundary.normalDetailBlockedReasonLabel)
@@ -981,9 +988,9 @@ public enum CustomWorkoutNormalDetailGate {
         }
         if plannedSteps.contains(where: { $0.plannedGoalType == .time }) && WorkoutPauseTimingSemantics.hasPauseOrResumeEvents(in: evidence.events) {
             if WorkoutPauseTimingSemantics.pairedPauseIntervals(in: evidence.events) == nil {
-                reasons.append("Time-goal rows have unpaired pause/resume evidence, and pause-adjusted timer logic is not enabled yet.")
-            } else {
-                reasons.append("Time-goal rows have paired pause/resume evidence, and pause-adjusted timer logic is not enabled yet.")
+                reasons.append("Time-goal rows have unpaired pause/resume evidence, so active-timer row math is blocked.")
+            } else if pauseIntervalsCrossActivityRows(events: evidence.events, activities: activities) {
+                reasons.append("A paired pause crosses HealthKit activity row boundaries, so active-timer row math is blocked.")
             }
         }
         if !isApprovedNormalDetailShape(plannedSteps) {
@@ -1588,6 +1595,25 @@ public enum CustomWorkoutNormalDetailGate {
             }
         }
         return true
+    }
+
+    private static func pauseIntervalsCrossActivityRows(
+        events: [WorkoutEvidenceEvent],
+        activities: [WorkoutEvidenceActivity]
+    ) -> Bool {
+        guard let pauseIntervals = WorkoutPauseTimingSemantics.pairedPauseIntervals(in: events),
+              !pauseIntervals.isEmpty,
+              !activities.isEmpty else {
+            return false
+        }
+
+        return !pauseIntervals.allSatisfy { pauseInterval in
+            activities.contains { activity in
+                guard let endDate = activity.endDate else { return false }
+                return pauseInterval.start >= activity.startDate.addingTimeInterval(-activityTimeToleranceSeconds)
+                    && pauseInterval.end <= endDate.addingTimeInterval(activityTimeToleranceSeconds)
+            }
+        }
     }
 
     private static func uniqueReasonLabels(_ reasons: [String]) -> [String] {

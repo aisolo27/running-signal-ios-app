@@ -57,7 +57,7 @@ Normal workout detail supports these resolved custom-workout row classes when th
 
 Paused timing semantics use a pause-window state machine for explicit pause/resume, motion pause/resume, and `pauseOrResumeRequest` toggle events. Duplicate, dangling, unpaired, cross-row, or otherwise caveated pause streams stay blocked from normal-detail promotion.
 
-`DerivedAnalyticsEngine.intervalCandidates` is a separate raw HealthKit event-marker path. It uses elapsed event-window duration and does not consume `WorkoutIntervalReconstruction` or the pause-window resolver, so it must not be treated as trusted custom-workout interval analytics or a pause-adjusted active-duration source until the interval analytics gate is explicitly reopened.
+`DerivedAnalyticsEngine.intervalCandidates` remains a raw HealthKit event-marker debug path only. Derived interval analytics publish rows only from the resolved custom-workout row path when the normal-detail evidence gate passes; raw segment markers are not interval analytics rows.
 
 Gate A simple fixed-distance `Work > Open / Extra` is promoted only for the exact one-step shape with one complete HealthKit activity row and positive `Open / Extra` tail. It must not broaden into structured/special workouts, paused workouts, recovery rows, repeat rows, or missing-evidence cases.
 
@@ -72,7 +72,7 @@ Gate B broad shape-whitelist work has been replaced by the generalized resolved-
 - Use `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-correctness-lock-v1.md` as the detailed acceptance matrix before approving new debug prototypes, normal-detail interval rows, or interval-row analytics.
 - Use `docs/validation/apple-fitness-interval-parity-dataset/ambiguous-repeat-tail-decision-rules-2026-06-24.md` before repeat-tail prototype or scorecard work.
 - Keep elapsed-vs-timer, active/timer, and pause-event diagnostics visible in future Gate B scoring.
-- Keep interval analytics whole-workout-level until supported and blocked custom-workout styles have stable rows, diagnostics agreement, and regression fixtures.
+- Keep interval analytics limited to evidence-gated resolved rows until supported and blocked custom-workout styles have stable rows, diagnostics agreement, and regression fixtures.
 
 ## Blocked
 
@@ -92,7 +92,7 @@ Gate B broad shape-whitelist work has been replaced by the generalized resolved-
 
 ## Recent Proof And Follow-Up
 
-- `docs/validation/apple-fitness-interval-parity-dataset/physical-iphone-priority-repeat-proof-2026-06-28/` partially archives the five-priority physical proof set. Priorities 1-3 have Apple Fitness screenshots, typed manual rows, and Raw HealthKit Debug/Parity Lab exports. Priority 1 drove the narrow paused fixed-cooldown/`Open / Extra` normal-detail gate; priorities 2-3 are clean no-pause controls. Priorities 4-5 remain pending.
+- `docs/validation/apple-fitness-interval-parity-dataset/physical-iphone-priority-repeat-proof-2026-06-28/` archives the five-priority physical proof set. Priorities 1-5 have Apple Fitness screenshots, typed manual rows, and Raw HealthKit Debug/Parity Lab exports. Priority 1 drove the narrow paused fixed-cooldown/`Open / Extra` normal-detail gate; priorities 2-4 are clean no-pause controls; priority 5 is a paused/manual-skip guard case where activity-boundary candidate rows match Apple Fitness active/timer timing better than plan-derived reconstruction.
 - Health Context follow-up: in-app Today/Data verification cards and neutral physical-iPhone check wording are implemented. Remaining proof is to verify VO2 Max and Resting Heart Rate on the physical iPhone after granting Apple Health read access.
 - Best Efforts follow-up: visible official segment bests use `PersonalBestEffortEngine` exact distance-window records. Summary-only whole-run estimates must remain excluded. The likely blocker for older benchmark PRs is detailed HealthKit distance evidence coverage.
 - Refresh architecture follow-up: monthly evidence refresh is transactional and persists month-scoped job/item checkpoints. Next proof is a physical-iPhone check for activation/scroll responsiveness, thermal behavior, and archived diagnostics/logs.
@@ -110,3 +110,8 @@ Gate B broad shape-whitelist work has been replaced by the generalized resolved-
 
 - Stopped-early custom workouts can now show the completed prefix of planned rows instead of blocking solely because planned row count is greater than HealthKit activity row count.
 - Parity Lab candidate rows and Raw Debug exports use the same completed-prefix mapping and suppress `Open / Extra` tails when planned rows remain uncompleted.
+
+## 2026-06-29 UI Source Guardrail
+
+- Raw Debug labels resolved/activity-boundary rows versus legacy plan-derived reconstruction, exports use the same supported-row resolver as the app view, and derived interval analytics publish only resolved custom-workout rows when the gate passes.
+- Regression tests cover the repeated failure mode where row math is correct but a visible pace/duration tile still uses an older plan-derived or raw-marker source.

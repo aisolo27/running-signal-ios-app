@@ -1874,7 +1874,7 @@ struct RawHealthKitWorkoutDebugView: View {
                 SectionHeader("WorkoutKit Plan Audit")
                 workoutPlanAuditView
 
-                SectionHeader("WorkoutKit Reconstructed Intervals")
+                SectionHeader("Resolved/Legacy Interval Rows")
                 reconstructedIntervalsView
 
                 SectionHeader("Parity Lab Candidate Rows")
@@ -2077,6 +2077,12 @@ struct RawHealthKitWorkoutDebugView: View {
                     MetricItem(title: "Plan source", value: result.planSource.label, detail: "Structure"),
                     MetricItem(title: "Window source", value: result.windowSource.label, detail: "Segment markers not used")
                 ])
+                NoticeCard(
+                    title: result.windowSource == .healthKitActivityBoundaries ? "Resolved row source" : "Legacy debug reconstruction",
+                    message: result.windowSource == .healthKitActivityBoundaries
+                        ? "These rows are resolved from WorkoutKit planned steps and HealthKit activity boundaries. The duration, distance, and pace tiles should use this same row basis."
+                        : "These rows are plan-derived debug reconstruction only. Compare against candidate boundary rows before treating any duration, distance, or pace as UI truth."
+                )
 
                 ForEach(result.intervals, id: \.index) { interval in
                     VStack(alignment: .leading, spacing: 8) {
@@ -2106,7 +2112,7 @@ struct RawHealthKitWorkoutDebugView: View {
                         }
 
                         MetricGrid(items: [
-                            MetricItem(title: "Pace", value: RunFormatters.pace(IntervalRowTimingText.displayPaceSecondsPerKm(for: interval)), detail: IntervalRowTimingText.displayPaceDetail(for: interval)),
+                            debugPaceItem(for: interval),
                             MetricItem(title: "Avg HR", value: RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"), detail: "Window"),
                             MetricItem(title: "Max HR", value: RunFormatters.number(interval.maxHeartRateBpm, suffix: " bpm"), detail: "Window"),
                             MetricItem(title: "Power", value: RunFormatters.number(interval.averagePower, suffix: " W"), detail: "Avg"),
@@ -2151,6 +2157,25 @@ struct RawHealthKitWorkoutDebugView: View {
             MetricItem(title: "Active", value: RunFormatters.duration(row.activeDurationSeconds), detail: row.durationRule),
             MetricItem(title: "Distance", value: RunFormatters.distance(row.distanceMeters), detail: "Activity row")
         ]
+    }
+
+    private func debugPaceItem(for interval: ReconstructedWorkoutInterval) -> MetricItem {
+        if let row = parityLabCandidateRowsResult.rows.first(where: { $0.index == interval.index }),
+           row.pauseOverlapSeconds > 0,
+           let distanceMeters = row.distanceMeters,
+           distanceMeters > 0,
+           row.activeDurationSeconds > 0 {
+            return MetricItem(
+                title: "Pace",
+                value: RunFormatters.pace(row.activeDurationSeconds / (distanceMeters / 1_000)),
+                detail: "Parity active"
+            )
+        }
+        return MetricItem(
+            title: "Pace",
+            value: RunFormatters.pace(IntervalRowTimingText.displayPaceSecondsPerKm(for: interval)),
+            detail: IntervalRowTimingText.displayPaceDetail(for: interval)
+        )
     }
 
     @ViewBuilder

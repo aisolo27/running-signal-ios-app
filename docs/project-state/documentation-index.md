@@ -107,7 +107,7 @@ Keep active validation lean. For custom-workout status and roadmap questions, st
 
 ## Recent Validation Archives
 
-- `docs/validation/apple-fitness-interval-parity-dataset/physical-iphone-priority-repeat-proof-2026-06-28/`: partial June 28 five-priority physical proof archive; priorities 1-3 have screenshots, typed Apple Fitness rows, and Raw HealthKit Debug/Parity Lab exports, priorities 4-5 pending.
+- `docs/validation/apple-fitness-interval-parity-dataset/physical-iphone-priority-repeat-proof-2026-06-28/`: June 28-29 five-priority physical proof archive; priorities 1-5 have screenshots, typed Apple Fitness rows, and Raw HealthKit Debug/Parity Lab exports. Priority 5 covers the paused/manual-skip Work guard case.
 
 ## Intentionally Not Archived
 

@@ -1,0 +1,59 @@
+{
+  "source": "Apple Fitness screenshots",
+  "screenshotOverview": "screenshots/priority-5-overview-v1.png",
+  "screenshotIntervals": "screenshots/priority-5-intervals-v2.png",
+  "workoutId": "9C084DCE-3CCF-4401-8B99-CFB58EF0AC82",
+  "workoutTitle": "Priority 5 (pause everything)",
+  "date": "2026-06-29",
+  "overview": {
+    "workoutTime": "0:26:19",
+    "elapsedTime": "0:28:07",
+    "distance": "3.90 km",
+    "averagePace": "6'44\"/km",
+    "averageHeartRate": "141 bpm",
+    "averageCadence": "161 spm",
+    "averagePower": "175 W",
+    "activeCalories": "251 cal",
+    "totalCalories": "289 cal",
+    "elevationGain": "3 m"
+  },
+  "rows": [
+    {
+      "index": 1,
+      "label": "Warmup",
+      "distance": "1.00 km",
+      "time": "06:26",
+      "pace": "6'26\"/km",
+      "heartRate": "137 bpm"
+    },
+    {
+      "index": 2,
+      "label": "Work",
+      "distance": "1.21 km",
+      "time": "07:40",
+      "pace": "6'20\"/km",
+      "heartRate": "141 bpm"
+    },
+    {
+      "index": 3,
+      "label": "Cooldown",
+      "distance": "0.99 km",
+      "time": "06:31",
+      "pace": "6'31\"/km",
+      "heartRate": "142 bpm"
+    },
+    {
+      "index": 4,
+      "label": "Open",
+      "distance": "688 m",
+      "time": "05:42",
+      "pace": "8'17\"/km",
+      "heartRate": "144 bpm"
+    }
+  ],
+  "notes": [
+    "Manual-skip guard case: Work row was paused, resumed, then skipped before completing the 2 km planned goal.",
+    "Apple Fitness Work row pace is active/timer based: 7:40 over 1.21 km is approximately 6:20/km. The elapsed row window is longer because of the paired pause.",
+    "Plan-derived reconstruction can drift on this case by treating the 2 km Work goal as complete and folding later evidence into the Work row; the HealthKit activity-boundary candidate rows match Apple Fitness."
+  ]
+}

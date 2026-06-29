@@ -2169,6 +2169,64 @@ import Testing
     #expect(candidates[0].caveats.contains("WorkoutKit planned rows are available, so this raw marker must not be used as custom-workout row analytics."))
 }
 
+@Test func derivedAnalyticsPublishesResolvedRowsInsteadOfRawMarkers() throws {
+    let start = Date(timeIntervalSince1970: 9_820)
+    let workout = testWorkout(id: "derived-resolved-rows", start: start, distanceMeters: 3_000, durationSeconds: 1_000)
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: [
+            PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km"),
+            PlannedWorkoutStep(index: 2, label: "Work 1", stepType: .work, plannedGoalType: .distance, plannedGoalValue: 1_000, plannedGoalDisplayText: "1 km")
+        ],
+        activityWindows: [
+            (0, 700, 2_000),
+            (700, 1_000, 1_000)
+        ],
+        distancePoints: [(0, 0), (700, 2_000), (1_000, 3_000)],
+        events: [
+            WorkoutEvidenceEvent(startDate: start, endDate: start.addingTimeInterval(1_000), type: "HKWorkoutEventTypeSegment", label: "Raw Segment")
+        ]
+    )
+
+    let rawCandidates = DerivedAnalyticsEngine.intervalCandidates(workout: workout, evidence: evidence)
+    let analysis = DerivedAnalyticsEngine.analyze(workout: workout, evidence: evidence)
+    let rows = try #require(analysis.intervalCandidates)
+
+    #expect(rawCandidates.count == 1)
+    #expect(rows.count == 2)
+    #expect(rows.map(\.source) == [.resolvedCustomWorkoutRow, .resolvedCustomWorkoutRow])
+    #expect(rows.map(\.markerKind) == [.resolvedActivityBoundaryRow, .resolvedActivityBoundaryRow])
+    #expect(rows[1].label == .work)
+    #expect(rows[1].paceSecondsPerKm == 300)
+    #expect(rows[1].caveats.contains("Segment markers were not used as interval analytics rows."))
+}
+
+@Test func derivedAnalyticsLeavesIntervalRowsEmptyWhenOnlyRawMarkersExist() {
+    let start = Date(timeIntervalSince1970: 9_830)
+    let workout = testWorkout(id: "derived-raw-only", start: start, distanceMeters: 1_000, durationSeconds: 300)
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .distance: WorkoutMetricSeries(
+                metric: .distance,
+                unit: "m",
+                points: [WorkoutEvidencePoint(date: start.addingTimeInterval(300), value: 1_000)]
+            )
+        ],
+        events: [
+            WorkoutEvidenceEvent(startDate: start, endDate: start.addingTimeInterval(300), type: "HKWorkoutEventTypeSegment", label: "Work")
+        ]
+    )
+
+    let rawCandidates = DerivedAnalyticsEngine.intervalCandidates(workout: workout, evidence: evidence)
+    let analysis = DerivedAnalyticsEngine.analyze(workout: workout, evidence: evidence)
+
+    #expect(rawCandidates.count == 1)
+    #expect(analysis.intervalCandidates == nil)
+    #expect(analysis.intervalConfidence == .unavailable)
+}
+
 @Test func workoutKitSpeedRangeConvertsToPaceRangeFastToSlow() {
     let display = WorkoutIntervalReconstructionFormat.paceRangeDisplay(
         speedLowerMetersPerSecond: 2.56,
@@ -2370,7 +2428,8 @@ import Testing
     #expect(markdown.contains("## Review Packet Scope"))
     #expect(markdown.contains("Whole-run stats remain usable when custom interval rows are blocked."))
     #expect(markdown.contains("External HealthFit/FIT archives stay offline validation evidence"))
-    #expect(markdown.contains("## WorkoutKit Reconstructed Intervals"))
+    #expect(markdown.contains("## Resolved/Legacy Interval Rows"))
+    #expect(markdown.contains("Segment markers are not interval analytics rows."))
     #expect(markdown.contains("| 1 | Warmup | 2 km"))
     #expect(markdown.contains("## HKWorkoutActivity Boundary Candidate Intervals"))
     #expect(markdown.contains("Debug-only alternate reconstruction for Parity Lab exports."))
@@ -2402,10 +2461,8 @@ import Testing
     #expect(markdown.contains("Manual FIT placeholder"))
     #expect(markdown.contains("Nearest Activity End"))
     #expect(markdown.contains("## Boundary Source Warnings"))
-    #expect(markdown.contains("Target distance"))
-    #expect(markdown.contains("Boundary sample"))
-    #expect(markdown.contains("Row 2: Open / Extra Tail"))
-    #expect(markdown.contains("Final distance sample offset"))
+    #expect(markdown.contains("Resolved from complete contiguous HealthKit activity rows mapped to expanded WorkoutKit planned steps."))
+    #expect(markdown.contains("Resolved from workout tail after complete fixed planned rows."))
     #expect(markdown.contains("HealthKit Segment Markers must not be promoted as Apple Fitness interval rows."))
     #expect(markdown.contains("## JSON Payload"))
     #expect(markdown.contains("\"reconstructedIntervals\""))
@@ -2414,13 +2471,11 @@ import Testing
     #expect(markdown.contains("\"customWorkoutCandidateRuleSummary\""))
     #expect(markdown.contains("\"customWorkoutCandidateRuleRows\""))
     #expect(markdown.contains("\"plannedExpandedRowCount\""))
-    #expect(markdown.contains("\"fixedRowExhaustionStatus\""))
     #expect(markdown.contains("\"tailStatus\""))
     #expect(markdown.contains("\"tailElapsedDurationSeconds\""))
     #expect(markdown.contains("\"tailDistanceMeters\""))
     #expect(markdown.contains("\"fallbackReasons\""))
-    #expect(markdown.contains("\"fallbackReasonLabels\""))
-    #expect(markdown.contains("\"safetyFlags\""))
+    #expect(markdown.contains("\"caveats\""))
     #expect(markdown.contains("\"fitValidationStatus\" : \"offline-evidence-only-not-runtime-truth\""))
     #expect(markdown.contains("\"durationDisplayRule\""))
     #expect(markdown.contains("\"startOffsetSeconds\""))
@@ -2437,7 +2492,7 @@ import Testing
     #expect(markdown.contains("\"usesFITRuntimeTruth\" : false"))
     #expect(markdown.contains("\"usesAppleFitnessManualRuntimeLogic\" : false"))
     #expect(markdown.contains("\"boundaryDiagnostics\""))
-    #expect(markdown.contains("\"tailDiagnostics\""))
+    #expect(markdown.contains("\"sourceNote\""))
     #expect(markdown.contains("\"segmentMarkers\""))
     #expect(markdown.contains("\"rawWorkoutEvents\""))
     #expect(markdown.contains("\"workoutActivities\""))

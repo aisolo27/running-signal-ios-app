@@ -126,7 +126,10 @@ public enum DiagnosticsExport {
         let evidence = workout.evidence
         let coverage = evidence.map(WorkoutEvidenceAnalyzer.coverage(for:))
         let reconstructedIntervals = evidence
-            .flatMap { WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: $0) }
+            .flatMap {
+                CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: $0)
+                    ?? WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: $0)
+            }
         let segmentMarkers = evidence.map {
             DerivedAnalyticsEngine.intervalCandidates(workout: workout, evidence: $0)
         } ?? []
@@ -195,9 +198,9 @@ public enum DiagnosticsExport {
             workout: workout
         ))
 
-        ## WorkoutKit Reconstructed Intervals
+        ## Resolved/Legacy Interval Rows
 
-        Planned structure source: WorkoutKit when available. Measured stats source: HealthKit samples.
+        Planned structure source: WorkoutKit when available. Measured stats source: HealthKit activity boundaries when the evidence gate passes; otherwise this section is legacy plan-derived debug reconstruction. Segment markers are not interval analytics rows.
 
         \(reconstructedIntervalsMarkdown(reconstructedIntervals, workout: workout))
 
