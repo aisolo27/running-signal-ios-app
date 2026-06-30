@@ -2428,9 +2428,10 @@ import Testing
     #expect(markdown.contains("## Review Packet Scope"))
     #expect(markdown.contains("Whole-run stats remain usable when custom interval rows are blocked."))
     #expect(markdown.contains("External HealthFit/FIT archives stay offline validation evidence"))
-    #expect(markdown.contains("## Resolved/Legacy Interval Rows"))
-    #expect(markdown.contains("Segment markers are not interval analytics rows."))
+    #expect(markdown.contains("## Official Resolved Interval Rows"))
+    #expect(markdown.contains("Segment markers and plan-derived reconstruction are not interval analytics rows."))
     #expect(markdown.contains("| 1 | Warmup | 2 km"))
+    #expect(markdown.contains("plan-derived reconstruction are not interval analytics rows"))
     #expect(markdown.contains("## Resolved HKWorkoutActivity Boundary Rows"))
     #expect(markdown.contains("Evidence-gated activity-boundary rows for normal detail and audit exports."))
     #expect(markdown.contains("HKWorkoutActivity boundary rows are the normal-detail source only when WorkoutKit and HealthKit evidence gates pass."))
@@ -2461,8 +2462,8 @@ import Testing
     #expect(markdown.contains("Manual FIT placeholder"))
     #expect(markdown.contains("Nearest Activity End"))
     #expect(markdown.contains("## Boundary Source Warnings"))
-    #expect(markdown.contains("Resolved from complete contiguous HealthKit activity rows mapped to expanded WorkoutKit planned steps."))
-    #expect(markdown.contains("Resolved from workout tail after complete fixed planned rows."))
+    #expect(markdown.contains("Mapped to WorkoutKit planned step order only."))
+    #expect(markdown.contains("Inferred from workout end minus final mapped activity boundary."))
     #expect(markdown.contains("HealthKit Segment Markers must not be promoted as Apple Fitness interval rows."))
     #expect(markdown.contains("## JSON Payload"))
     #expect(markdown.contains("\"reconstructedIntervals\""))
@@ -3175,8 +3176,8 @@ import Testing
     #expect(abs((exportedWork["elapsedDurationSeconds"] as? Double ?? 0) - 120) <= 0.001)
     #expect(abs((exportedWork["pauseOverlapSeconds"] as? Double ?? 0) - 30) <= 0.001)
     #expect(abs((exportedWork["activeDurationSeconds"] as? Double ?? 0) - 90) <= 0.001)
-    #expect(abs((exportedWork["displayDurationSeconds"] as? Double ?? 0) - 120) <= 0.001)
-    #expect(exportedWork["durationDisplayRule"] as? String == "elapsedRowWindow")
+    #expect(abs((exportedWork["displayDurationSeconds"] as? Double ?? 0) - 90) <= 0.001)
+    #expect(exportedWork["durationDisplayRule"] as? String == "activeTimer")
 
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence)?.intervals.first { $0.label == "Work 1" }?.durationDisplayRule == .activeTimer)
 }
@@ -5847,10 +5848,11 @@ private struct IsolatedDefaults {
 
     let markdown = DiagnosticsExport.rawHealthKitDebugMarkdown(workout: workout, generatedAt: start)
 
-    #expect(markdown.contains("Candidate/debug activity-boundary rows shown"))
-    #expect(markdown.contains("| 2 | Work 1 | work | mappedByPlannedStepOrder | 1.21 km | 9:29 | 108.2 s | 7:40 | 7:40"))
-    #expect(markdown.contains("| 3 | Cooldown | cooldown | mappedByPlannedStepOrder | 1.00 km | 6:31"))
-    #expect(markdown.contains("| 4 | Open / Extra | open | inferredOpenTailFromWorkoutEnd | 0.69 km | 5:42"))
+    #expect(markdown.contains("## Official Resolved Interval Rows"))
+    #expect(markdown.contains("Unavailable. Whole-run stats remain safe to review"))
+    #expect(markdown.contains("| 2 | Work 1 | mappedByPlannedStepOrder |"))
+    #expect(markdown.contains("| 3 | Cooldown | mappedByPlannedStepOrder |"))
+    #expect(markdown.contains("| 4 | Open / Extra | inferredOpenTailFromWorkoutEnd |"))
     #expect(!markdown.contains("| 2 | Work 1 | 2 km | Target unavailable | 2.00 km | 14:40"))
 }
 

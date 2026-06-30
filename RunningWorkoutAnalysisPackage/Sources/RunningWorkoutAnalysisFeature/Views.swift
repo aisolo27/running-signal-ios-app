@@ -1874,10 +1874,10 @@ struct RawHealthKitWorkoutDebugView: View {
                 SectionHeader("WorkoutKit Plan Audit")
                 workoutPlanAuditView
 
-                SectionHeader("Resolved/Legacy Interval Rows")
+                SectionHeader("Official Resolved Interval Rows")
                 reconstructedIntervalsView
 
-                SectionHeader("Resolved Activity-Boundary Rows")
+                SectionHeader("Resolved Boundary Row Audit")
                 parityLabCandidateRowsView
 
                 SectionHeader("HealthKit Segment Markers")
@@ -1974,10 +1974,7 @@ struct RawHealthKitWorkoutDebugView: View {
 
     private var reconstructedIntervals: WorkoutIntervalReconstructionResult? {
         guard let evidence = currentWorkout.evidence else { return nil }
-        if let supportedIntervals = CustomWorkoutNormalDetailGate.supportedIntervals(workout: currentWorkout, evidence: evidence) {
-            return supportedIntervals
-        }
-        return WorkoutIntervalReconstructionEngine.reconstruct(workout: currentWorkout, evidence: evidence)
+        return CustomWorkoutNormalDetailGate.supportedIntervals(workout: currentWorkout, evidence: evidence)
     }
 
     private var rawDebugExportMarkdown: String {
@@ -2079,17 +2076,13 @@ struct RawHealthKitWorkoutDebugView: View {
                     MetricItem(title: "Plan source", value: result.planSource.label, detail: "Structure"),
                     MetricItem(
                         title: "Window source",
-                        value: isUsingCandidateDebugRows ? "Candidate activity boundaries" : result.windowSource.label,
-                        detail: isUsingCandidateDebugRows ? "Debug rows; normal gate blocked" : "Segment markers not used"
+                        value: result.windowSource.label,
+                        detail: "Segment markers not used"
                     )
                 ])
                 NoticeCard(
-                    title: isUsingCandidateDebugRows ? "Candidate debug rows" : (result.windowSource == .healthKitActivityBoundaries ? "Resolved row source" : "Legacy debug reconstruction"),
-                    message: isUsingCandidateDebugRows
-                    ? "These rows use HealthKit activity-boundary candidate evidence because the normal evidence gate is still blocked. They keep the visible header, duration, distance, and pace on the same debug basis."
-                    : (result.windowSource == .healthKitActivityBoundaries
-                        ? "These rows are resolved from WorkoutKit planned steps and HealthKit activity boundaries. The duration, distance, and pace tiles should use this same row basis."
-                        : "These rows are plan-derived debug reconstruction only. Compare against candidate boundary rows before treating any duration, distance, or pace as UI truth.")
+                    title: "Resolved row source",
+                    message: "These rows are resolved from WorkoutKit planned steps and HealthKit activity boundaries. The duration, distance, and pace tiles should use this same row basis."
                 )
 
                 if isUsingCandidateDebugRows {
@@ -2196,7 +2189,7 @@ struct RawHealthKitWorkoutDebugView: View {
                 candidateDebugPaceItem(for: row)
             ])
 
-            Text("\(row.isOpenTail ? "Medium" : "High") · Candidate activity-boundary debug row")
+            Text("\(row.isOpenTail ? "Medium" : "High") · Resolved activity-boundary row")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -2257,8 +2250,8 @@ struct RawHealthKitWorkoutDebugView: View {
         let result = parityLabCandidateRowsResult
             VStack(alignment: .leading, spacing: 10) {
                 NoticeCard(
-                    title: "Candidate boundary rows",
-                    message: "These rows show the HealthKit activity-boundary source used by resolved custom workout intervals when evidence gates pass."
+                    title: "Resolved boundary rows",
+                    message: "These rows show the HealthKit activity-boundary source used by official custom workout intervals when evidence gates pass."
                 )
 
             if let unavailableReason = result.unavailableReason {
@@ -2270,8 +2263,12 @@ struct RawHealthKitWorkoutDebugView: View {
                     MetricItem(title: "Rows", value: "\(result.rows.count)", detail: result.rowCountDetail),
                     MetricItem(title: "Open tails", value: "\(result.rows.filter(\.isOpenTail).count)", detail: "Inferred"),
                     MetricItem(title: "Pauses", value: "\(result.pairedPauseCount)", detail: RunFormatters.duration(result.totalPairedPauseSeconds)),
-                    MetricItem(title: "Scope", value: "Debug", detail: "No production change"),
-                    MetricItem(title: "Parity scope", value: "Evidence gated", detail: "Normal UI when resolved")
+                    MetricItem(
+                        title: "Scope",
+                        value: result.promotesProductionBehavior ? "Normal detail" : "Audit",
+                        detail: result.promotesProductionBehavior ? "Official source" : "Fallback review"
+                    ),
+                    MetricItem(title: "Parity scope", value: "Evidence gated", detail: "Official when supported")
                 ])
 
                 if let stoppedEarlyMessage = result.stoppedEarlyMessage {
@@ -2315,7 +2312,7 @@ struct RawHealthKitWorkoutDebugView: View {
 
     private var parityLabCandidateRowsResult: ParityLabCandidateRowsResult {
         guard let evidence = currentWorkout.evidence else {
-            return ParityLabCandidateRowsResult(unavailableReason: "Reload HealthKit evidence on the physical iPhone before inspecting candidate rows.")
+            return ParityLabCandidateRowsResult(unavailableReason: "Reload HealthKit evidence on the physical iPhone before inspecting resolved boundary rows.")
         }
         guard let audit = evidence.workoutPlanAudit, !audit.plannedSteps.isEmpty else {
             return ParityLabCandidateRowsResult(unavailableReason: "WorkoutKit planned steps are missing for this workout.")
@@ -2428,6 +2425,7 @@ struct RawHealthKitWorkoutDebugView: View {
             rows: rows,
             structuredStatus: comparison.status.normalDetailBlockedReasonLabel,
             fallbackReasons: comparison.fallbackReasons.map(\.normalDetailBlockedReasonLabel),
+            promotesProductionBehavior: comparison.promotesProductionBehavior,
             pairedPauseCount: pauses.count,
             totalPairedPauseSeconds: pauses.map(\.durationSeconds).reduce(0, +),
             plannedRowCount: plannedSteps.count,
@@ -2487,6 +2485,7 @@ struct RawHealthKitWorkoutDebugView: View {
         var unavailableReason: String?
         var structuredStatus: String = CustomWorkoutComparisonStatus.missingRequiredEvidence.normalDetailBlockedReasonLabel
         var fallbackReasons: [String] = []
+        var promotesProductionBehavior = false
         var pairedPauseCount: Int = 0
         var totalPairedPauseSeconds: Double = 0
         var plannedRowCount: Int = 0
@@ -2498,12 +2497,12 @@ struct RawHealthKitWorkoutDebugView: View {
 
         var rowCountDetail: String {
             guard plannedRowCount > 0, completedRowCount > 0 else {
-                return "Candidate"
+                return "Resolved rows"
             }
             if completedRowCount < plannedRowCount {
                 return "Completed prefix of \(plannedRowCount)"
             }
-            return "Candidate"
+            return "Resolved rows"
         }
 
         var stoppedEarlyMessage: String? {

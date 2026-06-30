@@ -16,6 +16,7 @@ Last updated: 2026-06-28
 
 Keep active validation lean. For custom-workout status and roadmap questions, start with `docs/project-state/accuracy-ledger.md`; use the files below as source evidence only when the ledger row or task names them. Once a date-specific parity investigation is complete, move it to `docs/archive/old-validation/` unless it is still the latest active investigation, latest active evidence review, or current blocker.
 
+- `docs/validation/apple-fitness-interval-parity-dataset/user-supplied-june30-clean-repeat-tail-review-2026-06-30/`: current June 30 user-supplied proof packet for a clean no-pause `Warmup 2 km > 10x Work/Recovery > fixed Cooldown > Open / Extra` workout; row evidence supports the generalized resolved activity-boundary source, and current-build re-export should confirm supported status labels.
 - `docs/validation/2026-06-10-apple-fitness-parity.md`: current Jun 10 Apple Fitness parity note.
 - `docs/validation/apple-fitness-interval-model-research.md`: current WorkoutKit/HealthKit interval reconstruction research.
 - `docs/validation/golden-apple-fitness-checklist.md`: manual Apple Fitness parity checklist.

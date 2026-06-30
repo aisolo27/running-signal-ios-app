@@ -669,6 +669,83 @@ import Testing
     expectDebugOnly(comparison)
 }
 
+@Test func debugCustomWorkoutComparisonBridgeSupportsJune30TenRepeatFixedCooldownTail() {
+    let start = Date(timeIntervalSince1970: 1_798_632_765)
+    let workout = bridgeWorkout(start: start, distanceMeters: 7_221.2, durationSeconds: 2_829.3)
+    var plannedSteps: [PlannedWorkoutStep] = [
+        plannedStep(index: 1, label: "Warmup", stepType: .warmup, goalType: .distance, goalValue: 2_000)
+    ]
+    var activities: [WorkoutEvidenceActivity] = [
+        evidenceActivity(index: 1, start: start, end: start.addingTimeInterval(746.4), distance: 2_009.0)
+    ]
+
+    let workDurations = [42.1, 41.0, 40.4, 38.7, 41.3, 41.8, 41.4, 41.8, 42.1, 39.4]
+    let workDistances = [205.6, 196.6, 208.5, 211.8, 210.9, 213.4, 212.1, 213.2, 208.4, 202.1]
+    let recoveryDurations = [89.7, 89.6, 89.8, 89.3, 89.9, 89.6, 89.7, 89.5, 90.0, 89.7]
+    let recoveryDistances = [147.6, 148.1, 139.9, 148.4, 119.4, 78.7, 88.0, 98.9, 80.9, 38.0]
+    var cursor = 746.4
+    var rowIndex = 2
+
+    for repeatIndex in 1...10 {
+        let workEnd = cursor + workDurations[repeatIndex - 1]
+        plannedSteps.append(plannedStep(
+            index: rowIndex,
+            label: "Work \(repeatIndex)",
+            stepType: .work,
+            repeatBlockIndex: 1,
+            repeatIndex: repeatIndex,
+            goalType: .distance,
+            goalValue: 200
+        ))
+        activities.append(evidenceActivity(
+            index: rowIndex,
+            start: start.addingTimeInterval(cursor),
+            end: start.addingTimeInterval(workEnd),
+            distance: workDistances[repeatIndex - 1]
+        ))
+        cursor = workEnd
+        rowIndex += 1
+
+        let recoveryEnd = cursor + recoveryDurations[repeatIndex - 1]
+        plannedSteps.append(plannedStep(
+            index: rowIndex,
+            label: "Recovery \(repeatIndex)",
+            stepType: .recovery,
+            repeatBlockIndex: 1,
+            repeatIndex: repeatIndex,
+            goalType: .time,
+            goalValue: 90
+        ))
+        activities.append(evidenceActivity(
+            index: rowIndex,
+            start: start.addingTimeInterval(cursor),
+            end: start.addingTimeInterval(recoveryEnd),
+            distance: recoveryDistances[repeatIndex - 1]
+        ))
+        cursor = recoveryEnd
+        rowIndex += 1
+    }
+
+    let cooldownEnd = cursor + 754.1
+    plannedSteps.append(plannedStep(index: 22, label: "Cooldown", stepType: .cooldown, goalType: .distance, goalValue: 2_000))
+    activities.append(evidenceActivity(index: 22, start: start.addingTimeInterval(cursor), end: start.addingTimeInterval(cooldownEnd), distance: 2_008.6))
+
+    let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
+        plannedSteps: plannedSteps,
+        activities: activities,
+        workout: workout,
+        repeatTailRuleApproved: true
+    )
+
+    #expect(comparison.status == .supported)
+    #expect(comparison.fallbackReasons.isEmpty)
+    #expect(comparison.tailAmbiguity == .fixedCooldownFollowedByPossibleOpenExtraTail)
+    #expect(comparison.rows.count == 22)
+    #expect(comparison.promotesProductionBehavior)
+    #expect(comparison.rows.allSatisfy { $0.confidence == .supported })
+    expectDebugOnly(comparison)
+}
+
 @Test func debugCustomWorkoutComparisonBridgeDoesNotApplyRepeatTailRuleToOpenCooldown() {
     let start = Date(timeIntervalSince1970: 1_797_000_000)
     let workout = bridgeWorkout(start: start, distanceMeters: 1_020, durationSeconds: 420)

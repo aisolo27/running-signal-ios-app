@@ -128,7 +128,6 @@ public enum DiagnosticsExport {
         let reconstructedIntervals = evidence
             .flatMap {
                 CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: $0)
-                    ?? WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: $0)
             }
         let segmentMarkers = evidence.map {
             DerivedAnalyticsEngine.intervalCandidates(workout: workout, evidence: $0)
@@ -208,9 +207,9 @@ public enum DiagnosticsExport {
             workout: workout
         ))
 
-        ## Resolved/Legacy Interval Rows
+        ## Official Resolved Interval Rows
 
-        Planned structure source: WorkoutKit when available. Measured stats source: HealthKit activity boundaries when the evidence gate passes; otherwise this section is legacy plan-derived debug reconstruction. Segment markers are not interval analytics rows.
+        Planned structure source: WorkoutKit when available. Measured stats source: HealthKit activity boundaries when the evidence gate passes. Segment markers and plan-derived reconstruction are not interval analytics rows.
 
         \(reconstructedIntervalsMarkdown(reconstructedIntervals, workout: workout, candidateRuleScore: candidateRuleScore))
 
@@ -291,7 +290,9 @@ public enum DiagnosticsExport {
         let evidence = workout.evidence
         let coverage = evidence.map(WorkoutEvidenceAnalyzer.coverage(for:))
         let reconstructedIntervals = evidence
-            .flatMap { WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: $0) }
+            .flatMap {
+                CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: $0)
+            }
         let segmentMarkers = evidence.map {
             DerivedAnalyticsEngine.intervalCandidates(workout: workout, evidence: $0)
         } ?? []
@@ -437,13 +438,6 @@ public enum DiagnosticsExport {
             return "Unavailable. Whole-run stats remain safe to review, but custom interval rows need a supported public WorkoutKit and HealthKit evidence pattern before RunSignal can show them."
         }
 
-        if result.windowSource != .healthKitActivityBoundaries,
-           let candidateRuleScore,
-           candidateRuleScore.summary.isScoreable,
-           !candidateRuleScore.rows.isEmpty {
-            return candidateResolvedIntervalsMarkdown(candidateRuleScore)
-        }
-
         let rows = result.intervals.map { interval in
             [
                 "\(interval.index)",
@@ -547,7 +541,7 @@ public enum DiagnosticsExport {
             return """
             \(summaryTable)
 
-            No activity-boundary candidate rows were produced.
+            No resolved activity-boundary rows were produced.
 
             Caveats: \(summary.caveats.map(markdownCell).joined(separator: " · "))
             """
@@ -1366,7 +1360,7 @@ public enum DiagnosticsExport {
                 safetyFlags: baseCaveats,
                 fitValidationStatus: "offline-evidence-only-not-runtime-truth",
                 isScoreable: isScoreable,
-                notScoreableReason: isScoreable ? nil : activityCandidate.summary.notScoreableReason ?? "Activity-boundary candidate rows are unavailable.",
+                notScoreableReason: isScoreable ? nil : activityCandidate.summary.notScoreableReason ?? "Resolved activity-boundary rows are unavailable.",
                 caveats: baseCaveats,
                 productionUIWarning: productionWarning
             ),
@@ -1898,11 +1892,10 @@ public enum DiagnosticsExport {
             return "no HKWorkoutActivity rows"
         }
 
-        let reconstructed = WorkoutIntervalReconstructionEngine.reconstruct(
-            workout: workout,
-            evidence: evidence
-        )
-        let labels = reconstructed?.intervals.map { $0.label.lowercased() } ?? []
+        let supportedLabels = CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence)?
+            .intervals
+            .map { $0.label.lowercased() }
+        let labels = supportedLabels ?? plannedSteps.map { $0.label.lowercased() }
         let hasOpenTail = labels.contains { $0.contains("open") || $0.contains("extra") }
         let hasWarmup = labels.contains { $0.contains("warmup") }
         let hasCooldown = labels.contains { $0.contains("cooldown") }
@@ -1928,11 +1921,12 @@ public enum DiagnosticsExport {
         forceReenrichResult: ParityForceReenrichResult? = nil
     ) -> MonthlyDiagnosticsSummary {
         let evidence = workout.evidence
-        let reconstructed = evidence.flatMap {
-            WorkoutIntervalReconstructionEngine.reconstruct(workout: workout, evidence: $0)
-        }
-        let labels = reconstructed?.intervals.map { $0.label.lowercased() } ?? []
         let plannedSteps = evidence?.workoutPlanAudit?.plannedSteps ?? []
+        let supportedResolvedIntervals = evidence.flatMap {
+            CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: $0)
+        }
+        let supportedLabels = supportedResolvedIntervals?.intervals.map { $0.label.lowercased() }
+        let labels = supportedLabels ?? plannedSteps.map { $0.label.lowercased() }
         let hasOpenTail = labels.contains { $0.contains("open") || $0.contains("extra") }
         let evidenceCounts = ParityEvidenceCounts(workout: workout)
         let freshQueryReturnedWorkout = refreshResult?.freshQueryReturnedWorkout ?? forceReenrichResult?.freshQueryReturnedWorkout ?? false
@@ -1979,7 +1973,7 @@ public enum DiagnosticsExport {
             plannedStepCount: plannedSteps.count,
             hkWorkoutActivityCount: evidence?.activities.count ?? 0,
             rawWorkoutEventCount: evidence?.events.count ?? workout.intervalCount,
-            reconstructedIntervalCount: reconstructed?.intervals.count ?? 0,
+            reconstructedIntervalCount: supportedResolvedIntervals?.intervals.count ?? 0,
             hasOpenExtraTail: hasOpenTail,
             evidenceLoadedAt: evidence?.loadedAt.ISO8601Format(),
             workoutKitPlanStatus: evidence?.workoutPlanAudit?.status.rawValue ?? "missing",
