@@ -1,6 +1,6 @@
 # RunSignal Accuracy Ledger
 
-Last updated: 2026-06-28
+Last updated: 2026-06-29
 
 ## Purpose
 
@@ -30,7 +30,7 @@ The product standard is not "perfectly clone Apple Fitness." Apple does not expo
 
 | Status | Meaning | Normal workout detail | Analytics allowed |
 | --- | --- | --- | --- |
-| `Proven` | Exact shape has enough proof and guard coverage for the approved narrow behavior | Yes, only for the exact approved shape | Yes, only after the analytics readiness bar is met |
+| `Proven` | Shape or resolver path has enough proof and guard coverage for approved v1 behavior | Yes, when its evidence gate passes | Yes, only after the analytics readiness bar is met |
 | `Debug-only` | Evidence is promising, but proof or guard coverage is not enough for normal UI | No, except debug/Parity Lab output | No |
 | `Blocked` | Shape must not promote because a rule, proof packet, tolerance, or guard is missing | No | No |
 | `Whole-run only` | Workout can be analyzed as a normal completed run, but not as custom interval rows | Whole-run detail, splits, route, and safe summaries only | Whole-run analytics only |
@@ -103,10 +103,11 @@ Concrete bar:
 
 | Shape | Status | Allowed behavior | Proof basis | Do not broaden into |
 | --- | --- | --- | --- | --- |
+| Generalized WorkoutKit planned rows + HealthKit activity-boundary resolver | `Proven` v1 row source | Use complete contiguous HealthKit activity rows mapped to ordered WorkoutKit planned rows, or to a completed planned prefix for stopped-early workouts, as the normal-detail custom-workout boundary source when pause/tail evidence gates pass. | Jan-Jun physical-iPhone monthly diagnostics sweep: 136/136 monthly refresh completed; 114/114 planned workouts had scoreable HealthKit activity-boundary rows; 0 planned workouts were non-scoreable. Regression coverage keeps raw segment markers separate and fallback guards active. | Missing plans, missing/incomplete/non-contiguous activity rows, activity rows exceeding planned row count, unpaired/cross-row pauses, non-prefix partial context, ambiguous tails, stale summary-only evidence, duplicates, or plain open runs |
 | Plain open Watch run | `Whole-run only` | Show normal workout detail, splits, route, and whole-run stats. Do not invent custom interval rows. | Plain open-run controls have no WorkoutKit planned steps; FIT may contain split laps but not custom plan rows. | Custom Warmup/Work/Recovery/Cooldown rows |
 | Stopped-early single fixed-distance `Work` | `Proven` narrow, `rare-control` | Show one partial `Work` row only when one planned fixed-distance Work step maps to one complete partial HealthKit activity row. | June 14 stopped-early control with matching FIT one-lap/one-step evidence. | Completed Work/Open, repeat, paused, tail, or analytics behavior |
 | Stopped-early multi-step custom workout prefix | `Proven` narrow | Show only the complete contiguous HealthKit activity rows that map to the completed WorkoutKit planned prefix. Do not invent uncompleted planned rows or an `Open / Extra` tail. | Prove-it style early-stop regression and paused-repeat prefix guard. | Non-contiguous rows, rows exceeding planned count, unpaired/cross-row pauses, non-prefix partial context |
-| Simple fixed-distance `Work > Open / Extra` | `Proven` narrow | Show `Work 1` plus inferred `Open / Extra` only for exactly one fixed-distance Work step, one complete activity row, and positive tail. | Gate A March-June FIT support plus physical-iPhone June 12 post-promotion proof. | Structured/special workouts, paused workouts, recovery rows, repeat rows, missing evidence, broad `HKWorkoutActivity` promotion |
+| Simple fixed-distance `Work > Open / Extra` | `Proven` narrow | Show `Work 1` plus inferred `Open / Extra` only for exactly one fixed-distance Work step, one complete activity row, and positive tail. | Gate A March-June FIT support plus physical-iPhone June 12 post-promotion proof. | Structured/special workouts, paused workouts, recovery rows, repeat rows, or missing evidence outside the resolver gate |
 | `Warmup(2 km) > one Work step > Cooldown(Open)` | `Proven` narrow | Show Warmup, Work, and final Cooldown rows when planned rows map one-to-one to complete contiguous HealthKit activity rows. | Narrow normal-detail gate and supported row-level examples such as March 5 and April 24. | Broad warmup/work/cooldown promotion or paused timer outliers |
 | `Warmup(2 km) > one Work step > fixed Cooldown > Open / Extra` | `Proven` narrow | Show planned rows plus final inferred `Open / Extra` only for the clean fixed-cooldown tail subclass. | Current narrow normal-detail gate and fixed-cooldown tail proof. | Recovery-containing tails, repeat tails, or ambiguous tails |
 | Clean no-pause repeat block ending in `Cooldown(Open)` | `Proven` narrow | Show expanded Work/Recovery rows and final Cooldown. | Physical-iPhone repeat proof with complete expanded rows and no tail. | Paused repeats, ambiguous tails, missing rows, or broad repeat promotion |
@@ -132,7 +133,7 @@ Concrete bar:
 | Paused warmup/work/cooldown timer outlier, including May 29-style cases | `Blocked` | Distance/labels may look close, but elapsed-vs-timer behavior needs a shape-specific paused W/W/C timer rule. | Create timer rule and guard tests before any promotion |
 | March 19-style warmup/work/cooldown distance drift | `Blocked` | Candidate timing aligns, but warmup distance drift remains too large for promotion. | Keep blocked unless renewed evidence resolves the distance drift |
 | Duplicate, same-day extra, no-plan, guard-unknown, stale summary-only, or missing-detail workouts | `Excluded` | They are not reliable promotion evidence. | Use as fallback/debug evidence only unless fresh proof reclassifies them |
-| Broad `HKWorkoutActivity` boundary promotion | `Blocked` | Nine narrow gates are proven; broad production promotion is not approved. | Promote exact shapes only through this ledger |
+| Unsupported `HKWorkoutActivity` boundary evidence | `Blocked` | The generalized resolver is approved only when public evidence gates pass. Missing plans, missing/incomplete/non-contiguous rows, rows exceeding the plan, unpaired/cross-row pauses, ambiguous tails, and stale summary-only evidence must not promote. | Keep fallback tests locked; add exact guard coverage when a new unsupported pattern is investigated |
 
 ### Parked Until Structure Is Stable
 
@@ -149,9 +150,9 @@ Concrete bar:
 ## Current Execution Order
 
 1. Keep the `Proven` rows frozen unless evidence shows a real bug.
-2. Keep exact paused repeat fixed-tail `Open / Extra` support narrow and covered by its guard cases.
-3. Keep ambiguous repeat tails, broad recovery tails, broad paused tails, and paused W/W/C timer outliers blocked unless a later task names one exact shape and walks the promotion ladder.
-4. Before any interval-row analytics task, check the ledger row for the workout shape being analyzed.
+2. Keep generalized resolved-row behavior evidence-gated: WorkoutKit plan plus complete contiguous HealthKit activity rows, paired in-row pauses, and deterministic tails only.
+3. Keep ambiguous repeat tails, broad recovery tails, broad paused tails, missing evidence, and paused W/W/C timer outliers blocked unless a later task names the exact unsupported pattern and walks the promotion ladder.
+4. Before any interval-row analytics task, check that the analyzed workout uses the approved resolved-row source or a whole-run-only path.
 5. If a task cannot point to one ledger row, split the task before coding.
 
 Latest rung check, 2026-06-28:

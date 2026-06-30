@@ -3,22 +3,22 @@ import Foundation
 private let rawDebugReviewPacketScopeMarkdown = """
 ## Review Packet Scope
 
-This packet bundles Raw HealthKit Debug, WorkoutKit plan audit, HealthKit activity rows, Parity Lab candidate rows, structured comparison, fallback labels, pause/tail diagnostics, source metadata, and boundary warnings. It is debug/export-only and does not approve normal workout detail behavior.
+This packet bundles Raw HealthKit Debug, WorkoutKit plan audit, HealthKit activity rows, resolved activity-boundary rows, structured comparison, fallback labels, pause/tail diagnostics, source metadata, and boundary warnings. Resolved rows are the normal-detail source only when the structured evidence gate passes.
 
 Whole-run stats remain usable when custom interval rows are blocked. External HealthFit/FIT archives stay offline validation evidence; attach or reference them separately and do not treat FIT as app input or runtime truth.
 
-Blocked custom interval diagnostics are review aids only. A supported Parity Lab status, readable fallback label, or exported candidate row does not change normal workout detail unless the exact ledger row separately reaches the normal-detail promotion rung.
+Blocked custom interval diagnostics are review aids only. Missing plans, incomplete activity rows, non-contiguous rows, row-count mismatches, unpaired or cross-row pauses, and ambiguous tails stay on explicit fallback paths.
 """
 
 public enum DiagnosticsExport {
     private static var reviewPacketMetadata: ReviewPacketMetadata {
         ReviewPacketMetadata(
-            scope: "debug/export-only",
+            scope: "resolved-row-review-packet",
             includedArtifacts: [
                 "Raw HealthKit Debug",
                 "WorkoutKit plan audit",
                 "HealthKit workout activities",
-                "Parity Lab candidate rows",
+                "resolved activity-boundary rows",
                 "structured comparison summary",
                 "fallback reason labels",
                 "pause and tail diagnostics",
@@ -27,7 +27,7 @@ public enum DiagnosticsExport {
                 "blocked interval guardrails"
             ],
             externalEvidencePolicy: "External HealthFit/FIT archives are offline validation evidence only. Reference or attach them separately; RunSignal does not import or use FIT as runtime truth.",
-            normalWorkoutUIChanged: false,
+            normalWorkoutUIChanged: true,
             usesFITRuntimeTruth: false,
             fitArchiveReference: "external-reference-only"
         )
@@ -214,21 +214,21 @@ public enum DiagnosticsExport {
 
         \(reconstructedIntervalsMarkdown(reconstructedIntervals, workout: workout, candidateRuleScore: candidateRuleScore))
 
-        ## HKWorkoutActivity Boundary Candidate Intervals
+        ## Resolved HKWorkoutActivity Boundary Rows
 
-        Debug-only alternate reconstruction for Parity Lab exports. These rows are not production interval logic and are not shown in the normal workout UI.
+        Evidence-gated activity-boundary rows for normal detail and audit exports. Supported rows are production interval logic when WorkoutKit planned rows and complete contiguous HealthKit activity rows pass the structured gate; unsupported rows remain fallback/debug evidence only.
 
         \(activityBoundaryCandidateMarkdown(activityCandidate))
 
         ## Custom Workout Candidate Rule Scorer
 
-        Debug-only Parity Lab scorer for active-time duration, pause overlap, and Open / Extra tail rows. These rows are not production interval logic, are not shown in the normal workout UI, and do not approve a normal-detail gate.
+        Audit scorer for active-time duration, pause overlap, and Open / Extra tail rows. It explains why a resolved row set passes or falls back; it does not approve unsupported evidence by itself.
 
         \(customWorkoutCandidateRuleMarkdown(candidateRuleScore))
 
         ## Custom Workout Structured Comparison
 
-        Debug-only structured status and fallback taxonomy for Parity Lab rows. This status is not production interval logic, is not shown in the normal workout UI, and does not approve a normal-detail gate by itself.
+        Structured status and fallback taxonomy for resolved activity-boundary rows. Supported status feeds normal detail; blocked status stays audit-only and does not approve a normal-detail gate by itself.
 
         \(customWorkoutComparisonMarkdown(
             customWorkoutComparisonSummary(
@@ -509,7 +509,7 @@ public enum DiagnosticsExport {
         |---:|---|---|---|---:|---:|---:|---:|---:|---|---:|---:|---:|---|---|
         \(rows)
 
-        Notes: candidate/debug source only; normal-detail interval behavior is unchanged.
+        Notes: resolved activity-boundary source; normal detail uses these rows only when the structured gate passes.
         """
     }
 
@@ -1103,12 +1103,12 @@ public enum DiagnosticsExport {
         workout: CanonicalWorkout
     ) -> RawDebugActivityBoundaryCandidate {
         let baseCaveats = [
-            "debug-only, not promoted",
-            "not production interval logic",
-            "not shown in normal workout UI",
+            "evidence-gated row source",
+            "normal detail only when structured comparison is supported",
+            "fallback/debug evidence when the gate is blocked",
             "FIT and Apple Fitness/manual rows are not runtime inputs"
         ]
-        let productionWarning = "HKWorkoutActivity boundary rows are debug-only Parity Lab output and are not production UI."
+        let productionWarning = "HKWorkoutActivity boundary rows are the normal-detail source only when WorkoutKit and HealthKit evidence gates pass."
 
         guard !plannedSteps.isEmpty else {
             return RawDebugActivityBoundaryCandidate(
@@ -1286,11 +1286,11 @@ public enum DiagnosticsExport {
         events: [WorkoutEvidenceEvent],
         workout: CanonicalWorkout
     ) -> RawDebugCustomWorkoutCandidateRuleScore {
-        let productionWarning = "Custom workout candidate rule rows are debug-only Parity Lab output and are not production UI."
+        let productionWarning = "Custom workout rule rows describe the evidence-gated resolver; supported rows may feed normal detail, blocked rows remain audit-only."
         let baseCaveats = [
-            "debug-only, not promoted",
-            "not production interval logic",
-            "not shown in normal workout UI",
+            "evidence-gated resolver audit",
+            "blocked rows remain fallback-only",
+            "normal detail only when structured comparison is supported",
             "FIT and Apple Fitness/manual rows are not runtime inputs",
             "Active duration subtracts paired HealthKit pause/resume overlap when available."
         ]
@@ -2452,7 +2452,7 @@ private struct RawDebugActivityBoundaryCandidate {
 
 private struct RawDebugActivityBoundaryCandidateSummary: Codable {
     var strategyID: String = "hkworkoutactivity_boundary"
-    var scope: String = "debug/export-only"
+    var scope: String = "resolved-row-gate"
     var mappingStatus: String
     var activityCount: Int
     var plannedStepCount: Int
@@ -2494,7 +2494,7 @@ private struct RawDebugCustomWorkoutCandidateRuleScore {
 
 private struct RawDebugCustomWorkoutCandidateRuleSummary: Codable {
     var strategyID: String = "custom_workout_candidate_rule_active_time"
-    var scope: String = "debug/export-only"
+    var scope: String = "resolved-row-audit"
     var ruleStatus: String
     var candidateRowCount: Int
     var plannedExpandedRowCount: Int
@@ -2548,9 +2548,9 @@ private struct RawDebugCustomWorkoutComparisonSummary: Codable {
     var rowConfidences: [String]
     var tailAmbiguity: String
     var promotesProductionBehavior: Bool
-    var scope: String = "debug/export-only"
-    var productionIntervalBehaviorChanged: Bool = false
-    var normalWorkoutUIChanged: Bool = false
+    var scope: String
+    var productionIntervalBehaviorChanged: Bool
+    var normalWorkoutUIChanged: Bool
     var usesFITRuntimeTruth: Bool = false
 
     init(comparison: DebugCustomWorkoutComparison) {
@@ -2563,6 +2563,9 @@ private struct RawDebugCustomWorkoutComparisonSummary: Codable {
         rowConfidences = comparison.rows.map { $0.confidence.rawValue }
         tailAmbiguity = comparison.tailAmbiguity.rawValue
         promotesProductionBehavior = comparison.promotesProductionBehavior
+        scope = comparison.promotesProductionBehavior ? "normal-detail-resolved-row-source" : "audit/fallback-only"
+        productionIntervalBehaviorChanged = comparison.promotesProductionBehavior
+        normalWorkoutUIChanged = comparison.promotesProductionBehavior
     }
 }
 

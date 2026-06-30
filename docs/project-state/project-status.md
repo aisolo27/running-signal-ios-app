@@ -8,7 +8,7 @@ RunSignal is a native iPhone SwiftUI app for evidence-grounded completed running
 
 Coaching expansion, backend sync, AI calls, FIT import, HealthFit import/export, and file-based workout ingestion remain out of scope.
 
-The active milestone is `Custom Workout Correctness Lock v1`: promote generalized evidence-gated custom workout rows for normal detail when WorkoutKit planned rows and complete contiguous HealthKit activity rows agree, while keeping ambiguous or incomplete evidence on explicit fallback paths.
+The active milestone is `Custom Workout Correctness Lock v1`: keep the generalized evidence-gated custom workout row resolver stable now that WorkoutKit planned rows plus complete contiguous HealthKit activity rows are approved as the v1 normal-detail source when the evidence gate passes.
 
 ## First-Read Map
 
@@ -38,9 +38,9 @@ The active milestone is `Custom Workout Correctness Lock v1`: promote generalize
 
 ## Current Validation State
 
-Production custom workout intervals now use resolved candidate rows when the evidence gate passes: WorkoutKit planned rows are present and ordered, HealthKit activity rows are complete/contiguous and map to those rows or to a completed prefix for stopped-early workouts, pause/resume events are paired and contained within one row, and any post-fixed-row tail is deterministic. The row boundary source is the former Parity Lab candidate path; HealthKit samples enrich those rows with average HR, max HR, average power, and cadence where available.
+Production custom workout intervals now use resolved activity-boundary rows when the evidence gate passes: WorkoutKit planned rows are present and ordered, HealthKit activity rows are complete/contiguous and map to those rows or to a completed prefix for stopped-early workouts, pause/resume events are paired and contained within one row, and any post-fixed-row tail is deterministic. The row boundary source is the former Parity Lab candidate path; HealthKit samples enrich those rows with average HR, max HR, average power, and cadence where available.
 
-Parity Lab/debug exports now label stopped-early rows as completed planned prefixes, show stopped-early row counts once at the section level, keep shared debug/FIT caveats at summary level, and report structured comparison status against the completed prefix instead of the full unfinished plan.
+Parity Lab/Raw Debug exports inspect the same resolver, label stopped-early rows as completed planned prefixes, show stopped-early row counts once at the section level, keep shared FIT caveats at summary level, and report structured comparison status against the completed prefix instead of the full unfinished plan. They no longer describe scoreable activity-boundary rows as categorically non-production; blocked comparisons still remain audit-only.
 
 Normal workout detail supports these resolved custom-workout row classes when the evidence gate passes:
 
@@ -65,7 +65,7 @@ Gate B broad shape-whitelist work has been replaced by the generalized resolved-
 
 ## Current Next Work
 
-- Keep resolved candidate-row behavior stable across the archived Apple Fitness fixtures and priority workouts.
+- Keep resolved activity-boundary row behavior stable across the archived Apple Fitness fixtures and priority workouts.
 - Continue hardening fallback reasons for missing plans, incomplete activity rows, unpaired pauses, cross-row pauses, and stale summary-only evidence.
 - Run `docs/validation/apple-fitness-interval-parity-dataset/score_fit_backed_two_gate_validation.py` after rollup changes.
 - Run `docs/validation/apple-fitness-interval-parity-dataset/score_gate_b_custom_workout_fit.py` after Gate B rollup changes.
@@ -87,7 +87,7 @@ Gate B broad shape-whitelist work has been replaced by the generalized resolved-
 - Some older runs are summary-only because detailed HealthKit series may be unavailable.
 - FIT does not prove exact Apple Fitness UI presentation parity or private Apple smoothing/labeling rules.
 - WorkoutKit plan data can be unavailable or throw and must stay optional.
-- Structured and special custom workouts are not fully settled; repeat-block mapping, recovery-containing tails, repeat-tail cases, and reviewed warmup/work/cooldown outliers still block broad promotion.
+- Structured custom workouts are settled only when the generalized resolver evidence gate passes. Missing plans, incomplete or non-contiguous activity rows, rows exceeding the plan, unpaired/cross-row pauses, unresolved repeat context, ambiguous recovery tails, repeat-tail cases, and reviewed warmup/work/cooldown outliers stay on fallback paths.
 - Mechanics, trends, stronger run-type claims, and interval-row analytics remain confidence-gated.
 
 ## Recent Proof And Follow-Up
@@ -98,18 +98,18 @@ Gate B broad shape-whitelist work has been replaced by the generalized resolved-
 - Refresh architecture follow-up: monthly evidence refresh is transactional and persists month-scoped job/item checkpoints. Next proof is a physical-iPhone check for activation/scroll responsiveness, thermal behavior, and archived diagnostics/logs.
 ## 2026-06-28 Interval UI Note
 
-- Paused reconstructed interval rows now expose elapsed row-window duration, paired pause overlap, active/timer duration, display basis, and matching pace basis so Priority-style review can compare normal detail, Raw Debug reconstructed intervals, Parity Lab candidate rows, and Apple Fitness screenshots without hidden duration-basis mismatches.
+- Paused reconstructed interval rows now expose elapsed row-window duration, paired pause overlap, active/timer duration, display basis, and matching pace basis so Priority-style review can compare normal detail, Raw Debug resolved activity-boundary rows, and Apple Fitness screenshots without hidden duration-basis mismatches.
 
 ## 2026-06-28 Resolved Custom Workout Rows
 
 - Normal detail now resolves custom workout interval rows from complete contiguous HealthKit activity boundaries mapped to expanded WorkoutKit planned steps. The primary row duration uses active/timer time when paired pause overlap exists; RunSignal also exposes pause and elapsed row-window duration visibly.
 - Resolved rows aggregate average HR, max HR, average running power, and cadence from HealthKit samples over the resolved row window.
-- Parity Lab candidate rows remain visible as evidence/debug inspection, but they are no longer categorically separate from production: they are the boundary source when evidence gates pass.
+- Resolved activity-boundary rows remain visible in evidence/debug inspection, but they are no longer categorically separate from production: they are the boundary source when evidence gates pass.
 
 ## 2026-06-29 Stopped-Early Prefix Rows
 
 - Stopped-early custom workouts can now show the completed prefix of planned rows instead of blocking solely because planned row count is greater than HealthKit activity row count.
-- Parity Lab candidate rows and Raw Debug exports use the same completed-prefix mapping and suppress `Open / Extra` tails when planned rows remain uncompleted.
+- Resolved activity-boundary rows and Raw Debug exports use the same completed-prefix mapping and suppress `Open / Extra` tails when planned rows remain uncompleted.
 
 ## 2026-06-29 UI Source Guardrail
 

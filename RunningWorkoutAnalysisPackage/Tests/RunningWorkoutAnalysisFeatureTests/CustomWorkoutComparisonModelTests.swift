@@ -979,7 +979,7 @@ private func activityRow(
 }
 
 private func expectDebugOnly(_ comparison: DebugCustomWorkoutComparison) {
-    #expect(comparison.promotesProductionBehavior == false)
+    #expect(comparison.promotesProductionBehavior == (comparison.status == .supported))
 }
 
 private func bridgeWorkout(

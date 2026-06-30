@@ -390,7 +390,8 @@ enum DebugCustomWorkoutComparisonBuilder {
                 primaryFallbackReason: fallbackReasons.first
             ),
             fallbackReasons: fallbackReasons,
-            tailAmbiguity: tailAmbiguity
+            tailAmbiguity: tailAmbiguity,
+            promotesProductionBehavior: status == .supported
         )
     }
 

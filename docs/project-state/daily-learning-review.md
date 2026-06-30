@@ -162,3 +162,42 @@ Scope: reviewed 16 Codex session logs from June 28 whose `session_meta.payload.c
 
 - Added this June 28 section to `docs/project-state/daily-learning-review.md`.
 - Did not edit `docs/bug-log.md`, `docs/project-state/project-status.md`, `AGENTS.md`, or `docs/project-state/documentation-index.md` because the durable June 28 foreground-sync, refresh, interval-row, and routing lessons were already captured there by the June 28 implementation/doc commits.
+
+## 2026-06-29
+
+Scope: reviewed the June 29 Codex session logs whose `cwd` exactly matched this RunSignal repo. Excluded the active automation session. Treated this as a documentation-only learning review: no Xcode builds, device installs, HealthKit/provider mutations, commits, pushes, or broad repo scans.
+
+### Completed Work
+
+- Landed stopped-early Parity Lab/debug cleanup in `7bdf160`: completed-prefix row labels, structured comparison against the completed prefix, summary-level shared caveats, and package-test coverage. Physical iPhone install/run on `AIS17PM` had succeeded before the push.
+- Clarified the current Parity Lab status for planning: resolved activity-boundary rows are now aligned across Parity Lab, Raw Debug, and normal detail when evidence gates pass, while broad promotion remains blocked by missing/invalid public evidence.
+- Reviewed Priority 4/5 physical proof direction: Priority 4 remains a clean control, and Priority 5 is useful specifically because it combines a paired pause inside a planned Work row with a manual skip before natural completion.
+- Verified the Priority 5 Raw Debug UI source mismatch was fixed in commit `1bd675c`: the recording showed `Candidate activity boundaries`, coherent Work/Cooldown/Open rows, and raw HealthKit segment markers still labeled raw-debug-only.
+- Parsed the Jan-Jun monthly diagnostics sweep: `136/136` refreshes completed, `114/114` planned custom workouts had scoreable HealthKit activity-boundary rows, and `0` planned workouts were non-scoreable in the activity-boundary summary.
+- Created a paste-ready handoff for approving the generalized WorkoutKit planned rows plus HealthKit activity-boundary resolver as the v1 official custom-workout row source under evidence gates.
+- Began implementing that handoff in a later session: docs/app/export wording was updated, supported structured comparisons now set production-promotion metadata, focused regressions and the full package suite passed, and a Simulator smoke check rendered the Runs tab successfully. Those changes remain uncommitted at review time.
+
+### Pending Work
+
+- Commit/push or otherwise finish review of the late June 29 uncommitted resolver-wording and export-metadata changes after confirming the current dirty worktree still matches intent.
+- Keep Raw HealthKit Debug as audit/evidence tooling, but remove stale `debug-only`, `candidate`, `not production`, and `normal UI unchanged` wording where it refers to resolved activity-boundary rows that now feed normal detail when evidence gates pass.
+- Keep fallback guards for missing plans, missing/incomplete/non-contiguous activity rows, rows exceeding the plan, unpaired/cross-row pauses, duplicates, plain open runs, and stale summary-only evidence.
+- Move next product work toward interval analysis only after the v1 row-source wording and metadata cleanup is stable: target hit/miss, repeat consistency, work/recovery pacing, HR response, cadence/power by interval, and warmup/cooldown quality.
+
+### Mistakes, Fixes, And Friction
+
+- The automation prompt still referenced deleted `current-state.md` and `next-work.md`; this repo now routes current state and next work through `docs/project-state/project-status.md`.
+- iPhone Mirroring screen recording did not reliably capture semantic UI proof. For physical-iPhone diagnostics, exported files and screenshots are the reliable evidence path; event-stream/screen-mirror capture can be supplemental only.
+- The same bug pattern repeated: correct resolver math can be hidden by stale UI/export metadata. Supported comparison status and `promotesProductionBehavior` must stay derived from the same resolver status.
+- Do not ask for more examples once a representative real-workout diagnostics sweep clears the bar; use the sweep to update wording and move into product features.
+
+### Workflow Improvements
+
+- Start future custom-workout state answers with `docs/project-state/project-status.md`, then `docs/project-state/accuracy-ledger.md` only for shape/promotion specifics.
+- For paused/custom interval proof, compare the same row across normal detail, Raw Debug resolved rows, exported JSON, and Apple Fitness evidence; check row source, header, duration basis, pause overlap, active/timer duration, distance, pace, and label together.
+- When reviewing diagnostics exports, aggregate the machine-readable fields first, then inspect exceptions so no-plan, duplicate, and plain open runs are not mistaken for custom-workout failures.
+
+### Docs Updated By This Review
+
+- Added this June 29 section to `docs/project-state/daily-learning-review.md`.
+- Did not edit `docs/bug-log.md`, `docs/project-state/project-status.md`, `docs/project-state/accuracy-ledger.md`, `AGENTS.md`, or `docs/project-state/documentation-index.md` in this review because those routing-critical docs already had unrelated active edits from the late implementation session, and the durable bug-log/status changes were already present in that dirty worktree.

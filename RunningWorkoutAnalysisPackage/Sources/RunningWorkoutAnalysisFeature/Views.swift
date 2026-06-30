@@ -1733,7 +1733,7 @@ enum IntervalRowTimingText {
 
 struct RawHealthKitWorkoutDebugView: View {
     static let unavailableCustomIntervalsMessage = "Whole-run stats are still safe to review. Custom interval rows are hidden until RunSignal sees a supported public WorkoutKit and HealthKit evidence pattern."
-    static let reviewPacketScopeMessage = "Use this debug review packet to share Raw HealthKit Debug, the parity packet, WorkoutKit plan audit, HealthKit activity rows, candidate rows, fallback labels, pause/tail diagnostics, and source metadata. External HealthFit/FIT archives stay offline validation evidence; attach or reference them separately and do not treat them as app input. Debug support does not change normal workout detail."
+    static let reviewPacketScopeMessage = "Use this review packet to share Raw HealthKit Debug, the parity packet, WorkoutKit plan audit, HealthKit activity rows, resolved activity-boundary rows, fallback labels, pause/tail diagnostics, and source metadata. External HealthFit/FIT archives stay offline validation evidence; attach or reference them separately and do not treat them as app input. Resolved rows are the normal-detail source only when the evidence gate passes."
 
     var store: RunningAnalysisStore
     let workout: CanonicalWorkout
@@ -1877,7 +1877,7 @@ struct RawHealthKitWorkoutDebugView: View {
                 SectionHeader("Resolved/Legacy Interval Rows")
                 reconstructedIntervalsView
 
-                SectionHeader("Parity Lab Candidate Rows")
+                SectionHeader("Resolved Activity-Boundary Rows")
                 parityLabCandidateRowsView
 
                 SectionHeader("HealthKit Segment Markers")
