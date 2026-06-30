@@ -6,8 +6,9 @@ import Testing
 
 @MainActor
 @Test func rawHealthKitDebugUnavailableCustomIntervalsCopyIsEvidencePatternBased() {
-    #expect(RawHealthKitWorkoutDebugView.unavailableCustomIntervalsMessage == "Whole-run stats are still safe to review. Custom interval rows are hidden until RunSignal sees a supported public WorkoutKit and HealthKit evidence pattern.")
+    #expect(RawHealthKitWorkoutDebugView.unavailableCustomIntervalsMessage == "Not promoted yet. Whole-run stats are still safe to review until RunSignal sees a supported public WorkoutKit and HealthKit evidence pattern.")
     #expect(!RawHealthKitWorkoutDebugView.unavailableCustomIntervalsMessage.contains("distance/time evidence"))
+    #expect(!RawHealthKitWorkoutDebugView.unavailableCustomIntervalsMessage.contains("hidden"))
     #expect(RawHealthKitWorkoutDebugView.reviewPacketScopeMessage.contains("External HealthFit/FIT archives stay offline validation evidence"))
     #expect(RawHealthKitWorkoutDebugView.reviewPacketScopeMessage.contains("do not treat them as app input"))
     #expect(RawHealthKitWorkoutDebugView.reviewPacketScopeMessage.contains("Resolved rows are the normal-detail source only when the evidence gate passes."))
@@ -2428,11 +2429,11 @@ import Testing
     #expect(markdown.contains("## Review Packet Scope"))
     #expect(markdown.contains("Whole-run stats remain usable when custom interval rows are blocked."))
     #expect(markdown.contains("External HealthFit/FIT archives stay offline validation evidence"))
-    #expect(markdown.contains("## Official Resolved Interval Rows"))
+    #expect(markdown.contains("## Official Interval Rows"))
     #expect(markdown.contains("Segment markers and plan-derived reconstruction are not interval analytics rows."))
     #expect(markdown.contains("| 1 | Warmup | 2 km"))
     #expect(markdown.contains("plan-derived reconstruction are not interval analytics rows"))
-    #expect(markdown.contains("## Resolved HKWorkoutActivity Boundary Rows"))
+    #expect(markdown.contains("## Resolved Row Evidence"))
     #expect(markdown.contains("Evidence-gated activity-boundary rows for normal detail and audit exports."))
     #expect(markdown.contains("HKWorkoutActivity boundary rows are the normal-detail source only when WorkoutKit and HealthKit evidence gates pass."))
     #expect(markdown.contains("activity boundary direct"))
@@ -5848,8 +5849,8 @@ private struct IsolatedDefaults {
 
     let markdown = DiagnosticsExport.rawHealthKitDebugMarkdown(workout: workout, generatedAt: start)
 
-    #expect(markdown.contains("## Official Resolved Interval Rows"))
-    #expect(markdown.contains("Unavailable. Whole-run stats remain safe to review"))
+    #expect(markdown.contains("## Official Interval Rows"))
+    #expect(markdown.contains("Not promoted yet. Whole-run stats remain safe to review"))
     #expect(markdown.contains("| 2 | Work 1 | mappedByPlannedStepOrder |"))
     #expect(markdown.contains("| 3 | Cooldown | mappedByPlannedStepOrder |"))
     #expect(markdown.contains("| 4 | Open / Extra | inferredOpenTailFromWorkoutEnd |"))

@@ -30,11 +30,9 @@ struct RunsView: View {
             Section {
                 if store.usesSampleData {
                     NoticeCard(title: "Using Sample Data", message: "These workouts are placeholders. Load HealthKit from Settings to replace them with your completed running workouts.")
-                } else {
-                    NoticeCard(title: "HealthKit Loaded", message: "\(runs.count) completed running workouts are available. Duplicate-like workouts are hidden from this v1 list.")
                 }
 
-                WholeRunStatusCard(summary: wholeRunSummary)
+                WholeRunStatusCard(summary: wholeRunSummary, loadedRunCount: store.usesSampleData ? nil : runs.count)
             }
             .listRowSeparator(.hidden)
 
@@ -1382,6 +1380,7 @@ struct WorkoutDetailView: View {
                     WorkoutChartsPanel(workout: workout)
 
                     SplitsAndEventsPanel(
+                        store: store,
                         workout: workout,
                         segments: RunWorkoutSegments(workout: workout, analysis: store.derivedAnalysis(for: workout.id))
                     )
@@ -1458,7 +1457,7 @@ struct RouteAndSeriesPanel: View {
     }
 
     private var routeTitle: String {
-        if coordinateCount >= 2 { return "Route map available" }
+        if coordinateCount >= 2 { return "Route loaded" }
         if workout.routePointCount > 0 { return "Route points loaded" }
         if workout.routeAvailable { return "Route object available" }
         return "Route unavailable"
@@ -1535,50 +1534,31 @@ struct WorkoutChartsPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader("Charts")
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                ChartAvailabilityTile(label: "Heart rate", count: workout.heartRateSampleCount)
-                ChartAvailabilityTile(label: "Pace / speed", count: workout.runningSpeedSampleCount + workout.distanceSampleCount)
-                ChartAvailabilityTile(label: "Power", count: workout.runningPowerSampleCount)
-                ChartAvailabilityTile(label: "Cadence", count: workout.cadenceSampleCount + workout.stepCountSampleCount)
-                ChartAvailabilityTile(label: "Vertical oscillation", count: workout.verticalOscillationSampleCount)
-                ChartAvailabilityTile(label: "Ground contact", count: workout.groundContactTimeSampleCount)
-                ChartAvailabilityTile(label: "Stride length", count: workout.strideLengthSampleCount)
-                ChartAvailabilityTile(label: "Elevation", count: workout.routePointCount)
-            }
+            SectionHeader("Evidence")
+            MetricGrid(items: evidenceItems)
+            Text("Charts stay hidden until the loaded HealthKit series can render real trend lines.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
-}
 
-struct ChartAvailabilityTile: View {
-    let label: String
-    let count: Int
+    private var evidenceItems: [MetricItem] {
+        [
+            MetricItem(title: "Heart rate", value: sampleValue(workout.heartRateSampleCount), detail: "Samples loaded"),
+            MetricItem(title: "Pace", value: sampleValue(workout.runningSpeedSampleCount + workout.distanceSampleCount), detail: "Speed/distance"),
+            MetricItem(title: "Power", value: sampleValue(workout.runningPowerSampleCount), detail: "Running power"),
+            MetricItem(title: "Cadence", value: sampleValue(workout.cadenceSampleCount + workout.stepCountSampleCount), detail: "Cadence/steps")
+        ]
+    }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Image(systemName: count > 0 ? "waveform.path.ecg" : "minus.circle")
-                    .foregroundStyle(count > 0 ? .blue : .secondary)
-                Spacer()
-                Text(count > 0 ? "\(count)" : "Unavailable")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-            Text(label)
-                .font(.subheadline.bold())
-                .lineLimit(2)
-            Text(count > 0 ? "HealthKit samples loaded" : "No samples returned")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
-        .padding(10)
-        .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+    private func sampleValue(_ count: Int) -> String {
+        count > 0 ? "\(count)" : "Unavailable"
     }
 }
 
 struct SplitsAndEventsPanel: View {
+    let store: RunningAnalysisStore
     let workout: CanonicalWorkout
     let segments: RunWorkoutSegments
 
@@ -1590,7 +1570,7 @@ struct SplitsAndEventsPanel: View {
                 EmptyStateView(title: "Splits unavailable", message: "RunSignal needs distance samples or enough workout distance/time to estimate 1 km splits.")
             } else {
                 VStack(spacing: 8) {
-                    ForEach(segments.kilometerSplits.prefix(12), id: \.label) { split in
+                    ForEach(segments.kilometerSplits.prefix(5), id: \.label) { split in
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(split.label)
@@ -1612,6 +1592,11 @@ struct SplitsAndEventsPanel: View {
                         .background(.background)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
+                    if segments.kilometerSplits.count > 5 {
+                        Text("Showing first 5 of \(segments.kilometerSplits.count) splits.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -1623,10 +1608,21 @@ struct SplitsAndEventsPanel: View {
                     }
                 }
             } else {
-                NoticeCard(
-                    title: segments.eventSummary.hasEvents ? "Needs row evidence" : "Unavailable",
-                    message: intervalMessage
-                )
+                VStack(alignment: .leading, spacing: 10) {
+                    NoticeCard(
+                        title: "Intervals under review",
+                        message: intervalMessage,
+                        systemImage: "clock.badge.questionmark",
+                        tint: .blue
+                    )
+                    NavigationLink {
+                        RawHealthKitWorkoutDebugView(store: store, workout: workout)
+                    } label: {
+                        Label("View Interval Evidence", systemImage: "doc.text.magnifyingglass")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
         }
     }
@@ -1640,17 +1636,35 @@ struct SplitsAndEventsPanel: View {
     }
 
     private var intervalMessage: String {
-        let baseMessage: String
-        if !segments.eventSummary.hasEvents {
-            baseMessage = "HealthKit did not return enough public workout evidence for custom interval rows. Whole-run stats and splits remain safe to review."
-        } else {
-            baseMessage = "HealthKit returned \(segments.eventSummary.healthKitSummary), but RunSignal needs complete WorkoutKit planned rows plus contiguous HealthKit activity rows before showing custom workout intervals here. Use Raw HealthKit Debug if you need to inspect the raw events."
+        guard let evidence = workout.evidence else {
+            return "Whole-run stats are ready. Reload HealthKit evidence on the physical iPhone to review custom interval rows."
         }
 
-        guard let evidence = workout.evidence else { return baseMessage }
+        if let reviewSummary = intervalReviewSummary(evidence: evidence) {
+            return reviewSummary
+        }
+
         let reasons = CustomWorkoutNormalDetailGate.blockedReasons(workout: workout, evidence: evidence)
-        guard !reasons.isEmpty else { return baseMessage }
-        return baseMessage + "\n\nBlocked reason: " + reasons.prefix(3).joined(separator: " ")
+        guard !reasons.isEmpty else {
+            return "Whole-run stats are ready. RunSignal is still reviewing interval evidence for this workout."
+        }
+        return "Whole-run stats are ready. \(reasons[0])"
+    }
+
+    private func intervalReviewSummary(evidence: WorkoutEvidence) -> String? {
+        let activities = evidence.activities.sorted { $0.startDate < $1.startDate }
+        guard let audit = evidence.workoutPlanAudit,
+              !audit.plannedSteps.isEmpty,
+              let lastActivityEnd = activities.last?.endDate else {
+            return nil
+        }
+        let plannedSteps = audit.plannedSteps.sorted { $0.index < $1.index }
+        let hasFixedCooldownTail = plannedSteps.last?.stepType == .cooldown
+            && plannedSteps.last?.plannedGoalType != .open
+            && workout.endDate.timeIntervalSince(lastActivityEnd) > 0.5
+        guard hasFixedCooldownTail else { return nil }
+
+        return "RunSignal found \(activities.count + 1) resolved boundary rows, but the Open / Extra tail rule is still under review. Whole-run stats are ready."
     }
 }
 
@@ -1732,13 +1746,14 @@ enum IntervalRowTimingText {
 }
 
 struct RawHealthKitWorkoutDebugView: View {
-    static let unavailableCustomIntervalsMessage = "Whole-run stats are still safe to review. Custom interval rows are hidden until RunSignal sees a supported public WorkoutKit and HealthKit evidence pattern."
+    static let unavailableCustomIntervalsMessage = "Not promoted yet. Whole-run stats are still safe to review until RunSignal sees a supported public WorkoutKit and HealthKit evidence pattern."
     static let reviewPacketScopeMessage = "Use this review packet to share Raw HealthKit Debug, the parity packet, WorkoutKit plan audit, HealthKit activity rows, resolved activity-boundary rows, fallback labels, pause/tail diagnostics, and source metadata. External HealthFit/FIT archives stay offline validation evidence; attach or reference them separately and do not treat them as app input. Resolved rows are the normal-detail source only when the evidence gate passes."
 
     var store: RunningAnalysisStore
     let workout: CanonicalWorkout
     @State private var selectedDiagnosticsMonth = Date()
     @State private var showingMonthlyExportSheet = false
+    @State private var developerToolsExpanded = false
 
     var body: some View {
         let workout = currentWorkout
@@ -1751,102 +1766,113 @@ struct RawHealthKitWorkoutDebugView: View {
                     message: Self.reviewPacketScopeMessage
                 )
 
-                Button {
-                    Task {
-                        await store.forceReenrichEvidenceForParity(workoutID: workout.id)
-                    }
-                } label: {
-                    Label("Force re-enrich selected workout", systemImage: "arrow.clockwise")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(store.isEnrichingAudit)
-
-                if let result = store.parityForceReenrichResults[workout.id] {
-                    NoticeCard(
-                        title: "Last force re-enrich",
-                        message: forceReenrichSummary(result)
-                    )
-                }
-
-                ShareLink(item: parityPacketJSON) {
-                    Label("Share parity packet JSON", systemImage: "shippingbox")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-
-                ShareLink(item: rawDebugExportMarkdown) {
-                    Label("Share review packet markdown", systemImage: "doc.text.magnifyingglass")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-
-                SectionHeader("Monthly Diagnostics")
-                DatePicker(
-                    "Select month",
-                    selection: $selectedDiagnosticsMonth,
-                    displayedComponents: [.date]
-                )
-                .datePickerStyle(.compact)
-
-                if let summary = store.evidenceRefreshSummary(containing: selectedDiagnosticsMonth) {
-                    EvidenceRefreshJobCard(
-                        summary: summary,
-                        derivedSummary: store.derivedAnalysisRefreshSummary,
-                        isRefreshing: store.isEnrichingAudit
-                    ) {
-                        Task {
-                            await store.resumeEvidenceRefreshForMonth(containing: selectedDiagnosticsMonth)
+                DisclosureGroup(isExpanded: $developerToolsExpanded) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Button {
+                            Task {
+                                await store.forceReenrichEvidenceForParity(workoutID: workout.id)
+                            }
+                        } label: {
+                            Label("Force re-enrich selected workout", systemImage: "arrow.clockwise")
+                                .frame(maxWidth: .infinity)
                         }
-                    }
-                }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(store.isEnrichingAudit)
 
-                Button {
-                    Task {
-                        await store.refreshEvidenceForMonth(containing: selectedDiagnosticsMonth)
+                        if let result = store.parityForceReenrichResults[workout.id] {
+                            NoticeCard(
+                                title: "Last force re-enrich",
+                                message: forceReenrichSummary(result)
+                            )
+                        }
+
+                        ShareLink(item: parityPacketJSON) {
+                            Label("Share parity packet JSON", systemImage: "shippingbox")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+
+                        ShareLink(item: rawDebugExportMarkdown) {
+                            Label("Share review packet markdown", systemImage: "doc.text.magnifyingglass")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+
+                        SectionHeader("Monthly Diagnostics")
+                        DatePicker(
+                            "Select month",
+                            selection: $selectedDiagnosticsMonth,
+                            displayedComponents: [.date]
+                        )
+                        .datePickerStyle(.compact)
+
+                        if let summary = store.evidenceRefreshSummary(containing: selectedDiagnosticsMonth) {
+                            EvidenceRefreshJobCard(
+                                summary: summary,
+                                derivedSummary: store.derivedAnalysisRefreshSummary,
+                                isRefreshing: store.isEnrichingAudit
+                            ) {
+                                Task {
+                                    await store.resumeEvidenceRefreshForMonth(containing: selectedDiagnosticsMonth)
+                                }
+                            }
+                        }
+
+                        Button {
+                            Task {
+                                await store.refreshEvidenceForMonth(containing: selectedDiagnosticsMonth)
+                            }
+                        } label: {
+                            Label("Refresh Month Evidence", systemImage: "arrow.triangle.2.circlepath")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(store.isEnrichingAudit)
+
+                        Button {
+                            Task {
+                                await store.refreshEvidenceForMonth(containing: selectedDiagnosticsMonth)
+                                showingMonthlyExportSheet = true
+                            }
+                        } label: {
+                            Label("Refresh + Export Month", systemImage: "square.and.arrow.up.on.square")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(store.isEnrichingAudit)
+
+                        ShareLink(item: monthlyDiagnosticsJSON) {
+                            Label("Export Monthly Diagnostics JSON", systemImage: "calendar.badge.clock")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+
+                        ShareLink(item: monthlyDiagnosticsMarkdown) {
+                            Label("Export Monthly Diagnostics Summary", systemImage: "calendar")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+
+                        MetricGrid(items: [
+                            MetricItem(title: "UUID", value: workout.id, detail: "HKWorkout"),
+                            MetricItem(title: "Source", value: workout.sourceName, detail: workout.sourceID),
+                            MetricItem(title: "Device", value: workout.deviceName ?? "Unavailable", detail: "HealthKit"),
+                            MetricItem(title: "Start", value: RunFormatters.date.string(from: workout.startDate), detail: "HealthKit"),
+                            MetricItem(title: "End", value: RunFormatters.date.string(from: workout.endDate), detail: "HealthKit"),
+                            MetricItem(title: "Duration", value: RunFormatters.duration(workout.durationSeconds), detail: "Workout"),
+                            MetricItem(title: "Distance", value: RunFormatters.distance(workout.distanceMeters), detail: "Summary"),
+                            MetricItem(title: "Active energy", value: RunFormatters.calories(workout.activeEnergyKilocalories), detail: "Summary/samples"),
+                            MetricItem(title: "Total energy", value: workout.totalEnergyKilocalories.map { RunFormatters.calories($0) } ?? "Unavailable", detail: "Trust gated")
+                        ])
                     }
+                    .padding(.top, 8)
                 } label: {
-                    Label("Refresh Month Evidence", systemImage: "arrow.triangle.2.circlepath")
-                        .frame(maxWidth: .infinity)
+                    Label("Developer tools", systemImage: "wrench.and.screwdriver")
+                        .font(.headline)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(store.isEnrichingAudit)
-
-                Button {
-                    Task {
-                        await store.refreshEvidenceForMonth(containing: selectedDiagnosticsMonth)
-                        showingMonthlyExportSheet = true
-                    }
-                } label: {
-                    Label("Refresh + Export Month", systemImage: "square.and.arrow.up.on.square")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .disabled(store.isEnrichingAudit)
-
-                ShareLink(item: monthlyDiagnosticsJSON) {
-                    Label("Export Monthly Diagnostics JSON", systemImage: "calendar.badge.clock")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-
-                ShareLink(item: monthlyDiagnosticsMarkdown) {
-                    Label("Export Monthly Diagnostics Summary", systemImage: "calendar")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-
-                MetricGrid(items: [
-                    MetricItem(title: "UUID", value: workout.id, detail: "HKWorkout"),
-                    MetricItem(title: "Source", value: workout.sourceName, detail: workout.sourceID),
-                    MetricItem(title: "Device", value: workout.deviceName ?? "Unavailable", detail: "HealthKit"),
-                    MetricItem(title: "Start", value: RunFormatters.date.string(from: workout.startDate), detail: "HealthKit"),
-                    MetricItem(title: "End", value: RunFormatters.date.string(from: workout.endDate), detail: "HealthKit"),
-                    MetricItem(title: "Duration", value: RunFormatters.duration(workout.durationSeconds), detail: "Workout"),
-                    MetricItem(title: "Distance", value: RunFormatters.distance(workout.distanceMeters), detail: "Summary"),
-                    MetricItem(title: "Active energy", value: RunFormatters.calories(workout.activeEnergyKilocalories), detail: "Summary/samples"),
-                    MetricItem(title: "Total energy", value: workout.totalEnergyKilocalories.map { RunFormatters.calories($0) } ?? "Unavailable", detail: "Trust gated")
-                ])
+                .padding()
+                .background(.thinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
 
                 SectionHeader("Sample Counts")
                 MetricGrid(items: [
@@ -1874,10 +1900,10 @@ struct RawHealthKitWorkoutDebugView: View {
                 SectionHeader("WorkoutKit Plan Audit")
                 workoutPlanAuditView
 
-                SectionHeader("Official Resolved Interval Rows")
+            SectionHeader("Official Interval Rows")
                 reconstructedIntervalsView
 
-                SectionHeader("Resolved Boundary Row Audit")
+            SectionHeader("Resolved Row Evidence")
                 parityLabCandidateRowsView
 
                 SectionHeader("HealthKit Segment Markers")
@@ -1932,6 +1958,7 @@ struct RawHealthKitWorkoutDebugView: View {
                 }
             }
             .padding()
+            .padding(.bottom, 160)
         }
         .navigationTitle("Debug")
         .onAppear {
@@ -2091,45 +2118,7 @@ struct RawHealthKitWorkoutDebugView: View {
                     }
                 } else {
                     ForEach(result.intervals, id: \.index) { interval in
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack(alignment: .top) {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text("\(interval.index). \(interval.label)")
-                                        .font(.subheadline.bold())
-                                    Text("\(interval.plannedGoalDisplayText) · \(interval.plannedTargetDisplayText ?? "Target unavailable")")
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                VStack(alignment: .trailing, spacing: 3) {
-                                    Text(RunFormatters.duration(interval.displayDurationSeconds))
-                                        .font(.subheadline.monospacedDigit().bold())
-                                    Text(RunFormatters.distance(interval.actualDistanceMeters))
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-
-                            if let pausedTimingItems = IntervalRowTimingText.pausedTimingItems(for: interval) {
-                                MetricGrid(items: pausedTimingItems)
-                            }
-
-                            MetricGrid(items: [
-                                debugPaceItem(for: interval),
-                                MetricItem(title: "Avg HR", value: RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"), detail: "Window"),
-                                MetricItem(title: "Max HR", value: RunFormatters.number(interval.maxHeartRateBpm, suffix: " bpm"), detail: "Window"),
-                                MetricItem(title: "Power", value: RunFormatters.number(interval.averagePower, suffix: " W"), detail: "Avg"),
-                                MetricItem(title: "Cadence", value: RunFormatters.number(interval.averageCadence, suffix: " spm"), detail: "Avg")
-                            ])
-
-                            Text("\(interval.confidence.label) · \(interval.sourceNote)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(10)
-                        .background(.background)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        officialResolvedIntervalRowView(interval)
                     }
                 }
 
@@ -2160,39 +2149,70 @@ struct RawHealthKitWorkoutDebugView: View {
     }
 
     @ViewBuilder
+    private func officialResolvedIntervalRowView(_ interval: ReconstructedWorkoutInterval) -> some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 8) {
+                if let pausedTimingItems = IntervalRowTimingText.pausedTimingItems(for: interval) {
+                    MetricGrid(items: pausedTimingItems)
+                }
+
+                MetricGrid(items: [
+                    MetricItem(title: "Pace", value: RunFormatters.pace(IntervalRowTimingText.displayPaceSecondsPerKm(for: interval)), detail: IntervalRowTimingText.displayPaceDetail(for: interval)),
+                    MetricItem(title: "Avg HR", value: RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"), detail: "Window"),
+                    MetricItem(title: "Max HR", value: RunFormatters.number(interval.maxHeartRateBpm, suffix: " bpm"), detail: "Window"),
+                    MetricItem(title: "Power", value: RunFormatters.number(interval.averagePower, suffix: " W"), detail: "Avg"),
+                    MetricItem(title: "Cadence", value: RunFormatters.number(interval.averageCadence, suffix: " spm"), detail: "Avg")
+                ])
+
+                Text("\(interval.confidence.label) · \(interval.sourceNote)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.top, 8)
+        } label: {
+            RawIntervalCompactLabel(
+                title: "\(interval.index). \(interval.label)",
+                subtitle: "\(interval.plannedGoalDisplayText) · \(interval.plannedTargetDisplayText ?? "Target unavailable")",
+                duration: RunFormatters.duration(interval.displayDurationSeconds),
+                distance: RunFormatters.distance(interval.actualDistanceMeters),
+                badge: "Official",
+                badgeColor: .blue
+            )
+        }
+        .padding(10)
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    @ViewBuilder
     private func candidateResolvedDebugRowView(_ row: ParityLabCandidateRow) -> some View {
         let displayDuration = row.pauseOverlapSeconds > 0 ? row.activeDurationSeconds : row.elapsedDurationSeconds
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("\(row.index). \(row.label)")
-                        .font(.subheadline.bold())
-                    Text(row.detail)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 3) {
-                    Text(RunFormatters.duration(displayDuration))
-                        .font(.subheadline.monospacedDigit().bold())
-                    Text(RunFormatters.distance(row.distanceMeters))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 8) {
+                MetricGrid(items: [
+                    MetricItem(title: "Elapsed", value: RunFormatters.duration(row.elapsedDurationSeconds), detail: "Activity row"),
+                    MetricItem(title: "Pause", value: RunFormatters.duration(row.pauseOverlapSeconds), detail: "Paired overlap"),
+                    MetricItem(title: "Active", value: RunFormatters.duration(row.activeDurationSeconds), detail: row.durationRule),
+                    MetricItem(title: "Distance", value: RunFormatters.distance(row.distanceMeters), detail: row.mappingStatus),
+                    candidateDebugPaceItem(for: row)
+                ])
+
+                Text("\(row.isOpenTail ? "Medium" : "High") · Resolved activity-boundary row")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-
-            MetricGrid(items: [
-                MetricItem(title: "Elapsed", value: RunFormatters.duration(row.elapsedDurationSeconds), detail: "Activity row"),
-                MetricItem(title: "Pause", value: RunFormatters.duration(row.pauseOverlapSeconds), detail: "Paired overlap"),
-                MetricItem(title: "Active", value: RunFormatters.duration(row.activeDurationSeconds), detail: row.durationRule),
-                MetricItem(title: "Distance", value: RunFormatters.distance(row.distanceMeters), detail: row.mappingStatus),
-                candidateDebugPaceItem(for: row)
-            ])
-
-            Text("\(row.isOpenTail ? "Medium" : "High") · Resolved activity-boundary row")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 8)
+        } label: {
+            RawIntervalCompactLabel(
+                title: "\(row.index). \(row.label)",
+                subtitle: row.detail,
+                duration: RunFormatters.duration(displayDuration),
+                distance: RunFormatters.distance(row.distanceMeters),
+                badge: row.isOpenTail ? "Open / Extra" : "Resolved",
+                badgeColor: row.isOpenTail ? .orange : .blue
+            )
         }
         .padding(10)
         .background(.background)
@@ -2276,38 +2296,42 @@ struct RawHealthKitWorkoutDebugView: View {
                 }
 
                 ForEach(result.rows) { row in
-                    VStack(alignment: .leading, spacing: 9) {
-                        HStack(alignment: .top) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("\(row.index). \(row.label)")
-                                    .font(.subheadline.bold())
-                                Text(row.detail)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Text(row.isOpenTail ? "Open / Extra" : "Planned")
-                                .font(.caption.bold())
-                                .foregroundStyle(row.isOpenTail ? .orange : .secondary)
-                        }
-
-                        MetricGrid(items: [
-                            MetricItem(title: "Elapsed", value: RunFormatters.duration(row.elapsedDurationSeconds), detail: "Wall-clock row"),
-                            MetricItem(title: "Pause", value: RunFormatters.duration(row.pauseOverlapSeconds), detail: "Paired overlap"),
-                            MetricItem(title: "Active", value: RunFormatters.duration(row.activeDurationSeconds), detail: row.durationRule),
-                            MetricItem(title: "Distance", value: RunFormatters.distance(row.distanceMeters), detail: row.mappingStatus)
-                        ])
-
-                        Text("\(RunFormatters.duration(row.startOffsetSeconds)) -> \(RunFormatters.duration(row.endOffsetSeconds)) from workout start")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(10)
-                    .background(.background)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    resolvedEvidenceRowView(row)
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func resolvedEvidenceRowView(_ row: ParityLabCandidateRow) -> some View {
+        let displayDuration = row.pauseOverlapSeconds > 0 ? row.activeDurationSeconds : row.elapsedDurationSeconds
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 8) {
+                MetricGrid(items: [
+                    MetricItem(title: "Elapsed", value: RunFormatters.duration(row.elapsedDurationSeconds), detail: "Wall-clock row"),
+                    MetricItem(title: "Pause", value: RunFormatters.duration(row.pauseOverlapSeconds), detail: "Paired overlap"),
+                    MetricItem(title: "Active", value: RunFormatters.duration(row.activeDurationSeconds), detail: row.durationRule),
+                    MetricItem(title: "Distance", value: RunFormatters.distance(row.distanceMeters), detail: row.mappingStatus)
+                ])
+
+                Text("\(RunFormatters.duration(row.startOffsetSeconds)) -> \(RunFormatters.duration(row.endOffsetSeconds)) from workout start")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 8)
+        } label: {
+            RawIntervalCompactLabel(
+                title: "\(row.index). \(row.label)",
+                subtitle: row.detail,
+                duration: RunFormatters.duration(displayDuration),
+                distance: RunFormatters.distance(row.distanceMeters),
+                badge: row.isOpenTail ? "Open / Extra" : "Planned",
+                badgeColor: row.isOpenTail ? .orange : .secondary
+            )
+        }
+        .padding(10)
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var parityLabCandidateRowsResult: ParityLabCandidateRowsResult {
@@ -2344,8 +2368,8 @@ struct RawHealthKitWorkoutDebugView: View {
             let type = event.type.lowercased()
             return label.contains("pause")
                 || label.contains("resume")
-                || type.contains("rawvalue: 1")
-                || type.contains("rawvalue: 2")
+                || type.contains("pause")
+                || type.contains("resume")
         }
         let enablesPausedRepeatTailRule = !pauses.isEmpty
             && plannedSteps.contains { ($0.repeatIndex ?? 1) > 1 }
@@ -2554,6 +2578,41 @@ struct DebugMetricProvenanceRow: View {
         .padding(10)
         .background(.background)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct RawIntervalCompactLabel: View {
+    let title: String
+    let subtitle: String
+    let duration: String
+    let distance: String
+    let badge: String
+    let badgeColor: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(.subheadline.bold())
+                    Text(badge)
+                        .font(.caption2.bold())
+                        .foregroundStyle(badgeColor)
+                }
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 3) {
+                Text(duration)
+                    .font(.subheadline.monospacedDigit().bold())
+                Text(distance)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 }
 
@@ -2855,6 +2914,7 @@ struct ShapeMeter: View {
 
 struct WholeRunStatusCard: View {
     let summary: WholeRunHealthKitSummary
+    var loadedRunCount: Int?
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -2871,6 +2931,12 @@ struct WholeRunStatusCard: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if let loadedRunCount {
+                    Text("\(loadedRunCount) completed running workouts loaded. Duplicate-like workouts are hidden from this v1 list.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
         .padding()
@@ -3038,11 +3104,13 @@ struct InsightCard: View {
 struct NoticeCard: View {
     let title: String
     let message: String
+    var systemImage = "exclamationmark.circle"
+    var tint = Color.orange
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.circle")
-                .foregroundStyle(.orange)
+            Image(systemName: systemImage)
+                .foregroundStyle(tint)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.subheadline.bold())
@@ -3054,7 +3122,7 @@ struct NoticeCard: View {
             Spacer()
         }
         .padding()
-        .background(.orange.opacity(0.08))
+        .background(tint.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }

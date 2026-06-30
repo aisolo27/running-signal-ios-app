@@ -207,13 +207,13 @@ public enum DiagnosticsExport {
             workout: workout
         ))
 
-        ## Official Resolved Interval Rows
+        ## Official Interval Rows
 
         Planned structure source: WorkoutKit when available. Measured stats source: HealthKit activity boundaries when the evidence gate passes. Segment markers and plan-derived reconstruction are not interval analytics rows.
 
         \(reconstructedIntervalsMarkdown(reconstructedIntervals, workout: workout, candidateRuleScore: candidateRuleScore))
 
-        ## Resolved HKWorkoutActivity Boundary Rows
+        ## Resolved Row Evidence
 
         Evidence-gated activity-boundary rows for normal detail and audit exports. Supported rows are production interval logic when WorkoutKit planned rows and complete contiguous HealthKit activity rows pass the structured gate; unsupported rows remain fallback/debug evidence only.
 
@@ -435,7 +435,7 @@ public enum DiagnosticsExport {
         candidateRuleScore: RawDebugCustomWorkoutCandidateRuleScore? = nil
     ) -> String {
         guard let result, !result.intervals.isEmpty else {
-            return "Unavailable. Whole-run stats remain safe to review, but custom interval rows need a supported public WorkoutKit and HealthKit evidence pattern before RunSignal can show them."
+            return "Not promoted yet. Whole-run stats remain safe to review, but custom interval rows need a supported public WorkoutKit and HealthKit evidence pattern before RunSignal can show them."
         }
 
         let rows = result.intervals.map { interval in
