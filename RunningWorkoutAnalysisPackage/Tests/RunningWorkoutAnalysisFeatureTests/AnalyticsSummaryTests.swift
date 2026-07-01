@@ -116,6 +116,64 @@ import Testing
     #expect(IntervalDrillDownEligibility.officialRows(workout: run, evidence: evidence).isEmpty)
 }
 
+@Test func intervalAnalysisSummaryUsesOfficialRowsAndActiveTimerPace() throws {
+    let start = try makeDate(year: 2026, month: 6, day: 30)
+    let run = workout(id: "official-intervals", start: start, distance: 450, duration: 220, type: .interval)
+    let result = WorkoutIntervalReconstructionResult(
+        planSource: .workoutKit,
+        windowSource: .healthKitActivityBoundaries,
+        intervals: [
+            reconstructedInterval(
+                index: 1,
+                label: "Work 1",
+                stepType: .work,
+                start: start,
+                duration: 100,
+                elapsedDuration: 100,
+                activeDuration: 90,
+                pauseOverlap: 10,
+                displayRule: .activeTimer,
+                distance: 300,
+                pace: 100 / 0.3,
+                heartRate: 152,
+                maxHeartRate: 158,
+                power: 310,
+                cadence: 184
+            ),
+            reconstructedInterval(
+                index: 2,
+                label: "Recovery 1",
+                stepType: .recovery,
+                start: start.addingTimeInterval(100),
+                duration: 120,
+                elapsedDuration: 120,
+                activeDuration: 120,
+                pauseOverlap: 0,
+                displayRule: .elapsedRowWindow,
+                distance: 150,
+                pace: 800,
+                heartRate: 134,
+                maxHeartRate: 141,
+                power: 150,
+                cadence: 166
+            )
+        ]
+    )
+
+    let summary = IntervalAnalysisSummary(workout: run, result: result)
+    let work = try #require(summary.rows.first { $0.index == 1 })
+
+    #expect(summary.rows.map(\.label) == ["Work 1", "Recovery 1"])
+    #expect(summary.aggregateRows.map(\.index) == [1])
+    #expect(work.displayBasisLabel == "Active timer")
+    #expect(work.value(for: .pace)?.displayValue == 300)
+    #expect(work.value(for: .pace)?.chartValue == 12)
+    #expect(summary.aggregateValue(for: .duration)?.displayValue == 90)
+    #expect(summary.aggregateValue(for: .distance)?.displayValue == 300)
+    #expect(summary.aggregateValue(for: .power)?.displayValue == 310)
+    #expect(summary.availableMetrics == IntervalAnalysisMetric.allCases)
+}
+
 private var testCalendar: Calendar {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -152,5 +210,55 @@ private func workout(
         inferredRunType: type,
         isDuplicate: isDuplicate,
         evidence: evidence
+    )
+}
+
+private func reconstructedInterval(
+    index: Int,
+    label: String,
+    stepType: DerivedIntervalLabel,
+    start: Date,
+    duration: Double,
+    elapsedDuration: Double,
+    activeDuration: Double,
+    pauseOverlap: Double,
+    displayRule: ReconstructedIntervalDurationDisplayRule,
+    distance: Double,
+    pace: Double,
+    heartRate: Double,
+    maxHeartRate: Double,
+    power: Double,
+    cadence: Double
+) -> ReconstructedWorkoutInterval {
+    ReconstructedWorkoutInterval(
+        index: index,
+        label: label,
+        stepType: stepType,
+        plannedGoalType: .distance,
+        plannedGoalValue: distance,
+        plannedGoalDisplayText: RunFormatters.compactDistance(distance),
+        plannedTargetDisplayText: "Target",
+        actualStartDate: start,
+        actualEndDate: start.addingTimeInterval(duration),
+        actualDurationSeconds: duration,
+        elapsedDurationSeconds: elapsedDuration,
+        pauseOverlapSeconds: pauseOverlap,
+        activeDurationSeconds: activeDuration,
+        durationDisplayRule: displayRule,
+        actualDistanceMeters: distance,
+        actualPaceSecondsPerKm: pace,
+        averageHeartRateBpm: heartRate,
+        maxHeartRateBpm: maxHeartRate,
+        averageCadence: cadence,
+        averagePower: power,
+        planSource: .workoutKit,
+        windowSource: .healthKitActivityBoundaries,
+        boundaryStrategy: nil,
+        boundaryAdjustmentSeconds: nil,
+        boundaryOvershootMeters: nil,
+        boundaryDiagnostics: nil,
+        tailDiagnostics: nil,
+        sourceNote: "test",
+        confidence: .high
     )
 }

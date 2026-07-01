@@ -328,6 +328,291 @@ private struct WorkoutChartCard: View {
     }
 }
 
+struct IntervalAnalysisDeck: View {
+    let summary: IntervalAnalysisSummary
+
+    @State private var selectedIntervalIndex: Int?
+
+    private var selectedRow: IntervalAnalysisRow? {
+        guard let selectedIntervalIndex else { return nil }
+        return summary.rows.first { $0.index == selectedIntervalIndex }
+    }
+
+    private var visibleMetrics: [IntervalAnalysisMetric] {
+        summary.availableMetrics
+    }
+
+    var body: some View {
+        if !summary.rows.isEmpty, !visibleMetrics.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader("Interval Analysis")
+
+                IntervalAnalysisFocusStrip(
+                    summary: summary,
+                    selectedRow: selectedRow,
+                    metrics: visibleMetrics
+                )
+
+                ForEach(visibleMetrics) { metric in
+                    IntervalMetricChartCard(
+                        summary: summary,
+                        metric: metric,
+                        selectedIntervalIndex: $selectedIntervalIndex
+                    )
+                }
+            }
+        }
+    }
+}
+
+private struct IntervalAnalysisFocusStrip: View {
+    let summary: IntervalAnalysisSummary
+    let selectedRow: IntervalAnalysisRow?
+    let metrics: [IntervalAnalysisMetric]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.subheadline.bold())
+                    Text(subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(sourceBadge)
+                    .font(.caption2.bold())
+                    .foregroundStyle(.blue)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.blue.opacity(0.12))
+                    .clipShape(Capsule())
+            }
+
+            if let selectedRow, let pauseOverlap = selectedRow.pauseOverlapSeconds, pauseOverlap > 0 {
+                MetricGrid(items: [
+                    MetricItem(title: "Elapsed", value: RunFormatters.duration(selectedRow.elapsedDurationSeconds), detail: "Row window"),
+                    MetricItem(title: "Pause", value: RunFormatters.duration(pauseOverlap), detail: "Paired overlap"),
+                    MetricItem(title: "Active", value: RunFormatters.duration(selectedRow.activeDurationSeconds), detail: "Timer duration")
+                ])
+            }
+
+            MetricGrid(items: metricItems)
+        }
+        .padding(10)
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var title: String {
+        if let selectedRow {
+            return "\(selectedRow.index). \(selectedRow.label)"
+        }
+        return summary.aggregateScopeLabel
+    }
+
+    private var subtitle: String {
+        if let selectedRow {
+            return "\(selectedRow.plannedGoalDisplayText) · \(selectedRow.displayBasisLabel)"
+        }
+        return "\(summary.planSource.label) · \(summary.windowSource.label)"
+    }
+
+    private var sourceBadge: String {
+        selectedRow == nil ? "Average" : "Selected"
+    }
+
+    private var metricItems: [MetricItem] {
+        metrics.prefix(6).compactMap { metric in
+            if let selectedRow, let value = selectedRow.value(for: metric) {
+                return MetricItem(
+                    title: metric.title,
+                    value: IntervalMetricFormatter.value(value.displayValue, metric: metric),
+                    detail: metric == .pace ? selectedRow.displayBasisLabel : selectedRow.roleAbbreviation
+                )
+            }
+            guard let aggregate = summary.aggregateValue(for: metric) else { return nil }
+            return MetricItem(
+                title: metric.title,
+                value: IntervalMetricFormatter.value(aggregate.displayValue, metric: metric),
+                detail: summary.aggregateCaption(for: metric)
+            )
+        }
+    }
+}
+
+private struct IntervalMetricChartCard: View {
+    let summary: IntervalAnalysisSummary
+    let metric: IntervalAnalysisMetric
+    @Binding var selectedIntervalIndex: Int?
+
+    private var selectedRow: IntervalAnalysisRow? {
+        guard let selectedIntervalIndex else { return nil }
+        return summary.rows.first { $0.index == selectedIntervalIndex }
+    }
+
+    private var headlineValue: IntervalAnalysisMetricValue? {
+        if let selectedRow, let value = selectedRow.value(for: metric) {
+            return value
+        }
+        return summary.aggregateValue(for: metric)
+    }
+
+    private var headlineDetail: String {
+        if let selectedRow {
+            return "\(selectedRow.index) \(selectedRow.roleAbbreviation)"
+        }
+        return summary.aggregateCaption(for: metric)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                Text(metric.title)
+                    .font(.subheadline.bold())
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(IntervalMetricFormatter.value(headlineValue?.displayValue, metric: metric))
+                        .font(.title3.monospacedDigit().bold())
+                        .foregroundStyle(metricTint(metric))
+                    Text(headlineDetail)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Chart {
+                if let aggregate = summary.aggregateValue(for: metric) {
+                    RuleMark(y: .value("Average", aggregate.chartValue))
+                        .foregroundStyle(.secondary.opacity(0.6))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                }
+
+                ForEach(summary.rows) { row in
+                    if let value = row.value(for: metric) {
+                        BarMark(
+                            x: .value("Interval", row.index),
+                            y: .value(metric.title, value.chartValue),
+                            width: .ratio(0.65)
+                        )
+                        .foregroundStyle(barTint(for: row))
+                        .cornerRadius(3)
+                    }
+                }
+
+                if let selectedIntervalIndex,
+                   summary.rows.contains(where: { $0.index == selectedIntervalIndex }) {
+                    RuleMark(x: .value("Selected", selectedIntervalIndex))
+                        .foregroundStyle(.primary.opacity(0.45))
+                        .lineStyle(StrokeStyle(lineWidth: 1.5))
+                }
+            }
+            .frame(height: 170)
+            .chartXAxis {
+                AxisMarks(values: summary.rows.map(\.index)) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let index = value.as(Int.self),
+                           let row = summary.rows.first(where: { $0.index == index }) {
+                            VStack(spacing: 0) {
+                                Text("\(index)")
+                                Text(row.roleAbbreviation)
+                            }
+                        }
+                    }
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let chartValue = value.as(Double.self) {
+                            Text(IntervalMetricFormatter.axisValue(chartValue, metric: metric))
+                        }
+                    }
+                }
+            }
+            .chartXSelection(value: $selectedIntervalIndex)
+            .accessibilityLabel("\(metric.title) by official interval row")
+        }
+        .padding()
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func barTint(for row: IntervalAnalysisRow) -> Color {
+        guard let selectedIntervalIndex else {
+            return roleTint(for: row)
+        }
+        return row.index == selectedIntervalIndex ? metricTint(metric) : roleTint(for: row).opacity(0.35)
+    }
+
+    private func roleTint(for row: IntervalAnalysisRow) -> Color {
+        switch row.stepType {
+        case .warmup: .blue
+        case .work: .cyan
+        case .recovery: .yellow
+        case .cooldown: .teal
+        case .open: .orange
+        case .unknown: .secondary
+        }
+    }
+
+    private func metricTint(_ metric: IntervalAnalysisMetric) -> Color {
+        switch metric {
+        case .pace: .blue
+        case .heartRate: .red
+        case .power: .purple
+        case .cadence: .pink
+        case .duration: .yellow
+        case .distance: .cyan
+        }
+    }
+}
+
+private enum IntervalMetricFormatter {
+    static func value(_ value: Double?, metric: IntervalAnalysisMetric) -> String {
+        guard let value else { return "Unavailable" }
+        switch metric {
+        case .pace:
+            return RunFormatters.pace(value)
+        case .heartRate:
+            return RunFormatters.number(value, suffix: " bpm")
+        case .power:
+            return RunFormatters.number(value, suffix: " W")
+        case .cadence:
+            return RunFormatters.number(value, suffix: " spm")
+        case .duration:
+            return RunFormatters.duration(value)
+        case .distance:
+            return RunFormatters.compactDistance(value)
+        }
+    }
+
+    static func axisValue(_ chartValue: Double, metric: IntervalAnalysisMetric) -> String {
+        switch metric {
+        case .pace:
+            guard chartValue > 0 else { return "" }
+            return RunFormatters.pace(3_600 / chartValue).replacingOccurrences(of: " /km", with: "")
+        case .heartRate:
+            return RunFormatters.number(chartValue, suffix: "")
+        case .power:
+            return RunFormatters.number(chartValue, suffix: "")
+        case .cadence:
+            return RunFormatters.number(chartValue, suffix: "")
+        case .duration:
+            return RunFormatters.duration(chartValue)
+        case .distance:
+            return chartValue >= 1_000
+                ? String(format: "%.1f km", chartValue / 1_000)
+                : "\(Int(chartValue.rounded())) m"
+        }
+    }
+}
+
 struct IntervalDetailView: View {
     let workout: CanonicalWorkout
     let interval: ReconstructedWorkoutInterval

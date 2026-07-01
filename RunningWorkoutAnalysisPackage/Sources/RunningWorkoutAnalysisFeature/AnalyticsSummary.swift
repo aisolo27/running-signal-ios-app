@@ -293,6 +293,207 @@ public enum WorkoutChartSeriesBuilder {
     }
 }
 
+public enum IntervalAnalysisMetric: String, CaseIterable, Identifiable, Sendable {
+    case pace
+    case heartRate
+    case power
+    case cadence
+    case duration
+    case distance
+
+    public var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .pace: "Pace"
+        case .heartRate: "Heart Rate"
+        case .power: "Power"
+        case .cadence: "Cadence"
+        case .duration: "Duration"
+        case .distance: "Distance"
+        }
+    }
+
+    var unit: String {
+        switch self {
+        case .pace: "/km"
+        case .heartRate: "bpm"
+        case .power: "W"
+        case .cadence: "spm"
+        case .duration: "time"
+        case .distance: "m"
+        }
+    }
+
+    var usesTotalAggregate: Bool {
+        switch self {
+        case .duration, .distance: true
+        case .pace, .heartRate, .power, .cadence: false
+        }
+    }
+}
+
+public struct IntervalAnalysisMetricValue: Equatable, Sendable {
+    public var displayValue: Double
+    public var chartValue: Double
+
+    public init(displayValue: Double, chartValue: Double) {
+        self.displayValue = displayValue
+        self.chartValue = chartValue
+    }
+}
+
+public struct IntervalAnalysisRow: Identifiable, Equatable, Sendable {
+    public var id: Int { index }
+    public var index: Int
+    public var label: String
+    public var stepType: DerivedIntervalLabel
+    public var plannedGoalDisplayText: String
+    public var plannedTargetDisplayText: String?
+    public var displayDurationSeconds: Double
+    public var elapsedDurationSeconds: Double
+    public var activeDurationSeconds: Double
+    public var pauseOverlapSeconds: Double?
+    public var durationDisplayRule: ReconstructedIntervalDurationDisplayRule
+    public var distanceMeters: Double?
+    public var paceSecondsPerKm: Double?
+    public var averageHeartRateBpm: Double?
+    public var maxHeartRateBpm: Double?
+    public var averagePower: Double?
+    public var averageCadence: Double?
+    public var startOffsetSeconds: Double
+    public var endOffsetSeconds: Double
+
+    public init(interval: ReconstructedWorkoutInterval, workoutStart: Date) {
+        index = interval.index
+        label = interval.label
+        stepType = interval.stepType
+        plannedGoalDisplayText = interval.plannedGoalDisplayText
+        plannedTargetDisplayText = interval.plannedTargetDisplayText
+        displayDurationSeconds = interval.displayDurationSeconds
+        elapsedDurationSeconds = interval.elapsedRowWindowDurationSeconds
+        activeDurationSeconds = interval.activeTimerDurationSeconds
+        pauseOverlapSeconds = interval.pauseOverlapSeconds
+        durationDisplayRule = interval.durationDisplayRule ?? .elapsedRowWindow
+        distanceMeters = interval.actualDistanceMeters
+        paceSecondsPerKm = Self.displayPaceSecondsPerKm(for: interval)
+        averageHeartRateBpm = interval.averageHeartRateBpm
+        maxHeartRateBpm = interval.maxHeartRateBpm
+        averagePower = interval.averagePower
+        averageCadence = interval.averageCadence
+        startOffsetSeconds = interval.actualStartDate.timeIntervalSince(workoutStart)
+        endOffsetSeconds = interval.actualEndDate.timeIntervalSince(workoutStart)
+    }
+
+    public func value(for metric: IntervalAnalysisMetric) -> IntervalAnalysisMetricValue? {
+        switch metric {
+        case .pace:
+            guard let paceSecondsPerKm, paceSecondsPerKm > 0 else { return nil }
+            return IntervalAnalysisMetricValue(displayValue: paceSecondsPerKm, chartValue: 3_600 / paceSecondsPerKm)
+        case .heartRate:
+            return averageHeartRateBpm.map { IntervalAnalysisMetricValue(displayValue: $0, chartValue: $0) }
+        case .power:
+            return averagePower.map { IntervalAnalysisMetricValue(displayValue: $0, chartValue: $0) }
+        case .cadence:
+            return averageCadence.map { IntervalAnalysisMetricValue(displayValue: $0, chartValue: $0) }
+        case .duration:
+            return IntervalAnalysisMetricValue(displayValue: displayDurationSeconds, chartValue: displayDurationSeconds)
+        case .distance:
+            return distanceMeters.map { IntervalAnalysisMetricValue(displayValue: $0, chartValue: $0) }
+        }
+    }
+
+    public var roleAbbreviation: String {
+        switch stepType {
+        case .warmup: "WU"
+        case .work: "W"
+        case .recovery: "R"
+        case .cooldown: "CD"
+        case .open: "O"
+        case .unknown: "?"
+        }
+    }
+
+    public var displayBasisLabel: String {
+        durationDisplayRule == .activeTimer ? "Active timer" : "Elapsed window"
+    }
+
+    private static func displayPaceSecondsPerKm(for interval: ReconstructedWorkoutInterval) -> Double? {
+        guard interval.durationDisplayRule == .activeTimer,
+              let distanceMeters = interval.actualDistanceMeters,
+              distanceMeters > 0
+        else {
+            return interval.actualPaceSecondsPerKm
+        }
+
+        return interval.activeTimerDurationSeconds / (distanceMeters / 1_000)
+    }
+}
+
+public struct IntervalAnalysisSummary: Equatable, Sendable {
+    public var rows: [IntervalAnalysisRow]
+    public var planSource: IntervalPlanSource
+    public var windowSource: IntervalWindowSource
+
+    public init(workout: CanonicalWorkout, result: WorkoutIntervalReconstructionResult) {
+        rows = result.intervals
+            .map { IntervalAnalysisRow(interval: $0, workoutStart: workout.startDate) }
+            .sorted { $0.index < $1.index }
+        planSource = result.planSource
+        windowSource = result.windowSource
+    }
+
+    public var availableMetrics: [IntervalAnalysisMetric] {
+        IntervalAnalysisMetric.allCases.filter { metric in
+            rows.contains { $0.value(for: metric) != nil }
+        }
+    }
+
+    public var aggregateRows: [IntervalAnalysisRow] {
+        let workRows = rows.filter { $0.stepType == .work }
+        return workRows.isEmpty ? rows : workRows
+    }
+
+    public var aggregateScopeLabel: String {
+        rows.contains { $0.stepType == .work } ? "Work rows" : "Official rows"
+    }
+
+    public func aggregateValue(for metric: IntervalAnalysisMetric) -> IntervalAnalysisMetricValue? {
+        let sourceRows = aggregateRows
+
+        switch metric {
+        case .pace:
+            let totals = sourceRows.reduce(into: (duration: 0.0, distance: 0.0)) { partial, row in
+                guard let distance = row.distanceMeters, distance > 0 else { return }
+                partial.duration += row.displayDurationSeconds
+                partial.distance += distance
+            }
+            guard totals.duration > 0, totals.distance > 0 else { return nil }
+            let pace = totals.duration / (totals.distance / 1_000)
+            return IntervalAnalysisMetricValue(displayValue: pace, chartValue: 3_600 / pace)
+        case .duration:
+            let total = sourceRows
+                .compactMap { $0.value(for: metric)?.displayValue }
+                .reduce(0, +)
+            return total > 0 ? IntervalAnalysisMetricValue(displayValue: total, chartValue: total) : nil
+        case .distance:
+            let total = sourceRows
+                .compactMap { $0.value(for: metric)?.displayValue }
+                .reduce(0, +)
+            return total > 0 ? IntervalAnalysisMetricValue(displayValue: total, chartValue: total) : nil
+        case .heartRate, .power, .cadence:
+            let values = sourceRows.compactMap { $0.value(for: metric)?.displayValue }
+            guard !values.isEmpty else { return nil }
+            let average = values.reduce(0, +) / Double(values.count)
+            return IntervalAnalysisMetricValue(displayValue: average, chartValue: average)
+        }
+    }
+
+    public func aggregateCaption(for metric: IntervalAnalysisMetric) -> String {
+        "\(metric.usesTotalAggregate ? "Total" : "Average") \(aggregateScopeLabel)"
+    }
+}
+
 public enum IntervalDrillDownEligibility {
     public static func officialRows(workout: CanonicalWorkout, evidence: WorkoutEvidence?) -> [ReconstructedWorkoutInterval] {
         guard let evidence,

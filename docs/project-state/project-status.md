@@ -98,7 +98,9 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 - RunSignal has a first-pass `Analytics` tab with `Week Signal`: Monday-start weekly totals, run count, average pace, daily distance bars, purpose-category totals, and weekly workout rows from non-duplicate HealthKit runs.
 - Workout detail uses Swift Charts-backed core chart cards for pace, heart rate, power, and cadence.
 - Official promoted interval rows are tappable into interval detail; under-review evidence rows and raw/debug candidates remain out of product drill-down.
+- Workout detail now has a HealthFit-inspired `Interval Analysis` overview for official promoted interval rows: work-row aggregate metrics, per-row bars for pace, heart rate, power, cadence, duration, and distance, shared chart scrub selection, pause-aware active-timer pace, and the existing Apple-Fitness-like row list/drill-down below it.
 - Remaining proof is physical-iPhone validation with real HealthKit data for the weekly analytics tab, chart rendering, and one official interval drill-down.
+- Remaining interval-chart proof is a physical-iPhone workout whose official resolved rows are promoted, then visually checking the interval analysis scrub, selected-row values, and drill-down charts against Raw Debug/exported resolved rows.
 
 ## 2026-07-01 Repo Cleanup Slice
 

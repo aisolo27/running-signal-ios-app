@@ -1255,6 +1255,13 @@ struct SplitsAndEventsPanel: View {
 
             SectionHeader("Workout Intervals")
             if let supportedIntervals {
+                IntervalAnalysisDeck(
+                    summary: IntervalAnalysisSummary(
+                        workout: workout,
+                        result: supportedIntervals
+                    )
+                )
+
                 VStack(spacing: 8) {
                     ForEach(supportedIntervals.intervals, id: \.index) { interval in
                         NavigationLink {
