@@ -18,6 +18,12 @@ public struct ContentView: View {
             .tag(AppTab.runs)
 
             NavigationStack {
+                AnalyticsView(store: store)
+            }
+            .tabItem { Label(AppTab.analytics.title, systemImage: AppTab.analytics.symbol) }
+            .tag(AppTab.analytics)
+
+            NavigationStack {
                 SettingsView(store: store)
             }
             .tabItem { Label(AppTab.settings.title, systemImage: AppTab.settings.symbol) }
@@ -38,11 +44,13 @@ public struct ContentView: View {
 
 private enum AppTab: String {
     case runs
+    case analytics
     case settings
 
     var title: String {
         switch self {
         case .runs: "Runs"
+        case .analytics: "Analytics"
         case .settings: "Settings"
         }
     }
@@ -50,6 +58,7 @@ private enum AppTab: String {
     var symbol: String {
         switch self {
         case .runs: "figure.run"
+        case .analytics: "chart.bar.xaxis"
         case .settings: "gearshape"
         }
     }

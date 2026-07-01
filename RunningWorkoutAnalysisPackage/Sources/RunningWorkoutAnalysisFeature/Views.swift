@@ -853,7 +853,9 @@ struct HealthKitAuditView: View {
 
                     NoticeCard(
                         title: "Read-only audit",
-                        message: "This screen reports what HealthKit returned for each workout. The queue enriches bounded batches and skips workouts already cached with detailed evidence."
+                        message: "This screen reports what HealthKit returned for each workout. The queue enriches bounded batches and skips workouts already cached with detailed evidence.",
+                        systemImage: "checkmark.shield",
+                        tint: .blue
                     )
 
                     Button {
@@ -876,8 +878,12 @@ struct HealthKitAuditView: View {
                 }
             }
             .padding()
+            .padding(.bottom, 180)
         }
         .navigationTitle("HealthKit Audit")
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: 72)
+        }
     }
 
     private func hasRunningDynamics(_ workout: CanonicalWorkout) -> Bool {
@@ -1397,9 +1403,12 @@ struct WorkoutDetailView: View {
                 }
             }
             .padding()
-            .padding(.bottom, 120)
+            .padding(.bottom, 180)
         }
         .navigationTitle("Workout")
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: 72)
+        }
     }
 }
 
@@ -1451,7 +1460,9 @@ struct RouteAndSeriesPanel: View {
             }
             NoticeCard(
                 title: routeTitle,
-                message: routeMessage
+                message: routeMessage,
+                systemImage: routeIcon,
+                tint: routeTint
             )
         }
     }
@@ -1474,6 +1485,14 @@ struct RouteAndSeriesPanel: View {
             return "HealthKit exposed a route object, but point locations have not been loaded yet."
         }
         return "No route was returned for this workout."
+    }
+
+    private var routeIcon: String {
+        coordinateCount >= 2 ? "checkmark.circle" : "map"
+    }
+
+    private var routeTint: Color {
+        coordinateCount >= 2 ? .green : .orange
     }
 
     private var coordinateCount: Int {
@@ -1536,10 +1555,8 @@ struct WorkoutChartsPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader("Evidence")
             MetricGrid(items: evidenceItems)
-            Text("Charts stay hidden until the loaded HealthKit series can render real trend lines.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            SectionHeader("Charts")
+            WorkoutChartDeck(workout: workout)
         }
     }
 
@@ -1604,7 +1621,12 @@ struct SplitsAndEventsPanel: View {
             if let supportedIntervals {
                 VStack(spacing: 8) {
                     ForEach(supportedIntervals.intervals, id: \.index) { interval in
-                        IntervalRowView(interval: interval)
+                        NavigationLink {
+                            IntervalDetailView(workout: workout, interval: interval)
+                        } label: {
+                            IntervalRowView(interval: interval)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             } else {
@@ -1629,10 +1651,9 @@ struct SplitsAndEventsPanel: View {
 
     private var normalDetailCustomWorkoutIntervals: WorkoutIntervalReconstructionResult? {
         guard let evidence = workout.evidence else { return nil }
-        return CustomWorkoutNormalDetailGate.supportedIntervals(
-            workout: workout,
-            evidence: evidence
-        )
+        let intervals = IntervalDrillDownEligibility.officialRows(workout: workout, evidence: evidence)
+        guard !intervals.isEmpty else { return nil }
+        return CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence)
     }
 
     private var intervalMessage: String {
@@ -1958,9 +1979,12 @@ struct RawHealthKitWorkoutDebugView: View {
                 }
             }
             .padding()
-            .padding(.bottom, 160)
+            .padding(.bottom, 240)
         }
         .navigationTitle("Debug")
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: 72)
+        }
         .onAppear {
             selectedDiagnosticsMonth = currentWorkout.startDate
         }

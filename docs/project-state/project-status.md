@@ -1,6 +1,6 @@
 # RunSignal Project Status
 
-Last updated: 2026-06-30
+Last updated: 2026-07-01
 
 ## Product Direction
 
@@ -125,3 +125,9 @@ Gate B broad shape-whitelist work has been replaced by the generalized resolved-
 - Normal detail fallback copy now uses one clean `Intervals under review` state with a `View Interval Evidence` path to Raw Debug, and the June 30 fixed-cooldown `Open / Extra` review message reports resolved boundary row evidence without adding unpaired-pause wording when paired pauses are zero.
 - Raw Debug and exports now use `Official Interval Rows`, `Resolved Row Evidence`, and `Not promoted yet` labels so evidence existence and promotion status do not read as contradictory.
 - Raw Debug developer controls, monthly diagnostics, and source/device metadata now sit behind a collapsed `Developer tools` disclosure, while official/resolved interval evidence rows use compact expandable rows so the first debug view is scan-friendly.
+
+## 2026-07-01 Analytics Expansion Slice
+- RunSignal now has a first-pass `Analytics` tab with a `Week Signal` view: Monday-start weekly totals, run count, average pace, daily distance bars, purpose-category totals, and weekly workout rows from non-duplicate HealthKit runs.
+- Workout detail replaces the chart placeholder with Swift Charts-backed core chart cards for pace, heart rate, power, and cadence; missing series render quiet unavailable states instead of blank charts.
+- Official promoted interval rows are tappable into interval detail; under-review evidence rows and raw/debug candidates remain out of product drill-down.
+- Remaining proof is physical-iPhone validation with real HealthKit data for the weekly analytics tab, chart rendering, and one official interval drill-down.
