@@ -19,31 +19,6 @@ public struct RunWorkout: Identifiable, Equatable, Sendable {
     }
 }
 
-public struct RunWorkoutSeries: Equatable, Sendable {
-    public var workoutID: String
-    public var heartRate: WorkoutMetricSeries?
-    public var paceOrSpeed: WorkoutMetricSeries?
-    public var power: WorkoutMetricSeries?
-    public var cadence: WorkoutMetricSeries?
-    public var verticalOscillation: WorkoutMetricSeries?
-    public var groundContactTime: WorkoutMetricSeries?
-    public var strideLength: WorkoutMetricSeries?
-    public var route: [WorkoutRoutePoint]
-
-    public init(workout: CanonicalWorkout) {
-        let evidence = workout.evidence
-        workoutID = workout.id
-        heartRate = evidence?.series[.heartRate]
-        paceOrSpeed = evidence?.series[.runningSpeed] ?? evidence?.series[.distance]
-        power = evidence?.series[.runningPower]
-        cadence = evidence?.series[.cadence] ?? evidence?.series[.stepCount]
-        verticalOscillation = evidence?.series[.verticalOscillation]
-        groundContactTime = evidence?.series[.groundContactTime]
-        strideLength = evidence?.series[.strideLength]
-        route = evidence?.route ?? []
-    }
-}
-
 public struct RunWorkoutSegments: Equatable, Sendable {
     public var workoutID: String
     public var kilometerSplits: [DerivedSplitEstimate]

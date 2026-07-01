@@ -16,6 +16,11 @@ xcuserdata/
 *.ipa
 *.dSYM.zip
 *.dSYM
+*.xcresult
+*.profraw
+*.profdata
+*.trace
+*.ips
 
 ## Playgrounds
 timeline.xctimeline
@@ -37,6 +42,10 @@ playground.xcworkspace
 .swiftpm/
 DerivedData/
 .xcodebuildmcp/
+
+# Validation scratch outputs. Curated validation evidence stays tracked explicitly.
+docs/validation/**/_scratch/
+docs/validation/**/_tmp/
 
 # CocoaPods
 #

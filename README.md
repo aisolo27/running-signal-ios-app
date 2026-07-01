@@ -4,22 +4,21 @@ A modern iOS application using a **workspace + SPM package** architecture for cl
 
 ## RunSignal Project Notes
 
-RunSignal is a native iPhone SwiftUI app for Apple Fitness parity work over running workouts. The current product data source is HealthKit, with real workout evidence verified on a physical iPhone.
+RunSignal is a native iPhone SwiftUI app for evidence-grounded completed running workout analysis. The runtime data source is HealthKit, with real workout evidence verified on a physical iPhone.
 
 - Completed workout summaries, samples, routes, and raw events come from HealthKit.
 - Apple Watch custom workout planned structure should come from WorkoutKit `HKWorkout.workoutPlan` when available.
 - HealthKit segment markers are retained for Raw HealthKit Debug only and should not be used as Apple Fitness interval labels.
-- The debug-only `WorkoutKit Reconstructed Intervals` surface pairs WorkoutKit planned steps with HealthKit distance/time samples to validate Apple Fitness interval parity before any main-UI promotion.
-
-Current verification focus: Jun 10, 2026 `Wednesday Interval (6kmm)` custom running workout. See `docs/validation/apple-fitness-interval-model-research.md` and `docs/validation/2026-06-10-apple-fitness-parity.md`.
+- Production custom workout intervals use WorkoutKit planned steps plus complete contiguous HealthKit activity-boundary rows when the evidence gate passes.
+- Debug and validation surfaces remain available for Raw HealthKit evidence review, but raw segment markers are not product interval rows.
 
 ## Codex Project Context
 
 For current project direction and assistant rules, start with:
 
 - `AGENTS.md`
-- `docs/project-state/current-state.md`
-- `docs/project-state/next-work.md`
+- `docs/project-state/project-status.md`
+- `docs/project-state/accuracy-ledger.md`
 - `docs/project-state/documentation-index.md`
 
 Archived template-era assistant rules live under `docs/archive/` and should only be opened for historical context.

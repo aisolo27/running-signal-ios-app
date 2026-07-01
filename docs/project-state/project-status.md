@@ -131,3 +131,8 @@ Gate B broad shape-whitelist work has been replaced by the generalized resolved-
 - Workout detail replaces the chart placeholder with Swift Charts-backed core chart cards for pace, heart rate, power, and cadence; missing series render quiet unavailable states instead of blank charts.
 - Official promoted interval rows are tappable into interval detail; under-review evidence rows and raw/debug candidates remain out of product drill-down.
 - Remaining proof is physical-iPhone validation with real HealthKit data for the weekly analytics tab, chart rendering, and one official interval drill-down.
+
+## 2026-07-01 Repo Cleanup Slice
+- README routing now points new agents to `project-status.md`, `accuracy-ledger.md`, and `documentation-index.md` instead of removed `current-state.md` / `next-work.md` files.
+- Removed unrouted legacy SwiftUI screens and an unused workout-series wrapper while leaving validation evidence, interval resolver logic, diagnostics exports, and raw/debug interval boundaries intact.
+- `.gitignore` now covers additional Xcode/test scratch outputs without broadly ignoring curated validation evidence.
