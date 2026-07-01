@@ -201,3 +201,37 @@ Scope: reviewed the June 29 Codex session logs whose `cwd` exactly matched this 
 
 - Added this June 29 section to `docs/project-state/daily-learning-review.md`.
 - Did not edit `docs/bug-log.md`, `docs/project-state/project-status.md`, `docs/project-state/accuracy-ledger.md`, `AGENTS.md`, or `docs/project-state/documentation-index.md` in this review because those routing-critical docs already had unrelated active edits from the late implementation session, and the durable bug-log/status changes were already present in that dirty worktree.
+
+## 2026-06-30
+
+Scope: reviewed June 30 Codex session logs whose `session_meta.payload.cwd` or `turn_context.cwd` exactly matched this RunSignal repo. Excluded copied repo paths inside prompts and the active automation session. Treated this as documentation-only review: no Xcode builds, device installs, HealthKit/provider mutations, commits, pushes, or broad repo scans.
+
+### Completed Work
+
+- Landed interval status agreement in `3c18f01`: normal detail now uses a cleaner `Intervals under review` fallback with a `View Interval Evidence` path, Raw Debug/export labels distinguish `Official Interval Rows`, `Resolved Row Evidence`, and `Not promoted yet`, and the zero-pause June 30 fixed-cooldown `Open / Extra` review no longer implies unpaired-pause evidence.
+- Landed first-pass analytics and chart surfaces in `7303369`: an `Analytics` tab with weekly distance/run/pace summaries, daily bars and purpose totals, plus Swift Charts-backed workout detail cards and interval drill-down behavior limited to official promoted rows.
+- Landed repo cleanup in `fac8936`: removed unrouted legacy SwiftUI screens and an unused workout-series wrapper, updated README routing away from deleted `current-state.md` / `next-work.md`, and expanded `.gitignore` for local generated Xcode/test scratch outputs while preserving validation evidence.
+- Read-only cleanup subagents produced useful source/test and artifact hygiene recommendations before the cleanup commit; evidence archives, screenshots, exports, diagnostics, and validation fixtures remained preserved.
+
+### Pending Work
+
+- Physical-iPhone proof is still needed for real HealthKit weekly analytics, chart rendering, and one official interval drill-down before treating the new analytics slice as app-visible validated behavior.
+- Re-export the June 30 fixed-cooldown `Open / Extra` workout from a current build to confirm visible and exported status labels agree with the official resolved-row source.
+- Continue treating repo cleanup as an audit track: inventory and classify before any archive/delete move, and do not delete curated validation evidence without explicit approval.
+
+### Mistakes, Fixes, And Friction
+
+- Exact-cwd review must parse JSON fields, not plain `rg` path hits: one June 30 subagent log contained the RunSignal path in a prompt but had a different `cwd`, so text-search alone would have overcounted it.
+- The daily automation prompt still names deleted `current-state.md` and `next-work.md`; the current router is `docs/project-state/project-status.md`, with this file as the lower-risk place for dated review notes.
+- UI evidence wording can look contradictory when normal detail, Raw Debug, and export labels do not share the same support status. Keep status summary, visible labels, and export copy aligned in the same change.
+
+### Workflow Improvements
+
+- For daily reviews, start with `project-status.md` when the legacy split state files are absent, then only read `accuracy-ledger.md` if the day involves shape/promotion specifics.
+- For cleanup requests, run separate code and repo-artifact audits first, then remove only low-risk stale code/artifacts with tests; keep evidence/history folders out of deletion scope unless explicitly approved.
+- For product proof, keep simulator/package success separate from physical-iPhone app-visible proof, especially for real HealthKit analytics and interval drill-down behavior.
+
+### Docs Updated By This Review
+
+- Added this June 30 section to `docs/project-state/daily-learning-review.md`.
+- Did not edit `docs/bug-log.md`, `AGENTS.md`, or `docs/project-state/documentation-index.md`: June 30 durable state and bug-log lessons were already captured by commits `3c18f01`, `7303369`, and `fac8936`. Removed the unrelated malformed duplicate `docs/project-state/project-status 2.md` before publishing this review.
