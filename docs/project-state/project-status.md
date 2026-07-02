@@ -39,7 +39,7 @@ Decision rule: do not grow support by hard-fitting one workout shape at a time. 
 
 ## Current Validation State
 
-Production custom workout intervals use resolved activity-boundary rows when the evidence gate passes: WorkoutKit planned rows are present and ordered, HealthKit activity rows are complete/contiguous and map to those rows or to a completed prefix for stopped-early workouts, pause/resume events are paired and contained within one row, and any post-fixed-row tail is deterministic.
+Production custom workout intervals use resolved activity-boundary rows when the evidence gate passes: WorkoutKit planned rows are present and ordered, HealthKit activity rows are complete/contiguous and map to those rows or to a completed prefix for stopped-early workouts, repeat context is complete enough to prove the mapped prefix, pause/resume events are paired and contained within one row, and any post-fixed-row tail is deterministic.
 
 Normal workout detail supports these resolved custom-workout row classes when the evidence gate passes:
 
@@ -53,21 +53,23 @@ Normal workout detail supports these resolved custom-workout row classes when th
 - Narrow paused-repeat blocks with active/timer display for paused rows only.
 - Narrow May 1-style `Warmup > Recovery > Work > fixed Cooldown > inferred Open / Extra`.
 
+The official resolver is generalized beyond these named proof fixtures: future Work/Recovery/Cooldown repeat shapes can promote when the same WorkoutKit prefix, complete contiguous HealthKit activity rows, repeat-context, pause, and tail gates pass. `Open / Extra` is inferred only after all planned rows map and the final planned row is a fixed `Work` or `Cooldown`; planned open cooldowns remain `Cooldown`, stopped-early prefixes suppress tails, and Warmup-only tails stay under review.
+
 Paused timing semantics use a pause-window state machine for explicit pause/resume, motion pause/resume, and `pauseOrResumeRequest` toggle events. Duplicate, dangling, unpaired, cross-row, or caveated pause streams stay blocked from normal-detail promotion. Terminal zero-duration `rawValue: 1` pause markers at workout end are ignored because they do not represent paused elapsed time.
 
 `DerivedAnalyticsEngine.intervalCandidates` remains a raw HealthKit event-marker debug path only. Derived interval analytics publish rows only from the resolved custom-workout row path when the normal-detail evidence gate passes.
 
 ## Current Next Work
 
-- Keep resolved activity-boundary row behavior stable across archived Apple Fitness fixtures and priority workouts.
+- Keep generalized resolved activity-boundary row behavior stable across archived Apple Fitness fixtures and priority workouts.
 - Re-export the June 30 clean no-pause repeat fixed-cooldown/`Open / Extra` workout from a fresh current-build physical-iPhone install.
 - Confirm visible/export status labels agree with the resolved-row source.
-- Continue hardening fallback reasons for missing plans, incomplete activity rows, unpaired pauses, cross-row pauses, and stale summary-only evidence.
+- Continue hardening fallback reasons for missing plans, incomplete activity rows, inconsistent repeat context, unsupported tail shapes, unpaired pauses, cross-row pauses, and stale summary-only evidence.
 - Keep interval analytics limited to evidence-gated resolved rows until supported and blocked custom-workout styles have stable rows, diagnostics agreement, and regression fixtures.
 
 ## Blocked
 
-- Missing WorkoutKit plans, missing/non-contiguous/incomplete HealthKit activity rows, activity rows that exceed planned row count, unpaired or cross-row pause streams, stale summary-only evidence, and non-prefix partial repeat context remain blocked from custom interval rows.
+- Missing WorkoutKit plans, missing/non-contiguous/incomplete HealthKit activity rows, activity rows that exceed planned row count, inconsistent or non-prefix repeat context, unsupported tail shapes, unpaired or cross-row pause streams, and stale summary-only evidence remain blocked from custom interval rows.
 - HealthKit segment markers remain raw/debug-only and must not be treated as Apple Fitness row truth.
 - March 19-style material distance drift remains blocked until renewed evidence resolves the drift.
 - Duplicate, no-plan, same-day extra, drift/guard-unknown, stale summary-only, or missing-detail workouts remain excluded from production approval scoring.

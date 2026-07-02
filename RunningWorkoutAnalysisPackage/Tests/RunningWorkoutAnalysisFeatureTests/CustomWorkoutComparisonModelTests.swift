@@ -288,7 +288,7 @@ import Testing
     expectDebugOnly(comparison)
 }
 
-@Test func debugCustomWorkoutComparisonBridgeKeepsRepeatBlocksBehindRule() {
+@Test func debugCustomWorkoutComparisonBridgeSupportsFutureRepeatBlocksWithResolvedActivityRows() {
     let start = Date(timeIntervalSince1970: 1_797_000_000)
     let workout = bridgeWorkout(start: start, distanceMeters: 1_000, durationSeconds: 360)
     let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
@@ -307,8 +307,9 @@ import Testing
         workout: workout
     )
 
-    #expect(comparison.status == .repeatBlockNeedsRule)
-    #expect(comparison.rows.allSatisfy { $0.confidence == .needsRule })
+    #expect(comparison.status == .supported)
+    #expect(comparison.fallbackReasons.isEmpty)
+    #expect(comparison.rows.allSatisfy { $0.confidence == .supported })
     expectDebugOnly(comparison)
 }
 
@@ -356,7 +357,8 @@ import Testing
         ],
         workout: workout,
         pausedRepeatBlockRuleApproved: true,
-        pairedPauseCount: 1
+        pairedPauseCount: 1,
+        pauseEvidenceState: .paired
     )
 
     #expect(comparison.status == .supported)
@@ -365,7 +367,7 @@ import Testing
     expectDebugOnly(comparison)
 }
 
-@Test func debugCustomWorkoutComparisonBridgeKeepsPausedRepeatBlocksBehindExplicitPausedRule() {
+@Test func debugCustomWorkoutComparisonBridgeRequiresPairedPauseStateWhenPauseCountExists() {
     let start = Date(timeIntervalSince1970: 1_797_000_000)
     let workout = bridgeWorkout(start: start, distanceMeters: 1_000, durationSeconds: 420)
     let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
@@ -385,12 +387,13 @@ import Testing
         pairedPauseCount: 1
     )
 
-    #expect(comparison.status == .repeatBlockNeedsRule)
-    #expect(comparison.rows.allSatisfy { $0.confidence == .needsRule })
+    #expect(comparison.status == .inconclusive)
+    #expect(comparison.fallbackReasons.contains(.unpairedPauseEvents))
+    #expect(comparison.rows.allSatisfy { $0.confidence == .inconclusive })
     expectDebugOnly(comparison)
 }
 
-@Test func debugCustomWorkoutComparisonBridgeDoesNotApplyPausedRepeatRuleWithoutPairedPauses() {
+@Test func debugCustomWorkoutComparisonBridgeSupportsNoPauseRepeatRowsWithoutPausedRule() {
     let start = Date(timeIntervalSince1970: 1_797_000_000)
     let workout = bridgeWorkout(start: start, distanceMeters: 1_000, durationSeconds: 360)
     let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
@@ -411,12 +414,13 @@ import Testing
         pairedPauseCount: 0
     )
 
-    #expect(comparison.status == .repeatBlockNeedsRule)
-    #expect(comparison.rows.allSatisfy { $0.confidence == .needsRule })
+    #expect(comparison.status == .supported)
+    #expect(comparison.fallbackReasons.isEmpty)
+    #expect(comparison.rows.allSatisfy { $0.confidence == .supported })
     expectDebugOnly(comparison)
 }
 
-@Test func debugCustomWorkoutComparisonBridgeBlocksOpenTailRule() {
+@Test func debugCustomWorkoutComparisonBridgeSupportsDeterministicWorkOpenTail() {
     let start = Date(timeIntervalSince1970: 1_797_000_000)
     let workout = bridgeWorkout(start: start, distanceMeters: 1_050, durationSeconds: 360)
     let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
@@ -429,9 +433,9 @@ import Testing
         workout: workout
     )
 
-    #expect(comparison.status == .openTailNeedsRule)
-    #expect(comparison.fallbackReasons.contains(.openExtraTailAmbiguous))
-    #expect(comparison.rows.allSatisfy { $0.confidence == .needsRule })
+    #expect(comparison.status == .supported)
+    #expect(comparison.fallbackReasons.isEmpty)
+    #expect(comparison.rows.allSatisfy { $0.confidence == .supported })
     expectDebugOnly(comparison)
 }
 
@@ -485,7 +489,7 @@ import Testing
     expectDebugOnly(comparison)
 }
 
-@Test func debugCustomWorkoutComparisonBridgeDoesNotApplySimpleWorkOpenGateToSpecialWorkout() {
+@Test func debugCustomWorkoutComparisonBridgeSupportsResolvedMultiStepOpenTailWithoutShapeRule() {
     let start = Date(timeIntervalSince1970: 1_797_000_000)
     let workout = bridgeWorkout(start: start, distanceMeters: 3_050, durationSeconds: 1_260)
     let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
@@ -501,8 +505,8 @@ import Testing
         simpleWorkOpenRuleApproved: true
     )
 
-    #expect(comparison.status == .openTailNeedsRule)
-    #expect(comparison.fallbackReasons.contains(.openExtraTailAmbiguous))
+    #expect(comparison.status == .supported)
+    #expect(comparison.fallbackReasons.isEmpty)
     expectDebugOnly(comparison)
 }
 
@@ -531,7 +535,7 @@ import Testing
     expectDebugOnly(comparison)
 }
 
-@Test func debugCustomWorkoutComparisonBridgeBlocksRecoveryContainingOpenTailWithoutRecoveryRule() {
+@Test func debugCustomWorkoutComparisonBridgeSupportsRecoveryContainingOpenTailWithResolvedActivityRows() {
     let start = Date(timeIntervalSince1970: 1_797_000_000)
     let workout = bridgeWorkout(start: start, distanceMeters: 9_020, durationSeconds: 3_000)
     let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
@@ -550,9 +554,9 @@ import Testing
         workout: workout
     )
 
-    #expect(comparison.status == .openTailNeedsRule)
-    #expect(comparison.fallbackReasons.contains(.openExtraTailAmbiguous))
-    #expect(comparison.rows.allSatisfy { $0.confidence == .needsRule })
+    #expect(comparison.status == .supported)
+    #expect(comparison.fallbackReasons.isEmpty)
+    #expect(comparison.rows.allSatisfy { $0.confidence == .supported })
     expectDebugOnly(comparison)
 }
 
@@ -629,13 +633,14 @@ import Testing
         openTailRuleApproved: true
     )
 
-    #expect(comparison.status == .repeatBlockNeedsRule)
+    #expect(comparison.status == .supported)
+    #expect(comparison.fallbackReasons.isEmpty)
     #expect(comparison.tailAmbiguity == .fixedCooldownFollowedByPossibleOpenExtraTail)
-    #expect(comparison.rows.allSatisfy { $0.confidence == .needsRule })
+    #expect(comparison.rows.allSatisfy { $0.confidence == .supported })
     expectDebugOnly(comparison)
 }
 
-@Test func debugCustomWorkoutComparisonBridgeBlocksRepeatTailWithoutRepeatTailRule() {
+@Test func debugCustomWorkoutComparisonBridgeSupportsRepeatTailWithResolvedActivityRows() {
     let start = Date(timeIntervalSince1970: 1_797_000_000)
     let workout = bridgeWorkout(start: start, distanceMeters: 1_100, durationSeconds: 420)
     let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
@@ -645,9 +650,10 @@ import Testing
         openTailRuleApproved: true
     )
 
-    #expect(comparison.status == .repeatBlockNeedsRule)
+    #expect(comparison.status == .supported)
+    #expect(comparison.fallbackReasons.isEmpty)
     #expect(comparison.tailAmbiguity == .fixedCooldownFollowedByPossibleOpenExtraTail)
-    #expect(comparison.rows.allSatisfy { $0.confidence == .needsRule })
+    #expect(comparison.rows.allSatisfy { $0.confidence == .supported })
     expectDebugOnly(comparison)
 }
 
@@ -761,9 +767,10 @@ import Testing
         repeatTailRuleApproved: true
     )
 
-    #expect(comparison.status == .repeatBlockNeedsRule)
+    #expect(comparison.status == .supported)
+    #expect(comparison.fallbackReasons.isEmpty)
     #expect(comparison.tailAmbiguity == .plannedOpenCooldownContinuesToWorkoutEnd)
-    #expect(comparison.rows.allSatisfy { $0.confidence == .needsRule })
+    #expect(comparison.rows.allSatisfy { $0.confidence == .supported })
     expectDebugOnly(comparison)
 }
 
@@ -778,9 +785,9 @@ import Testing
         pairedPauseCount: 1
     )
 
-    #expect(comparison.status == .openTailNeedsRule)
-    #expect(comparison.fallbackReasons.contains(.openExtraTailAmbiguous))
-    #expect(comparison.rows.allSatisfy { $0.confidence == .needsRule })
+    #expect(comparison.status == .inconclusive)
+    #expect(comparison.fallbackReasons.contains(.unpairedPauseEvents))
+    #expect(comparison.rows.allSatisfy { $0.confidence == .inconclusive })
     expectDebugOnly(comparison)
 }
 
@@ -804,7 +811,7 @@ import Testing
     expectDebugOnly(comparison)
 }
 
-@Test func debugCustomWorkoutComparisonBridgeBlocksPausedRepeatFixedTailWithoutPairedPauseEvidence() {
+@Test func debugCustomWorkoutComparisonBridgeSupportsCleanRepeatFixedTailWithoutPauseEvidence() {
     let start = Date(timeIntervalSince1970: 1_797_000_000)
     let workout = bridgeWorkout(start: start, distanceMeters: 3_100, durationSeconds: 540)
     let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
@@ -814,14 +821,13 @@ import Testing
         pausedRepeatTailRuleApproved: true
     )
 
-    #expect(comparison.status == .inconclusive)
-    #expect(comparison.fallbackReasons.contains(.noPauseEvidence))
-    #expect(!comparison.fallbackReasons.contains(.unpairedPauseEvents))
-    #expect(comparison.rows.allSatisfy { $0.confidence == .inconclusive })
+    #expect(comparison.status == .supported)
+    #expect(comparison.fallbackReasons.isEmpty)
+    #expect(comparison.rows.allSatisfy { $0.confidence == .supported })
     expectDebugOnly(comparison)
 }
 
-@Test func debugCustomWorkoutComparisonBridgeDoesNotTurnPausedRepeatOpenCooldownIntoOpenExtra() {
+@Test func debugCustomWorkoutComparisonBridgeSupportsPausedRepeatOpenCooldownWithoutOpenExtra() {
     let start = Date(timeIntervalSince1970: 1_797_000_000)
     let workout = bridgeWorkout(start: start, distanceMeters: 3_020, durationSeconds: 540)
     let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
@@ -833,9 +839,9 @@ import Testing
         pauseEvidenceState: .paired
     )
 
-    #expect(comparison.status == .inconclusive)
+    #expect(comparison.status == .supported)
+    #expect(comparison.fallbackReasons.isEmpty)
     #expect(comparison.tailAmbiguity == .plannedOpenCooldownContinuesToWorkoutEnd)
-    #expect(comparison.fallbackReasons.contains(.finalRowOpenCooldown))
     #expect(comparison.rows.allSatisfy { $0.activityCandidateRow?.role != .extra })
     expectDebugOnly(comparison)
 }
@@ -873,7 +879,7 @@ import Testing
     expectDebugOnly(comparison)
 }
 
-@Test func debugCustomWorkoutComparisonBridgeBlocksPausedRepeatFixedTailBelowTailThreshold() {
+@Test func debugCustomWorkoutComparisonBridgeSupportsFixedCooldownWhenOpenTailBelowThreshold() {
     let start = Date(timeIntervalSince1970: 1_797_000_000)
     let workout = bridgeWorkout(start: start, distanceMeters: 3_000, durationSeconds: 500)
     let comparison = DebugCustomWorkoutComparisonBuilder.comparison(
@@ -885,8 +891,10 @@ import Testing
         pauseEvidenceState: .paired
     )
 
-    #expect(comparison.status == .inconclusive)
-    #expect(comparison.fallbackReasons.contains(.tailBelowThreshold))
+    #expect(comparison.status == .supported)
+    #expect(comparison.fallbackReasons.isEmpty)
+    #expect(comparison.tailAmbiguity == .none)
+    #expect(comparison.rows.allSatisfy { $0.activityCandidateRow?.role != .extra })
     expectDebugOnly(comparison)
 }
 

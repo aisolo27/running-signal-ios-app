@@ -1389,7 +1389,7 @@ public enum DiagnosticsExport {
             && plannedSteps.contains { $0.stepType == .recovery && $0.repeatBlockIndex != nil }
             && plannedSteps.last?.stepType == .cooldown
             && plannedSteps.last?.plannedGoalType != .open
-        let pauseEvidenceState: CustomWorkoutPauseEvidenceState = if enablesPausedRepeatTailRule {
+        let pauseEvidenceState: CustomWorkoutPauseEvidenceState = if !pairedPauses.isEmpty {
             .paired
         } else if hasPauseOrResumeEvidence {
             .unpaired

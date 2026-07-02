@@ -16,8 +16,10 @@ public enum CustomWorkoutResolvedIntervalRows {
         guard plannedSteps.indices.allSatisfy({ plannedSteps[$0].index == $0 + 1 }) else {
             return nil
         }
-        guard !plannedSteps.contains(where: { ($0.repeatIndex ?? 1) > 1 })
-            || plannedSteps.contains(where: { ($0.repeatIndex ?? 1) == 1 && $0.repeatBlockIndex != nil }) else {
+        guard hasCompleteRepeatContext(plannedSteps) else {
+            return nil
+        }
+        guard hasConsistentRepeatIterationShape(plannedSteps) else {
             return nil
         }
         guard !activities.isEmpty,
@@ -51,7 +53,14 @@ public enum CustomWorkoutResolvedIntervalRows {
         }
 
         if activities.count == plannedSteps.count {
-            appendOpenTailIfNeeded(to: &rows, workout: workout, activities: activities, pauses: pauses, evidence: evidence)
+            appendOpenTailIfNeeded(
+                to: &rows,
+                plannedSteps: plannedSteps,
+                workout: workout,
+                activities: activities,
+                pauses: pauses,
+                evidence: evidence
+            )
         }
 
         guard rows.allSatisfy({ $0.actualEndDate > $0.actualStartDate }) else {
@@ -84,7 +93,8 @@ public enum CustomWorkoutResolvedIntervalRows {
         distanceMeters: Double?,
         pauseIntervals: [DateInterval],
         evidence: WorkoutEvidence,
-        sourceNote: String
+        sourceNote: String,
+        tailDiagnostics: TailDiagnostics? = nil
     ) -> ReconstructedWorkoutInterval {
         let elapsed = max(0, end.timeIntervalSince(start))
         let pauseOverlap = pauseOverlapSeconds(start: start, end: end, pauses: pauseIntervals)
@@ -127,7 +137,7 @@ public enum CustomWorkoutResolvedIntervalRows {
             boundaryAdjustmentSeconds: nil,
             boundaryOvershootMeters: nil,
             boundaryDiagnostics: nil,
-            tailDiagnostics: nil,
+            tailDiagnostics: tailDiagnostics,
             sourceNote: sourceNote,
             confidence: .high
         )
@@ -204,11 +214,18 @@ public enum CustomWorkoutResolvedIntervalRows {
 
     private static func appendOpenTailIfNeeded(
         to rows: inout [ReconstructedWorkoutInterval],
+        plannedSteps: [PlannedWorkoutStep],
         workout: CanonicalWorkout,
         activities: [WorkoutEvidenceActivity],
         pauses: [DateInterval],
         evidence: WorkoutEvidence
     ) {
+        guard activities.count == plannedSteps.count,
+              let finalStep = plannedSteps.last,
+              finalStep.plannedGoalType != .open,
+              finalStep.stepType == .work || finalStep.stepType == .cooldown else {
+            return
+        }
         guard let lastEnd = activities.last?.endDate,
               workout.endDate > lastEnd else {
             return
@@ -234,7 +251,19 @@ public enum CustomWorkoutResolvedIntervalRows {
                 distanceMeters: tailDistance,
                 pauseIntervals: pauses,
                 evidence: evidence,
-                sourceNote: "Resolved from workout tail after complete fixed planned rows."
+                sourceNote: "Resolved from workout tail after complete fixed planned rows.",
+                tailDiagnostics: TailDiagnostics(
+                    plannedFinalStepEndDate: lastEnd,
+                    workoutEndDate: workout.endDate,
+                    remainingSeconds: tailDuration,
+                    remainingMeters: tailDistance,
+                    finalDistanceSampleDate: evidence.series[.distance]?.points.last?.date,
+                    finalDistanceSampleCumulativeDistanceMeters: evidence.series[.distance]?.points.last?.value,
+                    lastHeartRateSampleDate: evidence.series[.heartRate]?.points.last?.date,
+                    lastPowerSampleDate: evidence.series[.runningPower]?.points.last?.date,
+                    lastCadenceSampleDate: evidence.series[.cadence]?.points.last?.date,
+                    creationReason: "Remaining workout time or distance exceeded Open / Extra threshold after complete activity-boundary rows."
+                )
             )
         )
     }
@@ -261,6 +290,53 @@ public enum CustomWorkoutResolvedIntervalRows {
             }
         }
         return true
+    }
+
+    private static func hasCompleteRepeatContext(_ plannedSteps: [PlannedWorkoutStep]) -> Bool {
+        let repeatSteps = plannedSteps.filter { $0.repeatBlockIndex != nil || ($0.repeatIndex ?? 1) > 1 }
+        guard !repeatSteps.isEmpty else {
+            return true
+        }
+
+        let grouped = Dictionary(grouping: repeatSteps) { $0.repeatBlockIndex ?? -1 }
+        return grouped.values.allSatisfy { steps in
+            let repeatIndexes = Set(steps.map { $0.repeatIndex ?? 1 })
+            guard let maxRepeatIndex = repeatIndexes.max(), maxRepeatIndex >= 1 else {
+                return false
+            }
+            return Set(1...maxRepeatIndex).isSubset(of: repeatIndexes)
+        }
+    }
+
+    private static func hasConsistentRepeatIterationShape(_ plannedSteps: [PlannedWorkoutStep]) -> Bool {
+        let grouped = Dictionary(grouping: plannedSteps.filter { $0.repeatBlockIndex != nil }) { $0.repeatBlockIndex ?? -1 }
+        return grouped.values.allSatisfy { steps in
+            let byIteration = Dictionary(grouping: steps) { $0.repeatIndex ?? 1 }
+            let sortedIterations = byIteration.keys.sorted()
+            guard let firstIteration = sortedIterations.first,
+                  let firstSignature = byIteration[firstIteration]?.map(\.stepType),
+                  let lastIteration = sortedIterations.last else {
+                return true
+            }
+            return sortedIterations.allSatisfy { iteration in
+                guard let signature = byIteration[iteration]?.map(\.stepType) else {
+                    return false
+                }
+                if signature.filter({ $0 == .work }).count > 1, !signature.contains(.recovery) {
+                    return false
+                }
+                if signature == firstSignature {
+                    return true
+                }
+                if iteration == lastIteration,
+                   firstSignature.last == .recovery,
+                   signature == Array(firstSignature.dropLast()),
+                   plannedSteps.last?.stepType == .cooldown {
+                    return true
+                }
+                return false
+            }
+        }
     }
 
     private static func activityDistanceMeters(_ activity: WorkoutEvidenceActivity) -> Double? {
