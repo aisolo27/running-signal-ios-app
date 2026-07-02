@@ -141,6 +141,9 @@ public enum CustomWorkoutResolvedIntervalRows {
         var intervals: [DateInterval] = []
         var sawPauseEvidence = false
         for event in events.sorted(by: { $0.startDate < $1.startDate }) {
+            if isTerminalZeroDurationPauseMarker(event, workout: workout) {
+                continue
+            }
             let label = event.displayLabel.lowercased()
             let type = event.type.lowercased()
             let isPause = (label.contains("pause") && !label.contains("resume"))
@@ -171,6 +174,18 @@ public enum CustomWorkoutResolvedIntervalRows {
             return nil
         }
         return intervals
+    }
+
+    private static func isTerminalZeroDurationPauseMarker(
+        _ event: WorkoutEvidenceEvent,
+        workout: CanonicalWorkout
+    ) -> Bool {
+        let type = event.type.lowercased()
+        guard type.contains("rawvalue: 1") else { return false }
+
+        let duration = event.endDate.timeIntervalSince(event.startDate)
+        let startsAtWorkoutEnd = abs(event.startDate.timeIntervalSince(workout.endDate)) <= 1
+        return duration <= 0.5 && startsAtWorkoutEnd
     }
 
     private static func pausesAreAssignableToSingleRows(

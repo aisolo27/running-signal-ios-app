@@ -235,3 +235,34 @@ Scope: reviewed June 30 Codex session logs whose `session_meta.payload.cwd` or `
 
 - Added this June 30 section to `docs/project-state/daily-learning-review.md`.
 - Did not edit `docs/bug-log.md`, `AGENTS.md`, or `docs/project-state/documentation-index.md`: June 30 durable state and bug-log lessons were already captured by commits `3c18f01`, `7303369`, and `fac8936`. Removed the unrelated malformed duplicate `docs/project-state/project-status 2.md` before publishing this review.
+
+## 2026-07-01
+
+Scope: reviewed July 1 Codex session logs with JSON-field `session_meta.payload.cwd` or `turn_context.cwd` exactly equal to this RunSignal repo. Excluded copied repo paths inside unrelated prompts and excluded the active automation session. Treated this as documentation-only review: no Xcode builds, device installs, HealthKit/provider mutations, commits, pushes, or broad repo scans.
+
+### Completed Work
+
+- Landed interactive interval-analysis charts in `0c05222`: workout detail now shows a HealthFit-inspired `Interval Analysis` overview for official promoted interval rows, including work-row aggregate metrics, per-row bars for pace, heart rate, power, cadence, duration, and distance, shared chart scrub selection, pause-aware active-timer pace, and the existing Apple-Fitness-like row list/drill-down below it.
+- Kept interval analysis source-gated: official promoted rows are chart/drill-down eligible, while under-review evidence rows and raw/debug candidates stay out of product drill-down.
+- Added model/view and test coverage in `AnalyticsSummary.swift`, `AnalyticsViews.swift`, `Views.swift`, and `AnalyticsSummaryTests.swift`.
+- Updated `docs/project-state/project-status.md` during implementation to record the July 1 interval-analysis slice and remaining proof boundary.
+
+### Pending Work
+
+- Run fresh physical-iPhone semantic proof for the new interval charts on a workout whose official resolved rows are promoted, comparing visible chart values, scrub selection, and drill-down values against Raw Debug/exported resolved rows.
+- Keep the July 1 implementation status separate from physical HealthKit proof: `swift test`, whitespace checks, commit, push, and an earlier physical launch do not prove the new interval chart semantics on real data.
+
+### Mistakes, Fixes, And Friction
+
+- Text search for the RunSignal repo path overcounted July 1 sessions because unrelated prompts copied the RunSignal AGENTS block. Use JSON-field cwd filtering first, then inspect matched logs.
+- The automation prompt still names deleted `current-state.md` and `next-work.md`; the active router is `docs/project-state/project-status.md`. Lower-confidence dated review notes belong here.
+
+### Workflow Improvements
+
+- For future daily reviews, filter session logs by exact JSON cwd before grepping for topics or final summaries.
+- For interval-chart work, keep the proof checklist tied to one promoted-row workout: normal detail chart, interval row list, interval drill-down, Raw Debug/exported resolved rows, and Apple Fitness evidence where available.
+
+### Docs Updated By This Review
+
+- Added this July 1 section to `docs/project-state/daily-learning-review.md`.
+- Did not edit `docs/bug-log.md`, `AGENTS.md`, or `docs/project-state/documentation-index.md`: no new recurring gotcha or routing rule was stronger than existing bug-log/project-status entries.

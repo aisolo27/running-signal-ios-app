@@ -53,7 +53,7 @@ Normal workout detail supports these resolved custom-workout row classes when th
 - Narrow paused-repeat blocks with active/timer display for paused rows only.
 - Narrow May 1-style `Warmup > Recovery > Work > fixed Cooldown > inferred Open / Extra`.
 
-Paused timing semantics use a pause-window state machine for explicit pause/resume, motion pause/resume, and `pauseOrResumeRequest` toggle events. Duplicate, dangling, unpaired, cross-row, or caveated pause streams stay blocked from normal-detail promotion.
+Paused timing semantics use a pause-window state machine for explicit pause/resume, motion pause/resume, and `pauseOrResumeRequest` toggle events. Duplicate, dangling, unpaired, cross-row, or caveated pause streams stay blocked from normal-detail promotion. Terminal zero-duration `rawValue: 1` pause markers at workout end are ignored because they do not represent paused elapsed time.
 
 `DerivedAnalyticsEngine.intervalCandidates` remains a raw HealthKit event-marker debug path only. Derived interval analytics publish rows only from the resolved custom-workout row path when the normal-detail evidence gate passes.
 
@@ -120,7 +120,7 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 - Workout metric charts now support shared drag/scrub selection and format pace axes as pace strings instead of raw values such as `1,500 /km`.
 - Workout detail now shows all kilometer splits instead of truncating at five.
 - Raw Debug no longer shows the `Direct vs Calculated` provenance block.
-- Added regression coverage for the six-work-repeat fixed-cooldown plus `Open / Extra` recording shape so normal detail can promote the 15 official rows when the same evidence shape is available from HealthKit/WorkoutKit.
+- Added regression coverage for the six-work-repeat fixed-cooldown plus `Open / Extra` recording shape so normal detail can promote the 15 official rows when the same evidence shape is available from HealthKit/WorkoutKit, including a terminal zero-duration `HKWorkoutEventType(rawValue: 1)` marker at workout end.
 
 ## 2026-07-02 Analytics Period Expansion
 

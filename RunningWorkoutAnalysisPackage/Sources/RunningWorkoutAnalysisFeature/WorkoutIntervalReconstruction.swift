@@ -1113,7 +1113,8 @@ public enum CustomWorkoutNormalDetailGate {
             activities: activities,
             workout: workout,
             repeatBlockRuleApproved: true,
-            openTailRuleApproved: true
+            openTailRuleApproved: true,
+            repeatTailRuleApproved: true
         )
 
         guard comparison.status == .supported,
@@ -1530,7 +1531,8 @@ public enum CustomWorkoutNormalDetailGate {
             openTailRuleApproved: isNarrowWarmupWorkFixedCooldownOpenTail(plannedSteps)
                 || isNarrowNoPauseRepeatBlockFixedCooldownOpenTail(plannedSteps),
             simpleWorkOpenRuleApproved: true,
-            recoveryContainingOpenTailRuleApproved: isNarrowRecoveryContainingFixedCooldownOpenTail(plannedSteps)
+            recoveryContainingOpenTailRuleApproved: isNarrowRecoveryContainingFixedCooldownOpenTail(plannedSteps),
+            repeatTailRuleApproved: isNarrowNoPauseRepeatBlockFixedCooldownOpenTail(plannedSteps)
         )
     }
 

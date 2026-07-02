@@ -3697,7 +3697,7 @@ import Testing
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence)?.intervals.map(\.label) == result.intervals.map(\.label))
 }
 
-@Test func normalDetailGateSupportsSixRepeatFixedCooldownOpenTailRecordingShape() throws {
+@Test func normalDetailGateSupportsSixRepeatFixedCooldownOpenTailRecordingShapeWithTerminalPauseMarker() throws {
     let start = Date(timeIntervalSince1970: 10_658)
     let workout = testWorkout(id: "normal-detail-six-repeat-tail", start: start, distanceMeters: 7_600, durationSeconds: 2_785)
     var plannedSteps = [
@@ -3758,10 +3758,18 @@ import Testing
         workout: workout,
         plannedSteps: plannedSteps,
         activityWindows: activityWindows,
-        distancePoints: distancePoints
+        distancePoints: distancePoints,
+        events: [
+            WorkoutEvidenceEvent(
+                startDate: start.addingTimeInterval(2_785),
+                endDate: start.addingTimeInterval(2_785),
+                type: "HKWorkoutEventType(rawValue: 1)"
+            )
+        ]
     )
 
     let result = try #require(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence))
+    #expect(IntervalDrillDownEligibility.officialRows(workout: workout, evidence: evidence).count == 15)
     let workRows = result.intervals.filter { $0.stepType == .work }
     let summary = IntervalAnalysisSummary(workout: workout, result: result)
     let workSummary = try #require(summary.workRepeatSummary)
