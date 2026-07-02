@@ -46,6 +46,7 @@ DerivedData/
 # Validation scratch outputs. Curated validation evidence stays tracked explicitly.
 docs/validation/**/_scratch/
 docs/validation/**/_tmp/
+docs/validation/_local-reference-media/
 
 # CocoaPods
 #

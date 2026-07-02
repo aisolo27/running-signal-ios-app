@@ -45,6 +45,66 @@ import Testing
     #expect(WeeklyRunCategory.make(from: workout(id: "hills", type: .hills)) == .other)
 }
 
+@Test func periodAnalyticsComparesCurrentWeekToSameElapsedDaysLastWeek() throws {
+    let calendar = testCalendar
+    let currentMonday = try makeDate(year: 2026, month: 6, day: 29)
+    let now = try makeDate(year: 2026, month: 7, day: 2, hour: 12)
+    let previousMonday = currentMonday.addingTimeInterval(-7 * 86_400)
+    let runs = [
+        workout(id: "current-monday", start: currentMonday.addingTimeInterval(8 * 3_600), distance: 5_000, duration: 1_500, type: .easy),
+        workout(id: "current-thursday", start: currentMonday.addingTimeInterval(3 * 86_400), distance: 4_000, duration: 1_200, type: .easy),
+        workout(id: "previous-monday", start: previousMonday.addingTimeInterval(8 * 3_600), distance: 3_000, duration: 900, type: .easy),
+        workout(id: "previous-thursday", start: previousMonday.addingTimeInterval(3 * 86_400), distance: 4_000, duration: 1_200, type: .easy),
+        workout(id: "previous-saturday", start: previousMonday.addingTimeInterval(5 * 86_400), distance: 20_000, duration: 7_200, type: .longRun)
+    ]
+
+    let summary = TrainingPeriodAnalyticsSummary.make(workouts: runs, period: .week, containing: now, now: now, calendar: calendar)
+
+    #expect(summary.isPeriodToDate)
+    #expect(summary.elapsedDayCount == 4)
+    #expect(summary.totalDistanceMeters == 9_000)
+    #expect(summary.comparison?.elapsedDayCount == 4)
+    #expect(summary.comparison?.totalDistanceMeters == 7_000)
+    #expect(summary.distanceDeltaMeters == 2_000)
+}
+
+@Test func periodAnalyticsComparesCurrentMonthToSameElapsedDaysLastMonth() throws {
+    let calendar = testCalendar
+    let now = try makeDate(year: 2026, month: 7, day: 10, hour: 12)
+    let runs = [
+        workout(id: "current-july-2", start: try makeDate(year: 2026, month: 7, day: 2, hour: 7), distance: 6_000, duration: 1_800, type: .easy),
+        workout(id: "current-july-10", start: try makeDate(year: 2026, month: 7, day: 10, hour: 7), distance: 5_000, duration: 1_500, type: .easy),
+        workout(id: "previous-june-5", start: try makeDate(year: 2026, month: 6, day: 5, hour: 7), distance: 8_000, duration: 2_400, type: .easy),
+        workout(id: "previous-june-15", start: try makeDate(year: 2026, month: 6, day: 15, hour: 7), distance: 12_000, duration: 3_600, type: .longRun)
+    ]
+
+    let summary = TrainingPeriodAnalyticsSummary.make(workouts: runs, period: .month, containing: now, now: now, calendar: calendar)
+
+    #expect(summary.isPeriodToDate)
+    #expect(summary.elapsedDayCount == 10)
+    #expect(summary.totalDistanceMeters == 11_000)
+    #expect(summary.comparison?.totalDistanceMeters == 8_000)
+    #expect(summary.distanceBuckets.count == 10)
+}
+
+@Test func periodAnalyticsComparesCurrentYearToSameElapsedDaysLastYear() throws {
+    let calendar = testCalendar
+    let now = try makeDate(year: 2026, month: 3, day: 1, hour: 12)
+    let runs = [
+        workout(id: "current-jan", start: try makeDate(year: 2026, month: 1, day: 5, hour: 7), distance: 10_000, duration: 3_000, type: .easy),
+        workout(id: "current-feb", start: try makeDate(year: 2026, month: 2, day: 20, hour: 7), distance: 8_000, duration: 2_400, type: .easy),
+        workout(id: "previous-feb", start: try makeDate(year: 2025, month: 2, day: 15, hour: 7), distance: 12_000, duration: 3_600, type: .easy),
+        workout(id: "previous-april", start: try makeDate(year: 2025, month: 4, day: 1, hour: 7), distance: 30_000, duration: 10_800, type: .longRun)
+    ]
+
+    let summary = TrainingPeriodAnalyticsSummary.make(workouts: runs, period: .year, containing: now, now: now, calendar: calendar)
+
+    #expect(summary.isPeriodToDate)
+    #expect(summary.totalDistanceMeters == 18_000)
+    #expect(summary.comparison?.totalDistanceMeters == 12_000)
+    #expect(summary.distanceBuckets.map(\.label) == ["Jan", "Feb", "Mar"])
+}
+
 @Test func workoutChartSeriesBuildsCoreMetricsAndConvertsSpeedToPace() throws {
     let start = try makeDate(year: 2026, month: 6, day: 30)
     let run = workout(
@@ -171,7 +231,134 @@ import Testing
     #expect(summary.aggregateValue(for: .duration)?.displayValue == 90)
     #expect(summary.aggregateValue(for: .distance)?.displayValue == 300)
     #expect(summary.aggregateValue(for: .power)?.displayValue == 310)
+    #expect(summary.workRepeatSummary?.repeatCount == 1)
+    #expect(summary.workRepeatSummary?.totalActiveDurationSeconds == 90)
+    #expect(summary.workRepeatSummary?.totalDistanceMeters == 300)
+    #expect(summary.workRepeatSummary?.aggregatePaceSecondsPerKm == 300)
+    #expect(summary.repeatGroups.isEmpty)
     #expect(summary.availableMetrics == IntervalAnalysisMetric.allCases)
+}
+
+@Test func intervalAnalysisSummaryGroupsOfficialWorkRecoveryRepeats() throws {
+    let start = try makeDate(year: 2026, month: 6, day: 30)
+    let run = workout(id: "repeat-intervals", start: start, distance: 1_400, duration: 720, type: .interval)
+    let result = WorkoutIntervalReconstructionResult(
+        planSource: .workoutKit,
+        windowSource: .healthKitActivityBoundaries,
+        intervals: [
+            reconstructedInterval(
+                index: 1,
+                label: "Warmup",
+                stepType: .warmup,
+                start: start,
+                duration: 120,
+                elapsedDuration: 120,
+                activeDuration: 120,
+                pauseOverlap: 0,
+                displayRule: .elapsedRowWindow,
+                distance: 500,
+                pace: 360,
+                heartRate: 128,
+                maxHeartRate: 136,
+                power: 220,
+                cadence: 172
+            ),
+            reconstructedInterval(
+                index: 2,
+                label: "Work 1",
+                stepType: .work,
+                start: start.addingTimeInterval(120),
+                duration: 90,
+                elapsedDuration: 100,
+                activeDuration: 90,
+                pauseOverlap: 10,
+                displayRule: .activeTimer,
+                distance: 300,
+                pace: 100 / 0.3,
+                heartRate: 152,
+                maxHeartRate: 158,
+                power: 310,
+                cadence: 184
+            ),
+            reconstructedInterval(
+                index: 3,
+                label: "Recovery 1",
+                stepType: .recovery,
+                start: start.addingTimeInterval(220),
+                duration: 120,
+                elapsedDuration: 120,
+                activeDuration: 120,
+                pauseOverlap: 0,
+                displayRule: .elapsedRowWindow,
+                distance: 150,
+                pace: 800,
+                heartRate: 134,
+                maxHeartRate: 141,
+                power: 150,
+                cadence: 166
+            ),
+            reconstructedInterval(
+                index: 4,
+                label: "Work 2",
+                stepType: .work,
+                start: start.addingTimeInterval(340),
+                duration: 95,
+                elapsedDuration: 95,
+                activeDuration: 95,
+                pauseOverlap: 0,
+                displayRule: .elapsedRowWindow,
+                distance: 300,
+                pace: 95 / 0.3,
+                heartRate: 154,
+                maxHeartRate: 162,
+                power: 315,
+                cadence: 186
+            ),
+            reconstructedInterval(
+                index: 5,
+                label: "Recovery 2",
+                stepType: .recovery,
+                start: start.addingTimeInterval(435),
+                duration: 120,
+                elapsedDuration: 120,
+                activeDuration: 120,
+                pauseOverlap: 0,
+                displayRule: .elapsedRowWindow,
+                distance: 150,
+                pace: 800,
+                heartRate: 136,
+                maxHeartRate: 143,
+                power: 155,
+                cadence: 168
+            ),
+            reconstructedInterval(
+                index: 6,
+                label: "Cooldown",
+                stepType: .cooldown,
+                start: start.addingTimeInterval(555),
+                duration: 165,
+                elapsedDuration: 165,
+                activeDuration: 165,
+                pauseOverlap: 0,
+                displayRule: .elapsedRowWindow,
+                distance: 0,
+                pace: 0,
+                heartRate: 126,
+                maxHeartRate: 132,
+                power: 180,
+                cadence: 170
+            )
+        ]
+    )
+
+    let summary = IntervalAnalysisSummary(workout: run, result: result)
+
+    #expect(summary.workRepeatSummary?.repeatCount == 2)
+    #expect(summary.workRepeatSummary?.totalActiveDurationSeconds == 185)
+    #expect(summary.workRepeatSummary?.totalDistanceMeters == 600)
+    #expect(summary.workRepeatSummary?.aggregatePaceSecondsPerKm == 185 / 0.6)
+    #expect(summary.repeatGroups.map(\.repeatNumber) == [1, 2])
+    #expect(summary.repeatGroups.map { $0.rows.map(\.index) } == [[2, 3], [4, 5]])
 }
 
 private var testCalendar: Calendar {

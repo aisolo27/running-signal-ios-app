@@ -179,6 +179,349 @@ public struct WeeklyAnalyticsSummary: Equatable, Sendable {
     }
 }
 
+public struct TrainingPeriodDistanceBucket: Identifiable, Equatable, Sendable {
+    public var id: Date { startDate }
+    public var startDate: Date
+    public var endDate: Date
+    public var label: String
+    public var distanceMeters: Double
+}
+
+public struct TrainingPeriodComparison: Equatable, Sendable {
+    public var startDate: Date
+    public var endDate: Date
+    public var elapsedDayCount: Int
+    public var runCount: Int
+    public var totalDistanceMeters: Double
+    public var totalDurationSeconds: Double
+
+    public var averagePaceSecondsPerKm: Double? {
+        PaceMath.paceSecondsPerKm(
+            distanceMeters: totalDistanceMeters > 0 ? totalDistanceMeters : nil,
+            durationSeconds: totalDurationSeconds
+        )
+    }
+}
+
+public struct TrainingPeriodAnalyticsSummary: Equatable, Sendable {
+    public var period: TrainingAnalyticsPeriod
+    public var periodStart: Date
+    public var periodEnd: Date
+    public var analysisEnd: Date
+    public var elapsedDayCount: Int
+    public var isPeriodToDate: Bool
+    public var workouts: [WeeklyWorkoutRow]
+    public var distanceBuckets: [TrainingPeriodDistanceBucket]
+    public var categoryTotals: [WeeklyRunCategoryTotal]
+    public var totalDistanceMeters: Double
+    public var totalDurationSeconds: Double
+    public var comparison: TrainingPeriodComparison?
+
+    public var runCount: Int { workouts.count }
+
+    public var averagePaceSecondsPerKm: Double? {
+        PaceMath.paceSecondsPerKm(
+            distanceMeters: totalDistanceMeters > 0 ? totalDistanceMeters : nil,
+            durationSeconds: totalDurationSeconds
+        )
+    }
+
+    public var distanceDeltaMeters: Double? {
+        comparison.map { totalDistanceMeters - $0.totalDistanceMeters }
+    }
+
+    public var runCountDelta: Int? {
+        comparison.map { runCount - $0.runCount }
+    }
+
+    public var comparisonScopeLabel: String {
+        guard let comparison else { return "No previous period" }
+        let basis = isPeriodToDate ? "first \(comparison.elapsedDayCount) day\(comparison.elapsedDayCount == 1 ? "" : "s")" : "full period"
+        return "vs previous \(period.comparisonNoun) \(basis)"
+    }
+
+    public static func make(
+        workouts allWorkouts: [CanonicalWorkout],
+        period: TrainingAnalyticsPeriod,
+        containing date: Date = Date(),
+        now: Date = Date(),
+        calendar: Calendar = WeeklyAnalyticsSummary.mondayCalendar
+    ) -> TrainingPeriodAnalyticsSummary {
+        let start = period.start(containing: date, workouts: allWorkouts, now: now, calendar: calendar)
+        return make(workouts: allWorkouts, period: period, periodStart: start, now: now, calendar: calendar)
+    }
+
+    public static func make(
+        workouts allWorkouts: [CanonicalWorkout],
+        period: TrainingAnalyticsPeriod,
+        periodStart start: Date,
+        now: Date = Date(),
+        calendar: Calendar = WeeklyAnalyticsSummary.mondayCalendar
+    ) -> TrainingPeriodAnalyticsSummary {
+        let completed = V1WorkoutFilters.completedRuns(from: allWorkouts)
+        let fullEnd = period.end(after: start, workouts: completed, now: now, calendar: calendar)
+        let currentStart = period.start(containing: now, workouts: completed, now: now, calendar: calendar)
+        let isCurrent = period != .allTime && calendar.isDate(start, inSameDayAs: currentStart)
+        let elapsedDays = period.elapsedDayCount(from: start, fullEnd: fullEnd, now: now, isCurrent: isCurrent, calendar: calendar)
+        let analysisEnd = period == .allTime
+            ? fullEnd
+            : minDate(period.addingDays(elapsedDays, to: start, calendar: calendar), fullEnd)
+        let included = completed.filteredAndSorted(from: start, to: analysisEnd)
+        let rows = included.map { WeeklyWorkoutRow(workout: $0, category: WeeklyRunCategory.make(from: $0)) }
+        let totals = totals(for: included)
+        let buckets = period.distanceBuckets(for: completed, start: start, end: analysisEnd, calendar: calendar)
+        let categoryTotals = WeeklyRunCategory.allCases.map { category in
+            let categoryRows = rows.filter { $0.category == category }
+            return WeeklyRunCategoryTotal(
+                category: category,
+                runCount: categoryRows.count,
+                distanceMeters: categoryRows.compactMap(\.workout.distanceMeters).reduce(0, +)
+            )
+        }
+
+        return TrainingPeriodAnalyticsSummary(
+            period: period,
+            periodStart: start,
+            periodEnd: fullEnd,
+            analysisEnd: analysisEnd,
+            elapsedDayCount: elapsedDays,
+            isPeriodToDate: isCurrent,
+            workouts: rows,
+            distanceBuckets: buckets,
+            categoryTotals: categoryTotals,
+            totalDistanceMeters: totals.distance,
+            totalDurationSeconds: totals.duration,
+            comparison: comparison(
+                workouts: completed,
+                period: period,
+                periodStart: start,
+                elapsedDayCount: elapsedDays,
+                isPeriodToDate: isCurrent,
+                calendar: calendar
+            )
+        )
+    }
+
+    public static func availablePeriodStarts(
+        workouts: [CanonicalWorkout],
+        period: TrainingAnalyticsPeriod,
+        now: Date = Date(),
+        calendar: Calendar = WeeklyAnalyticsSummary.mondayCalendar
+    ) -> [Date] {
+        guard period != .allTime else { return [] }
+        let completed = V1WorkoutFilters.completedRuns(from: workouts)
+        let starts = Set(completed.map { period.start(containing: $0.startDate, workouts: completed, now: now, calendar: calendar) })
+        let current = period.start(containing: now, workouts: completed, now: now, calendar: calendar)
+        return Array(starts.union([current])).sorted(by: >)
+    }
+
+    private static func comparison(
+        workouts: [CanonicalWorkout],
+        period: TrainingAnalyticsPeriod,
+        periodStart start: Date,
+        elapsedDayCount: Int,
+        isPeriodToDate: Bool,
+        calendar: Calendar
+    ) -> TrainingPeriodComparison? {
+        guard period != .allTime,
+              let previousStart = period.previousStart(before: start, calendar: calendar)
+        else { return nil }
+
+        let previousFullEnd = start
+        let previousEnd = isPeriodToDate
+            ? minDate(period.addingDays(elapsedDayCount, to: previousStart, calendar: calendar), previousFullEnd)
+            : previousFullEnd
+        let included = workouts.filteredAndSorted(from: previousStart, to: previousEnd)
+        let totals = totals(for: included)
+
+        return TrainingPeriodComparison(
+            startDate: previousStart,
+            endDate: previousEnd,
+            elapsedDayCount: max(0, calendar.dateComponents([.day], from: previousStart, to: previousEnd).day ?? 0),
+            runCount: included.count,
+            totalDistanceMeters: totals.distance,
+            totalDurationSeconds: totals.duration
+        )
+    }
+
+    private static func totals(for workouts: [CanonicalWorkout]) -> (distance: Double, duration: Double) {
+        let distance = workouts.compactMap(\.distanceMeters).reduce(0, +)
+        let duration = workouts.reduce(0) { partial, workout in
+            guard let distance = workout.distanceMeters, distance > 0 else { return partial }
+            return partial + workout.durationSeconds
+        }
+        return (distance, duration)
+    }
+
+    private static func minDate(_ lhs: Date, _ rhs: Date) -> Date {
+        lhs < rhs ? lhs : rhs
+    }
+}
+
+private extension TrainingAnalyticsPeriod {
+    var comparisonNoun: String {
+        switch self {
+        case .week: "week"
+        case .month: "month"
+        case .year: "year"
+        case .allTime: "period"
+        }
+    }
+
+    var signalTitle: String {
+        switch self {
+        case .week: "Week Signal"
+        case .month: "Month Signal"
+        case .year: "Year Signal"
+        case .allTime: "All-Time Signal"
+        }
+    }
+
+    func start(containing date: Date, workouts: [CanonicalWorkout], now: Date, calendar: Calendar) -> Date {
+        switch self {
+        case .week:
+            return WeeklyAnalyticsSummary.weekStart(containing: date, calendar: calendar)
+        case .month:
+            let components = calendar.dateComponents([.year, .month], from: date)
+            return calendar.date(from: DateComponents(timeZone: calendar.timeZone, year: components.year, month: components.month, day: 1))
+                ?? calendar.startOfDay(for: date)
+        case .year:
+            let year = calendar.component(.year, from: date)
+            return calendar.date(from: DateComponents(timeZone: calendar.timeZone, year: year, month: 1, day: 1))
+                ?? calendar.startOfDay(for: date)
+        case .allTime:
+            return workouts.map { calendar.startOfDay(for: $0.startDate) }.min()
+                ?? calendar.startOfDay(for: now)
+        }
+    }
+
+    func end(after start: Date, workouts: [CanonicalWorkout], now: Date, calendar: Calendar) -> Date {
+        switch self {
+        case .week:
+            return calendar.date(byAdding: .day, value: 7, to: start) ?? start.addingTimeInterval(7 * 86_400)
+        case .month:
+            return calendar.date(byAdding: .month, value: 1, to: start) ?? start.addingTimeInterval(31 * 86_400)
+        case .year:
+            return calendar.date(byAdding: .year, value: 1, to: start) ?? start.addingTimeInterval(366 * 86_400)
+        case .allTime:
+            let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now.addingTimeInterval(86_400)
+            guard let latest = workouts.map(\.startDate).max() else { return tomorrow }
+            let afterLatest = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: latest)) ?? latest.addingTimeInterval(86_400)
+            return max(tomorrow, afterLatest)
+        }
+    }
+
+    func previousStart(before start: Date, calendar: Calendar) -> Date? {
+        switch self {
+        case .week:
+            return calendar.date(byAdding: .day, value: -7, to: start)
+        case .month:
+            return calendar.date(byAdding: .month, value: -1, to: start)
+        case .year:
+            return calendar.date(byAdding: .year, value: -1, to: start)
+        case .allTime:
+            return nil
+        }
+    }
+
+    func elapsedDayCount(from start: Date, fullEnd: Date, now: Date, isCurrent: Bool, calendar: Calendar) -> Int {
+        guard isCurrent else {
+            return max(0, calendar.dateComponents([.day], from: start, to: fullEnd).day ?? 0)
+        }
+        let currentDayEnd = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now
+        let clampedEnd = min(currentDayEnd, fullEnd)
+        return max(1, calendar.dateComponents([.day], from: start, to: clampedEnd).day ?? 1)
+    }
+
+    func addingDays(_ days: Int, to date: Date, calendar: Calendar) -> Date {
+        calendar.date(byAdding: .day, value: days, to: date) ?? date.addingTimeInterval(Double(days) * 86_400)
+    }
+
+    func distanceBuckets(
+        for workouts: [CanonicalWorkout],
+        start: Date,
+        end: Date,
+        calendar: Calendar
+    ) -> [TrainingPeriodDistanceBucket] {
+        switch self {
+        case .week, .month:
+            return dayBuckets(for: workouts, start: start, end: end, calendar: calendar)
+        case .year:
+            return componentBuckets(.month, dateFormat: "MMM", workouts: workouts, start: start, end: end, calendar: calendar)
+        case .allTime:
+            return componentBuckets(.year, dateFormat: "yyyy", workouts: workouts, start: start, end: end, calendar: calendar)
+        }
+    }
+
+    private func dayBuckets(
+        for workouts: [CanonicalWorkout],
+        start: Date,
+        end: Date,
+        calendar: Calendar
+    ) -> [TrainingPeriodDistanceBucket] {
+        let dayCount = max(0, calendar.dateComponents([.day], from: start, to: end).day ?? 0)
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = self == .week ? "EEE" : "d"
+
+        return (0..<dayCount).map { offset in
+            let bucketStart = addingDays(offset, to: start, calendar: calendar)
+            let bucketEnd = min(addingDays(1, to: bucketStart, calendar: calendar), end)
+            return TrainingPeriodDistanceBucket(
+                startDate: bucketStart,
+                endDate: bucketEnd,
+                label: formatter.string(from: bucketStart),
+                distanceMeters: workouts.distance(from: bucketStart, to: bucketEnd)
+            )
+        }
+    }
+
+    private func componentBuckets(
+        _ component: Calendar.Component,
+        dateFormat: String,
+        workouts: [CanonicalWorkout],
+        start: Date,
+        end: Date,
+        calendar: Calendar
+    ) -> [TrainingPeriodDistanceBucket] {
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = dateFormat
+
+        var buckets: [TrainingPeriodDistanceBucket] = []
+        var cursor = start
+        while cursor < end {
+            let next = calendar.date(byAdding: component, value: 1, to: cursor) ?? end
+            let bucketEnd = min(next, end)
+            buckets.append(
+                TrainingPeriodDistanceBucket(
+                    startDate: cursor,
+                    endDate: bucketEnd,
+                    label: formatter.string(from: cursor),
+                    distanceMeters: workouts.distance(from: cursor, to: bucketEnd)
+                )
+            )
+            cursor = next
+        }
+        return buckets
+    }
+}
+
+private extension [CanonicalWorkout] {
+    func filteredAndSorted(from start: Date, to end: Date) -> [CanonicalWorkout] {
+        filter { $0.startDate >= start && $0.startDate < end }
+            .sorted { $0.startDate > $1.startDate }
+    }
+
+    func distance(from start: Date, to end: Date) -> Double {
+        filter { $0.startDate >= start && $0.startDate < end }
+            .compactMap(\.distanceMeters)
+            .reduce(0, +)
+    }
+}
+
 public enum WorkoutChartMetric: String, CaseIterable, Identifiable, Sendable {
     case pace
     case heartRate
@@ -343,6 +686,33 @@ public struct IntervalAnalysisMetricValue: Equatable, Sendable {
     }
 }
 
+public struct IntervalWorkRepeatSummary: Equatable, Sendable {
+    public var repeatCount: Int
+    public var totalDistanceMeters: Double
+    public var totalActiveDurationSeconds: Double
+    public var aggregatePaceSecondsPerKm: Double?
+
+    public init(repeatCount: Int, totalDistanceMeters: Double, totalActiveDurationSeconds: Double) {
+        self.repeatCount = repeatCount
+        self.totalDistanceMeters = totalDistanceMeters
+        self.totalActiveDurationSeconds = totalActiveDurationSeconds
+        aggregatePaceSecondsPerKm = totalDistanceMeters > 0
+            ? totalActiveDurationSeconds / (totalDistanceMeters / 1_000)
+            : nil
+    }
+}
+
+public struct IntervalRepeatGroup: Identifiable, Equatable, Sendable {
+    public var id: Int { repeatNumber }
+    public var repeatNumber: Int
+    public var rows: [IntervalAnalysisRow]
+
+    public init(repeatNumber: Int, rows: [IntervalAnalysisRow]) {
+        self.repeatNumber = repeatNumber
+        self.rows = rows
+    }
+}
+
 public struct IntervalAnalysisRow: Identifiable, Equatable, Sendable {
     public var id: Int { index }
     public var index: Int
@@ -452,6 +822,51 @@ public struct IntervalAnalysisSummary: Equatable, Sendable {
     public var aggregateRows: [IntervalAnalysisRow] {
         let workRows = rows.filter { $0.stepType == .work }
         return workRows.isEmpty ? rows : workRows
+    }
+
+    public var workRepeatSummary: IntervalWorkRepeatSummary? {
+        let workRows = rows.filter { $0.stepType == .work }
+        guard !workRows.isEmpty else { return nil }
+
+        let totalDistance = workRows
+            .compactMap(\.distanceMeters)
+            .reduce(0, +)
+        let totalDuration = workRows
+            .map(\.displayDurationSeconds)
+            .reduce(0, +)
+
+        return IntervalWorkRepeatSummary(
+            repeatCount: workRows.count,
+            totalDistanceMeters: totalDistance,
+            totalActiveDurationSeconds: totalDuration
+        )
+    }
+
+    public var repeatGroups: [IntervalRepeatGroup] {
+        var groups: [IntervalRepeatGroup] = []
+        var currentIndex = rows.startIndex
+
+        while currentIndex < rows.endIndex {
+            let row = rows[currentIndex]
+            let nextIndex = rows.index(after: currentIndex)
+
+            guard row.stepType == .work,
+                  nextIndex < rows.endIndex,
+                  rows[nextIndex].stepType == .recovery else {
+                currentIndex = nextIndex
+                continue
+            }
+
+            groups.append(
+                IntervalRepeatGroup(
+                    repeatNumber: groups.count + 1,
+                    rows: [row, rows[nextIndex]]
+                )
+            )
+            currentIndex = rows.index(after: nextIndex)
+        }
+
+        return groups.count >= 2 ? groups : []
     }
 
     public var aggregateScopeLabel: String {

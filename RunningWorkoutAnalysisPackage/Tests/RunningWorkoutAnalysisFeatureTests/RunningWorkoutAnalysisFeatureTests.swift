@@ -3697,6 +3697,87 @@ import Testing
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence)?.intervals.map(\.label) == result.intervals.map(\.label))
 }
 
+@Test func normalDetailGateSupportsSixRepeatFixedCooldownOpenTailRecordingShape() throws {
+    let start = Date(timeIntervalSince1970: 10_658)
+    let workout = testWorkout(id: "normal-detail-six-repeat-tail", start: start, distanceMeters: 7_600, durationSeconds: 2_785)
+    var plannedSteps = [
+        PlannedWorkoutStep(index: 1, label: "Warmup", stepType: .warmup, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km")
+    ]
+    for repeatIndex in 1...6 {
+        plannedSteps.append(
+            PlannedWorkoutStep(
+                index: plannedSteps.count + 1,
+                label: "Work \(repeatIndex)",
+                stepType: .work,
+                repeatBlockIndex: 1,
+                repeatIndex: repeatIndex,
+                plannedGoalType: .distance,
+                plannedGoalValue: 400,
+                plannedGoalDisplayText: "400 m"
+            )
+        )
+        plannedSteps.append(
+            PlannedWorkoutStep(
+                index: plannedSteps.count + 1,
+                label: "Recovery \(repeatIndex)",
+                stepType: .recovery,
+                repeatBlockIndex: 1,
+                repeatIndex: repeatIndex,
+                plannedGoalType: .time,
+                plannedGoalValue: 120,
+                plannedGoalDisplayText: "120 s"
+            )
+        )
+    }
+    plannedSteps.append(
+        PlannedWorkoutStep(index: plannedSteps.count + 1, label: "Cooldown", stepType: .cooldown, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km")
+    )
+
+    let activityWindows: [(start: TimeInterval, end: TimeInterval, distance: Double)] = [
+        (0, 745, 2_010),
+        (745, 841, 400),
+        (841, 960, 190),
+        (960, 1_053, 410),
+        (1_053, 1_173, 180),
+        (1_173, 1_268, 400),
+        (1_268, 1_388, 180),
+        (1_388, 1_482, 400),
+        (1_482, 1_602, 190),
+        (1_602, 1_697, 410),
+        (1_697, 1_816, 190),
+        (1_816, 1_911, 410),
+        (1_911, 2_030, 180),
+        (2_030, 2_766, 2_000)
+    ]
+    var cumulativeDistance = 0.0
+    let distancePoints = activityWindows.map { window -> (offset: TimeInterval, distance: Double) in
+        cumulativeDistance += window.distance
+        return (window.end, cumulativeDistance)
+    } + [(2_785, 7_600)]
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: plannedSteps,
+        activityWindows: activityWindows,
+        distancePoints: distancePoints
+    )
+
+    let result = try #require(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence))
+    let workRows = result.intervals.filter { $0.stepType == .work }
+    let summary = IntervalAnalysisSummary(workout: workout, result: result)
+    let workSummary = try #require(summary.workRepeatSummary)
+
+    #expect(result.intervals.count == 15)
+    #expect(result.intervals.first?.label == "Warmup")
+    #expect(result.intervals.last?.label == "Open / Extra")
+    #expect(result.intervals.last?.actualDistanceMeters == 50)
+    #expect(workRows.count == 6)
+    #expect(workSummary.repeatCount == 6)
+    #expect(workSummary.totalDistanceMeters == 2_430)
+    #expect(workSummary.totalActiveDurationSeconds == 568)
+    #expect(summary.repeatGroups.count == 6)
+    assertElapsedTimingSemantics(result.intervals)
+}
+
 @Test func normalDetailGateBlocksRepeatFixedCooldownOpenTailWithDanglingPause() {
     let start = Date(timeIntervalSince1970: 10_657)
     let workout = testWorkout(id: "normal-detail-clean-repeat-tail-dangling-pause", start: start, distanceMeters: 4_040, durationSeconds: 1_615)

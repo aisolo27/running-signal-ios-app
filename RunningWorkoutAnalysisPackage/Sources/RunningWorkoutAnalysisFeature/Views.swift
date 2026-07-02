@@ -1223,7 +1223,7 @@ struct SplitsAndEventsPanel: View {
                 EmptyStateView(title: "Splits unavailable", message: "RunSignal needs distance samples or enough workout distance/time to estimate 1 km splits.")
             } else {
                 VStack(spacing: 8) {
-                    ForEach(segments.kilometerSplits.prefix(5), id: \.label) { split in
+                    ForEach(segments.kilometerSplits, id: \.label) { split in
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(split.label)
@@ -1245,33 +1245,12 @@ struct SplitsAndEventsPanel: View {
                         .background(.background)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
-                    if segments.kilometerSplits.count > 5 {
-                        Text("Showing first 5 of \(segments.kilometerSplits.count) splits.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
                 }
             }
 
             SectionHeader("Workout Intervals")
             if let supportedIntervals {
-                IntervalAnalysisDeck(
-                    summary: IntervalAnalysisSummary(
-                        workout: workout,
-                        result: supportedIntervals
-                    )
-                )
-
-                VStack(spacing: 8) {
-                    ForEach(supportedIntervals.intervals, id: \.index) { interval in
-                        NavigationLink {
-                            IntervalDetailView(workout: workout, interval: interval)
-                        } label: {
-                            IntervalRowView(interval: interval)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
+                IntervalAnalysisEntryCard(workout: workout, result: supportedIntervals)
             } else {
                 VStack(alignment: .leading, spacing: 10) {
                     NoticeCard(
@@ -1329,51 +1308,6 @@ struct SplitsAndEventsPanel: View {
         guard hasFixedCooldownTail else { return nil }
 
         return "RunSignal found \(activities.count + 1) resolved boundary rows, but the Open / Extra tail rule is still under review. Whole-run stats are ready."
-    }
-}
-
-private struct IntervalRowView: View {
-    let interval: ReconstructedWorkoutInterval
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("\(interval.index). \(interval.label)")
-                        .font(.subheadline.bold())
-                    Text(interval.plannedGoalDisplayText)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 3) {
-                    Text(RunFormatters.duration(interval.displayDurationSeconds))
-                        .font(.subheadline.monospacedDigit().bold())
-                    Text(RunFormatters.compactDistance(interval.actualDistanceMeters))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            if let pausedTimingDetail = IntervalRowTimingText.pausedTimingDetail(for: interval) {
-                Text(pausedTimingDetail)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-            if let pausedTimingItems = IntervalRowTimingText.pausedTimingItems(for: interval) {
-                MetricGrid(items: pausedTimingItems)
-            }
-            MetricGrid(items: [
-                MetricItem(title: "Pace", value: RunFormatters.pace(IntervalRowTimingText.displayPaceSecondsPerKm(for: interval)), detail: IntervalRowTimingText.displayPaceDetail(for: interval)),
-                MetricItem(title: "Avg HR", value: RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"), detail: "Window"),
-                MetricItem(title: "Max HR", value: RunFormatters.number(interval.maxHeartRateBpm, suffix: " bpm"), detail: "Window"),
-                MetricItem(title: "Power", value: RunFormatters.number(interval.averagePower, suffix: " W"), detail: "Avg"),
-                MetricItem(title: "Cadence", value: RunFormatters.number(interval.averageCadence, suffix: " spm"), detail: "Avg")
-            ])
-        }
-        .padding(10)
-        .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -1552,15 +1486,6 @@ struct RawHealthKitWorkoutDebugView: View {
                     MetricItem(title: "Events", value: "\(workout.intervalCount)", detail: intervalDetail)
                 ])
 
-                SectionHeader("Direct vs Calculated")
-                VStack(alignment: .leading, spacing: 8) {
-                    DebugMetricProvenanceRow(label: "Distance", value: workout.distanceMeters == nil ? "Unavailable" : "Direct HKWorkout summary")
-                    DebugMetricProvenanceRow(label: "Avg pace", value: workout.paceSecondsPerKm == nil ? "Unavailable" : "Calculated by RunSignal from distance/time")
-                    DebugMetricProvenanceRow(label: "Avg cadence", value: cadenceProvenance)
-                    DebugMetricProvenanceRow(label: "Total calories", value: workout.totalEnergyKilocalories == nil ? "Unavailable; not inferred" : "Trust-gated HealthKit evidence")
-                    DebugMetricProvenanceRow(label: "1 km splits", value: workout.distanceSampleCount > 1 ? "Calculated from distance series" : "Fallback distance/time estimate when shown")
-                }
-
                 SectionHeader("WorkoutKit Plan Audit")
                 workoutPlanAuditView
 
@@ -1694,19 +1619,6 @@ struct RawHealthKitWorkoutDebugView: View {
     private var intervalDetail: String {
         if let summary = currentWorkout.intervalLabelsSummary { return summary }
         if currentWorkout.intervalCount > 0 { return "Events found; labels unavailable" }
-        return "Unavailable"
-    }
-
-    private var cadenceProvenance: String {
-        if currentWorkout.cadenceSampleCount > 0 {
-            return "Direct cadence samples; displayed as full steps/min"
-        }
-        if currentWorkout.stepCountSampleCount > 0 {
-            return "Calculated from step samples as full steps/min"
-        }
-        if currentWorkout.fullStepCadence != nil {
-            return "Summary value normalized to full steps/min"
-        }
         return "Unavailable"
     }
 
