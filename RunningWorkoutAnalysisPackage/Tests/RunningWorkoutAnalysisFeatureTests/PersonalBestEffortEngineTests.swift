@@ -178,6 +178,29 @@ import Testing
     #expect(record.caveats.contains(.distanceSeriesUnusable))
 }
 
+@Test func personalBestEffortsRejectImpossibleExactSegments() throws {
+    let start = Date(timeIntervalSince1970: 750)
+    var workout = personalBestWorkout(id: "distance-spike", start: start, distanceMeters: 2_000, durationSeconds: 900, routeAvailable: true)
+    workout.evidence = personalBestEvidence(
+        workout: workout,
+        distancePoints: [
+            (60, 200),
+            (120, 200),
+            (180, 200),
+            (183, 1_000),
+            (240, 400)
+        ],
+        routeAvailable: true
+    )
+
+    let record = try #require(PersonalBestEffortEngine.records(for: workout).first { $0.bucket == .oneKilometer })
+
+    #expect(record.method == .wholeRunEstimate)
+    #expect(record.confidence == .estimated)
+    #expect(record.caveats.contains(.unrealisticSegmentPace))
+    #expect(record.caveats.contains(.distanceSeriesUnusable))
+}
+
 @Test func personalBestEffortsOfficialBestPrefersExactOverFasterEstimate() throws {
     let start = Date(timeIntervalSince1970: 800)
     var exact = personalBestWorkout(id: "exact", start: start, distanceMeters: 1_000, durationSeconds: 300, routeAvailable: true)

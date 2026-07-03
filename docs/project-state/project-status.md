@@ -1,6 +1,6 @@
 # RunSignal Project Status
 
-Last updated: 2026-07-02
+Last updated: 2026-07-03
 
 ## Product Direction
 
@@ -130,3 +130,16 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 - Current Week, Month, and Year views compare against the previous period on the same elapsed-day basis: week-to-date, month-to-date, and year-to-date compare only the matching first days of the prior period.
 - Period summaries keep HealthKit-only completed-run filtering, duplicate exclusion, distance, run count, average pace, evidence status, purpose mix, distance bars, and workout drill-down rows.
 - Added package tests for week-to-date, month-to-date, and year-to-date comparison windows.
+
+## 2026-07-03 Best Efforts Data-Quality Guard
+
+- All-Time Best Efforts now reject exact segment records whose distance samples imply an impossible segment pace, preventing corrupted or bursty HealthKit distance samples from surfacing as official `Exact` rows such as a 3-second 1K.
+- Added regression coverage for impossible rolling-segment evidence; affected records fall back to non-official estimated rows unless another valid exact record exists.
+- Remaining follow-up: improve the user-visible HealthKit evidence refresh/backfill flow so all-time PR completeness is easier to understand after fresh installs and foreground syncs.
+
+## 2026-07-03 Recording UI Follow-Up
+
+- Raised contrast for run-list subtext and shared metric tile labels/details so small HealthKit metadata is easier to read on dark cards.
+- Raised contrast for Runs list section headers, All-Time Best Efforts metadata/pace, Analytics Purpose Mix labels/distances, and Analytics workout row metadata/pace on physical-phone dark mode.
+- Workout charts now clamp the x-axis to the actual loaded sample range and overlay subtle official interval-boundary markers when supported resolved rows are available.
+- Interval Analysis now leads with a whole official-row breakdown before the work-repeat summary, keeps the work-repeat drilldown, and defaults selection to the first official row instead of Work 1.

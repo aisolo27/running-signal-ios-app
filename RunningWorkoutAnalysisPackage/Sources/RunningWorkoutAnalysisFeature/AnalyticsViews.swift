@@ -417,12 +417,12 @@ private struct WeeklyCategoryTotalsView: View {
                     VStack(alignment: .leading, spacing: 5) {
                         Text(total.category.label)
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(RunSignalTextStyle.secondary)
                         Text("\(total.runCount)")
                             .font(.title3.monospacedDigit().bold())
                         Text(RunFormatters.distance(total.distanceMeters))
                             .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(RunSignalTextStyle.tertiary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
@@ -453,7 +453,7 @@ private struct WeeklyWorkoutList: View {
                                     .font(.subheadline.bold())
                                 Text("\(row.category.label) · \(RunFormatters.shortDate.string(from: row.workout.startDate))")
                                     .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(RunSignalTextStyle.secondary)
                             }
                             Spacer()
                             VStack(alignment: .trailing, spacing: 4) {
@@ -461,7 +461,7 @@ private struct WeeklyWorkoutList: View {
                                     .font(.subheadline.monospacedDigit().bold())
                                 Text(RunFormatters.pace(row.workout.paceSecondsPerKm))
                                     .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(RunSignalTextStyle.secondary)
                             }
                         }
                         .padding(10)
@@ -502,10 +502,19 @@ struct WorkoutChartDeck: View {
         }
     }
 
+    private var officialIntervals: [ReconstructedWorkoutInterval] {
+        guard interval == nil,
+              let evidence = workout.evidence,
+              let result = CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) else {
+            return []
+        }
+        return result.intervals
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(series) { item in
-                WorkoutChartCard(series: item, selectedMinute: $selectedMinute)
+                WorkoutChartCard(series: item, intervalMarkers: officialIntervals.chartMarkers(workoutStart: workout.startDate), selectedMinute: $selectedMinute)
             }
         }
     }
@@ -513,6 +522,7 @@ struct WorkoutChartDeck: View {
 
 private struct WorkoutChartCard: View {
     let series: WorkoutChartSeries
+    let intervalMarkers: [WorkoutChartIntervalMarker]
     @Binding var selectedMinute: Double?
 
     private var selectedPoint: WorkoutChartPoint? {
@@ -534,6 +544,17 @@ private struct WorkoutChartCard: View {
 
     private var finiteValues: [Double] {
         series.points.map(\.value).filter { $0.isFinite }
+    }
+
+    private var xDomain: ClosedRange<Double> {
+        let minutes = series.points.map { $0.offsetSeconds / 60 }.filter { $0.isFinite }
+        guard let minimum = minutes.min(), let maximum = minutes.max() else {
+            return 0...1
+        }
+        guard minimum != maximum else {
+            return minimum...(minimum + 1)
+        }
+        return minimum...maximum
     }
 
     private var yDomain: ClosedRange<Double> {
@@ -586,6 +607,12 @@ private struct WorkoutChartCard: View {
 
             if series.isRenderable {
                 Chart {
+                    ForEach(intervalMarkers) { marker in
+                        RuleMark(x: .value("Interval boundary", marker.offsetMinutes))
+                            .foregroundStyle(marker.tint.opacity(0.32))
+                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 4]))
+                    }
+
                     ForEach(series.points) { point in
                         LineMark(
                             x: .value("Time", point.offsetSeconds / 60),
@@ -608,6 +635,7 @@ private struct WorkoutChartCard: View {
                     }
                 }
                 .frame(height: 165)
+                .chartXScale(domain: xDomain)
                 .chartYScale(domain: yDomain)
                 .chartXAxis {
                     AxisMarks { value in
@@ -659,6 +687,36 @@ private struct WorkoutChartCard: View {
             max(40, value)
         case .power, .cadence:
             max(0, value)
+        }
+    }
+}
+
+private struct WorkoutChartIntervalMarker: Identifiable {
+    let id: String
+    let offsetMinutes: Double
+    let tint: Color
+}
+
+private extension Array where Element == ReconstructedWorkoutInterval {
+    func chartMarkers(workoutStart: Date) -> [WorkoutChartIntervalMarker] {
+        var seen: Set<Int> = []
+        return flatMap { interval in
+            [
+                WorkoutChartIntervalMarker(
+                    id: "start-\(interval.index)",
+                    offsetMinutes: interval.actualStartDate.timeIntervalSince(workoutStart) / 60,
+                    tint: intervalRoleTint(for: interval.stepType)
+                ),
+                WorkoutChartIntervalMarker(
+                    id: "end-\(interval.index)",
+                    offsetMinutes: interval.actualEndDate.timeIntervalSince(workoutStart) / 60,
+                    tint: intervalRoleTint(for: interval.stepType)
+                )
+            ]
+        }
+        .filter { marker in
+            let key = Int((marker.offsetMinutes * 1_000).rounded())
+            return seen.insert(key).inserted
         }
     }
 }
@@ -773,15 +831,6 @@ struct IntervalAnalysisEntryCard: View {
     }
 
     private var entryItems: [MetricItem] {
-        if let workSummary = summary.workRepeatSummary {
-            return [
-                MetricItem(title: "Work reps", value: "\(workSummary.repeatCount)", detail: "Official rows"),
-                MetricItem(title: "Work distance", value: RunFormatters.compactDistance(workSummary.totalDistanceMeters), detail: "Total"),
-                MetricItem(title: "Work time", value: RunFormatters.duration(workSummary.totalActiveDurationSeconds), detail: "Active/display"),
-                MetricItem(title: "Work pace", value: RunFormatters.pace(workSummary.aggregatePaceSecondsPerKm), detail: "Aggregate")
-            ]
-        }
-
         return [
             MetricItem(title: "Rows", value: "\(summary.rows.count)", detail: "Official"),
             MetricItem(title: "Distance", value: IntervalMetricFormatter.value(summary.aggregateValue(for: .distance)?.displayValue, metric: .distance), detail: "Total"),
@@ -819,7 +868,11 @@ struct IntervalAnalysisScreen: View {
                     subtitle: "Official custom workout rows from resolved HealthKit activity-boundary evidence."
                 )
 
-                IntervalWorkTotalsPanel(summary: summary)
+                IntervalOverviewPanel(summary: summary)
+
+                if summary.workRepeatSummary != nil {
+                    IntervalWorkTotalsPanel(summary: summary)
+                }
 
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(alignment: .center) {
@@ -875,8 +928,43 @@ struct IntervalAnalysisScreen: View {
            summary.rows.contains(where: { $0.index == selectedIntervalIndex }) {
             return
         }
-        selectedIntervalIndex = summary.rows.first(where: { $0.stepType == .work })?.index
-            ?? summary.rows.first?.index
+        selectedIntervalIndex = summary.rows.first?.index
+    }
+}
+
+private struct IntervalOverviewPanel: View {
+    let summary: IntervalAnalysisSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Whole interval breakdown")
+                        .font(.subheadline.bold())
+                    Text("\(summary.planSource.label) · \(summary.windowSource.label)")
+                        .font(.caption2)
+                        .foregroundStyle(.primary)
+                }
+                Spacer()
+                Text("\(summary.rows.count) rows")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.blue)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.blue.opacity(0.12))
+                    .clipShape(Capsule())
+            }
+
+            MetricGrid(items: [
+                MetricItem(title: "Rows", value: "\(summary.rows.count)", detail: "Warmup/work/recovery"),
+                MetricItem(title: "Distance", value: IntervalMetricFormatter.value(summary.aggregateValue(for: .distance)?.displayValue, metric: .distance), detail: "All official rows"),
+                MetricItem(title: "Duration", value: IntervalMetricFormatter.value(summary.aggregateValue(for: .duration)?.displayValue, metric: .duration), detail: "Display basis"),
+                MetricItem(title: "Pace", value: IntervalMetricFormatter.value(summary.aggregateValue(for: .pace)?.displayValue, metric: .pace), detail: "Aggregate")
+            ])
+        }
+        .padding()
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -1270,7 +1358,11 @@ private struct IntervalAnalysisCompactRow: View {
 }
 
 private func intervalRoleTint(for row: IntervalAnalysisRow) -> Color {
-    switch row.stepType {
+    intervalRoleTint(for: row.stepType)
+}
+
+private func intervalRoleTint(for stepType: DerivedIntervalLabel) -> Color {
+    switch stepType {
     case .warmup: .blue
     case .work: .cyan
     case .recovery: .yellow

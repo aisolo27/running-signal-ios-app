@@ -46,7 +46,7 @@ struct RunsView: View {
                 }
             }
 
-            Section("All-Time Best Efforts") {
+            Section {
                 if allTimeBestEfforts.isEmpty {
                     EmptyStateView(title: "No exact best efforts", message: "Need detailed HealthKit distance samples before official segment bests can be calculated.")
                 } else {
@@ -54,9 +54,11 @@ struct RunsView: View {
                         PersonalBestEffortRow(effort: effort, titleFont: .headline)
                     }
                 }
+            } header: {
+                ListSectionTitle("All-Time Best Efforts")
             }
 
-            Section("Completed Runs") {
+            Section {
                 if runs.isEmpty {
                     EmptyStateView(title: "No completed runs", message: "Load HealthKit to show completed running workouts.")
                 } else {
@@ -68,6 +70,8 @@ struct RunsView: View {
                         }
                     }
                 }
+            } header: {
+                ListSectionTitle("Completed Runs")
             }
         }
         .navigationTitle("Runs")
@@ -179,7 +183,7 @@ struct FeaturedRunRow: View {
                 .font(.headline)
             Text(RunFormatters.date.string(from: workout.startDate))
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
             MetricGrid(items: [
                 MetricItem(title: "Distance", value: RunFormatters.distance(workout.distanceMeters), detail: workout.sourceName),
                 MetricItem(title: "Time", value: RunFormatters.duration(workout.durationSeconds), detail: "Workout"),
@@ -202,14 +206,14 @@ struct V1WorkoutRow: View {
                 Spacer()
                 Text(RunFormatters.shortDate.string(from: workout.startDate))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
             }
             Text("\(RunFormatters.distance(workout.distanceMeters)) · \(RunFormatters.duration(workout.durationSeconds)) · \(RunFormatters.pace(workout.paceSecondsPerKm))")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
             Text("Avg HR \(RunFormatters.number(workout.averageHeartRate, suffix: " bpm")) · \(workout.sourceName)")
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.primary)
         }
         .padding(.vertical, 4)
     }
@@ -226,7 +230,7 @@ struct PersonalBestEffortRow: View {
                     .font(titleFont)
                 Text(personalBestEffortDetail(effort))
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -236,7 +240,7 @@ struct PersonalBestEffortRow: View {
                     .font(titleFont.monospacedDigit())
                 Text(RunFormatters.pace(effort.paceSecondsPerKm))
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
             }
         }
         .padding(10)
@@ -291,6 +295,8 @@ private func personalBestEffortCaveatLabel(_ caveat: PersonalBestEffortCaveat) -
         return "sample gap"
     case .shortBucketDensityLimited:
         return "short-bucket density limited"
+    case .unrealisticSegmentPace:
+        return "unrealistic segment pace"
     case .distanceSeriesUnusable:
         return "distance samples unusable"
     }
@@ -2349,6 +2355,28 @@ struct SectionHeader: View {
     }
 }
 
+struct ListSectionTitle: View {
+    let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title)
+            .font(.headline)
+            .foregroundStyle(RunSignalTextStyle.prominentSecondary)
+            .textCase(nil)
+            .padding(.top, 4)
+    }
+}
+
+enum RunSignalTextStyle {
+    static let prominentSecondary = Color.primary.opacity(0.86)
+    static let secondary = Color.primary.opacity(0.74)
+    static let tertiary = Color.primary.opacity(0.62)
+}
+
 struct CoachCard: View {
     let title: String
     let value: String
@@ -2552,14 +2580,14 @@ struct MetricGrid: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(item.title)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.primary)
                     Text(item.value)
                         .font(.headline.monospacedDigit())
                         .lineLimit(2)
                         .minimumScaleFactor(0.75)
                     Text(item.detail)
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.primary)
                         .lineLimit(2)
                 }
                 .frame(maxWidth: .infinity, minHeight: 82, alignment: .topLeading)

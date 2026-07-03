@@ -81,6 +81,7 @@ public enum PersonalBestEffortCaveat: String, Codable, CaseIterable, Sendable {
     case pauseOverlap
     case sampleGap
     case shortBucketDensityLimited
+    case unrealisticSegmentPace
     case distanceSeriesUnusable
 }
 
@@ -206,13 +207,17 @@ public enum PersonalBestEffortEngine {
                 caveats.append(.pauseOverlap)
             }
 
-            let hardFailures = caveats.filter { $0 == .sampleGap || $0 == .shortBucketDensityLimited }
+            let duration = endDate.timeIntervalSince(startSample.date)
+            if isUnrealisticSegment(durationSeconds: duration, distanceMeters: target) {
+                caveats.append(.unrealisticSegmentPace)
+            }
+
+            let hardFailures = caveats.filter { $0 == .sampleGap || $0 == .shortBucketDensityLimited || $0 == .unrealisticSegmentPace }
             if !hardFailures.isEmpty {
                 failureCaveats.append(contentsOf: hardFailures)
                 continue
             }
 
-            let duration = endDate.timeIntervalSince(startSample.date)
             let window = SegmentWindow(startDate: startSample.date, endDate: endDate, durationSeconds: duration, caveats: orderedUnique(caveats))
             if bestWindow.map({ duration < $0.durationSeconds }) ?? true {
                 bestWindow = window
@@ -377,6 +382,12 @@ public enum PersonalBestEffortEngine {
             caveats.append(.sampleGap)
         }
         return caveats
+    }
+
+    private static func isUnrealisticSegment(durationSeconds: Double, distanceMeters: Double) -> Bool {
+        guard durationSeconds.isFinite, distanceMeters > 0 else { return true }
+        let paceSecondsPerKm = durationSeconds / (distanceMeters / 1_000)
+        return paceSecondsPerKm < 90
     }
 
     private static func pauseIntervals(
