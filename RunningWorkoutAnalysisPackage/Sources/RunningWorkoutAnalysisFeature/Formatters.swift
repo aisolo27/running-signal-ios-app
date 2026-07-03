@@ -14,6 +14,12 @@ enum RunFormatters {
         return formatter
     }()
 
+    static let mediumDateWithYear: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, yyyy"
+        return formatter
+    }()
+
     static func distance(_ meters: Double?) -> String {
         guard let meters else { return "Unavailable" }
         return String(format: "%.2f km", meters / 1_000)

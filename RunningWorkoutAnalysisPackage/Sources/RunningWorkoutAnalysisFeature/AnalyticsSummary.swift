@@ -31,11 +31,11 @@ public enum WeeklyRunCategory: String, CaseIterable, Identifiable, Sendable {
 
     var label: String {
         switch self {
-        case .easy: "Easy"
-        case .interval: "Interval"
-        case .threshold: "Threshold"
+        case .easy: "Easy Run"
+        case .interval: "Interval Run"
+        case .threshold: "Threshold / Tempo"
         case .longRun: "Long Run"
-        case .warmupCooldown: "Warm-up/Cool-down"
+        case .warmupCooldown: "Warm-up / Cool-down"
         case .race: "Race"
         case .other: "Other"
         }

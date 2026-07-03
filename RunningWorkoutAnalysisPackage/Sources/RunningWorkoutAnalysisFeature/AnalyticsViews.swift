@@ -79,6 +79,9 @@ private struct PeriodSignalView: View {
                     signalTitle: signalTitle,
                     canMoveNewer: (activeIndex ?? 0) > 0,
                     canMoveOlder: (activeIndex ?? periodStarts.count) < periodStarts.count - 1,
+                    canResetToCurrent: activeIndex != nil && activeIndex != 0,
+                    resetTitle: currentPeriodButtonTitle,
+                    resetToCurrent: resetToCurrent,
                     moveNewer: moveNewer,
                     moveOlder: moveOlder
                 )
@@ -108,13 +111,22 @@ private struct PeriodSignalView: View {
     private var periodTitle: String {
         switch summary.period {
         case .week:
-            "\(RunFormatters.shortDate.string(from: summary.periodStart)) - \(RunFormatters.shortDate.string(from: summary.analysisEnd.addingTimeInterval(-1)))"
+            "\(RunFormatters.mediumDateWithYear.string(from: summary.periodStart)) - \(RunFormatters.mediumDateWithYear.string(from: summary.analysisEnd.addingTimeInterval(-1)))"
         case .month, .year:
-            "\(RunFormatters.shortDate.string(from: summary.periodStart)) - \(RunFormatters.shortDate.string(from: summary.analysisEnd.addingTimeInterval(-1)))"
+            "\(RunFormatters.mediumDateWithYear.string(from: summary.periodStart)) - \(RunFormatters.mediumDateWithYear.string(from: summary.analysisEnd.addingTimeInterval(-1)))"
         case .allTime:
             summary.runCount == 0
                 ? "No loaded runs"
-                : "\(RunFormatters.shortDate.string(from: summary.periodStart)) - \(RunFormatters.shortDate.string(from: summary.analysisEnd.addingTimeInterval(-1)))"
+                : "\(RunFormatters.mediumDateWithYear.string(from: summary.periodStart)) - \(RunFormatters.mediumDateWithYear.string(from: summary.analysisEnd.addingTimeInterval(-1)))"
+        }
+    }
+
+    private var currentPeriodButtonTitle: String {
+        switch summary.period {
+        case .week: "Current Week"
+        case .month: "Current Month"
+        case .year: "Current Year"
+        case .allTime: "All-Time"
         }
     }
 
@@ -169,6 +181,10 @@ private struct PeriodSignalView: View {
         guard let activeIndex, activeIndex < periodStarts.count - 1 else { return }
         selectedPeriodStart = periodStarts[activeIndex + 1]
     }
+
+    private func resetToCurrent() {
+        selectedPeriodStart = nil
+    }
 }
 
 private struct PeriodNavigator: View {
@@ -176,34 +192,47 @@ private struct PeriodNavigator: View {
     let signalTitle: String
     let canMoveNewer: Bool
     let canMoveOlder: Bool
+    let canResetToCurrent: Bool
+    let resetTitle: String
+    let resetToCurrent: () -> Void
     let moveNewer: () -> Void
     let moveOlder: () -> Void
 
     var body: some View {
-        HStack {
-            Button(action: moveOlder) {
-                Image(systemName: "chevron.left")
-            }
-            .buttonStyle(.bordered)
-            .disabled(!canMoveOlder)
-            .accessibilityLabel("Previous period")
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Button(action: moveOlder) {
+                    Image(systemName: "chevron.left")
+                }
+                .buttonStyle(.bordered)
+                .disabled(!canMoveOlder)
+                .accessibilityLabel("Previous period")
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(signalTitle)
-                    .font(.headline)
-                Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(signalTitle)
+                        .font(.headline)
+                    Text(title)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button(action: moveNewer) {
+                    Image(systemName: "chevron.right")
+                }
+                .buttonStyle(.bordered)
+                .disabled(!canMoveNewer)
+                .accessibilityLabel("Next period")
             }
 
-            Spacer()
-
-            Button(action: moveNewer) {
-                Image(systemName: "chevron.right")
+            if canResetToCurrent {
+                Button(action: resetToCurrent) {
+                    Label(resetTitle, systemImage: "calendar.badge.clock")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
             }
-            .buttonStyle(.bordered)
-            .disabled(!canMoveNewer)
-            .accessibilityLabel("Next period")
         }
     }
 }
@@ -439,38 +468,196 @@ private struct WeeklyWorkoutList: View {
     let rows: [WeeklyWorkoutRow]
     var title = "Runs This Week"
 
+    @State private var isSelecting = false
+    @State private var selectedWorkoutIDs: Set<String> = []
+    @State private var bulkCategory = WeeklyRunCategory.easy
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title)
+            HStack {
+                SectionHeader(title)
+                Spacer()
+                Button(isSelecting ? "Done" : "Select") {
+                    isSelecting.toggle()
+                    if !isSelecting {
+                        selectedWorkoutIDs.removeAll()
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+
+            if isSelecting {
+                bulkControls
+            }
+
             VStack(spacing: 8) {
                 ForEach(rows) { row in
-                    NavigationLink {
-                        WorkoutDetailView(store: store, workoutID: row.workout.id)
-                    } label: {
-                        HStack(spacing: 10) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(RunWorkout(workout: row.workout).displayName)
-                                    .font(.subheadline.bold())
-                                Text("\(row.category.label) · \(RunFormatters.shortDate.string(from: row.workout.startDate))")
-                                    .font(.caption2)
-                                    .foregroundStyle(RunSignalTextStyle.secondary)
+                    if isSelecting {
+                        Button {
+                            toggleSelection(row.workout.id)
+                        } label: {
+                            workoutRow(row, selected: selectedWorkoutIDs.contains(row.workout.id), selectable: true)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        HStack(spacing: 8) {
+                            NavigationLink {
+                                WorkoutDetailView(store: store, workoutID: row.workout.id)
+                            } label: {
+                                workoutRow(row, selected: false, selectable: false)
                             }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 4) {
-                                Text(RunFormatters.distance(row.workout.distanceMeters))
-                                    .font(.subheadline.monospacedDigit().bold())
-                                Text(RunFormatters.pace(row.workout.paceSecondsPerKm))
-                                    .font(.caption2)
-                                    .foregroundStyle(RunSignalTextStyle.secondary)
+                            .buttonStyle(.plain)
+
+                            categoryMenu {
+                                update(row: row, category: $0)
                             }
                         }
-                        .padding(10)
-                        .background(.background)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
-                    .buttonStyle(.plain)
                 }
             }
+        }
+    }
+
+    private var bulkControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 8)], spacing: 8) {
+                Button("All Visible") {
+                    selectedWorkoutIDs = Set(rows.map(\.workout.id))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Button("Before Nov 2025") {
+                    selectedWorkoutIDs = Set(rows.filter { isBeforeManualReviewEra($0.workout.startDate) }.map(\.workout.id))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Button("Clear") {
+                    selectedWorkoutIDs.removeAll()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 135), spacing: 8)], spacing: 8) {
+                Menu {
+                    ForEach(WeeklyRunCategory.allCases) { category in
+                        Button(category.label) {
+                            bulkCategory = category
+                        }
+                    }
+                } label: {
+                    Label(bulkCategory.label, systemImage: "tag")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Button {
+                    applyBulkCategory()
+                } label: {
+                    Label("Apply to \(selectedWorkoutIDs.count)", systemImage: "checkmark.circle")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .disabled(selectedWorkoutIDs.isEmpty)
+            }
+        }
+        .padding(10)
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func workoutRow(_ row: WeeklyWorkoutRow, selected: Bool, selectable: Bool) -> some View {
+        HStack(spacing: 10) {
+            if selectable {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selected ? .blue : RunSignalTextStyle.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(RunWorkout(workout: row.workout).displayName)
+                    .font(.subheadline.bold())
+                Text("\(row.category.label) · \(RunFormatters.mediumDateWithYear.string(from: row.workout.startDate))")
+                    .font(.caption2)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(RunFormatters.distance(row.workout.distanceMeters))
+                    .font(.subheadline.monospacedDigit().bold())
+                Text(RunFormatters.pace(row.workout.paceSecondsPerKm))
+                    .font(.caption2)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
+            }
+        }
+        .padding(10)
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func categoryMenu(_ action: @escaping (WeeklyRunCategory) -> Void) -> some View {
+        Menu {
+            ForEach(WeeklyRunCategory.allCases) { category in
+                Button(category.label) {
+                    action(category)
+                }
+            }
+        } label: {
+            Image(systemName: "tag")
+                .frame(width: 34, height: 34)
+        }
+        .buttonStyle(.bordered)
+        .accessibilityLabel("Set run category")
+    }
+
+    private func toggleSelection(_ workoutID: String) {
+        if selectedWorkoutIDs.contains(workoutID) {
+            selectedWorkoutIDs.remove(workoutID)
+        } else {
+            selectedWorkoutIDs.insert(workoutID)
+        }
+    }
+
+    private func applyBulkCategory() {
+        for row in rows where selectedWorkoutIDs.contains(row.workout.id) {
+            update(row: row, category: bulkCategory)
+        }
+        selectedWorkoutIDs.removeAll()
+    }
+
+    private func update(row: WeeklyWorkoutRow, category: WeeklyRunCategory) {
+        store.update(
+            workoutID: row.workout.id,
+            manualRunType: category.manualRunType,
+            notes: row.workout.notes
+        )
+    }
+
+    private func isBeforeManualReviewEra(_ date: Date) -> Bool {
+        let cutoff = DateComponents(calendar: .current, year: 2025, month: 11, day: 1).date
+        return cutoff.map { date < $0 } ?? false
+    }
+}
+
+private extension WeeklyRunCategory {
+    var manualRunType: RunType {
+        switch self {
+        case .easy:
+            return .easy
+        case .interval:
+            return .interval
+        case .threshold:
+            return .threshold
+        case .longRun:
+            return .longRun
+        case .warmupCooldown:
+            return .recovery
+        case .race:
+            return .race
+        case .other:
+            return .unknown
         }
     }
 }
