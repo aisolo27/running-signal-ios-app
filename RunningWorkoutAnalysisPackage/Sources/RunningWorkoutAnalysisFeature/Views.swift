@@ -17,6 +17,10 @@ struct RunsView: View {
         store.personalBestEffortSummary.allTime
     }
 
+    private var workoutsByID: [String: CanonicalWorkout] {
+        Dictionary(uniqueKeysWithValues: store.workouts.map { ($0.id, $0) })
+    }
+
     private var wholeRunSummary: WholeRunHealthKitSummary {
         WholeRunHealthKitSummary.make(
             workouts: store.workouts,
@@ -51,7 +55,15 @@ struct RunsView: View {
                     EmptyStateView(title: "No exact best efforts", message: "Need detailed HealthKit distance samples before official segment bests can be calculated.")
                 } else {
                     ForEach(allTimeBestEfforts, id: \.bucket) { effort in
-                        PersonalBestEffortRow(effort: effort, titleFont: .headline)
+                        if let workout = workoutsByID[effort.workoutID] {
+                            NavigationLink {
+                                WorkoutDetailView(store: store, workoutID: workout.id)
+                            } label: {
+                                PersonalBestEffortRow(effort: effort, titleFont: .headline)
+                            }
+                        } else {
+                            PersonalBestEffortRow(effort: effort, titleFont: .headline)
+                        }
                     }
                 }
             } header: {

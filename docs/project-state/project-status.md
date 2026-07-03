@@ -143,3 +143,4 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 - Raised contrast for Runs list section headers, All-Time Best Efforts metadata/pace, Analytics Purpose Mix labels/distances, and Analytics workout row metadata/pace on physical-phone dark mode.
 - Workout charts now clamp the x-axis to the actual loaded sample range and overlay subtle official interval-boundary markers when supported resolved rows are available.
 - Interval Analysis now leads with a whole official-row breakdown before the work-repeat summary, keeps the work-repeat drilldown, and defaults selection to the first official row instead of Work 1.
+- All-Time Best Effort rows now navigate to the source workout detail when the backing HealthKit run is loaded, so records such as longest run, 400m, 1K, mile, and 5K can be opened for full run context.
