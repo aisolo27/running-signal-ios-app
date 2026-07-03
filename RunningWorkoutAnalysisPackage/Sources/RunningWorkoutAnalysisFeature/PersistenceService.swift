@@ -396,6 +396,25 @@ public enum PersistenceService {
         try? context.save()
     }
 
+    public static func updateManualFields(updates: [ManualWorkoutFieldUpdate], context: ModelContext) {
+        guard !updates.isEmpty else { return }
+        let updatesByID = Dictionary(uniqueKeysWithValues: updates.map { ($0.id, $0) })
+        var changed = false
+        let date = Date()
+
+        for record in fetchPersisted(context: context) {
+            guard let update = updatesByID[record.id] else { continue }
+            record.manualRunTypeRaw = update.runType?.rawValue
+            record.notes = update.notes
+            record.updatedAt = date
+            changed = true
+        }
+
+        if changed {
+            try? context.save()
+        }
+    }
+
     private static func refreshEvidenceRefreshJobCounts(
         job: PersistedEvidenceRefreshJob,
         context: ModelContext,

@@ -621,9 +621,16 @@ private struct WeeklyWorkoutList: View {
     }
 
     private func applyBulkCategory() {
-        for row in rows where selectedWorkoutIDs.contains(row.workout.id) {
-            update(row: row, category: bulkCategory)
+        let selectedIDs = selectedWorkoutIDs
+        let updates = rows.compactMap { row -> ManualWorkoutFieldUpdate? in
+            guard selectedIDs.contains(row.workout.id) else { return nil }
+            return ManualWorkoutFieldUpdate(
+                id: row.workout.id,
+                runType: bulkCategory.manualRunType,
+                notes: row.workout.notes
+            )
         }
+        store.updateManualFields(updates)
         selectedWorkoutIDs.removeAll()
     }
 

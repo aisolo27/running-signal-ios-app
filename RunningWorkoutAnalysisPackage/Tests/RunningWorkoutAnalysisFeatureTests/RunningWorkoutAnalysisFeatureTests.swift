@@ -869,6 +869,38 @@ import Testing
 }
 
 @MainActor
+@Test func persistenceUpdatesManualFieldsInBatch() throws {
+    let context = try inMemoryModelContext()
+    let start = Date(timeIntervalSince1970: 4_000)
+    let workouts = [
+        testWorkout(id: "batch-easy", start: start, distanceMeters: 5_000, durationSeconds: 1_500),
+        testWorkout(id: "batch-long", start: start.addingTimeInterval(86_400), distanceMeters: 12_000, durationSeconds: 4_800),
+        testWorkout(id: "batch-unchanged", start: start.addingTimeInterval(2 * 86_400), distanceMeters: 4_000, durationSeconds: 1_400)
+    ]
+
+    PersistenceService.upsert(workouts, context: context)
+    PersistenceService.updateManualFields(
+        updates: [
+            ManualWorkoutFieldUpdate(id: "batch-easy", runType: .recovery, notes: "Warm-up"),
+            ManualWorkoutFieldUpdate(id: "batch-long", runType: .longRun, notes: "Reviewed")
+        ],
+        context: context
+    )
+
+    let refreshed = PersistenceService.fetchWorkouts(context: context)
+    let easy = try #require(refreshed.first { $0.id == "batch-easy" })
+    let long = try #require(refreshed.first { $0.id == "batch-long" })
+    let unchanged = try #require(refreshed.first { $0.id == "batch-unchanged" })
+
+    #expect(easy.manualRunType == .recovery)
+    #expect(easy.notes == "Warm-up")
+    #expect(long.manualRunType == .longRun)
+    #expect(long.notes == "Reviewed")
+    #expect(unchanged.manualRunType == nil)
+    #expect(unchanged.notes.isEmpty)
+}
+
+@MainActor
 @Test func monthlyEvidenceRefreshFailurePreservesCachedEvidence() async throws {
     let context = try inMemoryModelContext()
     let calendar = fixedCalendar()

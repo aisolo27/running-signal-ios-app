@@ -150,3 +150,4 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 - Analytics period headers now show the year and expose a current-period jump button when browsing older Week, Month, or Year views.
 - Analytics workout rows expose visible manual category menus and a bulk Select mode with All Visible, Before Nov 2025, Clear, category picker, and Apply actions.
 - Manual category writes use existing persisted `manualRunType` fields, preserving the HealthKit-only runtime data contract while letting purpose mix and period summaries reflect reviewed labels.
+- Bulk manual category Apply now writes selected rows as one store/persistence batch with one analytics recompute, avoiding all-time history freezes from per-row saves and recomputes.

@@ -164,6 +164,18 @@ public struct RefreshInterruptionProofSummary: Equatable, Sendable {
     }
 }
 
+public struct ManualWorkoutFieldUpdate: Equatable, Sendable {
+    public var id: String
+    public var runType: RunType?
+    public var notes: String
+
+    public init(id: String, runType: RunType?, notes: String) {
+        self.id = id
+        self.runType = runType
+        self.notes = notes
+    }
+}
+
 public struct DerivedAnalysisRefreshSummary: Equatable, Sendable {
     public let refreshedWorkoutIDs: [String]
     public let checkedAt: Date?
@@ -668,6 +680,25 @@ public final class RunningAnalysisStore {
         workouts[index].notes = notes
         if let modelContext {
             PersistenceService.updateManualFields(id: workoutID, runType: manualRunType, notes: notes, context: modelContext)
+        }
+        recompute()
+    }
+
+    public func updateManualFields(_ updates: [ManualWorkoutFieldUpdate]) {
+        guard !updates.isEmpty else { return }
+        let updatesByID = Dictionary(uniqueKeysWithValues: updates.map { ($0.id, $0) })
+        var changed = false
+
+        for index in workouts.indices {
+            guard let update = updatesByID[workouts[index].id] else { continue }
+            workouts[index].manualRunType = update.runType
+            workouts[index].notes = update.notes
+            changed = true
+        }
+
+        guard changed else { return }
+        if let modelContext {
+            PersistenceService.updateManualFields(updates: updates, context: modelContext)
         }
         recompute()
     }
