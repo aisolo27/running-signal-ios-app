@@ -514,6 +514,40 @@ import Testing
     #expect(!store.diagnosticsMarkdown.contains("- Message: Imported 1 reviewed web run categories."))
 }
 
+@MainActor
+@Test func storeRestoresPersistedHealthKitRunsAndBestEffortsAfterRelaunch() async throws {
+    let context = try inMemoryModelContext()
+    let oldRun = testWorkout(
+        id: "old-healthkit-run",
+        start: Date(timeIntervalSince1970: 1_530_000_000),
+        distanceMeters: 10_000,
+        durationSeconds: 3_000
+    )
+    let healthKitService = StubHealthKitService()
+    healthKitService.loadResult = HealthKitLoadResult(
+        authorizationState: .authorized,
+        workouts: [oldRun],
+        healthContext: HealthContext(),
+        message: "Loaded 1 HealthKit running workout."
+    )
+    let firstStore = RunningAnalysisStore(healthKitService: healthKitService)
+
+    await firstStore.bootstrap(modelContext: context)
+    await firstStore.refreshFromHealthKit()
+
+    #expect(PersistenceService.fetchWorkouts(context: context).map(\.id) == [oldRun.id])
+    #expect(firstStore.personalBestEffortSummary.allTime.contains { $0.workoutID == oldRun.id })
+
+    let reopenedStore = RunningAnalysisStore(healthKitService: StubHealthKitService())
+    await reopenedStore.bootstrap(modelContext: context)
+
+    #expect(!reopenedStore.usesSampleData)
+    #expect(reopenedStore.workouts.map(\.id) == [oldRun.id])
+    #expect(reopenedStore.personalBestEffortSummary.allTime.contains { record in
+        record.bucket == .longestRun && record.workoutID == oldRun.id
+    })
+}
+
 @Test func healthKitSyncStateStorePersistsLastSyncDate() {
     let defaults = UserDefaults(suiteName: "RunSignalTests.\(UUID().uuidString)")!
     let date = Date(timeIntervalSince1970: 1_800)

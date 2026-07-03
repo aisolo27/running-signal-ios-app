@@ -27,6 +27,8 @@ Use this as a selective lookup, not required full-context reading. Read the inde
 
 ## HealthKit
 
+- Symptom: Analytics year navigation stopped at recent history even though older HealthKit runs existed. Cause: the full `Load HealthKit Runs` query was capped to the newest 250 workouts. Fix: use `HKObjectQueryNoLimit` for the summary workout load while keeping detailed evidence enrichment capped/batched.
+
 - Symptom: a paused/manual-skip custom workout shows a plausible but wrong plan-derived Work row, such as a full planned distance with elapsed pace, while Apple Fitness shows a shorter skipped row with active/timer pace. Cause: distance-goal reconstruction can keep chasing the original planned goal after a manual skip, folding later cooldown/tail evidence into the Work row. Fix: for paused/skipped custom workouts, compare Apple Fitness against complete contiguous `HKWorkoutActivity` boundary rows and the normal-detail resolved-row path; treat raw segment markers and plan-derived reconstruction as debug evidence only.
 - Rule: monthly evidence refresh jobs should dedupe only active attempts. Completed attempts are refresh history and must not block a later manual refresh for the same month.
 

@@ -167,3 +167,8 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 - Removed ignored local junk: `.DS_Store` files, SwiftPM `.build`, and the large ignored HealthFit local video copy.
 - Moved completed date-specific validation evidence, older physical-iPhone proof folders, screenshot archives, and nonfixture exports into `docs/archive/old-validation/` while keeping evidence tracked.
 - Kept active validation focused on the interval parity router, active scripts/scorecards, the June 26 paired-pause fixed-tail proof, the June 28 priority proof, the June 30 current review packet, and the future fixture template.
+
+## 2026-07-03 HealthKit Full History Cache Fix
+
+- `Load HealthKit Runs` now fetches all completed running workout summaries instead of only the newest 250, so Analytics year navigation can reach older loaded history while detailed evidence remains capped/batched.
+- Added regression coverage that a loaded HealthKit run persists through a relaunch-style store bootstrap and keeps All-Time Best Efforts populated from the local cache.
