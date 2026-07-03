@@ -266,3 +266,38 @@ Scope: reviewed July 1 Codex session logs with JSON-field `session_meta.payload.
 
 - Added this July 1 section to `docs/project-state/daily-learning-review.md`.
 - Did not edit `docs/bug-log.md`, `AGENTS.md`, or `docs/project-state/documentation-index.md`: no new recurring gotcha or routing rule was stronger than existing bug-log/project-status entries.
+
+## 2026-07-02
+
+Scope: reviewed July 2 Codex session logs with JSON-field `session_meta.payload.cwd` or `turn_context.cwd` exactly equal to this RunSignal repo. Excluded copied repo paths inside unrelated prompts and excluded the active automation session. Treated this as a documentation-only review: no Xcode builds, device installs, HealthKit/provider mutations, commits, pushes, or broad repo scans.
+
+### Completed Work
+
+- Landed interval-analysis and analytics-period expansion in `b0776f0`: the HealthFit-inspired interval analysis moved toward a dedicated touch-first view, period summaries expanded beyond week-only to Week, Month, Year, and All-Time, and `docs/validation/healthfit-interval-ui-reference.md` was added as the local reference-note companion to ignored screen-recording media.
+- Fixed terminal pause interval promotion in `b53a2cc`: a zero-duration terminal `HKWorkoutEventType(rawValue: 1)` no longer blocks otherwise valid fixed-cooldown plus `Open / Extra` custom-workout promotion, while real dangling/cross-row pause evidence remains blocked.
+- Hardened custom-workout interval promotion in `0700f04`: generalized resolved activity-boundary promotion, export/status alignment, fallback wording, and regression coverage for the six-work-repeat fixed-cooldown plus `Open / Extra` shape. The push-live run reported `swift test --package-path RunningWorkoutAnalysisPackage` passing with `225 tests`, committed on `main`, pushed to `origin/main`, and left the working tree clean.
+- Physical iPhone build/install/launch proof was reported for `AIS17PM`, but visible semantic UI snapshot proof was Simulator-only because the available snapshot tool still targeted the Simulator after the device run.
+
+### Pending Work
+
+- On the physical iPhone, use `Settings > Load HealthKit Runs` after a fresh install before judging real-data screens such as Best Efforts, analytics periods, or custom workout interval promotion.
+- Capture fresh app-visible physical-iPhone proof for the July 2 interval/analytics changes: promoted official interval rows, touch/scrub behavior, period summaries, and values compared against Raw Debug/exported resolved rows where available.
+- Continue keeping supported official rows and under-review evidence distinct: official custom-workout blocks should appear only when `CustomWorkoutNormalDetailGate.supportedIntervals` returns rows; unsupported or incomplete evidence should remain whole-run/under-review.
+
+### Mistakes, Fixes, And Friction
+
+- A terminal zero-duration rawValue 1 marker looked like a dangling pause when the resolver considered pause events without enough workout-end context. The durable rule is now in `docs/bug-log.md`: ignore only zero-duration rawValue 1 markers at the exact workout end, while preserving blocks for real dangling/cross-row pause streams.
+- Several read-only subagent findings were useful, but their outputs mixed current-source behavior, exported proof, and possible stale installed-build evidence. Future reviews should separate source inspection, current-build export evidence, and physical UI proof before calling a UI gate broken.
+- `push live` followed repo policy correctly for this project: verify, commit to `main`, push `main`, and report no feature branch cleanup when already on `main`.
+
+### Workflow Improvements
+
+- For custom-workout promotion bugs, start with the structured export fields: candidate row count/source, comparison status, `promotesProductionBehavior`, `normalWorkoutUIChanged`, fallback reasons, tail ambiguity, and pause-event exclusions. Then inspect source only where those fields disagree.
+- For physical-device proof, keep build/install/launch success, Simulator screenshot proof, and actual physical-iPhone semantic proof as separate evidence levels in summaries.
+- When a screen recording or HealthFit reference drives UI direction, keep runtime ingestion out of scope; use it as a design reference only and store tracked metadata/notes rather than committing local media.
+
+### Docs Updated By This Review
+
+- Added this July 2 section to `docs/project-state/daily-learning-review.md`.
+- Did not edit `docs/bug-log.md` or `docs/project-state/project-status.md`: July 2's durable terminal-pause rule, interval-promotion state, and analytics-period state were already captured by the landed commits.
+- Did not edit `AGENTS.md` or `docs/project-state/documentation-index.md`: no new routing rule or doc classification stronger than the existing entries emerged from this review.
