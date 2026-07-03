@@ -29,6 +29,18 @@ struct RunsView: View {
         )
     }
 
+    private var appReadinessSummary: AppReadinessUXSummary {
+        AppReadinessUXSummary.make(
+            workouts: store.workouts,
+            authorizationState: store.authorizationState,
+            usesSampleData: store.usesSampleData,
+            isLoading: store.isLoading,
+            evidenceQueueSummary: store.evidenceQueueSummary,
+            bestEfforts: allTimeBestEfforts,
+            refreshJobs: store.evidenceRefreshJobSummaries
+        )
+    }
+
     var body: some View {
         List {
             Section {
@@ -37,6 +49,8 @@ struct RunsView: View {
                 }
 
                 WholeRunStatusCard(summary: wholeRunSummary, loadedRunCount: store.usesSampleData ? nil : runs.count)
+
+                AppReadinessCard(summary: appReadinessSummary)
             }
             .listRowSeparator(.hidden)
 
@@ -236,11 +250,13 @@ struct PersonalBestEffortRow: View {
     let titleFont: Font
 
     var body: some View {
+        let trust = BestEffortUXSummary.make(effort: effort)
+
         HStack {
             VStack(alignment: .leading, spacing: 3) {
                 Text(effort.bucket.label)
                     .font(titleFont)
-                Text(personalBestEffortDetail(effort))
+                Text("\(RunFormatters.shortDate.string(from: effort.date)) · \(trust.detail)")
                     .font(.caption2)
                     .foregroundStyle(RunSignalTextStyle.secondary)
                     .lineLimit(3)
@@ -253,6 +269,7 @@ struct PersonalBestEffortRow: View {
                 Text(RunFormatters.pace(effort.paceSecondsPerKm))
                     .font(.caption2)
                     .foregroundStyle(RunSignalTextStyle.secondary)
+                ConfidencePill(text: trust.title, confidence: trust.confidence)
             }
         }
         .padding(10)
@@ -265,52 +282,6 @@ struct PersonalBestEffortRow: View {
             return RunFormatters.compactDistance(effort.distanceMeters)
         }
         return RunFormatters.duration(effort.durationSeconds)
-    }
-}
-
-private func personalBestEffortDetail(_ effort: PersonalBestEffortRecord) -> String {
-    var parts = [
-        personalBestEffortStatus(effort),
-        RunFormatters.shortDate.string(from: effort.date)
-    ]
-    let caveats = effort.caveats.map(personalBestEffortCaveatLabel)
-    if !caveats.isEmpty {
-        parts.append(caveats.joined(separator: ", "))
-    }
-    return parts.joined(separator: " · ")
-}
-
-private func personalBestEffortStatus(_ effort: PersonalBestEffortRecord) -> String {
-    switch effort.confidence {
-    case .exact:
-        return "Exact"
-    case .estimated:
-        return "Estimated"
-    case .exactTotal:
-        return "Exact total"
-    case .unavailable:
-        return "Unavailable"
-    }
-}
-
-private func personalBestEffortCaveatLabel(_ caveat: PersonalBestEffortCaveat) -> String {
-    switch caveat {
-    case .summaryOnlyEstimate:
-        return "whole-run estimate"
-    case .indoorDeviceDerivedDistance:
-        return "indoor/device distance"
-    case .routeMissing:
-        return "route missing"
-    case .pauseOverlap:
-        return "pause overlap"
-    case .sampleGap:
-        return "sample gap"
-    case .shortBucketDensityLimited:
-        return "short-bucket density limited"
-    case .unrealisticSegmentPace:
-        return "unrealistic segment pace"
-    case .distanceSeriesUnusable:
-        return "distance samples unusable"
     }
 }
 
@@ -1031,6 +1002,21 @@ struct WorkoutDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 if let workout {
+                    let supportedIntervals = workout.evidence.flatMap {
+                        CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: $0)
+                    }
+                    let intervalBlockedReasons = workout.evidence.map {
+                        CustomWorkoutNormalDetailGate.blockedReasons(workout: workout, evidence: $0)
+                    } ?? ["Detailed HealthKit evidence is missing."]
+
+                    WorkoutReviewCard(
+                        summary: WorkoutReviewUXSummary.make(
+                            workout: workout,
+                            supportedIntervals: supportedIntervals,
+                            blockedReasons: intervalBlockedReasons
+                        )
+                    )
+
                     WorkoutSummaryCard(workout: workout)
 
                     FitnessWorkoutMetrics(workout: workout)
@@ -2246,6 +2232,66 @@ struct WholeRunStatusCard: View {
     }
 }
 
+struct AppReadinessCard: View {
+    let summary: AppReadinessUXSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "checklist.checked")
+                    .foregroundStyle(.blue)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(summary.title)
+                            .font(.headline)
+                        Spacer()
+                        ConfidencePill(text: summary.confidence.label, confidence: summary.confidence)
+                    }
+                    Text(summary.detail)
+                        .font(.subheadline)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            ReviewSignalGrid(signals: summary.signals)
+        }
+        .padding()
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+struct WorkoutReviewCard: View {
+    let summary: WorkoutReviewUXSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "waveform.path.ecg.rectangle")
+                    .foregroundStyle(.blue)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(summary.title)
+                            .font(.headline)
+                        Spacer()
+                        ConfidencePill(text: summary.confidence.label, confidence: summary.confidence)
+                    }
+                    Text(summary.detail)
+                        .font(.subheadline)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            ReviewSignalGrid(signals: summary.signals)
+        }
+        .padding()
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
 struct HealthContextVerificationCard: View {
     let verification: HealthContextVerification
 
@@ -2580,6 +2626,56 @@ struct EmptyStateView: View {
         }
         .frame(maxWidth: .infinity)
         .padding()
+    }
+}
+
+struct ReviewSignalGrid: View {
+    let signals: [ReviewSignal]
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 8)], spacing: 8) {
+            ForEach(signals) { signal in
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        Text(signal.title)
+                            .font(.caption2.bold())
+                            .foregroundStyle(RunSignalTextStyle.prominentSecondary)
+                        Spacer(minLength: 4)
+                        Circle()
+                            .fill(signalTint(signal.confidence))
+                            .frame(width: 7, height: 7)
+                            .accessibilityHidden(true)
+                    }
+                    Text(signal.value)
+                        .font(.subheadline.monospacedDigit().bold())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                    Text(signal.detail)
+                        .font(.caption2)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(9)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.thinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+
+    private func signalTint(_ confidence: ConfidenceLevel) -> Color {
+        switch confidence {
+        case .strong:
+            .green
+        case .moderate:
+            .blue
+        case .limited, .weak:
+            .orange
+        case .blocked, .unavailable:
+            .red
+        }
     }
 }
 

@@ -151,3 +151,13 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 - Analytics workout rows expose visible manual category menus and a bulk Select mode with All Visible, Before Nov 2025, Clear, category picker, and Apply actions.
 - Manual category writes use existing persisted `manualRunType` fields, preserving the HealthKit-only runtime data contract while letting purpose mix and period summaries reflect reviewed labels.
 - Bulk manual category Apply now writes selected rows as one store/persistence batch with one analytics recompute, avoiding all-time history freezes from per-row saves and recomputes.
+
+## 2026-07-03 Trust-First Workout Review UX
+
+- Runs now has a user-facing readiness card that separates sample data, HealthKit access, detailed-evidence refresh state, exact Best Efforts, and loaded completed runs before the user opens any detail screen.
+- Workout detail now starts with a run-review card that answers whether the workout is sample-only, whole-run-ready, duplicate-only, or official structured-workout evidence, while keeping Raw HealthKit Debug secondary.
+- Best Effort rows now use plain trust language for `Official exact`, `Official total`, `Estimate`, and `Unavailable`, including caveat explanations without promoting estimated rows as official PRs.
+- Official Interval Analysis now opens with a work-rep execution summary for work count, fade, recovery rows, pause rows, and `Open / Extra` context before the chart/list drill-down.
+- Added focused package tests for app readiness, Best Effort trust copy, sample-workout proof boundaries, official workout review, and interval execution summary behavior.
+- Simulator proof passed on iPhone 17: Runs readiness card, Best Effort trust row copy, and Workout Detail sample-proof copy were visible and non-overlapping after the package test suite passed.
+- Physical iPhone install/run succeeded on `AIS17PM` through XcodeBuildMCP after package tests and simulator smoke. Real HealthKit app-visible proof still requires checking the live phone screen because the available UI snapshot path can still target Simulator after a device run.

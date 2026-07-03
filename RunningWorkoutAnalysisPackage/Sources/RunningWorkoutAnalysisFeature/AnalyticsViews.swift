@@ -1062,6 +1062,8 @@ struct IntervalAnalysisScreen: View {
                     subtitle: "Official custom workout rows from resolved HealthKit activity-boundary evidence."
                 )
 
+                IntervalExecutionSummaryPanel(summary: IntervalExecutionUXSummary.make(summary: summary))
+
                 IntervalOverviewPanel(summary: summary)
 
                 if summary.workRepeatSummary != nil {
@@ -1123,6 +1125,36 @@ struct IntervalAnalysisScreen: View {
             return
         }
         selectedIntervalIndex = summary.rows.first?.index
+    }
+}
+
+private struct IntervalExecutionSummaryPanel: View {
+    let summary: IntervalExecutionUXSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "target")
+                    .foregroundStyle(.blue)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(summary.title)
+                            .font(.headline)
+                        Spacer()
+                        ConfidencePill(text: summary.confidence.label, confidence: summary.confidence)
+                    }
+                    Text(summary.detail)
+                        .font(.subheadline)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            ReviewSignalGrid(signals: summary.signals)
+        }
+        .padding()
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 
