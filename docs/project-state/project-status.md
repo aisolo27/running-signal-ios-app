@@ -114,7 +114,7 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 - Supported custom workouts now enter interval analysis through a compact official-row summary in workout detail, then a dedicated touch-first interval analysis screen.
 - The dedicated screen uses one selectable Swift Charts interval bar chart, core work-repeat totals, selected-row details, and grouped Work/Recovery repeats when official resolved rows form repeat pairs.
 - The slice remains display-only and official-row-only: it does not expand custom workout detection, use raw segment markers, or add FIT/HealthFit runtime input.
-- The HealthFit screen recording reference is copied to ignored local media at `docs/validation/_local-reference-media/healthfit-interval-ui/HealthFit.MP4`; tracked metadata and UI notes live in `docs/validation/healthfit-interval-ui-reference.md`.
+- The HealthFit screen recording reference stays as tracked metadata/UI notes in `docs/validation/healthfit-interval-ui-reference.md`; the ignored local video copy was removed during repo cleanup to keep the workspace light.
 
 ## 2026-07-02 Post-Recording Chart And Split Follow-Up
 
@@ -161,3 +161,9 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 - Added focused package tests for app readiness, Best Effort trust copy, sample-workout proof boundaries, official workout review, and interval execution summary behavior.
 - Simulator proof passed on iPhone 17: Runs readiness card, Best Effort trust row copy, and Workout Detail sample-proof copy were visible and non-overlapping after the package test suite passed.
 - Physical iPhone install/run succeeded on `AIS17PM` through XcodeBuildMCP after package tests and simulator smoke. Real HealthKit app-visible proof still requires checking the live phone screen because the available UI snapshot path can still target Simulator after a device run.
+
+## 2026-07-03 Repo Hygiene Cleanup
+
+- Removed ignored local junk: `.DS_Store` files, SwiftPM `.build`, and the large ignored HealthFit local video copy.
+- Moved completed date-specific validation evidence, older physical-iPhone proof folders, screenshot archives, and nonfixture exports into `docs/archive/old-validation/` while keeping evidence tracked.
+- Kept active validation focused on the interval parity router, active scripts/scorecards, the June 26 paired-pause fixed-tail proof, the June 28 priority proof, the June 30 current review packet, and the future fixture template.

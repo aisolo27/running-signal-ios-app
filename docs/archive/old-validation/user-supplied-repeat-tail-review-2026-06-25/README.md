@@ -53,8 +53,8 @@ Strict file validation:
 ```bash
 python3 docs/validation/apple-fitness-interval-parity-dataset/validate_parity_export_consistency.py \
   --require-readable-fallback-labels \
-  docs/validation/apple-fitness-interval-parity-dataset/user-supplied-repeat-tail-review-2026-06-25/june-25-2026-parity-packet-reexport-2026-06-25T1633Z.txt \
-  docs/validation/apple-fitness-interval-parity-dataset/user-supplied-repeat-tail-review-2026-06-25/june-25-2026-raw-healthkit-debug-reexport-2026-06-25T1633Z.txt
+  docs/archive/old-validation/user-supplied-repeat-tail-review-2026-06-25/june-25-2026-parity-packet-reexport-2026-06-25T1633Z.txt \
+  docs/archive/old-validation/user-supplied-repeat-tail-review-2026-06-25/june-25-2026-raw-healthkit-debug-reexport-2026-06-25T1633Z.txt
 ```
 
 Result:
@@ -68,7 +68,7 @@ Strict folder validation:
 ```bash
 python3 docs/validation/apple-fitness-interval-parity-dataset/validate_parity_export_consistency.py \
   --require-readable-fallback-labels \
-  docs/validation/apple-fitness-interval-parity-dataset/user-supplied-repeat-tail-review-2026-06-25
+  docs/archive/old-validation/user-supplied-repeat-tail-review-2026-06-25
 ```
 
 Result:

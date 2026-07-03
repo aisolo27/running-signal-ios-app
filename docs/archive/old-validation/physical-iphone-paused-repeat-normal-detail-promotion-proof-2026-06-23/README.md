@@ -28,7 +28,7 @@ All source files were copied from:
 
 Apr 22, Apr 29, May 6, and May 13 screenshots were copied from the existing repository screenshot archive:
 
-`docs/validation/apple-fitness-interval-parity-dataset/apple-fitness-screenshot-archive-2026-06-13/`
+`docs/archive/old-validation/apple-fitness-screenshot-archive-2026-06-13/`
 
 May 27 screenshots were copied from:
 

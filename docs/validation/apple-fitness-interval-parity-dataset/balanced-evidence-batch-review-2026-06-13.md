@@ -17,7 +17,7 @@ User-supplied local source folders:
 
 Repo-local screenshot archive:
 
-- `docs/validation/apple-fitness-interval-parity-dataset/apple-fitness-screenshot-archive-2026-06-13/`
+- `docs/archive/old-validation/apple-fitness-screenshot-archive-2026-06-13/`
 
 The screenshot archive contains the Apple Fitness screenshots for the 12 screenshot-confirmed fixtures. FIT files remain external/offline validation evidence and are not a runtime app input.
 

@@ -5,8 +5,8 @@ Status: local UI reference only. This recording is not runtime data, not an app 
 ## Local Media
 
 - Original file: `/Users/adrielsolorzano/Downloads/HealthFit.MP4`
-- Local archive copy: `docs/validation/_local-reference-media/healthfit-interval-ui/HealthFit.MP4`
-- Git status: the `_local-reference-media` folder is intentionally ignored because the video is large.
+- Local archive copy: removed during repo cleanup because the video is large and ignored.
+- Git status: the `_local-reference-media` folder remains ignored for any future local-only media references.
 
 ## File Metadata
 

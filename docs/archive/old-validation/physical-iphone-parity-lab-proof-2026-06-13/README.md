@@ -8,7 +8,7 @@ User-supplied files exported from the latest RunSignal debug build installed on 
 
 Repo-local archive:
 
-- `docs/validation/apple-fitness-interval-parity-dataset/physical-iphone-parity-lab-proof-2026-06-13/exports/`
+- `docs/archive/old-validation/physical-iphone-parity-lab-proof-2026-06-13/exports/`
 
 ## Files
 

@@ -1,6 +1,6 @@
 # Documentation Index
 
-Last updated: 2026-07-02
+Last updated: 2026-07-03
 
 ## Active Docs To Read First
 
@@ -17,6 +17,8 @@ Last updated: 2026-07-02
 Keep active validation lean. For custom-workout status and roadmap questions, start with `docs/project-state/accuracy-ledger.md`; use the files below as source evidence only when the ledger row or task names them. Once a date-specific parity investigation is complete, move it to `docs/archive/old-validation/` unless it is still the latest active investigation, latest active evidence review, or current blocker.
 
 - `docs/validation/apple-fitness-interval-parity-dataset/user-supplied-june30-clean-repeat-tail-review-2026-06-30/`: current June 30 user-supplied proof packet for a clean no-pause `Warmup 2 km > 10x Work/Recovery > fixed Cooldown > Open / Extra` workout; row evidence supports the generalized resolved activity-boundary source, and current-build re-export should confirm supported status labels.
+- `docs/validation/apple-fitness-interval-parity-dataset/physical-iphone-priority-repeat-proof-2026-06-28/`: current June 28-29 five-priority physical proof archive; priorities 1-5 have screenshots, typed Apple Fitness rows, and Raw HealthKit Debug/Parity Lab exports. Priority 5 covers the paused/manual-skip Work guard case.
+- `docs/validation/apple-fitness-interval-parity-dataset/physical-iphone-paused-repeat-fixed-tail-open-extra-proof-2026-06-26/`: current narrow paired-pause fixed-tail `Open / Extra` proof with Raw HealthKit Debug, parity packet, Apple Fitness screenshots, and offline FIT evidence.
 - `docs/validation/healthfit-interval-ui-reference.md`: local UI-reference note for the ignored HealthFit interval screen recording archive; interaction/organization reference only, not runtime data or promotion evidence.
 - `docs/validation/2026-06-10-apple-fitness-parity.md`: current Jun 10 Apple Fitness parity note.
 - `docs/validation/apple-fitness-interval-model-research.md`: current WorkoutKit/HealthKit interval reconstruction research.
@@ -68,11 +70,6 @@ Keep active validation lean. For custom-workout status and roadmap questions, st
 - `docs/validation/apple-fitness-interval-parity-dataset/fresh-iphone-parity-lab-export-review-2026-06-13.md`: latest-debug-build iPhone export review confirming selected parity packets and May monthly diagnostics match the docs/debug candidate reconstruction scorecard.
 - `docs/validation/apple-fitness-interval-parity-dataset/balanced-evidence-batch-review-2026-06-13.md`: complete balanced evidence batch review across all 12 screenshot-confirmed fixtures, including local source paths, the repo screenshot archive, and the external HealthFit FIT archive link.
 - `docs/validation/apple-fitness-interval-parity-dataset/custom-workout-production-readiness-plan.md`: current docs-only plan for moving debug-only Parity Lab rows toward a future debug prototype and later production UI gate.
-- `docs/validation/apple-fitness-interval-parity-dataset/apple-fitness-screenshot-archive-2026-06-13/`: repo-local archive of Apple Fitness screenshots for the 12 screenshot-confirmed fixtures.
-- `docs/validation/apple-fitness-interval-parity-dataset/physical-iphone-parity-lab-proof-2026-06-13/`: repo-local archive and summary for physical iPhone `AIS17PM` Raw HealthKit Debug/parity packet proof exports for May 1, Jun 5, and Jun 10.
-- `docs/validation/apple-fitness-interval-parity-dataset/physical-iphone-interval-timing-semantics-proof-2026-06-23/`: repo-local archive and summary for physical iPhone paused-repeat exports confirming elapsed row-window, paired pause-overlap, active/timer semantics, and post-install reconstructed-interval display fields remain debug/export-only with no normal UI promotion.
-- `docs/validation/apple-fitness-interval-parity-dataset/2026-06-14-stopped-early-and-open-run/`: docs/evidence capture for a stopped-early `Test Race Day 5k` custom workout and a plain open Watch run; matching FIT files are linked from the saved external HealthFit archive folder, copied locally, decoded, and used as controls for the narrow stopped-early Work gate plus open-run fallback behavior.
-
 ## Reference Docs To Read Selectively
 
 - `README.md`: setup and architecture only when unclear.
@@ -103,17 +100,21 @@ Keep active validation lean. For custom-workout status and roadmap questions, st
 - `docs/archive/old-research/COMBINED-HEALTHKIT-CODEX-REFERENCE.md`: generated combined HealthKit pack; too large for routine context.
 - `docs/archive/old-research/codex-healthkit-reference-prompt.md`: prompt wrapper superseded by `AGENTS.md` and the HealthKit start-here router.
 
+## Archived Validation Evidence
+
+- `docs/archive/old-validation/`: completed date-specific parity evidence, older physical-iPhone proof folders, generated screenshot archives, nonfixture exports, and historical proof packets moved out of the active validation path. Use these only when a ledger row, current scorecard, or archaeology task names them.
+- `docs/archive/old-validation/apple-fitness-screenshot-archive-2026-06-13/`: repo-local archive of Apple Fitness screenshots for the 12 screenshot-confirmed fixtures.
+- `docs/archive/old-validation/physical-iphone-parity-lab-proof-2026-06-13/`: physical iPhone `AIS17PM` Raw HealthKit Debug/parity packet proof exports for May 1, Jun 5, and Jun 10.
+- `docs/archive/old-validation/physical-iphone-interval-timing-semantics-proof-2026-06-23/`: paused-repeat exports confirming elapsed row-window, paired pause-overlap, active/timer semantics, and post-install reconstructed-interval display fields remain debug/export-only with no normal UI promotion.
+- `docs/archive/old-validation/2026-06-14-stopped-early-and-open-run/`: stopped-early custom workout and plain open Watch run control evidence.
+
 ## Needs Human Review
 
 - `README.md`: still contains useful setup details, but some template-era sections may be worth trimming later.
-
-## Recent Validation Archives
-
-- `docs/validation/apple-fitness-interval-parity-dataset/physical-iphone-priority-repeat-proof-2026-06-28/`: June 28-29 five-priority physical proof archive; priorities 1-5 have screenshots, typed Apple Fitness rows, and Raw HealthKit Debug/Parity Lab exports. Priority 5 covers the paused/manual-skip Work guard case.
 
 ## Intentionally Not Archived
 
 - `AGENTS.md`, `README.md`, and `docs/bug-log.md`.
 - Current HealthKit start/rules files and numbered HealthKit reference topics.
-- Current Apple Fitness parity validation docs and the interval parity dataset.
+- Current Apple Fitness parity validation docs, active scorecard scripts, current proof folders, and the interval parity dataset router.
 - `docs/milestones/09-healthkit-evidence-contract.md`, because Step 7 is still active.
