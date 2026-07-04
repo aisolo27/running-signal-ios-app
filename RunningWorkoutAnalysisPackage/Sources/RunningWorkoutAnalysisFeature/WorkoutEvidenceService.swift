@@ -95,7 +95,7 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
 
         let predicate = HKQuery.predicateForObjects(from: workout)
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
-        let associated = await quantitySamples(type: type, predicate: predicate, sort: sort, unit: unit)
+        let associated = await quantitySamples(type: type, predicate: predicate, sort: sort, unit: unit, sampleSource: .associatedWorkout)
         if !associated.isEmpty {
             return MetricLoadResult(
                 series: WorkoutMetricSeries(metric: metric, unit: unitLabel, points: associated.points),
@@ -109,11 +109,11 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
         )
         let sourcePredicate = HKQuery.predicateForObjects(from: workout.sourceRevision.source)
         let fallbackPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [datePredicate, sourcePredicate])
-        let fallback = await quantitySamples(type: type, predicate: fallbackPredicate, sort: sort, unit: unit)
+        let fallback = await quantitySamples(type: type, predicate: fallbackPredicate, sort: sort, unit: unit, sampleSource: .sourceDateFallback)
         let errors = [associated.errorMessage, fallback.errorMessage].compactMap { $0 }.joined(separator: " ")
         let message: String?
         if !fallback.points.isEmpty {
-            message = nil
+            message = "Using source/date fallback samples; associated workout samples were unavailable."
         } else if !errors.isEmpty {
             message = errors
         } else {
@@ -134,7 +134,8 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
         type: HKQuantityType,
         predicate: NSPredicate,
         sort: NSSortDescriptor,
-        unit: HKUnit
+        unit: HKUnit,
+        sampleSource: WorkoutEvidenceSampleSource
     ) async -> SampleQueryResult {
         await withCheckedContinuation { continuation in
             let query = HKSampleQuery(
@@ -144,7 +145,7 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
                 sortDescriptors: [sort]
             ) { _, samples, error in
                 let points = (samples as? [HKQuantitySample] ?? []).map {
-                    WorkoutEvidencePoint(date: $0.startDate, value: $0.quantity.doubleValue(for: unit))
+                    Self.evidencePoint(sample: $0, unit: unit, sampleSource: sampleSource)
                 }
                 continuation.resume(returning: SampleQueryResult(points: points, errorMessage: error.map { String(describing: $0) }))
             }
@@ -166,7 +167,7 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
         }
 
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
-        let associated = await stepCadencePoints(type: type, predicate: HKQuery.predicateForObjects(from: workout), sort: sort)
+        let associated = await stepCadencePoints(type: type, predicate: HKQuery.predicateForObjects(from: workout), sort: sort, sampleSource: .associatedWorkout)
         if !associated.isEmpty {
             return MetricLoadResult(
                 series: WorkoutMetricSeries(metric: .cadence, unit: "spm", points: associated.points),
@@ -180,7 +181,7 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
         )
         let sourcePredicate = HKQuery.predicateForObjects(from: workout.sourceRevision.source)
         let fallbackPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [datePredicate, sourcePredicate])
-        let fallback = await stepCadencePoints(type: type, predicate: fallbackPredicate, sort: sort)
+        let fallback = await stepCadencePoints(type: type, predicate: fallbackPredicate, sort: sort, sampleSource: .sourceDateFallback)
         let errors = [associated.errorMessage, fallback.errorMessage].compactMap { $0 }.joined(separator: " ")
         return MetricLoadResult(
             series: WorkoutMetricSeries(metric: .cadence, unit: "spm", points: fallback.points),
@@ -188,7 +189,7 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
                 name: WorkoutEvidenceMetric.cadence.rawValue,
                 status: fallback.points.isEmpty ? (errors.isEmpty ? .unavailable : .failed) : .loaded,
                 count: fallback.points.count,
-                message: fallback.points.isEmpty ? (errors.isEmpty ? "No step samples returned for cadence derivation." : errors) : nil
+                message: fallback.points.isEmpty ? (errors.isEmpty ? "No step samples returned for cadence derivation." : errors) : "Using source/date fallback step samples for cadence derivation."
             )
         )
     }
@@ -196,7 +197,8 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
     private func stepCadencePoints(
         type: HKQuantityType,
         predicate: NSPredicate,
-        sort: NSSortDescriptor
+        sort: NSSortDescriptor,
+        sampleSource: WorkoutEvidenceSampleSource
     ) async -> SampleQueryResult {
         await withCheckedContinuation { continuation in
             let query = HKSampleQuery(
@@ -209,7 +211,13 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
                     let minutes = sample.endDate.timeIntervalSince(sample.startDate) / 60
                     guard minutes > 0 else { return nil }
                     let steps = sample.quantity.doubleValue(for: .count())
-                    return WorkoutEvidencePoint(date: sample.startDate, value: steps / minutes)
+                    return Self.evidencePoint(
+                        sample: sample,
+                        unit: .count(),
+                        value: steps / minutes,
+                        sampleSource: sampleSource,
+                        representativeDate: sample.startDate
+                    )
                 }
                 continuation.resume(returning: SampleQueryResult(points: points, errorMessage: error.map { String(describing: $0) }))
             }
@@ -373,6 +381,40 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
         default:
             nil
         }
+    }
+
+    private static func evidencePoint(
+        sample: HKQuantitySample,
+        unit: HKUnit,
+        value: Double? = nil,
+        sampleSource: WorkoutEvidenceSampleSource,
+        representativeDate: Date? = nil
+    ) -> WorkoutEvidencePoint {
+        WorkoutEvidencePoint(
+            date: representativeDate ?? sample.startDate,
+            value: value ?? sample.quantity.doubleValue(for: unit),
+            startDate: sample.startDate,
+            endDate: sample.endDate,
+            sampleSource: sampleSource,
+            sourceName: sample.sourceRevision.source.name,
+            sourceVersion: sample.sourceRevision.version,
+            deviceName: deviceName(sample.device),
+            metadataKeys: sample.metadata.map { $0.keys.map { String(describing: $0) }.sorted() } ?? []
+        )
+    }
+
+    private static func deviceName(_ device: HKDevice?) -> String? {
+        let value = [
+            device?.name,
+            device?.manufacturer,
+            device?.model,
+            device?.hardwareVersion,
+            device?.softwareVersion
+        ]
+        .compactMap { $0 }
+        .filter { !$0.isEmpty }
+        .joined(separator: " ")
+        return value.isEmpty ? nil : value
     }
 
     private func eventTypeLabel(_ type: HKWorkoutEventType) -> String {
@@ -627,7 +669,8 @@ private enum WorkoutKitPlanAuditFormatter {
             plannedGoalType: goal.type,
             plannedGoalValue: goal.value,
             plannedGoalDisplayText: goal.display,
-            plannedTargetDisplayText: step.alert.map(alertLabel)
+            plannedTargetDisplayText: step.alert.map(alertLabel),
+            plannedTargets: step.alert.map { [plannedTarget($0)] }
         )
     }
 
@@ -727,6 +770,64 @@ private enum WorkoutKitPlanAuditFormatter {
             return "cadence \(measurementLabel(alert.target))"
         default:
             return String(describing: type(of: alert))
+        }
+    }
+
+    private static func plannedTarget(_ alert: any WorkoutAlert) -> PlannedWorkoutTarget {
+        let display = alertLabel(alert)
+        switch alert {
+        case let alert as SpeedRangeAlert:
+            let metric = String(describing: alert.metric).lowercased()
+            return PlannedWorkoutTarget(
+                kind: metric.contains("pace") ? .pace : .speed,
+                lowerBound: alert.target.lowerBound.value,
+                upperBound: alert.target.upperBound.value,
+                unit: alert.target.lowerBound.unit.symbol,
+                displayText: display
+            )
+        case let alert as SpeedThresholdAlert:
+            let metric = String(describing: alert.metric).lowercased()
+            return PlannedWorkoutTarget(
+                kind: metric.contains("pace") ? .pace : .speed,
+                lowerBound: alert.target.value,
+                upperBound: alert.target.value,
+                unit: alert.target.unit.symbol,
+                displayText: display
+            )
+        case let alert as HeartRateRangeAlert:
+            return PlannedWorkoutTarget(
+                kind: .heartRate,
+                lowerBound: alert.target.lowerBound.value,
+                upperBound: alert.target.upperBound.value,
+                unit: alert.target.lowerBound.unit.symbol,
+                displayText: display
+            )
+        case _ as HeartRateZoneAlert:
+            return PlannedWorkoutTarget(kind: .zone, unit: "heart-rate zone", displayText: display)
+        case let alert as PowerRangeAlert:
+            return PlannedWorkoutTarget(
+                kind: .power,
+                lowerBound: alert.target.lowerBound.value,
+                upperBound: alert.target.upperBound.value,
+                unit: alert.target.lowerBound.unit.symbol,
+                displayText: display
+            )
+        case let alert as PowerThresholdAlert:
+            return PlannedWorkoutTarget(kind: .power, lowerBound: alert.target.value, upperBound: alert.target.value, unit: alert.target.unit.symbol, displayText: display)
+        case _ as PowerZoneAlert:
+            return PlannedWorkoutTarget(kind: .zone, unit: "power zone", displayText: display)
+        case let alert as CadenceRangeAlert:
+            return PlannedWorkoutTarget(
+                kind: .cadence,
+                lowerBound: alert.target.lowerBound.value,
+                upperBound: alert.target.upperBound.value,
+                unit: alert.target.lowerBound.unit.symbol,
+                displayText: display
+            )
+        case let alert as CadenceThresholdAlert:
+            return PlannedWorkoutTarget(kind: .cadence, lowerBound: alert.target.value, upperBound: alert.target.value, unit: alert.target.unit.symbol, displayText: display)
+        default:
+            return PlannedWorkoutTarget(kind: .unknown, displayText: display)
         }
     }
 

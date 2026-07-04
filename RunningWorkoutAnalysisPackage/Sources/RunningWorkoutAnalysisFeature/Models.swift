@@ -17,6 +17,156 @@ public enum RunEnvironment: String, Codable, CaseIterable, Identifiable, Sendabl
     }
 }
 
+public enum WorkoutCapabilityConfidence: String, Codable, Sendable {
+    case strong
+    case moderate
+    case limited
+}
+
+public enum WorkoutCapabilityMetric: String, Codable, CaseIterable, Identifiable, Sendable {
+    case route
+    case distanceSeries
+    case runningSpeed
+    case heartRate
+    case power
+    case cadence
+    case runningDynamics
+    case elevation
+
+    public var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .route: "Route"
+        case .distanceSeries: "Distance samples"
+        case .runningSpeed: "Running speed"
+        case .heartRate: "Heart rate"
+        case .power: "Power"
+        case .cadence: "Cadence"
+        case .runningDynamics: "Running dynamics"
+        case .elevation: "Elevation"
+        }
+    }
+}
+
+public struct WorkoutCapabilityProfile: Equatable, Sendable {
+    public var environment: RunEnvironment
+    public var environmentConfidence: WorkoutCapabilityConfidence
+    public var environmentEvidence: [String]
+    public var expectedMetrics: Set<WorkoutCapabilityMetric>
+    public var availableMetrics: Set<WorkoutCapabilityMetric>
+    public var missingExpectedMetrics: Set<WorkoutCapabilityMetric>
+    public var expectedMissingReasons: [WorkoutCapabilityMetric: String]
+
+    public var summary: String {
+        switch environment {
+        case .indoor:
+            "Indoor run: route and GPS elevation are not expected."
+        case .outdoor:
+            missingExpectedMetrics.isEmpty
+                ? "Outdoor run: expected route and running evidence are available."
+                : "Outdoor run: some expected GPS or sample evidence is missing."
+        case .unknown:
+            "Run environment is unknown; route and elevation expectations stay limited."
+        }
+    }
+
+    public static func make(for workout: CanonicalWorkout) -> WorkoutCapabilityProfile {
+        let hasRoute = workout.routeAvailable || workout.routePointCount > 0
+        let hasDistanceSeries = workout.distanceSampleCount > 0
+        let hasSpeed = workout.runningSpeedSampleCount > 0
+        let hasHeartRate = workout.heartRateSampleCount > 0 || workout.averageHeartRate != nil
+        let hasPower = workout.runningPowerSampleCount > 0 || workout.averagePower != nil
+        let hasCadence = workout.cadenceSampleCount > 0 || workout.stepCountSampleCount > 0 || workout.averageCadence != nil
+        let hasDynamics = workout.strideLengthSampleCount > 0
+            || workout.verticalOscillationSampleCount > 0
+            || workout.groundContactTimeSampleCount > 0
+        let hasElevation = (workout.elevationGainMeters ?? 0) > 0
+
+        var available = Set<WorkoutCapabilityMetric>()
+        if hasRoute { available.insert(.route) }
+        if hasDistanceSeries { available.insert(.distanceSeries) }
+        if hasSpeed { available.insert(.runningSpeed) }
+        if hasHeartRate { available.insert(.heartRate) }
+        if hasPower { available.insert(.power) }
+        if hasCadence { available.insert(.cadence) }
+        if hasDynamics { available.insert(.runningDynamics) }
+        if hasElevation { available.insert(.elevation) }
+
+        let expected: Set<WorkoutCapabilityMetric>
+        switch workout.environment {
+        case .indoor:
+            expected = [.distanceSeries, .heartRate, .cadence]
+        case .outdoor:
+            expected = [.route, .distanceSeries, .runningSpeed, .heartRate, .elevation]
+        case .unknown:
+            expected = [.distanceSeries, .heartRate]
+        }
+
+        let missing = expected.subtracting(available)
+        var reasons: [WorkoutCapabilityMetric: String] = [:]
+        for metric in missing {
+            reasons[metric] = missingReason(metric: metric, environment: workout.environment)
+        }
+
+        let confidence: WorkoutCapabilityConfidence
+        switch workout.environment {
+        case .indoor:
+            confidence = hasRoute ? .moderate : .strong
+        case .outdoor:
+            confidence = hasRoute ? .strong : .moderate
+        case .unknown:
+            confidence = .limited
+        }
+
+        var evidence = ["Environment: \(workout.environment.label)"]
+        evidence.append(hasRoute ? "Route evidence present" : "No route evidence")
+        if workout.routePointCount > 0 {
+            evidence.append("\(workout.routePointCount) route points")
+        }
+        if workout.distanceSampleCount > 0 {
+            evidence.append("\(workout.distanceSampleCount) distance samples")
+        }
+
+        return WorkoutCapabilityProfile(
+            environment: workout.environment,
+            environmentConfidence: confidence,
+            environmentEvidence: evidence,
+            expectedMetrics: expected,
+            availableMetrics: available,
+            missingExpectedMetrics: missing,
+            expectedMissingReasons: reasons
+        )
+    }
+
+    private static func missingReason(metric: WorkoutCapabilityMetric, environment: RunEnvironment) -> String {
+        switch (metric, environment) {
+        case (.route, .indoor), (.elevation, .indoor):
+            "Not expected for indoor/treadmill runs."
+        case (.route, .outdoor):
+            "Outdoor runs usually expose a HealthKit route when location permission and route data are available."
+        case (.route, .unknown):
+            "Run environment is unknown, so route expectations stay limited."
+        case (.elevation, .outdoor):
+            "Outdoor elevation needs route altitude coverage or HealthKit elevation metadata."
+        case (.elevation, .unknown):
+            "Run environment is unknown, so elevation expectations stay limited."
+        case (.distanceSeries, _):
+            "Detailed distance samples have not been loaded for this workout."
+        case (.runningSpeed, _):
+            "Running speed samples are unavailable for this workout."
+        case (.heartRate, _):
+            "Heart-rate samples are unavailable for this workout."
+        case (.power, _):
+            "Running power is optional and depends on device/OS support."
+        case (.cadence, _):
+            "Cadence needs cadence samples or usable step-count samples."
+        case (.runningDynamics, _):
+            "Running dynamics are optional and depend on device/OS support."
+        }
+    }
+}
+
 public enum RunType: String, Codable, CaseIterable, Identifiable, Sendable {
     case easy
     case recovery
@@ -466,6 +616,10 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
 
     public var workoutScopeLabel: String {
         evidence == nil ? "HealthKit workout summary" : "workout-scoped HealthKit evidence"
+    }
+
+    public var capabilityProfile: WorkoutCapabilityProfile {
+        WorkoutCapabilityProfile.make(for: self)
     }
 }
 

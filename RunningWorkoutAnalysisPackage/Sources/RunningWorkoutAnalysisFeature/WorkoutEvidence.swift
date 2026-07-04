@@ -34,11 +34,78 @@ public enum WorkoutEvidenceMetric: String, Codable, CaseIterable, Identifiable, 
 
 public struct WorkoutEvidencePoint: Codable, Equatable, Sendable {
     public var date: Date
+    public var startDate: Date
+    public var endDate: Date
     public var value: Double
+    public var sampleSource: WorkoutEvidenceSampleSource
+    public var sourceName: String?
+    public var sourceVersion: String?
+    public var deviceName: String?
+    public var metadataKeys: [String]
 
-    public init(date: Date, value: Double) {
+    public init(
+        date: Date,
+        value: Double,
+        startDate: Date? = nil,
+        endDate: Date? = nil,
+        sampleSource: WorkoutEvidenceSampleSource = .associatedWorkout,
+        sourceName: String? = nil,
+        sourceVersion: String? = nil,
+        deviceName: String? = nil,
+        metadataKeys: [String] = []
+    ) {
         self.date = date
+        self.startDate = startDate ?? date
+        self.endDate = endDate ?? startDate ?? date
         self.value = value
+        self.sampleSource = sampleSource
+        self.sourceName = sourceName
+        self.sourceVersion = sourceVersion
+        self.deviceName = deviceName
+        self.metadataKeys = metadataKeys
+    }
+
+    public init(date: Date, _ value: Double) {
+        self.init(date: date, value: value)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case date
+        case startDate
+        case endDate
+        case value
+        case sampleSource
+        case sourceName
+        case sourceVersion
+        case deviceName
+        case metadataKeys
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        date = try container.decode(Date.self, forKey: .date)
+        startDate = try container.decodeIfPresent(Date.self, forKey: .startDate) ?? date
+        endDate = try container.decodeIfPresent(Date.self, forKey: .endDate) ?? startDate
+        value = try container.decode(Double.self, forKey: .value)
+        sampleSource = try container.decodeIfPresent(WorkoutEvidenceSampleSource.self, forKey: .sampleSource) ?? .associatedWorkout
+        sourceName = try container.decodeIfPresent(String.self, forKey: .sourceName)
+        sourceVersion = try container.decodeIfPresent(String.self, forKey: .sourceVersion)
+        deviceName = try container.decodeIfPresent(String.self, forKey: .deviceName)
+        metadataKeys = try container.decodeIfPresent([String].self, forKey: .metadataKeys) ?? []
+    }
+}
+
+public enum WorkoutEvidenceSampleSource: String, Codable, Sendable {
+    case associatedWorkout
+    case sourceDateFallback
+    case derived
+
+    var label: String {
+        switch self {
+        case .associatedWorkout: "Associated workout"
+        case .sourceDateFallback: "Source/date fallback"
+        case .derived: "Derived"
+        }
     }
 }
 

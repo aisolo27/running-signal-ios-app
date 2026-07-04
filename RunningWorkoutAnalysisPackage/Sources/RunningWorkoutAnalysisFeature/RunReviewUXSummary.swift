@@ -124,6 +124,7 @@ public struct WorkoutReviewUXSummary: Equatable, Sendable {
         let isHealthKitSource = workout.dataSourceLabel.contains("HealthKit")
         let hasDetailedSeries = isHealthKitSource && workout.seriesAvailable && workout.seriesSampleCount > 0
         let hasOfficialIntervals = supportedIntervals?.intervals.isEmpty == false
+        let capability = workout.capabilityProfile
         let intervalDetail = hasOfficialIntervals
             ? "Official rows"
             : blockedReasons.first ?? "Whole-run only"
@@ -155,6 +156,16 @@ public struct WorkoutReviewUXSummary: Equatable, Sendable {
             confidence = .limited
         }
 
+        let missingCapabilityCount = capability.missingExpectedMetrics.count
+        let capabilityConfidence: ConfidenceLevel = switch capability.environmentConfidence {
+        case .strong:
+            missingCapabilityCount == 0 ? .strong : .moderate
+        case .moderate:
+            .moderate
+        case .limited:
+            .limited
+        }
+
         let signals = [
             ReviewSignal(
                 title: "Whole Run",
@@ -173,6 +184,12 @@ public struct WorkoutReviewUXSummary: Equatable, Sendable {
                 value: hasDetailedSeries ? "\(workout.seriesSampleCount)" : "Summary",
                 detail: hasDetailedSeries ? "Samples" : "No series",
                 confidence: hasDetailedSeries ? .strong : .limited
+            ),
+            ReviewSignal(
+                title: "Expected Data",
+                value: capability.environment.label,
+                detail: missingCapabilityCount == 0 ? "Matches run type" : "\(missingCapabilityCount) missing",
+                confidence: capabilityConfidence
             ),
             ReviewSignal(
                 title: "Source",

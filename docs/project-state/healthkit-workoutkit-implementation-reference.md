@@ -22,6 +22,15 @@ This is a source-map for explaining RunSignal's current Apple Health implementat
 5. `CustomWorkoutResolvedIntervalRows` promotes custom workout interval rows only when WorkoutKit planned rows and HealthKit activity boundaries pass the evidence gate.
 6. `DerivedAnalyticsEngine`, `PersonalBestEffortEngine`, and the SwiftUI views consume canonical workouts and evidence-gated rows for analytics, charts, best efforts, debug screens, and exports.
 
+## 2026-07-03 Accuracy Hardening Additions
+
+- `CanonicalWorkout.capabilityProfile` builds an environment-aware expected-data profile for indoor, outdoor, and unknown runs. Indoor runs do not expect route/GPS elevation; outdoor runs expect route, distance samples, speed, heart rate, and elevation evidence when available.
+- `WorkoutReviewUXSummary` surfaces an `Expected Data` signal from that capability profile so missing route/elevation is interpreted by run environment rather than one generic rule.
+- `WorkoutEvidencePoint` preserves sample start/end, representative date, associated-workout vs source/date fallback provenance, source revision name/version, device name, and metadata keys.
+- Official resolved interval rows prefer `HKWorkoutActivity.duration` and `HKWorkoutActivity.allStatistics` when those native HealthKit row values are available and reconcile with pause evidence. Associated sample-window aggregation remains the fallback for missing activity-level row metrics.
+- `PlannedWorkoutStep` carries typed `PlannedWorkoutTarget` values from WorkoutKit alerts alongside `plannedTargetDisplayText`.
+- Shortened/skipped distance-goal rows add diagnostics when the HealthKit activity distance is materially shorter than the planned row distance. This preserves manual-skip evidence without relaxing the existing evidence gate.
+
 ## HealthKit Authorization And Loading
 
 Source files:
@@ -138,14 +147,14 @@ Source files:
 ### Evidence Types
 
 - `WorkoutEvidenceMetric`: supported series metrics: heart rate, running speed, distance, active energy, basal energy, running power, cadence, step count, stride length, vertical oscillation, and ground contact time.
-- `WorkoutEvidencePoint`: one timestamped metric value.
+- `WorkoutEvidencePoint`: one metric value with start/end sample window, representative date, source/date provenance, source revision, device, and metadata keys.
 - `WorkoutRoutePoint`: one route point with date, latitude, longitude, optional altitude, and optional speed.
 - `WorkoutEvidenceEvent`: normalized wrapper for `HKWorkoutEvent`. Stores start/end dates, raw type label, display label, and metadata keys.
 - `WorkoutEvidenceActivityStatistic`: one statistic attached to a HealthKit activity row: quantity type, unit, start/end, source count, sum, average, minimum, maximum, and duration.
 - `WorkoutEvidenceActivity`: normalized `HKWorkoutActivity` row. Stores row identity, activity type, location type, start/end, duration, metadata keys, row events, and row statistics.
 - `WorkoutPlanAuditStatus`: WorkoutKit plan audit state: available, unavailable, failed, or unsupported.
 - `WorkoutPlanAudit`: optional WorkoutKit plan evidence with status, plan ID, plan type, display name, summary lines, planned steps, and error message.
-- `WorkoutMetricSeries`: metric series plus unit, sorted points, sample count, average, and maximum.
+- `WorkoutMetricSeries`: metric series plus unit, sorted points, sample count, average, and maximum. Point windows are preserved so row aggregation can use sample overlap instead of only one timestamp.
 - `WorkoutEvidence`: full workout detail bundle: `workoutID`, `loadedAt`, `series`, `route`, `events`, `activities`, `workoutPlanAudit`, and query `diagnostics`.
 - `WorkoutEvidenceDiagnostics` / `WorkoutEvidenceQueryDiagnostic`: query status, counts, and warnings for evidence loading.
 
@@ -220,7 +229,8 @@ Source files:
 - `ExpandedCustomWorkoutPlanStep`: one expanded planned row after repeat expansion. Tracks original index, expanded index, block index, repeat iteration, role, goal, and source.
 - `CustomWorkoutStepModel`: warmup, repeat blocks, and cooldown model. Expands custom plans into ordered `PlannedWorkoutStep` rows.
 - `PlannedWorkoutGoalType`: goal kind for planned rows: distance, time, open, energy, or unavailable.
-- `PlannedWorkoutStep`: final app row used by interval logic. Fields are `index`, `label`, `stepType`, `repeatBlockIndex`, `repeatIndex`, `plannedGoalType`, `plannedGoalValue`, `plannedGoalDisplayText`, and `plannedTargetDisplayText`.
+- `PlannedWorkoutStep`: final app row used by interval logic. Fields are `index`, `label`, `stepType`, `repeatBlockIndex`, `repeatIndex`, `plannedGoalType`, `plannedGoalValue`, `plannedGoalDisplayText`, `plannedTargetDisplayText`, and optional typed `plannedTargets`.
+- `PlannedWorkoutTarget`: typed WorkoutKit alert/target metadata for pace/speed, heart rate, power, cadence, zones, or unknown target kinds. Kept alongside display text for future target-vs-actual analysis.
 
 ## Official Custom Workout Interval Rows
 
@@ -253,13 +263,13 @@ Source files:
 - `resolve().rows`: final official `ReconstructedWorkoutInterval` array.
 - `resolvedRow().elapsed`: row-window duration from HealthKit activity start/end.
 - `resolvedRow().pauseOverlap`: seconds paused inside the row window.
-- `resolvedRow().activeDuration`: elapsed minus pause overlap.
+- `resolvedRow().activeDuration`: native `HKWorkoutActivity.duration` when available and reconciled with pause evidence; otherwise elapsed minus paired pause overlap.
 - `resolvedRow().displayRule`: elapsed-window vs active-timer display decision.
 - `resolvedRow().distanceMeters`: row distance from HealthKit activity statistics or tail calculation.
 - `resolvedRow().pace`: seconds per kilometer for the selected display duration and row distance.
-- `resolvedRow().heartRates`: heart-rate series values inside the row window.
-- `resolvedRow().cadence`: average cadence inside the row window, falling back to step-count-derived cadence.
-- `resolvedRow().power`: average running power inside the row window.
+- `resolvedRow().heartRates`: average/max heart rate from `HKWorkoutActivity.allStatistics` first, then HealthKit sample-overlap fallback.
+- `resolvedRow().cadence`: average cadence from activity statistics when available, then cadence series, then step-count-derived cadence.
+- `resolvedRow().power`: average running power from activity statistics first, then HealthKit sample-overlap fallback.
 - `pairedPauseIntervals().pendingPause`: current unmatched pause timestamp.
 - `pairedPauseIntervals().intervals`: completed pause/resume windows.
 - `pairedPauseIntervals().sawPauseEvidence`: distinguishes no-pause workouts from malformed pause streams.

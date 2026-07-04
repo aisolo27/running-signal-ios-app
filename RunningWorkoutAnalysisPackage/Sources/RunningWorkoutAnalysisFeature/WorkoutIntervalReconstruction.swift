@@ -81,6 +81,7 @@ public struct PlannedWorkoutStep: Codable, Equatable, Sendable {
     public var plannedGoalValue: Double?
     public var plannedGoalDisplayText: String
     public var plannedTargetDisplayText: String?
+    public var plannedTargets: [PlannedWorkoutTarget]?
 
     public init(
         index: Int,
@@ -91,7 +92,8 @@ public struct PlannedWorkoutStep: Codable, Equatable, Sendable {
         plannedGoalType: PlannedWorkoutGoalType,
         plannedGoalValue: Double? = nil,
         plannedGoalDisplayText: String,
-        plannedTargetDisplayText: String? = nil
+        plannedTargetDisplayText: String? = nil,
+        plannedTargets: [PlannedWorkoutTarget]? = nil
     ) {
         self.index = index
         self.label = label
@@ -102,6 +104,42 @@ public struct PlannedWorkoutStep: Codable, Equatable, Sendable {
         self.plannedGoalValue = plannedGoalValue
         self.plannedGoalDisplayText = plannedGoalDisplayText
         self.plannedTargetDisplayText = plannedTargetDisplayText
+        self.plannedTargets = plannedTargets
+    }
+}
+
+public enum PlannedWorkoutTargetKind: String, Codable, Sendable {
+    case pace
+    case speed
+    case heartRate
+    case power
+    case cadence
+    case zone
+    case unknown
+}
+
+public struct PlannedWorkoutTarget: Codable, Equatable, Sendable {
+    public var kind: PlannedWorkoutTargetKind
+    public var lowerBound: Double?
+    public var upperBound: Double?
+    public var unit: String?
+    public var displayText: String
+    public var source: String
+
+    public init(
+        kind: PlannedWorkoutTargetKind,
+        lowerBound: Double? = nil,
+        upperBound: Double? = nil,
+        unit: String? = nil,
+        displayText: String,
+        source: String = "WorkoutKit"
+    ) {
+        self.kind = kind
+        self.lowerBound = lowerBound
+        self.upperBound = upperBound
+        self.unit = unit
+        self.displayText = displayText
+        self.source = source
     }
 }
 

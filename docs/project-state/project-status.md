@@ -172,3 +172,12 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 
 - `Load HealthKit Runs` now fetches all completed running workout summaries instead of only the newest 250, so Analytics year navigation can reach older loaded history while detailed evidence remains capped/batched.
 - Added regression coverage that a loaded HealthKit run persists through a relaunch-style store bootstrap and keeps All-Time Best Efforts populated from the local cache.
+
+## 2026-07-03 HealthKit Accuracy Hardening Slice
+
+- Workouts now expose an environment-aware capability profile so indoor runs do not treat missing route/GPS elevation as an error, while outdoor/unknown runs keep expected-vs-available evidence visible.
+- Workout review now surfaces an `Expected Data` signal driven by the capability profile, separating indoor, outdoor, and unknown evidence expectations.
+- Official resolved custom-workout rows prefer native `HKWorkoutActivity` duration/statistics when available and reconciled with pause evidence; sample-window aggregation remains HealthKit fallback evidence for missing activity-level stats.
+- Workout-scoped quantity samples now preserve sample start/end, associated-vs-source/date fallback provenance, source revision, device, and metadata keys for future evidence-quality decisions.
+- WorkoutKit planned steps now preserve typed target metadata from alerts alongside display text, enabling later target-vs-actual analysis without parsing strings.
+- Shortened/skipped planned distance rows now add resolved-row diagnostics when HealthKit activity distance ends materially before the planned distance; this preserves Priority 5-style guard evidence without broadening interval analytics.

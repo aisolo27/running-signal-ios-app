@@ -45,6 +45,7 @@ public enum CustomWorkoutResolvedIntervalRows {
                 plannedTargetDisplayText: step.plannedTargetDisplayText,
                 start: activity.startDate,
                 end: activity.endDate ?? activity.startDate.addingTimeInterval(activity.durationSeconds),
+                activity: activity,
                 distanceMeters: activityDistanceMeters(activity),
                 pauseIntervals: pauses,
                 evidence: evidence,
@@ -67,16 +68,21 @@ public enum CustomWorkoutResolvedIntervalRows {
             return nil
         }
 
+        let executionDiagnostics = plannedExecutionDiagnostics(
+            plannedSteps: resolvedPlannedSteps,
+            rows: rows
+        )
+
         return WorkoutIntervalReconstructionResult(
             planSource: .workoutKit,
             windowSource: .healthKitActivityBoundaries,
             intervals: rows,
             notes: [
                 "Resolved custom workout rows use HealthKit activity boundaries for row windows.",
-                "Displayed row duration uses active timer time when paired pause overlap is present."
+                "Displayed row duration prefers native HealthKit activity duration when available."
             ] + (activities.count < plannedSteps.count ? [
                 "Workout ended before all planned rows completed; only completed HealthKit activity rows are shown."
-            ] : [])
+            ] : []) + executionDiagnostics
         )
     }
 
@@ -90,6 +96,7 @@ public enum CustomWorkoutResolvedIntervalRows {
         plannedTargetDisplayText: String?,
         start: Date,
         end: Date,
+        activity: WorkoutEvidenceActivity? = nil,
         distanceMeters: Double?,
         pauseIntervals: [DateInterval],
         evidence: WorkoutEvidence,
@@ -97,18 +104,31 @@ public enum CustomWorkoutResolvedIntervalRows {
         tailDiagnostics: TailDiagnostics? = nil
     ) -> ReconstructedWorkoutInterval {
         let elapsed = max(0, end.timeIntervalSince(start))
-        let pauseOverlap = pauseOverlapSeconds(start: start, end: end, pauses: pauseIntervals)
-        let activeDuration = max(0, elapsed - pauseOverlap)
-        let displayRule: ReconstructedIntervalDurationDisplayRule = pauseOverlap > 0 ? .activeTimer : .elapsedRowWindow
+        let eventPauseOverlap = pauseOverlapSeconds(start: start, end: end, pauses: pauseIntervals)
+        let nativeActiveDuration = (activity?.durationSeconds).flatMap { duration -> Double? in
+            guard duration > 0, duration <= elapsed + 1 else { return nil }
+            let eventDerivedActive = max(0, elapsed - eventPauseOverlap)
+            if eventPauseOverlap > 0.5, abs(duration - elapsed) <= 1, abs(duration - eventDerivedActive) > 1 {
+                return nil
+            }
+            return min(duration, elapsed)
+        } ?? max(0, elapsed - eventPauseOverlap)
+        let activeDuration = nativeActiveDuration
+        let pauseOverlap = max(eventPauseOverlap, max(0, elapsed - activeDuration))
+        let displayRule: ReconstructedIntervalDurationDisplayRule = pauseOverlap > 0.5 ? .activeTimer : .elapsedRowWindow
         let displayDuration = displayRule == .activeTimer ? activeDuration : elapsed
         let pace = distanceMeters.flatMap { distance -> Double? in
             guard distance > 0, displayDuration > 0 else { return nil }
             return displayDuration / (distance / 1_000)
         }
         let heartRates = values(metric: .heartRate, start: start, end: end, evidence: evidence)
-        let cadence = average(values(metric: .cadence, start: start, end: end, evidence: evidence))
+        let averageHeartRate = activityAverage(.heartRate, in: activity) ?? average(heartRates)
+        let maxHeartRate = activityMaximum(.heartRate, in: activity) ?? heartRates.max()
+        let cadence = activityAverage(.cadence, in: activity)
+            ?? average(values(metric: .cadence, start: start, end: end, evidence: evidence))
             ?? average(values(metric: .stepCount, start: start, end: end, evidence: evidence))
-        let power = average(values(metric: .runningPower, start: start, end: end, evidence: evidence))
+        let power = activityAverage(.runningPower, in: activity)
+            ?? average(values(metric: .runningPower, start: start, end: end, evidence: evidence))
 
         return ReconstructedWorkoutInterval(
             index: index,
@@ -127,8 +147,8 @@ public enum CustomWorkoutResolvedIntervalRows {
             durationDisplayRule: displayRule,
             actualDistanceMeters: distanceMeters,
             actualPaceSecondsPerKm: pace,
-            averageHeartRateBpm: average(heartRates),
-            maxHeartRateBpm: heartRates.max(),
+            averageHeartRateBpm: averageHeartRate,
+            maxHeartRateBpm: maxHeartRate,
             averageCadence: cadence,
             averagePower: power,
             planSource: .workoutKit,
@@ -340,9 +360,71 @@ public enum CustomWorkoutResolvedIntervalRows {
     }
 
     private static func activityDistanceMeters(_ activity: WorkoutEvidenceActivity) -> Double? {
-        activity.statistics.first {
-            $0.quantityType == "HKQuantityTypeIdentifierDistanceWalkingRunning"
-        }?.sum
+        activitySum(.distance, in: activity)
+    }
+
+    private static func plannedExecutionDiagnostics(
+        plannedSteps: [PlannedWorkoutStep],
+        rows: [ReconstructedWorkoutInterval]
+    ) -> [String] {
+        zip(plannedSteps, rows).compactMap { step, row in
+            guard step.plannedGoalType == .distance,
+                  let plannedDistance = step.plannedGoalValue,
+                  plannedDistance > 0,
+                  let actualDistance = row.actualDistanceMeters,
+                  actualDistance > 0,
+                  actualDistance < plannedDistance * 0.9 else {
+                return nil
+            }
+            return "\(step.label) ended at \(Int(actualDistance.rounded())) m before its planned \(Int(plannedDistance.rounded())) m distance; treat as shortened/skipped HealthKit activity evidence, not plan-derived completion."
+        }
+    }
+
+    private static func activitySum(_ metric: WorkoutEvidenceMetric, in activity: WorkoutEvidenceActivity?) -> Double? {
+        activityStatistic(metric, in: activity)?.sum
+    }
+
+    private static func activityAverage(_ metric: WorkoutEvidenceMetric, in activity: WorkoutEvidenceActivity?) -> Double? {
+        activityStatistic(metric, in: activity)?.average
+    }
+
+    private static func activityMaximum(_ metric: WorkoutEvidenceMetric, in activity: WorkoutEvidenceActivity?) -> Double? {
+        activityStatistic(metric, in: activity)?.maximum
+    }
+
+    private static func activityStatistic(
+        _ metric: WorkoutEvidenceMetric,
+        in activity: WorkoutEvidenceActivity?
+    ) -> WorkoutEvidenceActivityStatistic? {
+        guard let identifier = healthKitIdentifier(for: metric) else { return nil }
+        return activity?.statistics.first { $0.quantityType == identifier }
+    }
+
+    private static func healthKitIdentifier(for metric: WorkoutEvidenceMetric) -> String? {
+        switch metric {
+        case .heartRate:
+            "HKQuantityTypeIdentifierHeartRate"
+        case .runningSpeed:
+            "HKQuantityTypeIdentifierRunningSpeed"
+        case .distance:
+            "HKQuantityTypeIdentifierDistanceWalkingRunning"
+        case .activeEnergy:
+            "HKQuantityTypeIdentifierActiveEnergyBurned"
+        case .basalEnergy:
+            "HKQuantityTypeIdentifierBasalEnergyBurned"
+        case .runningPower:
+            "HKQuantityTypeIdentifierRunningPower"
+        case .stepCount:
+            "HKQuantityTypeIdentifierStepCount"
+        case .strideLength:
+            "HKQuantityTypeIdentifierRunningStrideLength"
+        case .verticalOscillation:
+            "HKQuantityTypeIdentifierRunningVerticalOscillation"
+        case .groundContactTime:
+            "HKQuantityTypeIdentifierRunningGroundContactTime"
+        case .cadence:
+            nil
+        }
     }
 
     private static func values(
@@ -352,7 +434,8 @@ public enum CustomWorkoutResolvedIntervalRows {
         evidence: WorkoutEvidence
     ) -> [Double] {
         evidence.series[metric]?.points.compactMap { point in
-            point.date >= start && point.date <= end ? point.value : nil
+            let overlaps = point.endDate >= start && point.startDate <= end
+            return overlaps ? point.value : nil
         } ?? []
     }
 

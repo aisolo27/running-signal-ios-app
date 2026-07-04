@@ -40,6 +40,159 @@ import Testing
     #expect(estimatedSummary.detail.contains("distance series unusable"))
 }
 
+@Test func workoutCapabilityProfileTreatsIndoorRouteAsNotExpected() throws {
+    let start = Date(timeIntervalSinceReferenceDate: 1_500)
+    let run = workout(
+        id: "indoor",
+        start: start,
+        distance: 5_000,
+        duration: 1_800,
+        type: .easy,
+        environment: .indoor,
+        distanceSampleCount: 20,
+        heartRateSampleCount: 20,
+        cadenceSampleCount: 20
+    )
+
+    let profile = run.capabilityProfile
+
+    #expect(profile.environment == .indoor)
+    #expect(!profile.expectedMetrics.contains(.route))
+    #expect(!profile.missingExpectedMetrics.contains(.route))
+    #expect(profile.summary.contains("route and GPS elevation are not expected"))
+}
+
+@Test func workoutReviewSummarySurfacesExpectedDataSignal() throws {
+    let start = Date(timeIntervalSinceReferenceDate: 1_600)
+    let run = workout(
+        id: "outdoor-limited",
+        start: start,
+        distance: 5_000,
+        duration: 1_800,
+        type: .easy,
+        environment: .outdoor,
+        distanceSampleCount: 20,
+        heartRateSampleCount: 20
+    )
+
+    let summary = WorkoutReviewUXSummary.make(workout: run, supportedIntervals: nil, blockedReasons: [])
+    let expectedData = try #require(summary.signals.first { $0.title == "Expected Data" })
+
+    #expect(expectedData.value == "Outdoor")
+    #expect(expectedData.detail.contains("missing"))
+    #expect(expectedData.confidence == .moderate)
+}
+
+@Test func resolvedRowsPreferNativeActivityDurationAndStatistics() throws {
+    let start = Date(timeIntervalSinceReferenceDate: 1_700)
+    let workout = workout(id: "native-activity", start: start, distance: 400, duration: 120, type: .interval)
+    let activity = workoutActivity(
+        start: start,
+        end: start.addingTimeInterval(120),
+        duration: 100,
+        distance: 400,
+        averageHeartRate: 150,
+        maxHeartRate: 166,
+        averagePower: 310
+    )
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        series: [
+            .heartRate: WorkoutMetricSeries(metric: .heartRate, unit: "bpm", points: [
+                WorkoutEvidencePoint(date: start.addingTimeInterval(30), value: 99)
+            ]),
+            .runningPower: WorkoutMetricSeries(metric: .runningPower, unit: "W", points: [
+                WorkoutEvidencePoint(date: start.addingTimeInterval(30), value: 100)
+            ])
+        ],
+        activities: [activity],
+        workoutPlanAudit: WorkoutPlanAudit(
+            status: .available,
+            plannedSteps: [
+                PlannedWorkoutStep(index: 1, label: "Work 1", stepType: .work, plannedGoalType: .distance, plannedGoalValue: 400, plannedGoalDisplayText: "400 m")
+            ]
+        )
+    )
+
+    let result = try #require(CustomWorkoutResolvedIntervalRows.resolve(workout: workout, evidence: evidence))
+    let row = try #require(result.intervals.first)
+
+    #expect(row.durationDisplayRule == .activeTimer)
+    #expect(abs(row.elapsedRowWindowDurationSeconds - 120) <= 0.001)
+    #expect(abs(row.activeTimerDurationSeconds - 100) <= 0.001)
+    #expect(abs((row.pauseOverlapSeconds ?? 0) - 20) <= 0.001)
+    #expect(row.averageHeartRateBpm == 150)
+    #expect(row.maxHeartRateBpm == 166)
+    #expect(row.averagePower == 310)
+}
+
+@Test func resolvedRowsAddShortenedDistanceDiagnosticWithoutBlocking() throws {
+    let start = Date(timeIntervalSinceReferenceDate: 1_800)
+    let workout = workout(id: "manual-skip", start: start, distance: 1_210, duration: 460, type: .interval)
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        activities: [
+            workoutActivity(start: start, end: start.addingTimeInterval(460), duration: 460, distance: 1_210)
+        ],
+        workoutPlanAudit: WorkoutPlanAudit(
+            status: .available,
+            plannedSteps: [
+                PlannedWorkoutStep(index: 1, label: "Work 1", stepType: .work, plannedGoalType: .distance, plannedGoalValue: 2_000, plannedGoalDisplayText: "2 km")
+            ]
+        )
+    )
+
+    let result = try #require(CustomWorkoutResolvedIntervalRows.resolve(workout: workout, evidence: evidence))
+
+    #expect(result.intervals.map(\.label) == ["Work 1"])
+    #expect(result.notes.contains { $0.contains("shortened/skipped HealthKit activity evidence") })
+}
+
+@Test func workoutEvidencePointPreservesSampleWindowAndProvenance() {
+    let start = Date(timeIntervalSinceReferenceDate: 1_900)
+    let point = WorkoutEvidencePoint(
+        date: start,
+        value: 12,
+        startDate: start,
+        endDate: start.addingTimeInterval(5),
+        sampleSource: .sourceDateFallback,
+        sourceName: "Apple Watch",
+        sourceVersion: "26.0",
+        deviceName: "Watch",
+        metadataKeys: ["Key"]
+    )
+
+    #expect(point.startDate == start)
+    #expect(point.endDate == start.addingTimeInterval(5))
+    #expect(point.sampleSource == .sourceDateFallback)
+    #expect(point.sourceName == "Apple Watch")
+    #expect(point.metadataKeys == ["Key"])
+}
+
+@Test func plannedWorkoutStepKeepsTypedTargetsBesideDisplayText() {
+    let target = PlannedWorkoutTarget(
+        kind: .pace,
+        lowerBound: 240,
+        upperBound: 250,
+        unit: "s/km",
+        displayText: "pace range 4:00-4:10 /km"
+    )
+    let step = PlannedWorkoutStep(
+        index: 1,
+        label: "Work 1",
+        stepType: .work,
+        plannedGoalType: .distance,
+        plannedGoalValue: 400,
+        plannedGoalDisplayText: "400 m",
+        plannedTargetDisplayText: target.displayText,
+        plannedTargets: [target]
+    )
+
+    #expect(step.plannedTargetDisplayText == "pace range 4:00-4:10 /km")
+    #expect(step.plannedTargets?.first?.kind == .pace)
+    #expect(step.plannedTargets?.first?.lowerBound == 240)
+}
+
 @Test func workoutReviewSummaryLeadsWithOfficialStructuredRowsWhenAvailable() {
     let start = Date(timeIntervalSinceReferenceDate: 2_000)
     let run = workout(id: "official-workout", start: start, distance: 1_000, duration: 400, type: .interval)
@@ -186,7 +339,14 @@ private func workout(
     distance: Double,
     duration: Double,
     type: RunType,
-    evidence: WorkoutEvidence? = nil
+    evidence: WorkoutEvidence? = nil,
+    environment: RunEnvironment = .outdoor,
+    routeAvailable: Bool = false,
+    routePointCount: Int = 0,
+    distanceSampleCount: Int = 0,
+    heartRateSampleCount: Int = 0,
+    runningSpeedSampleCount: Int = 0,
+    cadenceSampleCount: Int = 0
 ) -> CanonicalWorkout {
     CanonicalWorkout(
         id: id,
@@ -194,11 +354,17 @@ private func workout(
         sourceName: "HealthKit",
         startDate: start,
         endDate: start.addingTimeInterval(duration),
-        environment: .outdoor,
+        environment: environment,
         distanceMeters: distance,
         durationSeconds: duration,
+        routeAvailable: routeAvailable,
         seriesAvailable: evidence != nil,
+        routePointCount: routePointCount,
         seriesSampleCount: evidence?.series.values.map(\.sampleCount).reduce(0, +) ?? 0,
+        heartRateSampleCount: heartRateSampleCount,
+        runningSpeedSampleCount: runningSpeedSampleCount,
+        distanceSampleCount: distanceSampleCount,
+        cadenceSampleCount: cadenceSampleCount,
         inferredRunType: type,
         evidence: evidence
     )
@@ -251,5 +417,63 @@ private func reconstructedInterval(
         tailDiagnostics: nil,
         sourceNote: "test",
         confidence: .high
+    )
+}
+
+private func workoutActivity(
+    start: Date,
+    end: Date,
+    duration: Double,
+    distance: Double,
+    averageHeartRate: Double? = nil,
+    maxHeartRate: Double? = nil,
+    averagePower: Double? = nil
+) -> WorkoutEvidenceActivity {
+    var statistics = [
+        WorkoutEvidenceActivityStatistic(
+            quantityType: "HKQuantityTypeIdentifierDistanceWalkingRunning",
+            unit: "m",
+            startDate: start,
+            endDate: end,
+            sourceCount: 1,
+            sum: distance,
+            durationSeconds: duration
+        )
+    ]
+    if averageHeartRate != nil || maxHeartRate != nil {
+        statistics.append(
+            WorkoutEvidenceActivityStatistic(
+                quantityType: "HKQuantityTypeIdentifierHeartRate",
+                unit: "bpm",
+                startDate: start,
+                endDate: end,
+                sourceCount: 1,
+                average: averageHeartRate,
+                maximum: maxHeartRate,
+                durationSeconds: duration
+            )
+        )
+    }
+    if let averagePower {
+        statistics.append(
+            WorkoutEvidenceActivityStatistic(
+                quantityType: "HKQuantityTypeIdentifierRunningPower",
+                unit: "W",
+                startDate: start,
+                endDate: end,
+                sourceCount: 1,
+                average: averagePower,
+                durationSeconds: duration
+            )
+        )
+    }
+    return WorkoutEvidenceActivity(
+        id: UUID().uuidString,
+        activityType: "running",
+        locationType: "outdoor",
+        startDate: start,
+        endDate: end,
+        durationSeconds: duration,
+        statistics: statistics
     )
 }
