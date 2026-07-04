@@ -1247,6 +1247,310 @@ import Testing
 }
 
 @MainActor
+@Test func healthKitSyncDeletesRemovedWorkoutsFromStoreAndPersistence() async throws {
+    let syncDefaults = isolatedDefaults()
+    defer { syncDefaults.reset() }
+    HealthKitSyncStateStore.saveAnchor(HKQueryAnchor(fromValue: 1), defaults: syncDefaults.defaults)
+    let context = try inMemoryModelContext()
+    let deleted = testWorkout(
+        id: "deleted-healthkit-workout",
+        start: Date(timeIntervalSince1970: 3_600),
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    let kept = testWorkout(
+        id: "kept-healthkit-workout",
+        start: Date(timeIntervalSince1970: 7_200),
+        distanceMeters: 8_000,
+        durationSeconds: 2_400
+    )
+    PersistenceService.upsert([deleted, kept], context: context)
+    let syncService = StubHealthKitWorkoutSyncService(
+        batchResults: [[
+            HealthKitWorkoutSyncResult(
+                authorizationState: .authorized,
+                deletedWorkoutIDs: [deleted.id],
+                newAnchor: HKQueryAnchor(fromValue: 2)
+            )
+        ]]
+    )
+    let store = RunningAnalysisStore(
+        healthKitService: StubHealthKitService(),
+        syncService: syncService,
+        syncDefaults: syncDefaults.defaults
+    )
+
+    await store.bootstrap(modelContext: context)
+    await store.syncHealthKitChanges()
+
+    #expect(!store.workouts.contains { $0.id == deleted.id })
+    #expect(store.workouts.contains { $0.id == kept.id })
+    #expect(!PersistenceService.fetchWorkouts(context: context).contains { $0.id == deleted.id })
+    #expect(store.syncState.lastDeletedCount == 1)
+}
+
+@MainActor
+@Test func healthKitSyncAppliesMultipleBatchesBeforeReportingState() async throws {
+    let syncDefaults = isolatedDefaults()
+    defer { syncDefaults.reset() }
+    HealthKitSyncStateStore.saveAnchor(HKQueryAnchor(fromValue: 1), defaults: syncDefaults.defaults)
+    let context = try inMemoryModelContext()
+    let old = testWorkout(
+        id: "old-healthkit-workout",
+        start: Date(timeIntervalSince1970: 1_000),
+        distanceMeters: 4_000,
+        durationSeconds: 1_300
+    )
+    let first = testWorkout(
+        id: "first-batch-workout",
+        start: Date(timeIntervalSince1970: 8_000),
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    let second = testWorkout(
+        id: "second-batch-workout",
+        start: Date(timeIntervalSince1970: 9_000),
+        distanceMeters: 10_000,
+        durationSeconds: 3_000
+    )
+    PersistenceService.upsert([old], context: context)
+    let syncService = StubHealthKitWorkoutSyncService(
+        batchResults: [[
+            HealthKitWorkoutSyncResult(
+                authorizationState: .authorized,
+                fetchedWorkouts: [first],
+                newAnchor: HKQueryAnchor(fromValue: 2)
+            ),
+            HealthKitWorkoutSyncResult(
+                authorizationState: .authorized,
+                fetchedWorkouts: [second],
+                deletedWorkoutIDs: [old.id],
+                newAnchor: HKQueryAnchor(fromValue: 3)
+            )
+        ]]
+    )
+    let store = RunningAnalysisStore(
+        healthKitService: StubHealthKitService(),
+        syncService: syncService,
+        syncDefaults: syncDefaults.defaults
+    )
+
+    await store.bootstrap(modelContext: context)
+    await store.syncHealthKitChanges()
+
+    #expect(syncService.syncCallCount == 1)
+    #expect(store.workouts.map(\.id).contains(first.id))
+    #expect(store.workouts.map(\.id).contains(second.id))
+    #expect(!store.workouts.map(\.id).contains(old.id))
+    #expect(store.syncState.lastFetchedCount == 2)
+    #expect(store.syncState.lastInsertedCount == 2)
+    #expect(store.syncState.lastDeletedCount == 1)
+}
+
+@MainActor
+@Test func healthKitSyncDoesNotAdvanceSyncStateWhenPersistenceFails() async throws {
+    let syncDefaults = isolatedDefaults()
+    defer { syncDefaults.reset() }
+    HealthKitSyncStateStore.saveAnchor(HKQueryAnchor(fromValue: 1), defaults: syncDefaults.defaults)
+    let context = try inMemoryModelContext()
+    let existing = testWorkout(
+        id: "existing-healthkit-workout",
+        start: Date(timeIntervalSince1970: 1_000),
+        distanceMeters: 4_000,
+        durationSeconds: 1_300
+    )
+    let incoming = testWorkout(
+        id: "incoming-healthkit-workout",
+        start: Date(timeIntervalSince1970: 8_000),
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    PersistenceService.upsert([existing], context: context)
+    let syncService = StubHealthKitWorkoutSyncService(
+        batchResults: [[
+            HealthKitWorkoutSyncResult(
+                authorizationState: .authorized,
+                fetchedWorkouts: [incoming],
+                newAnchor: HKQueryAnchor(fromValue: 2)
+            )
+        ]]
+    )
+    let store = RunningAnalysisStore(
+        healthKitService: StubHealthKitService(),
+        syncService: syncService,
+        syncDefaults: syncDefaults.defaults,
+        syncPersistenceSave: { _, _, _ in
+            throw NSError(domain: "RunSignalSyncPersistenceTest", code: 1)
+        }
+    )
+
+    await store.bootstrap(modelContext: context)
+    await store.syncHealthKitChanges()
+
+    #expect(store.authorizationState == .error)
+    #expect(store.syncState.lastSyncAt == nil)
+    #expect(HealthKitSyncStateStore.loadLastSyncAt(defaults: syncDefaults.defaults) == nil)
+    #expect(!store.workouts.map(\.id).contains(incoming.id))
+    #expect(!PersistenceService.fetchWorkouts(context: context).contains { $0.id == incoming.id })
+}
+
+@MainActor
+@Test func healthKitInitialImportPersistsCompletedJobAndUsesSummaryWindows() async throws {
+    let context = try inMemoryModelContext()
+    let healthKit = StubHealthKitService()
+    let imported = testWorkout(
+        id: "windowed-import-workout",
+        start: Date(timeIntervalSince1970: 8_000),
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    healthKit.windowedLoadResults = [
+        HealthKitLoadResult(
+            authorizationState: .authorized,
+            workouts: [imported],
+            healthContext: HealthContext(),
+            message: nil
+        )
+    ]
+    healthKit.loadResult = HealthKitLoadResult(
+        authorizationState: .partial,
+        workouts: [],
+        healthContext: HealthContext(),
+        message: nil
+    )
+    let store = RunningAnalysisStore(healthKitService: healthKit)
+
+    await store.bootstrap(modelContext: context)
+    await store.refreshFromHealthKit()
+
+    let job = try #require(PersistenceService.fetchHealthKitImportJob(context: context))
+    #expect(job.status == .completed)
+    #expect(job.importedCount == 1)
+    #expect(store.healthKitImportJobSummary?.status == .completed)
+    #expect(store.workouts.contains { $0.id == imported.id })
+    #expect(healthKit.windowedLoadRequests.first?.detailedEvidenceLimit == HealthKitService.defaultDetailedEvidenceLimit)
+    #expect(healthKit.windowedLoadRequests.dropFirst().allSatisfy { $0.detailedEvidenceLimit == 0 })
+}
+
+@MainActor
+@Test func healthKitInitialImportPausesWhenBudgetExpires() async throws {
+    let context = try inMemoryModelContext()
+    let healthKit = StubHealthKitService()
+    let start = Date(timeIntervalSince1970: 0)
+    let store = RunningAnalysisStore(
+        healthKitService: healthKit,
+        makeImportBudgetPolicy: {
+            IngestionBudgetPolicy(
+                startedAt: start,
+                maxElapsedSeconds: 1,
+                now: { Date(timeIntervalSince1970: 2) },
+                isCancelled: { false },
+                isLowPowerModeEnabled: { false },
+                thermalState: { .nominal }
+            )
+        }
+    )
+
+    await store.bootstrap(modelContext: context)
+    await store.refreshFromHealthKit()
+
+    let job = try #require(PersistenceService.fetchHealthKitImportJob(context: context))
+    #expect(job.status == .paused)
+    #expect(job.pauseReason == .elapsedBudgetExceeded)
+    #expect(healthKit.windowedLoadRequests.isEmpty)
+    #expect(store.healthKitImportJobSummary?.status == .paused)
+}
+
+@MainActor
+@Test func healthKitInitialImportPauseKeepsCompletedWindowCursor() async throws {
+    let context = try inMemoryModelContext()
+    let healthKit = StubHealthKitService()
+    healthKit.windowedLoadResults = [
+        HealthKitLoadResult(
+            authorizationState: .authorized,
+            workouts: [],
+            healthContext: HealthContext(),
+            message: nil
+        )
+    ]
+    let start = Date(timeIntervalSince1970: 0)
+    let counter = BudgetCallCounter()
+    let store = RunningAnalysisStore(
+        healthKitService: healthKit,
+        makeImportBudgetPolicy: {
+            IngestionBudgetPolicy(
+                startedAt: start,
+                maxElapsedSeconds: 1,
+                now: {
+                    counter.increment()
+                    return Date(timeIntervalSince1970: counter.value == 1 ? 0 : 2)
+                },
+                isCancelled: { false },
+                isLowPowerModeEnabled: { false },
+                thermalState: { .nominal }
+            )
+        }
+    )
+
+    await store.bootstrap(modelContext: context)
+    await store.refreshFromHealthKit()
+
+    let job = try #require(PersistenceService.fetchHealthKitImportJob(context: context))
+    let firstRequest = try #require(healthKit.windowedLoadRequests.first)
+    #expect(job.status == .paused)
+    #expect(job.currentWindowStart == firstRequest.startDate)
+    #expect(job.currentWindowEnd == firstRequest.startDate)
+    #expect(healthKit.windowedLoadRequests.count == 1)
+}
+
+@MainActor
+@Test func healthKitBackgroundDeliveryRegistersObserverService() async throws {
+    let context = try inMemoryModelContext()
+    let healthKit = StubHealthKitService()
+    healthKit.windowedLoadResults = [
+        HealthKitLoadResult(
+            authorizationState: .authorized,
+            workouts: [
+                testWorkout(
+                    id: "background-registration-workout",
+                    start: Date(timeIntervalSince1970: 10_000),
+                    distanceMeters: 5_000,
+                    durationSeconds: 1_500
+                )
+            ],
+            healthContext: HealthContext(),
+            message: nil
+        )
+    ]
+    let syncService = StubHealthKitWorkoutSyncService()
+    let store = RunningAnalysisStore(
+        healthKitService: healthKit,
+        syncService: syncService
+    )
+
+    await store.bootstrap(modelContext: context)
+    await store.refreshFromHealthKit()
+
+    #expect(syncService.observerStartCount == 1)
+    #expect(store.authorizationState == .authorized)
+}
+
+@MainActor
+@Test func healthKitBackgroundDeliverySkipsSampleOnlyFirstLaunch() async throws {
+    let context = try inMemoryModelContext()
+    let syncService = StubHealthKitWorkoutSyncService()
+    let store = RunningAnalysisStore(
+        healthKitService: StubHealthKitService(),
+        syncService: syncService
+    )
+
+    await store.bootstrap(modelContext: context)
+    await store.startHealthKitBackgroundDelivery()
+
+    #expect(syncService.observerStartCount == 0)
+}
+
+@MainActor
 @Test func monthlyEvidenceRefreshSuccessReplacesCachedEvidence() async throws {
     let context = try inMemoryModelContext()
     let calendar = fixedCalendar()
@@ -5868,6 +6172,7 @@ private func inMemoryModelContext() throws -> ModelContext {
         PersistedEvidenceEnrichmentState.self,
         PersistedEvidenceRefreshJob.self,
         PersistedEvidenceRefreshJobItem.self,
+        PersistedHealthKitImportJob.self,
         PersistedDerivedWorkoutAnalysis.self
     ])
     let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
@@ -6046,6 +6351,8 @@ private final class StubHealthKitService: HealthKitServicing, @unchecked Sendabl
         healthContext: HealthContext(),
         message: nil
     )
+    var windowedLoadResults: [HealthKitLoadResult] = []
+    private(set) var windowedLoadRequests: [(startDate: Date?, endDate: Date?, detailedEvidenceLimit: Int, probeRoutesWhenEvidenceMissing: Bool)] = []
     var enrichResults: [HealthKitLoadResult]
     private(set) var enrichedIDs: [[String]] = []
 
@@ -6061,6 +6368,17 @@ private final class StubHealthKitService: HealthKitServicing, @unchecked Sendabl
 
     func loadRunningWorkouts() async -> HealthKitLoadResult {
         loadResult
+    }
+
+    func loadRunningWorkouts(
+        startDate: Date?,
+        endDate: Date?,
+        detailedEvidenceLimit: Int,
+        probeRoutesWhenEvidenceMissing: Bool
+    ) async -> HealthKitLoadResult {
+        windowedLoadRequests.append((startDate, endDate, detailedEvidenceLimit, probeRoutesWhenEvidenceMissing))
+        guard !windowedLoadResults.isEmpty else { return loadResult }
+        return windowedLoadResults.removeFirst()
     }
 
     func enrichRunningWorkouts(ids: [String]) async -> HealthKitLoadResult {
@@ -6083,19 +6401,51 @@ private final class StubHealthKitService: HealthKitServicing, @unchecked Sendabl
 
 private final class StubHealthKitWorkoutSyncService: HealthKitWorkoutSyncServicing, @unchecked Sendable {
     var results: [HealthKitWorkoutSyncResult]
+    var batchResults: [[HealthKitWorkoutSyncResult]]
     private(set) var syncCallCount = 0
+    private(set) var observerStartCount = 0
+    var observerResult = HealthKitWorkoutSyncResult(authorizationState: .authorized, message: "Observer started.")
     private let delayNanoseconds: UInt64
 
-    init(results: [HealthKitWorkoutSyncResult] = [], delayNanoseconds: UInt64 = 0) {
+    init(
+        results: [HealthKitWorkoutSyncResult] = [],
+        batchResults: [[HealthKitWorkoutSyncResult]] = [],
+        delayNanoseconds: UInt64 = 0
+    ) {
         self.results = results
+        self.batchResults = batchResults
         self.delayNanoseconds = delayNanoseconds
     }
 
     func syncRunningWorkouts(from anchor: HKQueryAnchor?) async -> HealthKitWorkoutSyncResult {
         syncCallCount += 1
+        await delayIfNeeded()
+        return nextResult()
+    }
+
+    func syncRunningWorkoutBatches(from anchor: HKQueryAnchor?) async -> [HealthKitWorkoutSyncResult] {
+        syncCallCount += 1
+        await delayIfNeeded()
+        if !batchResults.isEmpty {
+            return batchResults.removeFirst()
+        }
+        return [nextResult()]
+    }
+
+    func startObservingRunningWorkoutChanges(
+        _ handler: @escaping @MainActor @Sendable () async -> Void
+    ) async -> HealthKitWorkoutSyncResult {
+        observerStartCount += 1
+        return observerResult
+    }
+
+    private func delayIfNeeded() async {
         if delayNanoseconds > 0 {
             try? await Task.sleep(nanoseconds: delayNanoseconds)
         }
+    }
+
+    private func nextResult() -> HealthKitWorkoutSyncResult {
         if results.isEmpty {
             return HealthKitWorkoutSyncResult(
                 authorizationState: .partial,
@@ -6103,6 +6453,21 @@ private final class StubHealthKitWorkoutSyncService: HealthKitWorkoutSyncServici
             )
         }
         return results.removeFirst()
+    }
+}
+
+private final class BudgetCallCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int {
+        lock.withLock { count }
+    }
+
+    func increment() {
+        lock.withLock {
+            count += 1
+        }
     }
 }
 

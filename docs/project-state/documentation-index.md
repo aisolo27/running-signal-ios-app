@@ -1,12 +1,14 @@
 # Documentation Index
 
-Last updated: 2026-07-03
+Last updated: 2026-07-04
 
 ## Active Docs To Read First
 
 - `docs/project-state/project-status.md`: first project-context file for project state, next work, blockers, and out-of-scope boundaries.
 - `docs/project-state/accuracy-ledger.md`: first-read workout-shape accuracy map, promotion ladder, active blockers, and replacement/archive policy for scattered validation planning docs.
 - `docs/project-state/daily-learning-review.md`: dated automation summaries for useful lower-confidence or already-codified conversation lessons.
+- `docs/project-state/data-ingestion-background-reference.md`: repo-grounded reference packet for HealthKit first-install import jobs, summary/evidence caching, foreground/background incremental sync, detailed-evidence backfill, relaunch recovery, and remaining physical-device proof gaps.
+- `docs/project-state/data-ingestion-ai-review-synthesis.md`: consolidated ChatGPT/Claude/Grok/Perplexity review, implemented ingestion hardening slice, and remaining physical-device/instrumentation plan.
 - `AGENTS.md`: repo rules, tool routing, and context-loading policy.
 - `docs/bug-log.md`: selective gotcha index; read only the relevant section.
 - `docs/claude-runsignal-architecture-handoff.md`: Claude-oriented app architecture, HealthKit data map, analytics/UI handoff, and review prompts.

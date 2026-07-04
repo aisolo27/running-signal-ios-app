@@ -15,6 +15,26 @@ public enum PersistenceService {
     }
 
     public static func upsert(_ workouts: [CanonicalWorkout], context: ModelContext) {
+        try? upsertAndSave(workouts, context: context)
+    }
+
+    public static func upsertAndSave(_ workouts: [CanonicalWorkout], context: ModelContext) throws {
+        applyUpserts(workouts, context: context)
+        try context.save()
+    }
+
+    public static func applySyncChangesAndSave(
+        upserting workouts: [CanonicalWorkout],
+        deletingIDs ids: Set<String>,
+        context: ModelContext
+    ) throws {
+        guard !workouts.isEmpty || !ids.isEmpty else { return }
+        applyWorkoutDeletes(ids: ids, context: context)
+        applyUpserts(workouts, context: context)
+        try context.save()
+    }
+
+    private static func applyUpserts(_ workouts: [CanonicalWorkout], context: ModelContext) {
         let existing = fetchPersisted(context: context)
         var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
         let existingEvidence = fetchPersistedEvidence(context: context)
@@ -56,10 +76,18 @@ public enum PersistenceService {
             }
         }
 
-        try? context.save()
     }
 
     public static func deleteWorkouts(ids: Set<String>, context: ModelContext) {
+        try? deleteWorkoutsAndSave(ids: ids, context: context)
+    }
+
+    public static func deleteWorkoutsAndSave(ids: Set<String>, context: ModelContext) throws {
+        applyWorkoutDeletes(ids: ids, context: context)
+        try context.save()
+    }
+
+    private static func applyWorkoutDeletes(ids: Set<String>, context: ModelContext) {
         guard !ids.isEmpty else { return }
         for record in fetchPersisted(context: context) where ids.contains(record.id) {
             context.delete(record)
@@ -73,7 +101,6 @@ public enum PersistenceService {
         for record in fetchPersistedDerivedAnalyses(context: context) where ids.contains(record.workoutID) {
             context.delete(record)
         }
-        try? context.save()
     }
 
     public static func deleteEvidence(ids: Set<String>, context: ModelContext) {
@@ -249,6 +276,65 @@ public enum PersistenceService {
         fetchRefreshJobItems(context: context)
             .filter { $0.jobID == jobID }
             .sorted { $0.workoutID < $1.workoutID }
+    }
+
+    public static func fetchHealthKitImportJob(context: ModelContext) -> PersistedHealthKitImportJob? {
+        fetchHealthKitImportJobs(context: context).first
+    }
+
+    @discardableResult
+    public static func startHealthKitImportJob(
+        context: ModelContext,
+        windowStart: Date?,
+        windowEnd: Date?,
+        at date: Date = Date()
+    ) -> PersistedHealthKitImportJob {
+        let job = fetchHealthKitImportJob(context: context) ?? {
+            let job = PersistedHealthKitImportJob(createdAt: date)
+            context.insert(job)
+            return job
+        }()
+        if job.status == .completed {
+            job.importedCount = 0
+            job.failedCount = 0
+            job.skippedCount = 0
+        }
+        job.markRunning(windowStart: windowStart, windowEnd: windowEnd, at: date)
+        try? context.save()
+        return job
+    }
+
+    public static func updateHealthKitImportProgress(
+        imported: Int,
+        windowStart: Date?,
+        windowEnd: Date?,
+        context: ModelContext,
+        at date: Date = Date()
+    ) {
+        guard let job = fetchHealthKitImportJob(context: context) else { return }
+        job.markProgress(imported: imported, windowStart: windowStart, windowEnd: windowEnd, at: date)
+        try? context.save()
+    }
+
+    public static func pauseHealthKitImportJob(
+        reason: IngestionPauseReason,
+        context: ModelContext,
+        at date: Date = Date()
+    ) {
+        guard let job = fetchHealthKitImportJob(context: context) else { return }
+        job.markPaused(reason: reason, at: date)
+        try? context.save()
+    }
+
+    public static func finishHealthKitImportJob(
+        status: HealthKitImportJobStatus,
+        message: String?,
+        context: ModelContext,
+        at date: Date = Date()
+    ) {
+        guard let job = fetchHealthKitImportJob(context: context) else { return }
+        job.markFinished(status: status, message: message, at: date)
+        try? context.save()
     }
 
     @discardableResult
@@ -464,6 +550,14 @@ public enum PersistenceService {
     private static func fetchRefreshJobItems(context: ModelContext) -> [PersistedEvidenceRefreshJobItem] {
         do {
             return try context.fetch(FetchDescriptor<PersistedEvidenceRefreshJobItem>())
+        } catch {
+            return []
+        }
+    }
+
+    private static func fetchHealthKitImportJobs(context: ModelContext) -> [PersistedHealthKitImportJob] {
+        do {
+            return try context.fetch(FetchDescriptor<PersistedHealthKitImportJob>())
         } catch {
             return []
         }

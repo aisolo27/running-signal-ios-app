@@ -24,6 +24,7 @@ struct RunningWorkoutAnalysisApp: App {
             PersistedEvidenceEnrichmentState.self,
             PersistedEvidenceRefreshJob.self,
             PersistedEvidenceRefreshJobItem.self,
+            PersistedHealthKitImportJob.self,
             PersistedDerivedWorkoutAnalysis.self
         ])
     }

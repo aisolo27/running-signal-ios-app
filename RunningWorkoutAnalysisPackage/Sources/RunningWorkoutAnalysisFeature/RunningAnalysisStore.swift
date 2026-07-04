@@ -164,6 +164,50 @@ public struct RefreshInterruptionProofSummary: Equatable, Sendable {
     }
 }
 
+public struct HealthKitImportJobSummary: Equatable {
+    public let status: HealthKitImportJobStatus
+    public let importedCount: Int
+    public let currentWindowStart: Date?
+    public let currentWindowEnd: Date?
+    public let lastError: String?
+
+    public var statusTitle: String {
+        switch status {
+        case .queued:
+            "Queued"
+        case .running:
+            "Importing"
+        case .paused:
+            "Paused"
+        case .completed:
+            "Completed"
+        case .failed:
+            "Failed"
+        case .blocked:
+            "Blocked"
+        }
+    }
+
+    public var detailText: String {
+        var parts = ["\(importedCount) imported"]
+        if let currentWindowStart, let currentWindowEnd {
+            parts.append("\(RunFormatters.date.string(from: currentWindowStart)) - \(RunFormatters.date.string(from: currentWindowEnd))")
+        }
+        if let lastError, !lastError.isEmpty {
+            parts.append(lastError)
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    init(job: PersistedHealthKitImportJob) {
+        status = job.status
+        importedCount = job.importedCount
+        currentWindowStart = job.currentWindowStart
+        currentWindowEnd = job.currentWindowEnd
+        lastError = job.lastError
+    }
+}
+
 public struct ManualWorkoutFieldUpdate: Equatable, Sendable {
     public var id: String
     public var runType: RunType?
@@ -227,6 +271,7 @@ public final class RunningAnalysisStore {
     public private(set) var parityForceReenrichResults: [String: ParityForceReenrichResult] = [:]
     public private(set) var monthlyEvidenceRefreshResults: [String: MonthlyEvidenceRefreshResult] = [:]
     public private(set) var evidenceRefreshJobs: [PersistedEvidenceRefreshJob] = []
+    public private(set) var healthKitImportJobSummary: HealthKitImportJobSummary?
     public private(set) var derivedAnalysisRefreshSummary = DerivedAnalysisRefreshSummary.empty
 
     public var evidenceRefreshJobSummaries: [EvidenceRefreshJobSummary] {
@@ -236,6 +281,8 @@ public final class RunningAnalysisStore {
     private let healthKitService: any HealthKitServicing
     private let syncService: any HealthKitWorkoutSyncServicing
     private let syncDefaults: UserDefaults
+    private let syncPersistenceSave: ([CanonicalWorkout], Set<String>, ModelContext) throws -> Void
+    private let makeImportBudgetPolicy: () -> IngestionBudgetPolicy
     private var didBootstrap = false
     private var lastForegroundSyncAt: Date?
     private var isForegroundSyncInFlight = false
@@ -244,11 +291,19 @@ public final class RunningAnalysisStore {
     public init(
         healthKitService: any HealthKitServicing = HealthKitService(),
         syncService: (any HealthKitWorkoutSyncServicing)? = nil,
-        syncDefaults: UserDefaults = .standard
+        syncDefaults: UserDefaults = .standard,
+        makeImportBudgetPolicy: @escaping () -> IngestionBudgetPolicy = {
+            IngestionBudgetPolicy(maxElapsedSeconds: 45)
+        },
+        syncPersistenceSave: @escaping ([CanonicalWorkout], Set<String>, ModelContext) throws -> Void = { workouts, ids, context in
+            try PersistenceService.applySyncChangesAndSave(upserting: workouts, deletingIDs: ids, context: context)
+        }
     ) {
         self.healthKitService = healthKitService
         self.syncService = syncService ?? HealthKitWorkoutSyncService(healthKitService: healthKitService)
         self.syncDefaults = syncDefaults
+        self.syncPersistenceSave = syncPersistenceSave
+        self.makeImportBudgetPolicy = makeImportBudgetPolicy
     }
 
     public var authorizationState: AuthorizationState {
@@ -309,12 +364,111 @@ public final class RunningAnalysisStore {
         applyReviewedRunTypes()
         recompute(hydrateEvidence: false, refreshDerivedAnalyses: false)
         refreshEvidenceRefreshJobs()
+        refreshHealthKitImportJobSummary()
     }
 
     public func refreshFromHealthKit() async {
         isLoading = true
         defer { isLoading = false }
 
+        guard let modelContext else {
+            await loadHealthKitRunsWithoutImportJob()
+            return
+        }
+
+        let budget = makeImportBudgetPolicy()
+        let windows = healthKitImportWindows(
+            resumingFrom: PersistenceService.fetchHealthKitImportJob(context: modelContext)?.currentWindowEnd
+        )
+        guard let firstWindow = windows.first else {
+            PersistenceService.finishHealthKitImportJob(status: .completed, message: nil, context: modelContext)
+            refreshHealthKitImportJobSummary()
+            return
+        }
+
+        PersistenceService.startHealthKitImportJob(
+            context: modelContext,
+            windowStart: firstWindow.start,
+            windowEnd: firstWindow.end
+        )
+        refreshHealthKitImportJobSummary()
+
+        var importedTotal = 0
+        var sawAuthorizedEmptyWindow = false
+        for (index, window) in windows.enumerated() {
+            if let reason = budget.pauseReason(allowsDetailedEvidence: false) {
+                PersistenceService.pauseHealthKitImportJob(reason: reason, context: modelContext)
+                refreshHealthKitImportJobSummary()
+                updateHealthKitStatus(authorizationState: authorizationState, message: reason.message)
+                recompute()
+                return
+            }
+
+            let result = await healthKitService.loadRunningWorkouts(
+                startDate: window.start,
+                endDate: window.end,
+                detailedEvidenceLimit: index == 0 ? HealthKitService.defaultDetailedEvidenceLimit : 0,
+                probeRoutesWhenEvidenceMissing: index == 0
+            )
+            healthContext = result.healthContext
+            updateHealthKitStatus(
+                authorizationState: result.authorizationState,
+                message: result.message ?? "Imported \(result.workouts.count) HealthKit running workouts for \(RunFormatters.date.string(from: window.start)) - \(RunFormatters.date.string(from: window.end))."
+            )
+
+            guard result.authorizationState == .authorized || result.authorizationState == .partial else {
+                let status: HealthKitImportJobStatus = result.authorizationState == .unavailable ? .blocked : .failed
+                PersistenceService.finishHealthKitImportJob(status: status, message: result.message, context: modelContext)
+                refreshHealthKitImportJobSummary()
+                if workouts.isEmpty {
+                    usesSampleData = true
+                    workouts = SampleData.workouts
+                    healthContext = SampleData.healthContext
+                    persistCurrent()
+                }
+                recompute()
+                return
+            }
+
+            sawAuthorizedEmptyWindow = sawAuthorizedEmptyWindow || result.workouts.isEmpty
+            importedTotal += result.workouts.count
+            if !result.workouts.isEmpty {
+                usesSampleData = false
+                workouts = removeSampleWorkoutsIfRealDataExists(mergeManualFields(incoming: result.workouts, current: workouts))
+                deletePersistedSampleWorkoutsIfNeeded()
+                applyReviewedRunTypes()
+                persistCurrent()
+            }
+            PersistenceService.updateHealthKitImportProgress(
+                imported: result.workouts.count,
+                windowStart: window.start,
+                windowEnd: window.start,
+                context: modelContext
+            )
+            refreshHealthKitImportJobSummary()
+            await Task.yield()
+        }
+
+        if importedTotal == 0 && sawAuthorizedEmptyWindow {
+            usesSampleData = false
+            let previousSampleIDs = sampleWorkoutIDs(in: workouts)
+            workouts = []
+            if !previousSampleIDs.isEmpty {
+                PersistenceService.deleteWorkouts(ids: previousSampleIDs, context: modelContext)
+            }
+            persistCurrent()
+        }
+        if workouts.isEmpty && usesSampleData {
+            workouts = SampleData.workouts
+            persistCurrent()
+        }
+        PersistenceService.finishHealthKitImportJob(status: .completed, message: nil, context: modelContext)
+        refreshHealthKitImportJobSummary()
+        await startHealthKitBackgroundDelivery()
+        recompute()
+    }
+
+    private func loadHealthKitRunsWithoutImportJob() async {
         let result = await healthKitService.loadRunningWorkouts()
         healthContext = result.healthContext
         updateHealthKitStatus(
@@ -325,11 +479,7 @@ public final class RunningAnalysisStore {
         guard !result.workouts.isEmpty else {
             if result.authorizationState == .authorized || result.authorizationState == .partial {
                 usesSampleData = false
-                let previousSampleIDs = sampleWorkoutIDs(in: workouts)
                 workouts = []
-                if let modelContext, !previousSampleIDs.isEmpty {
-                    PersistenceService.deleteWorkouts(ids: previousSampleIDs, context: modelContext)
-                }
                 persistCurrent()
             } else {
                 usesSampleData = true
@@ -351,49 +501,121 @@ public final class RunningAnalysisStore {
         recompute()
     }
 
+    public func refreshRunsListFromHealthKit() async {
+        if shouldSyncHealthKitOnForeground {
+            await syncHealthKitChanges()
+        } else {
+            await refreshFromHealthKit()
+        }
+    }
+
     public func syncHealthKitChanges(includePostSyncMaintenance: Bool = true) async {
         isLoading = true
         defer { isLoading = false }
 
-        let currentIDs = Set(workouts.map(\.id))
-        let result = await syncService.syncRunningWorkouts(from: HealthKitSyncStateStore.loadAnchor(defaults: syncDefaults))
-        healthContext = result.healthContext
-        updateHealthKitStatus(
-            authorizationState: result.authorizationState,
-            message: result.message ?? "HealthKit sync finished."
-        )
-
-        guard result.authorizationState == .authorized || result.authorizationState == .partial else {
+        let batches = await syncService.syncRunningWorkoutBatches(from: HealthKitSyncStateStore.loadAnchor(defaults: syncDefaults))
+        guard !batches.isEmpty else {
+            updateHealthKitStatus(
+                authorizationState: .partial,
+                message: "HealthKit sync found no new running workout changes."
+            )
             if includePostSyncMaintenance {
                 recompute()
             }
             return
         }
 
-        if let anchor = result.newAnchor {
-            HealthKitSyncStateStore.saveAnchor(anchor, defaults: syncDefaults)
+        var knownIDs = Set(workouts.map(\.id))
+        var fetchedCount = 0
+        var insertedCount = 0
+        var updatedCount = 0
+        var deletedCount = 0
+        var lastMessage: String?
+        var lastAuthorizationState: AuthorizationState = .partial
+
+        for result in batches {
+            healthContext = result.healthContext
+            lastMessage = result.message ?? lastMessage
+            lastAuthorizationState = result.authorizationState
+
+            guard result.authorizationState == .authorized || result.authorizationState == .partial else {
+                updateHealthKitStatus(
+                    authorizationState: result.authorizationState,
+                    message: result.message ?? "HealthKit sync finished."
+                )
+                if includePostSyncMaintenance {
+                    recompute()
+                }
+                return
+            }
+
+            let deletedIDs = Set(result.deletedWorkoutIDs)
+            let batchInsertedCount = result.fetchedWorkouts.filter { !knownIDs.contains($0.id) }.count
+            let batchUpdatedCount = result.fetchedWorkouts.count - batchInsertedCount
+            let previousWorkouts = workouts
+            let previousUsesSampleData = usesSampleData
+
+            if !result.fetchedWorkouts.isEmpty {
+                usesSampleData = false
+            }
+            var merged = mergeSyncedWorkouts(changes: result.fetchedWorkouts, current: workouts)
+            if !deletedIDs.isEmpty {
+                merged.removeAll { deletedIDs.contains($0.id) }
+            }
+            workouts = removeSampleWorkoutsIfRealDataExists(merged)
+            applyReviewedRunTypes()
+
+            let fetchedIDs = Set(result.fetchedWorkouts.map(\.id))
+            let workoutsToPersist = workouts.filter { fetchedIDs.contains($0.id) }
+            var idsToDelete = deletedIDs
+            if workouts.contains(where: { !isSampleWorkout($0) }) {
+                idsToDelete.formUnion(SampleData.workouts.map(\.id))
+            }
+
+            do {
+                if let modelContext {
+                    try syncPersistenceSave(workoutsToPersist, idsToDelete, modelContext)
+                } else if !workoutsToPersist.isEmpty || !idsToDelete.isEmpty {
+                    throw CocoaError(.fileNoSuchFile)
+                }
+            } catch {
+                workouts = previousWorkouts
+                usesSampleData = previousUsesSampleData
+                updateHealthKitStatus(
+                    authorizationState: .error,
+                    message: "HealthKit sync stopped before saving its anchor because local persistence failed."
+                )
+                if includePostSyncMaintenance {
+                    recompute()
+                }
+                return
+            }
+
+            if let anchor = result.newAnchor {
+                HealthKitSyncStateStore.saveAnchor(anchor, defaults: syncDefaults)
+            }
+
+            fetchedCount += result.fetchedWorkouts.count
+            insertedCount += batchInsertedCount
+            updatedCount += batchUpdatedCount
+            deletedCount += result.deletedWorkoutIDs.count
+            knownIDs.subtract(deletedIDs)
+            knownIDs.formUnion(fetchedIDs)
         }
 
-        let insertedCount = result.fetchedWorkouts.filter { !currentIDs.contains($0.id) }.count
-        let updatedCount = result.fetchedWorkouts.count - insertedCount
-        let deletedCount = result.deletedWorkoutIDs.count
         let syncedAt = Date()
         HealthKitSyncStateStore.saveLastSyncAt(syncedAt, defaults: syncDefaults)
-
-        if !result.fetchedWorkouts.isEmpty {
-            usesSampleData = false
-            workouts = removeSampleWorkoutsIfRealDataExists(mergeSyncedWorkouts(changes: result.fetchedWorkouts, current: workouts))
-            deletePersistedSampleWorkoutsIfNeeded()
-            applyReviewedRunTypes()
-            persistCurrent()
-        }
+        updateHealthKitStatus(
+            authorizationState: lastAuthorizationState,
+            message: lastMessage ?? "HealthKit sync finished."
+        )
         if includePostSyncMaintenance {
             refreshEvidenceQueueSummary()
         }
 
         syncState = HealthKitSyncState(
             lastSyncAt: syncedAt,
-            lastFetchedCount: result.fetchedWorkouts.count,
+            lastFetchedCount: fetchedCount,
             lastInsertedCount: insertedCount,
             lastUpdatedCount: updatedCount,
             lastDeletedCount: deletedCount,
@@ -415,6 +637,27 @@ public final class RunningAnalysisStore {
         isForegroundSyncInFlight = true
         defer { isForegroundSyncInFlight = false }
         await syncHealthKitChanges(includePostSyncMaintenance: false)
+    }
+
+    public func startHealthKitBackgroundDelivery() async {
+        guard didBootstrap, !usesSampleData || authorizationState == .authorized || authorizationState == .partial else { return }
+        let result = await syncService.startObservingRunningWorkoutChanges { [weak self] in
+            guard let self else { return }
+            await self.syncHealthKitChanges(includePostSyncMaintenance: false)
+        }
+        guard result.authorizationState == .authorized else {
+            if result.authorizationState == .error {
+                updateHealthKitStatus(
+                    authorizationState: result.authorizationState,
+                    message: result.message ?? "Could not register HealthKit background delivery."
+                )
+            }
+            return
+        }
+        updateHealthKitStatus(
+            authorizationState: result.authorizationState,
+            message: result.message ?? "HealthKit background delivery is registered."
+        )
     }
 
     public func enrichNextHealthKitAuditBatch(limit: Int = HealthKitService.defaultDetailedEvidenceLimit) async {
@@ -858,6 +1101,20 @@ public final class RunningAnalysisStore {
         PersistenceService.deleteWorkouts(ids: Set(SampleData.workouts.map(\.id)), context: modelContext)
     }
 
+    private func healthKitImportWindows(resumingFrom resumeEnd: Date?) -> [(start: Date, end: Date)] {
+        let calendar = Calendar(identifier: .gregorian)
+        let now = Date()
+        let lowerBound = calendar.date(from: DateComponents(year: 2000, month: 1, day: 1)) ?? Date(timeIntervalSince1970: 0)
+        var end = resumeEnd ?? now
+        var windows: [(start: Date, end: Date)] = []
+        while end > lowerBound {
+            let start = max(calendar.date(byAdding: .year, value: -1, to: end) ?? lowerBound, lowerBound)
+            windows.append((start: start, end: end))
+            end = start
+        }
+        return windows
+    }
+
     private func invalidateLoadedEvidence(workoutID: String) {
         workouts = workouts.map { workout in
             guard workout.id == workoutID else { return workout }
@@ -1029,6 +1286,14 @@ public final class RunningAnalysisStore {
             return
         }
         evidenceRefreshJobs = PersistenceService.fetchEvidenceRefreshJobs(context: modelContext)
+    }
+
+    private func refreshHealthKitImportJobSummary() {
+        guard let modelContext else {
+            healthKitImportJobSummary = nil
+            return
+        }
+        healthKitImportJobSummary = PersistenceService.fetchHealthKitImportJob(context: modelContext).map(HealthKitImportJobSummary.init(job:))
     }
 
     private func monthScopeKey(for date: Date, calendar: Calendar) -> String {

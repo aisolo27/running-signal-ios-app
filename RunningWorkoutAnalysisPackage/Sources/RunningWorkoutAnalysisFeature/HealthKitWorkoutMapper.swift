@@ -2,7 +2,12 @@ import Foundation
 @preconcurrency import HealthKit
 
 enum HealthKitWorkoutMapper {
-    static func normalize(_ workouts: [HKWorkout], store: HKHealthStore, detailedEvidenceLimit: Int = 20) async -> [CanonicalWorkout] {
+    static func normalize(
+        _ workouts: [HKWorkout],
+        store: HKHealthStore,
+        detailedEvidenceLimit: Int = 20,
+        probeRoutesWhenEvidenceMissing: Bool = true
+    ) async -> [CanonicalWorkout] {
         var normalized: [CanonicalWorkout] = []
         let evidenceService = WorkoutEvidenceService(store: store)
         let detailWorkoutIDs = Set(workouts.prefix(detailedEvidenceLimit).map(\.uuid))
@@ -13,6 +18,8 @@ enum HealthKitWorkoutMapper {
                 : WorkoutEvidence(workoutID: workout.uuid.uuidString)
             let routeAvailable = if !evidence.route.isEmpty {
                 true
+            } else if !probeRoutesWhenEvidenceMissing {
+                false
             } else {
                 await hasRoute(for: workout, store: store)
             }

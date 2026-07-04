@@ -13,6 +13,12 @@ public protocol HealthKitServicing: AnyObject, Sendable {
 
     func requestAuthorization() async -> AuthorizationState
     func loadRunningWorkouts() async -> HealthKitLoadResult
+    func loadRunningWorkouts(
+        startDate: Date?,
+        endDate: Date?,
+        detailedEvidenceLimit: Int,
+        probeRoutesWhenEvidenceMissing: Bool
+    ) async -> HealthKitLoadResult
     func enrichRunningWorkouts(ids: [String]) async -> HealthKitLoadResult
     func loadHealthContext() async -> HealthContext
 }
@@ -38,6 +44,20 @@ public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
     }
 
     public func loadRunningWorkouts() async -> HealthKitLoadResult {
+        await loadRunningWorkouts(
+            startDate: nil,
+            endDate: nil,
+            detailedEvidenceLimit: Self.defaultDetailedEvidenceLimit,
+            probeRoutesWhenEvidenceMissing: true
+        )
+    }
+
+    public func loadRunningWorkouts(
+        startDate: Date?,
+        endDate: Date?,
+        detailedEvidenceLimit: Int,
+        probeRoutesWhenEvidenceMissing: Bool
+    ) async -> HealthKitLoadResult {
         guard isAvailable else {
             return HealthKitLoadResult(authorizationState: .unavailable, workouts: [], healthContext: HealthContext(), message: "HealthKit is not available on this device.")
         }
@@ -48,12 +68,13 @@ public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
         }
 
         do {
-            let workouts = try await queryRunningWorkouts()
+            let workouts = try await queryRunningWorkouts(startDate: startDate, endDate: endDate)
             let healthContext = await queryHealthContext()
             let canonical = await HealthKitWorkoutMapper.normalize(
                 workouts,
                 store: store,
-                detailedEvidenceLimit: Self.defaultDetailedEvidenceLimit
+                detailedEvidenceLimit: detailedEvidenceLimit,
+                probeRoutesWhenEvidenceMissing: probeRoutesWhenEvidenceMissing
             )
             return HealthKitLoadResult(
                 authorizationState: canonical.isEmpty ? .partial : .authorized,
@@ -103,14 +124,25 @@ public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
         HealthKitPermissionCatalog.readTypes
     }
 
-    private func queryRunningWorkouts() async throws -> [HKWorkout] {
+    private func queryRunningWorkouts(startDate: Date? = nil, endDate: Date? = nil) async throws -> [HKWorkout] {
         let predicate = HKQuery.predicateForWorkouts(with: .running)
+        let finalPredicate: NSPredicate
+        if startDate != nil || endDate != nil {
+            let datePredicate = HKQuery.predicateForSamples(
+                withStart: startDate,
+                end: endDate,
+                options: [.strictStartDate]
+            )
+            finalPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [predicate, datePredicate])
+        } else {
+            finalPredicate = predicate
+        }
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
 
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKSampleQuery(
                 sampleType: HKObjectType.workoutType(),
-                predicate: predicate,
+                predicate: finalPredicate,
                 limit: HKObjectQueryNoLimit,
                 sortDescriptors: [sort]
             ) { _, samples, error in

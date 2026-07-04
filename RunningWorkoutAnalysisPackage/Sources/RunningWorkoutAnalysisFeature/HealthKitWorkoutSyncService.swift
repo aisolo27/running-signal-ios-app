@@ -55,18 +55,106 @@ public struct HealthKitWorkoutSyncResult: Sendable {
 
 public protocol HealthKitWorkoutSyncServicing: AnyObject, Sendable {
     func syncRunningWorkouts(from anchor: HKQueryAnchor?) async -> HealthKitWorkoutSyncResult
+    func syncRunningWorkoutBatches(from anchor: HKQueryAnchor?) async -> [HealthKitWorkoutSyncResult]
+    func startObservingRunningWorkoutChanges(
+        _ handler: @escaping @MainActor @Sendable () async -> Void
+    ) async -> HealthKitWorkoutSyncResult
+}
+
+public extension HealthKitWorkoutSyncServicing {
+    func syncRunningWorkoutBatches(from anchor: HKQueryAnchor?) async -> [HealthKitWorkoutSyncResult] {
+        [await syncRunningWorkouts(from: anchor)]
+    }
+
+    func startObservingRunningWorkoutChanges(
+        _ handler: @escaping @MainActor @Sendable () async -> Void
+    ) async -> HealthKitWorkoutSyncResult {
+        HealthKitWorkoutSyncResult(authorizationState: .unavailable, message: "HealthKit background delivery is unavailable for this sync service.")
+    }
 }
 
 public final class HealthKitWorkoutSyncService: HealthKitWorkoutSyncServicing, @unchecked Sendable {
     private let store = HKHealthStore()
     private let healthKitService: any HealthKitServicing
+    private var observerQuery: HKObserverQuery?
     public static let defaultSyncBatchLimit = 100
+    public static let defaultMaxSyncBatches = 20
 
     public init(healthKitService: any HealthKitServicing = HealthKitService()) {
         self.healthKitService = healthKitService
     }
 
     public func syncRunningWorkouts(from anchor: HKQueryAnchor?) async -> HealthKitWorkoutSyncResult {
+        let batches = await syncRunningWorkoutBatches(from: anchor)
+        guard let first = batches.first else {
+            return HealthKitWorkoutSyncResult(authorizationState: .partial, message: "HealthKit sync found no new running workout changes.")
+        }
+
+        return HealthKitWorkoutSyncResult(
+            authorizationState: batches.contains { $0.authorizationState == .error } ? .error : first.authorizationState,
+            fetchedWorkouts: batches.flatMap(\.fetchedWorkouts),
+            deletedWorkoutIDs: batches.flatMap(\.deletedWorkoutIDs),
+            newAnchor: batches.last?.newAnchor,
+            healthContext: batches.last?.healthContext ?? first.healthContext,
+            message: syncMessage(
+                fetchedCount: batches.reduce(0) { $0 + $1.fetchedWorkouts.count },
+                deletedCount: batches.reduce(0) { $0 + $1.deletedWorkoutIDs.count }
+            )
+        )
+    }
+
+    public func syncRunningWorkoutBatches(from anchor: HKQueryAnchor?) async -> [HealthKitWorkoutSyncResult] {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            return [HealthKitWorkoutSyncResult(authorizationState: .unavailable, message: "HealthKit is not available on this device.")]
+        }
+
+        let state = await healthKitService.requestAuthorization()
+        guard state == .authorized else {
+            return [HealthKitWorkoutSyncResult(authorizationState: state, message: "HealthKit permission is not fully available.")]
+        }
+
+        do {
+            var batches: [HealthKitWorkoutSyncResult] = []
+            var currentAnchor = anchor
+            for _ in 0..<Self.defaultMaxSyncBatches {
+                try Task.checkCancellation()
+                let anchored = try await anchoredRunningWorkouts(from: currentAnchor)
+                let canonical = await HealthKitWorkoutMapper.normalize(
+                    anchored.workouts,
+                    store: store,
+                    detailedEvidenceLimit: 0,
+                    probeRoutesWhenEvidenceMissing: false
+                )
+                let batch = HealthKitWorkoutSyncResult(
+                    authorizationState: canonical.isEmpty && anchored.deletedWorkoutIDs.isEmpty ? .partial : .authorized,
+                    fetchedWorkouts: DuplicateDetector.markDuplicates(canonical),
+                    deletedWorkoutIDs: anchored.deletedWorkoutIDs,
+                    newAnchor: anchored.anchor,
+                    healthContext: HealthContext(),
+                    message: syncMessage(fetchedCount: canonical.count, deletedCount: anchored.deletedWorkoutIDs.count)
+                )
+                batches.append(batch)
+                currentAnchor = anchored.anchor
+                if canonical.count + anchored.deletedWorkoutIDs.count < Self.defaultSyncBatchLimit {
+                    break
+                }
+                await Task.yield()
+            }
+
+            let healthContext = await healthKitService.loadHealthContext()
+            if var last = batches.popLast() {
+                last.healthContext = healthContext
+                batches.append(last)
+            }
+            return batches
+        } catch {
+            return [HealthKitWorkoutSyncResult(authorizationState: .error, message: "Could not sync HealthKit running workouts.")]
+        }
+    }
+
+    public func startObservingRunningWorkoutChanges(
+        _ handler: @escaping @MainActor @Sendable () async -> Void
+    ) async -> HealthKitWorkoutSyncResult {
         guard HKHealthStore.isHealthDataAvailable() else {
             return HealthKitWorkoutSyncResult(authorizationState: .unavailable, message: "HealthKit is not available on this device.")
         }
@@ -76,19 +164,35 @@ public final class HealthKitWorkoutSyncService: HealthKitWorkoutSyncServicing, @
             return HealthKitWorkoutSyncResult(authorizationState: state, message: "HealthKit permission is not fully available.")
         }
 
+        let workoutType = HKObjectType.workoutType()
+        if observerQuery == nil {
+            let predicate = HKQuery.predicateForWorkouts(with: .running)
+            let query = HKObserverQuery(sampleType: workoutType, predicate: predicate) { _, completionHandler, error in
+                guard error == nil else {
+                    completionHandler()
+                    return
+                }
+                nonisolated(unsafe) let finish = completionHandler
+                Task {
+                    await handler()
+                    finish()
+                }
+            }
+            observerQuery = query
+            store.execute(query)
+        }
+
         do {
-            let anchored = try await anchoredRunningWorkouts(from: anchor)
-            let canonical = await HealthKitWorkoutMapper.normalize(anchored.workouts, store: store)
+            try await enableBackgroundDelivery(for: workoutType)
             return HealthKitWorkoutSyncResult(
-                authorizationState: canonical.isEmpty && anchored.deletedWorkoutIDs.isEmpty ? .partial : .authorized,
-                fetchedWorkouts: DuplicateDetector.markDuplicates(canonical),
-                deletedWorkoutIDs: anchored.deletedWorkoutIDs,
-                newAnchor: anchored.anchor,
-                healthContext: await healthKitService.loadHealthContext(),
-                message: syncMessage(fetchedCount: canonical.count, deletedCount: anchored.deletedWorkoutIDs.count)
+                authorizationState: .authorized,
+                message: "HealthKit background delivery is registered for running workout summaries."
             )
         } catch {
-            return HealthKitWorkoutSyncResult(authorizationState: .error, message: "Could not sync HealthKit running workouts.")
+            return HealthKitWorkoutSyncResult(
+                authorizationState: .error,
+                message: "Could not enable HealthKit background delivery."
+            )
         }
     }
 
@@ -114,6 +218,22 @@ public final class HealthKitWorkoutSyncService: HealthKitWorkoutSyncServicing, @
                 continuation.resume(returning: (workouts, deletedIDs, newAnchor))
             }
             store.execute(query)
+        }
+    }
+
+    private func enableBackgroundDelivery(for type: HKObjectType) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+            store.enableBackgroundDelivery(for: type, frequency: .immediate) { success, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                if success {
+                    continuation.resume()
+                } else {
+                    continuation.resume(throwing: CocoaError(.featureUnsupported))
+                }
+            }
         }
     }
 

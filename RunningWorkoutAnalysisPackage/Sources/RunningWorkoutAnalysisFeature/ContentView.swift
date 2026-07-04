@@ -31,6 +31,7 @@ public struct ContentView: View {
         }
         .task {
             await store.bootstrap(modelContext: modelContext)
+            await store.startHealthKitBackgroundDelivery()
             await store.syncHealthKitChangesOnForeground()
         }
         .onChange(of: scenePhase) { _, newPhase in

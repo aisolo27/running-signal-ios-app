@@ -102,7 +102,7 @@ struct RunsView: View {
         }
         .navigationTitle("Runs")
         .refreshable {
-            await store.refreshFromHealthKit()
+            await store.refreshRunsListFromHealthKit()
         }
     }
 }
@@ -128,6 +128,11 @@ struct SettingsView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                    if let importSummary = store.healthKitImportJobSummary {
+                        LabeledContent(importSummary.statusTitle, value: importSummary.detailText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     Button {
                         Task { await store.refreshFromHealthKit() }
                     } label: {

@@ -1,6 +1,6 @@
 # RunSignal Project Status
 
-Last updated: 2026-07-03
+Last updated: 2026-07-04
 
 ## Product Direction
 
@@ -16,6 +16,8 @@ Decision rule: do not grow support by hard-fitting one workout shape at a time. 
 
 - Use this file for current state, next work, blockers, and out-of-scope boundaries.
 - Use `docs/project-state/accuracy-ledger.md` for workout-shape status, promotion rungs, proof bars, and allowed/blocked interval behavior.
+- Use `docs/project-state/data-ingestion-background-reference.md` for current on-device HealthKit load, cache, foreground sync, detailed-evidence backfill, and background-work risk review.
+- Use `docs/project-state/data-ingestion-ai-review-synthesis.md` for the consolidated ChatGPT/Claude/Grok/Perplexity review and prioritized ingestion hardening plan.
 - Use `docs/project-state/documentation-index.md` when choosing deeper docs, scorecards, scripts, or archives.
 
 ## Runtime Data Contract
@@ -61,6 +63,7 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 
 ## Current Next Work
 
+- Continue data ingestion hardening before expanding analytics depth: measure the new import job, observer delivery, anchored deletions, large backlog sync, thermal behavior, and battery impact on a physical iPhone.
 - Keep generalized resolved activity-boundary row behavior stable across archived Apple Fitness fixtures and priority workouts.
 - Re-export the June 30 clean no-pause repeat fixed-cooldown/`Open / Extra` workout from a fresh current-build physical-iPhone install.
 - Confirm visible/export status labels agree with the resolved-row source.
@@ -77,6 +80,7 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 ## Known Limitations
 
 - Some older runs are summary-only because detailed HealthKit series may be unavailable.
+- First-install all-history summary import, anchored deletion sync, observer delivery, and long detailed-evidence refreshes are not yet proven against large real HealthKit histories, true background delivery, cancellation, or thermal adaptation on a physical iPhone.
 - FIT does not prove exact Apple Fitness UI presentation parity or private Apple smoothing/labeling rules.
 - WorkoutKit plan data can be unavailable or throw and must stay optional.
 - Mechanics, trends, stronger run-type claims, and interval-row analytics remain confidence-gated.
@@ -114,6 +118,15 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 - Supported custom workouts now enter interval analysis through a compact official-row summary in workout detail, then a dedicated touch-first interval analysis screen.
 - The dedicated screen uses one selectable Swift Charts interval bar chart, core work-repeat totals, selected-row details, and grouped Work/Recovery repeats when official resolved rows form repeat pairs.
 - The slice remains display-only and official-row-only: it does not expand custom workout detection, use raw segment markers, or add FIT/HealthFit runtime input.
+
+## 2026-07-04 Data Ingestion Hardening Slice
+
+- Foreground HealthKit sync now processes batch results, applies deleted HealthKit workout IDs to in-memory state and SwiftData, and saves anchors only after the matching local sync save succeeds.
+- Delta sync normalization is summary-only: it uses `detailedEvidenceLimit: 0` and disables per-workout route probes so foreground delta/background-ready sync does not silently load detailed evidence.
+- Explicit `Load HealthKit Runs` now records a persisted HealthKit import job and walks summary history through newest-to-oldest yearly windows, with older windows summary-only and an import budget policy for elapsed time, cancellation, Low Power Mode, and thermal state.
+- The app registers `HKObserverQuery` plus HealthKit background delivery for workout changes; observer work runs the lightweight summary-only anchored sync path, not detailed evidence enrichment.
+- Runs pull-to-refresh now uses lightweight anchored sync when an import/cache and anchor exist; Settings remains the explicit full `Load HealthKit Runs` entry point.
+- Package tests cover deleted-workout removal, multi-batch sync aggregation, anchor/sync-state preservation when injected local persistence fails, import job completion/pause state, import cursor persistence, and background observer registration.
 - The HealthFit screen recording reference stays as tracked metadata/UI notes in `docs/validation/healthfit-interval-ui-reference.md`; the ignored local video copy was removed during repo cleanup to keep the workspace light.
 
 ## 2026-07-02 Post-Recording Chart And Split Follow-Up

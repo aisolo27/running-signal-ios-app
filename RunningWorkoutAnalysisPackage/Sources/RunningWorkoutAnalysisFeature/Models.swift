@@ -920,6 +920,15 @@ public enum EvidenceRefreshJobItemStatus: String, Codable, CaseIterable, Sendabl
     case skipped
 }
 
+public enum HealthKitImportJobStatus: String, Codable, CaseIterable, Sendable {
+    case queued
+    case running
+    case paused
+    case completed
+    case failed
+    case blocked
+}
+
 @Model
 public final class PersistedEvidenceRefreshJob {
     @Attribute(.unique) public var jobID: String
@@ -1090,6 +1099,88 @@ public final class PersistedEvidenceRefreshJobItem {
 
     public static func makeItemID(jobID: String, workoutID: String) -> String {
         "\(jobID):\(workoutID)"
+    }
+}
+
+@Model
+public final class PersistedHealthKitImportJob {
+    @Attribute(.unique) public var jobID: String
+    public var statusRaw: String
+    public var createdAt: Date
+    public var startedAt: Date?
+    public var updatedAt: Date
+    public var completedAt: Date?
+    public var importedCount: Int
+    public var failedCount: Int
+    public var skippedCount: Int
+    public var currentWindowStart: Date?
+    public var currentWindowEnd: Date?
+    public var lastError: String?
+    public var pauseReasonRaw: String?
+
+    public init(
+        jobID: String = "initial-healthkit-import",
+        status: HealthKitImportJobStatus = .queued,
+        createdAt: Date = Date()
+    ) {
+        self.jobID = jobID
+        self.statusRaw = status.rawValue
+        self.createdAt = createdAt
+        self.startedAt = nil
+        self.updatedAt = createdAt
+        self.completedAt = nil
+        self.importedCount = 0
+        self.failedCount = 0
+        self.skippedCount = 0
+        self.currentWindowStart = nil
+        self.currentWindowEnd = nil
+        self.lastError = nil
+        self.pauseReasonRaw = nil
+    }
+
+    public var status: HealthKitImportJobStatus {
+        HealthKitImportJobStatus(rawValue: statusRaw) ?? .queued
+    }
+
+    public var pauseReason: IngestionPauseReason? {
+        pauseReasonRaw.flatMap(IngestionPauseReason.init(rawValue:))
+    }
+
+    public func markRunning(windowStart: Date?, windowEnd: Date?, at date: Date = Date()) {
+        statusRaw = HealthKitImportJobStatus.running.rawValue
+        startedAt = startedAt ?? date
+        updatedAt = date
+        completedAt = nil
+        currentWindowStart = windowStart
+        currentWindowEnd = windowEnd
+        lastError = nil
+        pauseReasonRaw = nil
+    }
+
+    public func markProgress(imported: Int, windowStart: Date?, windowEnd: Date?, at date: Date = Date()) {
+        importedCount += imported
+        currentWindowStart = windowStart
+        currentWindowEnd = windowEnd
+        updatedAt = date
+    }
+
+    public func markPaused(reason: IngestionPauseReason, at date: Date = Date()) {
+        statusRaw = HealthKitImportJobStatus.paused.rawValue
+        updatedAt = date
+        lastError = reason.message
+        pauseReasonRaw = reason.rawValue
+    }
+
+    public func markFinished(status: HealthKitImportJobStatus, message: String? = nil, at date: Date = Date()) {
+        statusRaw = status.rawValue
+        completedAt = date
+        updatedAt = date
+        lastError = message
+        pauseReasonRaw = nil
+        if status == .completed {
+            currentWindowStart = nil
+            currentWindowEnd = nil
+        }
     }
 }
 
