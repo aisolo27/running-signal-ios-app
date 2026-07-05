@@ -275,6 +275,7 @@ public final class RunningAnalysisStore {
     public private(set) var evidenceRefreshJobs: [PersistedEvidenceRefreshJob] = []
     public private(set) var healthKitImportJobSummary: HealthKitImportJobSummary?
     public private(set) var derivedAnalysisRefreshSummary = DerivedAnalysisRefreshSummary.empty
+    public private(set) var analyzingWorkoutIDs: Set<String> = []
 
     public var evidenceRefreshJobSummaries: [EvidenceRefreshJobSummary] {
         evidenceRefreshJobs.map(EvidenceRefreshJobSummary.init(job:))
@@ -678,7 +679,11 @@ public final class RunningAnalysisStore {
         }
 
         isEnrichingAudit = true
-        defer { isEnrichingAudit = false }
+        analyzingWorkoutIDs.formUnion(candidates)
+        defer {
+            analyzingWorkoutIDs.subtract(candidates)
+            isEnrichingAudit = false
+        }
 
         let result = await healthKitService.enrichRunningWorkouts(ids: Array(candidates))
         let statusMessage = result.message ?? "HealthKit audit enrichment finished."
@@ -702,6 +707,51 @@ public final class RunningAnalysisStore {
         recompute()
     }
 
+    public func loadFullAnalysisForWorkout(workoutID: String) async {
+        guard workouts.contains(where: { $0.id == workoutID }) else {
+            updateHealthKitStatus(
+                authorizationState: .error,
+                message: "Workout is not loaded in the current RunSignal store."
+            )
+            return
+        }
+        guard !isEnrichingAudit else {
+            message = "HealthKit evidence refresh is already running."
+            return
+        }
+
+        isEnrichingAudit = true
+        analyzingWorkoutIDs.insert(workoutID)
+        defer {
+            analyzingWorkoutIDs.remove(workoutID)
+            isEnrichingAudit = false
+        }
+
+        let result = await healthKitService.enrichRunningWorkouts(ids: [workoutID])
+        updateHealthKitStatus(
+            authorizationState: result.authorizationState,
+            message: result.message ?? "Full analysis refresh finished."
+        )
+
+        let returnedWorkout = result.workouts.first { $0.id == workoutID }
+        let canUseResult = result.authorizationState == .authorized || result.authorizationState == .partial
+        if canUseResult, let returnedWorkout, returnedWorkout.evidence != nil {
+            workouts = removeSampleWorkoutsIfRealDataExists(mergeSyncedWorkouts(changes: [returnedWorkout], current: workouts))
+            deletePersistedSampleWorkoutsIfNeeded()
+            applyReviewedRunTypes()
+            persistCurrent()
+            markEvidenceQueueAttempt(ids: [workoutID], status: .enriched, message: result.message)
+        } else {
+            markEvidenceQueueAttempt(
+                ids: [workoutID],
+                status: .failed,
+                message: result.message ?? "HealthKit did not return detailed evidence for this workout."
+            )
+        }
+
+        recompute()
+    }
+
     public func forceReenrichEvidenceForParity(workoutID: String) async {
         guard workouts.contains(where: { $0.id == workoutID }) else {
             parityForceReenrichResults[workoutID] = ParityForceReenrichResult(
@@ -718,7 +768,11 @@ public final class RunningAnalysisStore {
         }
 
         isEnrichingAudit = true
-        defer { isEnrichingAudit = false }
+        analyzingWorkoutIDs.insert(workoutID)
+        defer {
+            analyzingWorkoutIDs.remove(workoutID)
+            isEnrichingAudit = false
+        }
 
         let cacheWasPresent = workouts.first(where: { $0.id == workoutID })?.evidence != nil
             || (modelContext.map { PersistenceService.fetchEvidence(workoutID: workoutID, context: $0) } ?? nil) != nil
@@ -933,7 +987,7 @@ public final class RunningAnalysisStore {
         if let modelContext {
             PersistenceService.updateManualFields(id: workoutID, runType: manualRunType, notes: notes, context: modelContext)
         }
-        recompute()
+        recompute(hydrateEvidence: false, refreshDerivedAnalyses: false)
     }
 
     public func updateManualFields(_ updates: [ManualWorkoutFieldUpdate]) {
@@ -952,7 +1006,39 @@ public final class RunningAnalysisStore {
         if let modelContext {
             PersistenceService.updateManualFields(updates: updates, context: modelContext)
         }
-        recompute()
+        recompute(hydrateEvidence: false, refreshDerivedAnalyses: false)
+    }
+
+    public func hydrateCachedEvidenceIfAvailable(for workoutID: String) {
+        guard let index = workouts.firstIndex(where: { $0.id == workoutID }),
+              workouts[index].evidence == nil,
+              let modelContext,
+              let evidence = PersistenceService.fetchEvidence(workoutID: workoutID, context: modelContext)
+        else { return }
+
+        workouts[index].evidence = evidence
+        workouts[index].routePointCount = evidence.route.count
+        workouts[index].seriesSampleCount = evidence.seriesSampleCount
+        workouts[index].routeAvailable = workouts[index].routeAvailable || !evidence.route.isEmpty
+        workouts[index].seriesAvailable = workouts[index].seriesAvailable || evidence.seriesSampleCount > 0
+
+        if let derivedAnalysis = PersistenceService.fetchDerivedAnalysis(workoutID: workoutID, context: modelContext) {
+            derivedAnalysesByWorkoutID[workoutID] = derivedAnalysis
+        }
+        refreshEvidenceQueueSummary()
+    }
+
+    public func evidenceQueueItem(for workoutID: String) -> EvidenceEnrichmentQueueItem? {
+        guard let modelContext else {
+            return EvidenceEnrichmentQueue.items(workouts: workouts, cachedEvidenceIDs: [])
+                .first { $0.workoutID == workoutID }
+        }
+        return EvidenceEnrichmentQueue.items(
+            workouts: workouts,
+            cachedEvidenceIDs: PersistenceService.fetchEvidenceIDs(context: modelContext),
+            failedStates: PersistenceService.fetchEnrichmentStateByID(context: modelContext)
+        )
+        .first { $0.workoutID == workoutID }
     }
 
     public func importReviewedRunTypes(from url: URL) {

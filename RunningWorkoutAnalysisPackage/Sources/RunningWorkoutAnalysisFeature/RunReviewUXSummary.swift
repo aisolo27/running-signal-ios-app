@@ -75,7 +75,7 @@ public struct AppReadinessUXSummary: Equatable, Sendable {
             ReviewSignal(
                 title: "Evidence",
                 value: "\(evidenceQueueSummary.pendingCount)",
-                detail: evidenceQueueSummary.pendingCount == 0 ? "Pending" : evidenceQueueSummary.nextPriority?.label ?? "Pending",
+                detail: evidenceQueueSummary.pendingCount == 0 ? "Complete" : evidenceQueueSummary.nextPriority?.label ?? "Pending",
                 confidence: evidenceQueueSummary.pendingCount == 0 ? .strong : .moderate
             ),
             ReviewSignal(
@@ -107,6 +107,109 @@ public struct AppReadinessUXSummary: Equatable, Sendable {
         }
 
         return AppReadinessUXSummary(title: title, detail: detail, confidence: confidence, signals: signals)
+    }
+}
+
+public enum EvidenceReadinessAction: Equatable, Sendable {
+    case none
+    case load
+    case refresh
+
+    public var title: String? {
+        switch self {
+        case .none: nil
+        case .load: "Load full analysis"
+        case .refresh: "Refresh full analysis"
+        }
+    }
+}
+
+public struct EvidenceReadinessSummary: Equatable, Sendable {
+    public var title: String
+    public var detail: String
+    public var confidence: ConfidenceLevel
+    public var action: EvidenceReadinessAction
+    public var technicalDetail: String?
+
+    public static func make(
+        workout: CanonicalWorkout,
+        queueItem: EvidenceEnrichmentQueueItem?,
+        isProcessing: Bool,
+        supportedIntervals: WorkoutIntervalReconstructionResult?,
+        blockedReasons: [String]
+    ) -> EvidenceReadinessSummary {
+        let isHealthKitSource = workout.dataSourceLabel.contains("HealthKit")
+        guard isHealthKitSource else {
+            return EvidenceReadinessSummary(
+                title: "Sample summary ready",
+                detail: "This sample workout keeps the app usable, but it is not Apple Health evidence.",
+                confidence: .limited,
+                action: .none,
+                technicalDetail: "Sample workouts do not load HealthKit samples, routes, or WorkoutKit plans."
+            )
+        }
+
+        if isProcessing {
+            return EvidenceReadinessSummary(
+                title: "Analyzing run",
+                detail: "RunSignal is reading HealthKit samples, route, workout events, and structured workout evidence.",
+                confidence: .moderate,
+                action: .none,
+                technicalDetail: "Detailed evidence refresh is running in the foreground."
+            )
+        }
+
+        if let queueItem, queueItem.status == .failed {
+            return EvidenceReadinessSummary(
+                title: "Analysis failed",
+                detail: queueItem.message ?? "RunSignal could not load full HealthKit evidence for this run.",
+                confidence: .limited,
+                action: .refresh,
+                technicalDetail: "Retry reads detailed HealthKit evidence for the selected workout only."
+            )
+        }
+
+        if let queueItem, queueItem.status == .pending {
+            return EvidenceReadinessSummary(
+                title: "Full analysis queued",
+                detail: "Summary stats are ready. Detailed HealthKit evidence is waiting in the analysis queue.",
+                confidence: .moderate,
+                action: .load,
+                technicalDetail: "Opening this run can prioritize it ahead of the normal queue."
+            )
+        }
+
+        let hasDetailedEvidence = workout.evidence != nil && (workout.seriesSampleCount > 0 || workout.routePointCount > 0 || workout.intervalCount > 0)
+        if hasDetailedEvidence, supportedIntervals?.intervals.isEmpty == false {
+            return EvidenceReadinessSummary(
+                title: "Full analysis ready",
+                detail: "Charts, samples, and official structured interval evidence are available.",
+                confidence: .strong,
+                action: .refresh,
+                technicalDetail: "Planned goals come from WorkoutKit; recorded metrics come from HealthKit activities and samples."
+            )
+        }
+
+        if hasDetailedEvidence {
+            let blockedDetail = blockedReasons.first.map {
+                "Detailed HealthKit evidence is loaded, but official interval rows are blocked: \($0)"
+            } ?? "Detailed HealthKit evidence is loaded. Some structured interval details remain unavailable."
+            return EvidenceReadinessSummary(
+                title: "Some details unavailable",
+                detail: blockedDetail,
+                confidence: .moderate,
+                action: .refresh,
+                technicalDetail: "Summary, route, charts, and whole-run metrics can still be valid when custom interval rows are blocked."
+            )
+        }
+
+        return EvidenceReadinessSummary(
+            title: "Summary ready",
+            detail: "Basic workout stats are loaded from Apple Health. Full charts and intervals need detailed analysis.",
+            confidence: .limited,
+            action: .load,
+            technicalDetail: "Full analysis reads HealthKit samples, routes, workout events, activities, and WorkoutKit plan metadata when available."
+        )
     }
 }
 

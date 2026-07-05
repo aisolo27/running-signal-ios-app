@@ -1,6 +1,6 @@
 # RunSignal Project Status
 
-Last updated: 2026-07-04
+Last updated: 2026-07-05
 
 ## Product Direction
 
@@ -134,6 +134,14 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 ## 2026-07-04 Interval Goal Vs Measured Display
 
 - Official interval detail, Raw Debug official rows, and selected Interval Analysis rows now separate WorkoutKit goal distance/time from measured HealthKit distance/time/pace. Distance-goal rows show goal distance, measured distance, measured time, goal-normalized pace, and measured pace; time-goal and open rows stay measured-first without inventing a goal distance.
+
+## 2026-07-05 Physical Recording Bug-Fix Pass
+
+- Analytics manual category writes now avoid the expensive full evidence/derived-analysis recompute path, reducing freeze/crash risk on physical iPhones with large HealthKit histories.
+- Workout detail now hydrates already-cached per-workout evidence on entry, so previously refreshed runs do not remain evidence-missing until the Raw Debug force re-enrich action is used.
+- Workout detail now has a normal full-analysis readiness card with `Summary ready`, `Full analysis queued`, `Analyzing run`, `Full analysis ready`, `Some details unavailable`, and `Analysis failed` states, plus `Load full analysis` / `Refresh full analysis` actions for the selected run.
+- Raw HealthKit Debug is now a secondary `View technical details` path from the readiness card, not the main user workflow for loading or judging detailed evidence.
+- Raw Debug labels now distinguish accepted pause windows from unpaired pause fallback reasons, and Workout detail has extra bottom inset space for the floating tab bar.
 
 ## 2026-07-02 Post-Recording Chart And Split Follow-Up
 

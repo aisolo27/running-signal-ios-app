@@ -1013,6 +1013,15 @@ struct WorkoutDetailView: View {
                     let intervalBlockedReasons = workout.evidence.map {
                         CustomWorkoutNormalDetailGate.blockedReasons(workout: workout, evidence: $0)
                     } ?? ["Detailed HealthKit evidence is missing."]
+                    let queueItem = store.evidenceQueueItem(for: workout.id)
+                    let isProcessing = store.analyzingWorkoutIDs.contains(workout.id)
+                    let readiness = EvidenceReadinessSummary.make(
+                        workout: workout,
+                        queueItem: queueItem,
+                        isProcessing: isProcessing,
+                        supportedIntervals: supportedIntervals,
+                        blockedReasons: intervalBlockedReasons
+                    )
 
                     WorkoutReviewCard(
                         summary: WorkoutReviewUXSummary.make(
@@ -1020,6 +1029,21 @@ struct WorkoutDetailView: View {
                             supportedIntervals: supportedIntervals,
                             blockedReasons: intervalBlockedReasons
                         )
+                    )
+
+                    EvidenceReadinessCard(
+                        summary: readiness,
+                        queueItem: queueItem,
+                        isProcessing: isProcessing,
+                        isDisabled: store.isEnrichingAudit,
+                        loadAction: {
+                            Task {
+                                await store.loadFullAnalysisForWorkout(workoutID: workout.id)
+                            }
+                        },
+                        technicalDestination: {
+                            RawHealthKitWorkoutDebugView(store: store, workout: workout)
+                        }
                     )
 
                     WorkoutSummaryCard(workout: workout)
@@ -1036,23 +1060,19 @@ struct WorkoutDetailView: View {
                         segments: RunWorkoutSegments(workout: workout, analysis: store.derivedAnalysis(for: workout.id))
                     )
 
-                    NavigationLink {
-                        RawHealthKitWorkoutDebugView(store: store, workout: workout)
-                    } label: {
-                        Label("Open Raw HealthKit Debug", systemImage: "stethoscope")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
                 } else {
                     EmptyStateView(title: "Workout missing", message: "The selected workout is no longer in local state.")
                 }
             }
             .padding()
-            .padding(.bottom, 180)
+            .padding(.bottom, 220)
         }
         .navigationTitle("Workout")
         .safeAreaInset(edge: .bottom) {
-            Color.clear.frame(height: 72)
+            Color.clear.frame(height: 112)
+        }
+        .task(id: workoutID) {
+            store.hydrateCachedEvidenceIfAvailable(for: workoutID)
         }
     }
 }
@@ -1400,7 +1420,7 @@ struct RawHealthKitWorkoutDebugView: View {
 
                         SectionHeader("Monthly Diagnostics")
                         DatePicker(
-                            "Select month",
+                            "Select date in month",
                             selection: $selectedDiagnosticsMonth,
                             displayedComponents: [.date]
                         )
@@ -1862,7 +1882,7 @@ struct RawHealthKitWorkoutDebugView: View {
                     MetricItem(title: "Fallback", value: result.primaryFallbackReason ?? "None", detail: "Primary reason"),
                     MetricItem(title: "Rows", value: "\(result.rows.count)", detail: result.rowCountDetail),
                     MetricItem(title: "Open tails", value: "\(result.rows.filter(\.isOpenTail).count)", detail: "Inferred"),
-                    MetricItem(title: "Pauses", value: "\(result.pairedPauseCount)", detail: RunFormatters.duration(result.totalPairedPauseSeconds)),
+                    MetricItem(title: "Accepted pauses", value: "\(result.pairedPauseCount)", detail: RunFormatters.duration(result.totalPairedPauseSeconds)),
                     MetricItem(
                         title: "Scope",
                         value: result.promotesProductionBehavior ? "Normal detail" : "Audit",
@@ -2286,6 +2306,108 @@ struct WorkoutReviewCard: View {
         .padding()
         .background(.background)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+struct EvidenceReadinessCard<TechnicalDestination: View>: View {
+    let summary: EvidenceReadinessSummary
+    let queueItem: EvidenceEnrichmentQueueItem?
+    let isProcessing: Bool
+    let isDisabled: Bool
+    let loadAction: () -> Void
+    @ViewBuilder let technicalDestination: () -> TechnicalDestination
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: symbol)
+                    .foregroundStyle(color)
+                    .frame(width: 18)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(summary.title)
+                            .font(.headline)
+                        Spacer()
+                        ConfidencePill(text: summary.confidence.label, confidence: summary.confidence)
+                    }
+                    Text(summary.detail)
+                        .font(.subheadline)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            if isProcessing {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Analyzing HealthKit evidence")
+                        .font(.caption)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
+                }
+            }
+
+            if let technicalDetail = summary.technicalDetail {
+                Text(technicalDetail)
+                    .font(.caption)
+                    .foregroundStyle(RunSignalTextStyle.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let queueItem {
+                HStack(spacing: 8) {
+                    Label(queueItem.status.label, systemImage: "list.bullet.clipboard")
+                    Text(queueItem.priority.label)
+                }
+                .font(.caption)
+                .foregroundStyle(RunSignalTextStyle.tertiary)
+            }
+
+            HStack(spacing: 10) {
+                if let actionTitle = summary.action.title {
+                    Button(actionTitle, action: loadAction)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(isDisabled || isProcessing)
+                }
+
+                NavigationLink {
+                    technicalDestination()
+                } label: {
+                    Label("View technical details", systemImage: "stethoscope")
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding()
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var symbol: String {
+        switch summary.action {
+        case .load:
+            isProcessing ? "hourglass" : "arrow.down.circle"
+        case .refresh:
+            isProcessing ? "hourglass" : "arrow.clockwise.circle"
+        case .none:
+            summary.confidence == .strong ? "checkmark.seal" : "info.circle"
+        }
+    }
+
+    private var color: Color {
+        switch summary.confidence {
+        case .strong:
+            .green
+        case .moderate:
+            .blue
+        case .limited:
+            .orange
+        case .weak:
+            .yellow
+        case .blocked:
+            .red
+        case .unavailable:
+            .red
+        }
     }
 }
 

@@ -17,6 +17,7 @@ import Testing
     #expect(summary.confidence == .limited)
     #expect(summary.detail.contains("Load read-only HealthKit"))
     #expect(summary.signals.contains { $0.title == "Best Efforts" && $0.confidence == .limited })
+    #expect(summary.signals.contains { $0.title == "Evidence" && $0.value == "0" && $0.detail == "Complete" })
 }
 
 @Test func bestEffortTrustSummaryDistinguishesExactFromEstimate() {
@@ -310,6 +311,106 @@ import Testing
     #expect(summary.signals.contains { $0.title == "Work" && $0.value == "2" })
     #expect(summary.signals.contains { $0.title == "Fade" && $0.value == "+15s/km" })
     #expect(summary.signals.contains { $0.title == "Pauses" && $0.value == "1" })
+}
+
+@Test func evidenceReadinessSurfacesQueuedSummaryOnlyAnalysis() {
+    let start = Date(timeIntervalSinceReferenceDate: 2_200)
+    let run = workout(id: "queued", start: start, distance: 5_000, duration: 1_500, type: .easy)
+    let queueItem = EvidenceEnrichmentQueueItem(
+        workoutID: run.id,
+        startDate: start,
+        priority: .latestRun,
+        status: .pending
+    )
+
+    let summary = EvidenceReadinessSummary.make(
+        workout: run,
+        queueItem: queueItem,
+        isProcessing: false,
+        supportedIntervals: nil,
+        blockedReasons: ["Detailed HealthKit evidence is missing."]
+    )
+
+    #expect(summary.title == "Full analysis queued")
+    #expect(summary.action == .load)
+    #expect(summary.detail.contains("Detailed HealthKit evidence"))
+}
+
+@Test func evidenceReadinessSurfacesFailedRetryState() {
+    let start = Date(timeIntervalSinceReferenceDate: 2_300)
+    let run = workout(id: "failed", start: start, distance: 5_000, duration: 1_500, type: .easy)
+    let queueItem = EvidenceEnrichmentQueueItem(
+        workoutID: run.id,
+        startDate: start,
+        priority: .recentQuality,
+        status: .failed,
+        message: "WorkoutKit plan unavailable."
+    )
+
+    let summary = EvidenceReadinessSummary.make(
+        workout: run,
+        queueItem: queueItem,
+        isProcessing: false,
+        supportedIntervals: nil,
+        blockedReasons: []
+    )
+
+    #expect(summary.title == "Analysis failed")
+    #expect(summary.action == .refresh)
+    #expect(summary.detail == "WorkoutKit plan unavailable.")
+}
+
+@Test func evidenceReadinessSurfacesReadyOfficialIntervals() {
+    let start = Date(timeIntervalSinceReferenceDate: 2_400)
+    let evidence = WorkoutEvidence(
+        workoutID: "ready",
+        series: [
+            .distance: WorkoutMetricSeries(
+                metric: .distance,
+                unit: "m",
+                points: [
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(10), 100),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(20), 200)
+                ]
+            )
+        ]
+    )
+    let run = workout(id: "ready", start: start, distance: 5_000, duration: 1_500, type: .interval, evidence: evidence)
+    let intervals = WorkoutIntervalReconstructionResult(
+        planSource: .workoutKit,
+        windowSource: .healthKitActivityBoundaries,
+        intervals: [
+            reconstructedInterval(
+                index: 1,
+                label: "Work 1",
+                stepType: .work,
+                start: start,
+                duration: 100,
+                elapsedDuration: 100,
+                activeDuration: 100,
+                pauseOverlap: 0,
+                displayRule: .elapsedRowWindow,
+                distance: 400,
+                pace: 250,
+                heartRate: 150,
+                maxHeartRate: 160,
+                power: 300,
+                cadence: 180
+            )
+        ]
+    )
+
+    let summary = EvidenceReadinessSummary.make(
+        workout: run,
+        queueItem: nil,
+        isProcessing: false,
+        supportedIntervals: intervals,
+        blockedReasons: []
+    )
+
+    #expect(summary.title == "Full analysis ready")
+    #expect(summary.action == .refresh)
+    #expect(summary.confidence == .strong)
 }
 
 private func personalBestEffort(
