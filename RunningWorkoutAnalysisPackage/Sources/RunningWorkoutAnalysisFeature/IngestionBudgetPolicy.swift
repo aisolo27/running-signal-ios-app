@@ -18,7 +18,7 @@ public enum IngestionPauseReason: String, Codable, Sendable {
         case .thermalCritical:
             "Stopped because the device thermal state is critical."
         case .elapsedBudgetExceeded:
-            "Paused after reaching the current work budget."
+            "Paused to keep the app responsive. Tap Load HealthKit Runs to continue."
         }
     }
 }

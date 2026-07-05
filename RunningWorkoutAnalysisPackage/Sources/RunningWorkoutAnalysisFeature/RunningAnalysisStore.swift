@@ -190,11 +190,13 @@ public struct HealthKitImportJobSummary: Equatable {
 
     public var detailText: String {
         var parts = ["\(importedCount) imported"]
-        if let currentWindowStart, let currentWindowEnd {
-            parts.append("\(RunFormatters.date.string(from: currentWindowStart)) - \(RunFormatters.date.string(from: currentWindowEnd))")
+        if status == .running, let currentWindowStart, let currentWindowEnd, currentWindowStart != currentWindowEnd {
+            parts.append("Checking \(RunFormatters.date.string(from: currentWindowStart)) - \(RunFormatters.date.string(from: currentWindowEnd))")
         }
         if let lastError, !lastError.isEmpty {
             parts.append(lastError)
+        } else if status == .completed {
+            parts.append("Up to date")
         }
         return parts.joined(separator: " · ")
     }
@@ -411,9 +413,12 @@ public final class RunningAnalysisStore {
                 probeRoutesWhenEvidenceMissing: index == 0
             )
             healthContext = result.healthContext
+            let importMessage = result.workouts.isEmpty
+                ? "Checking older HealthKit running history."
+                : "Imported \(result.workouts.count) HealthKit running workouts."
             updateHealthKitStatus(
                 authorizationState: result.authorizationState,
-                message: result.message ?? "Imported \(result.workouts.count) HealthKit running workouts for \(RunFormatters.date.string(from: window.start)) - \(RunFormatters.date.string(from: window.end))."
+                message: importMessage
             )
 
             guard result.authorizationState == .authorized || result.authorizationState == .partial else {
@@ -464,6 +469,10 @@ public final class RunningAnalysisStore {
         }
         PersistenceService.finishHealthKitImportJob(status: .completed, message: nil, context: modelContext)
         refreshHealthKitImportJobSummary()
+        updateHealthKitStatus(
+            authorizationState: authorizationState,
+            message: "HealthKit import finished."
+        )
         await startHealthKitBackgroundDelivery()
         recompute()
     }
@@ -1171,7 +1180,7 @@ public final class RunningAnalysisStore {
         workouts = DuplicateDetector.markDuplicates(workouts)
         runTypeReconciliation = RunTypeReviewBridge.reconcile(reviews: reviewedRunTypes, workouts: workouts)
         snapshot = AnalyticsEngine.snapshot(for: workouts, healthContext: healthContext)
-        personalBestEffortSummary = PersonalBestEffortEngine.summarize(workouts: workouts)
+        personalBestEffortSummary = PersonalBestEffortEngine.summarize(workouts: workoutsForBestEfforts())
         refreshEvidenceQueueSummary()
         if shouldRefreshDerivedAnalyses {
             derivedAnalysisRefreshSummary = refreshDerivedAnalyses()
@@ -1194,6 +1203,23 @@ public final class RunningAnalysisStore {
             hydrated.routePointCount = evidence.route.count
             hydrated.seriesSampleCount = evidence.seriesSampleCount
             hydrated.routeAvailable = hydrated.routeAvailable || !evidence.route.isEmpty
+            hydrated.seriesAvailable = hydrated.seriesAvailable || evidence.seriesSampleCount > 0
+            return hydrated
+        }
+    }
+
+    private func workoutsForBestEfforts() -> [CanonicalWorkout] {
+        guard let modelContext else { return workouts }
+        let evidenceByID = PersistenceService.fetchEvidenceByWorkoutID(context: modelContext)
+        guard !evidenceByID.isEmpty else { return workouts }
+        return workouts.map { workout in
+            guard workout.evidence == nil, let evidence = evidenceByID[workout.id] else {
+                return workout
+            }
+            var hydrated = workout
+            hydrated.evidence = evidence
+            hydrated.distanceSampleCount = max(hydrated.distanceSampleCount, evidence.series[.distance]?.points.count ?? 0)
+            hydrated.seriesSampleCount = max(hydrated.seriesSampleCount, evidence.seriesSampleCount)
             hydrated.seriesAvailable = hydrated.seriesAvailable || evidence.seriesSampleCount > 0
             return hydrated
         }

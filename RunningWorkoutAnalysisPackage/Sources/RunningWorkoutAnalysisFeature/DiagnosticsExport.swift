@@ -196,7 +196,7 @@ public enum DiagnosticsExport {
 
         ## HKWorkoutActivity Inventory
 
-        Debug-only inventory of public `HKWorkout.workoutActivities` rows. These rows are not used for production interval reconstruction.
+        Debug inventory of public `HKWorkout.workoutActivities` rows. These rows feed production interval reconstruction only through the supported resolved-row gate.
 
         \(workoutActivityInventoryMarkdown(
             evidence?.activities ?? [],

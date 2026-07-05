@@ -66,6 +66,51 @@ import Testing
     #expect(RunFormatters.distance(400) == "0.40 km")
 }
 
+@Test func intervalGoalMeasuredItemsSeparateDistanceGoalStats() {
+    let interval = intervalForGoalMeasuredText(
+        plannedGoalType: .distance,
+        plannedGoalValue: 400,
+        plannedGoalDisplayText: "400 m",
+        distanceMeters: 409.560677917541,
+        durationSeconds: 93.03776931762695
+    )
+
+    let items = IntervalGoalMeasuredText.metricItems(for: interval)
+    #expect(items.map(\.title) == ["Goal Distance", "Measured Distance", "Measured Time", "Goal Pace", "Measured Pace"])
+    #expect(items.map(\.value) == ["400 m", "410 m", "1:33", "3:53 /km", "3:47 /km"])
+    #expect(items.map(\.detail) == ["WorkoutKit", "HealthKit", "Elapsed window", "Goal distance", "Elapsed window"])
+}
+
+@Test func intervalGoalMeasuredItemsSeparateTimeGoalStats() {
+    let interval = intervalForGoalMeasuredText(
+        plannedGoalType: .time,
+        plannedGoalValue: 120,
+        plannedGoalDisplayText: "120 s",
+        distanceMeters: 178.32590897359162,
+        durationSeconds: 119.90282893180847
+    )
+
+    let items = IntervalGoalMeasuredText.metricItems(for: interval)
+    #expect(items.map(\.title) == ["Goal Time", "Measured Time", "Measured Distance", "Measured Pace"])
+    #expect(items.map(\.value) == ["2:00", "2:00", "178 m", "11:12 /km"])
+    #expect(items.map(\.detail) == ["WorkoutKit", "Elapsed window", "HealthKit", "Elapsed window"])
+}
+
+@Test func intervalGoalMeasuredItemsKeepOpenRowsMeasuredOnly() {
+    let interval = intervalForGoalMeasuredText(
+        plannedGoalType: .open,
+        plannedGoalValue: nil,
+        plannedGoalDisplayText: "Open",
+        distanceMeters: 43.3,
+        durationSeconds: 18.8
+    )
+
+    let items = IntervalGoalMeasuredText.metricItems(for: interval)
+    #expect(items.map(\.title) == ["Measured Distance", "Measured Time", "Measured Pace"])
+    #expect(items.map(\.value) == ["43 m", "0:19", "7:14 /km"])
+    #expect(items.map(\.detail) == ["HealthKit", "Elapsed window", "Elapsed window"])
+}
+
 @Test func weightedPaceAggregatesDurationOverDistance() {
     let start = Date()
     let workouts = [
@@ -92,6 +137,47 @@ import Testing
     ]
 
     #expect(PaceMath.weightedPaceSecondsPerKm(workouts) == 366.6666666666667)
+}
+
+private func intervalForGoalMeasuredText(
+    plannedGoalType: PlannedWorkoutGoalType,
+    plannedGoalValue: Double?,
+    plannedGoalDisplayText: String,
+    distanceMeters: Double?,
+    durationSeconds: Double
+) -> ReconstructedWorkoutInterval {
+    let start = Date(timeIntervalSince1970: 1_000)
+    return ReconstructedWorkoutInterval(
+        index: 1,
+        label: "Work 1",
+        stepType: plannedGoalType == .time ? .recovery : .work,
+        plannedGoalType: plannedGoalType,
+        plannedGoalValue: plannedGoalValue,
+        plannedGoalDisplayText: plannedGoalDisplayText,
+        plannedTargetDisplayText: nil,
+        actualStartDate: start,
+        actualEndDate: start.addingTimeInterval(durationSeconds),
+        actualDurationSeconds: durationSeconds,
+        elapsedDurationSeconds: durationSeconds,
+        pauseOverlapSeconds: 0,
+        activeDurationSeconds: durationSeconds,
+        durationDisplayRule: .elapsedRowWindow,
+        actualDistanceMeters: distanceMeters,
+        actualPaceSecondsPerKm: distanceMeters.map { durationSeconds / ($0 / 1_000) },
+        averageHeartRateBpm: nil,
+        maxHeartRateBpm: nil,
+        averageCadence: nil,
+        averagePower: nil,
+        planSource: .workoutKit,
+        windowSource: .healthKitActivityBoundaries,
+        boundaryStrategy: nil,
+        boundaryAdjustmentSeconds: nil,
+        boundaryOvershootMeters: nil,
+        boundaryDiagnostics: nil,
+        tailDiagnostics: nil,
+        sourceNote: "Test",
+        confidence: .high
+    )
 }
 
 @Test func manualRunTypeOverridesInferredRunType() {
@@ -1427,6 +1513,7 @@ import Testing
     #expect(job.status == .completed)
     #expect(job.importedCount == 1)
     #expect(store.healthKitImportJobSummary?.status == .completed)
+    #expect(store.healthKitImportJobSummary?.detailText == "1 imported · Up to date")
     #expect(store.workouts.contains { $0.id == imported.id })
     #expect(healthKit.windowedLoadRequests.first?.detailedEvidenceLimit == HealthKitService.defaultDetailedEvidenceLimit)
     #expect(healthKit.windowedLoadRequests.dropFirst().allSatisfy { $0.detailedEvidenceLimit == 0 })
@@ -1459,6 +1546,7 @@ import Testing
     #expect(job.pauseReason == .elapsedBudgetExceeded)
     #expect(healthKit.windowedLoadRequests.isEmpty)
     #expect(store.healthKitImportJobSummary?.status == .paused)
+    #expect(store.healthKitImportJobSummary?.detailText == "0 imported · Paused to keep the app responsive. Tap Load HealthKit Runs to continue.")
 }
 
 @MainActor
@@ -1501,6 +1589,7 @@ import Testing
     #expect(job.currentWindowStart == firstRequest.startDate)
     #expect(job.currentWindowEnd == firstRequest.startDate)
     #expect(healthKit.windowedLoadRequests.count == 1)
+    #expect(store.healthKitImportJobSummary?.detailText.contains(" - ") == false)
 }
 
 @MainActor
@@ -2016,6 +2105,38 @@ import Testing
     #expect(store.workouts.first?.evidence == nil)
     #expect(store.workouts.first?.routePointCount == 2)
     #expect(store.evidenceQueueSummary.enrichedCount == 1)
+}
+
+@MainActor
+@Test func storeRestoresExactBestEffortsFromCachedEvidenceAfterRelaunch() async throws {
+    let context = try inMemoryModelContext()
+    let start = Date(timeIntervalSince1970: 9_000)
+    var workout = testWorkout(
+        id: "cached-exact-best-effort",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    workout.evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .distance: testSeries(.distance, values: Array(repeating: 100, count: 50), start: start, interval: 30)
+        ]
+    )
+
+    PersistenceService.upsert([workout], context: context)
+    let store = RunningAnalysisStore()
+
+    await store.bootstrap(modelContext: context)
+
+    #expect(store.workouts.first?.evidence == nil)
+    #expect(store.personalBestEffortSummary.allTime.contains {
+        $0.bucket == .fiveKilometer
+            && $0.workoutID == workout.id
+            && $0.method == .exactSegment
+            && $0.confidence == .exact
+    })
 }
 
 @MainActor

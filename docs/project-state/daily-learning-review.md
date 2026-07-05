@@ -301,3 +301,76 @@ Scope: reviewed July 2 Codex session logs with JSON-field `session_meta.payload.
 - Added this July 2 section to `docs/project-state/daily-learning-review.md`.
 - Did not edit `docs/bug-log.md` or `docs/project-state/project-status.md`: July 2's durable terminal-pause rule, interval-promotion state, and analytics-period state were already captured by the landed commits.
 - Did not edit `AGENTS.md` or `docs/project-state/documentation-index.md`: no new routing rule or doc classification stronger than the existing entries emerged from this review.
+
+## 2026-07-03
+
+Scope: reviewed July 3 Codex session logs with JSON-field `session_meta.payload.cwd` or `turn_context.cwd` exactly equal to this RunSignal repo. Excluded copied repo paths inside prompts and excluded the active July 4 daily-learning automation session. Treated this as a documentation-only review: no Xcode builds, device installs, HealthKit/provider mutations, commits, pushes, or broad repo scans.
+
+### Completed Work
+
+- Improved recording-driven UI readability and interaction: dark-mode run metadata contrast was raised, workout charts gained scrub/clamped sample-range behavior plus interval-boundary markers, Interval Analysis now starts with the whole official-row breakdown, and Best Effort rows can navigate to source workout detail when loaded.
+- Added manual run categorization for Analytics: visible per-row category controls, period year/current-period navigation, bulk Select actions, persisted `manualRunType` writes, and batched bulk apply to avoid all-history UI freezes.
+- Added trust-first workout review UX: Runs readiness, workout-detail review, plain-language Best Effort trust labels, and interval execution summary behavior, with package tests plus Simulator proof and physical iPhone install/run reported.
+- Cleaned repo evidence shape: ignored local junk and the large local HealthFit video were removed, completed validation archives moved under `docs/archive/old-validation/`, and active validation folders stayed focused.
+- Hardened HealthKit data quality and ingestion: full-history summary loading replaced the newest-250 ceiling, impossible best-effort segment paces are rejected, indoor/outdoor expected-data capability profiles were added, native `HKWorkoutActivity` stats are preferred when reconciled, and foreground/background-ready ingestion now has batch/deletion/anchor/import-job hardening.
+
+### Pending Work
+
+- Real HealthKit semantic proof still needs on-phone checking after installs because available UI snapshot paths can still target Simulator after a physical-device run.
+- After fresh installs or when all-time history looks incomplete, use `Settings > Load HealthKit Runs` before judging Best Efforts, Analytics year navigation, or custom-workout screens.
+- Measure the new import/foreground/background-ready ingestion path on the physical iPhone: large history duration, observer delivery, anchored deletions, scroll responsiveness, Low Power Mode, thermal behavior, cancellation, and battery impact.
+- Keep target-vs-actual, deeper trend claims, and interval analytics expansion gated until the new typed target metadata, native activity stats, and evidence-quality provenance have physical proof and regression coverage.
+
+### Mistakes, Fixes, And Friction
+
+- Bulk Analytics categorization initially risked freezing multi-year histories because selection writes could save/recompute per row; the durable fix is batch persistence plus one analytics recompute.
+- Simulator sample data hid physical-phone risks: visual UI proof, install success, and real HealthKit semantic proof must remain separate evidence levels.
+- All-Time Best Efforts can look wrong for two different reasons: incomplete detailed distance-series enrichment or corrupt/bursty distance samples. Fix evidence coverage first, but reject impossible exact segment paces when the loaded series itself is bad.
+- Pull-to-refresh and app-active sync can become expensive if they drift into full history/detailed-evidence work. Foreground deltas should stay summary-only and anchored; full history remains explicit and resumable through `Load HealthKit Runs`.
+
+### Workflow Improvements
+
+- For UI polish from screen recordings, record the visible complaint first, then update only the app surface that proves it; do not turn design-reference media into runtime import scope.
+- For HealthKit ingestion work, inspect deletion handling, anchor-after-persist semantics, route/detail probes, and test seams before adding background delivery.
+- For repo cleanup, classify active evidence, archived evidence, generated scorecards, local ignored media, and future templates before moving anything; do not delete tracked evidence.
+
+### Docs Updated By This Review
+
+- Added this July 3 section to `docs/project-state/daily-learning-review.md`.
+- Did not edit `docs/project-state/project-status.md`, `docs/bug-log.md`, or `docs/project-state/documentation-index.md`: July 3 implementation commits already captured the stable state, durable gotchas, and data-ingestion doc classification.
+- Did not edit `AGENTS.md`: no new routing/tooling rule stronger than the existing RunSignal guidance emerged from this review.
+
+## 2026-07-04
+
+Scope: reviewed July 4 Codex session logs whose JSON `session_meta.payload.cwd` exactly matched this RunSignal repo. Excluded unrelated sessions and the active daily-learning automation session. Treated this as documentation-only review: no Xcode builds, device installs, HealthKit/provider mutations, commits, pushes, or broad repo scans.
+
+### Completed Work
+
+- Reviewed Apple Fitness screenshots, RunSignal debug exports, and interval code for a fixed-distance Work-row discrepancy where Apple Fitness showed a `400 m` row while RunSignal measured about `409.6 m`.
+- Confirmed the likely distinction is not a missing HealthKit boundary: WorkoutKit provides the planned goal, while HealthKit `HKWorkoutActivity` rows provide measured distance/time. Apple Fitness appears goal-normalized for fixed-distance rows; RunSignal should be explicit about goal vs measured basis.
+- Added goal-vs-measured interval display support across official interval detail, Raw Debug official rows, and selected Interval Analysis rows. Distance-goal rows now expose goal distance, measured distance, measured time, goal-normalized pace, and measured pace; time-goal and open rows stay measured-first.
+- Added focused formatter/test coverage for distance-goal, time-goal, and open interval rows.
+- Validation reported in the session: `swift test --package-path RunningWorkoutAnalysisPackage`, `git diff --check`, and an iPhone 17 Simulator build/run/screenshot smoke check all passed; the simulator app was stopped afterward.
+
+### Pending Work
+
+- Physical-iPhone semantic proof is still needed before claiming the goal-vs-measured interval UI is validated against real HealthKit workout data and Apple Fitness screens.
+- Continue keeping resolver boundaries unchanged: do not reverse-engineer Apple Fitness rows or replace measured HealthKit distance with planned goal distance.
+- Use current-build exports plus Apple Fitness screenshots when checking whether labels, goal-normalized pace, measured pace, and row timing agree for warmup, work, recovery, cooldown, and `Open / Extra` rows.
+
+### Mistakes, Fixes, And Friction
+
+- Debug/export wording could make official resolved activity-boundary rows look contradictory when a separate structured-comparison summary was inconclusive. The fix was wording/status clarity, not a resolver change.
+- The daily-review prompt still names deleted `current-state.md` and `next-work.md`; this repo currently routes state through `docs/project-state/project-status.md`.
+- XcodeBuildMCP session defaults were empty during the implementation session, so the workflow needed workspace/scheme/simulator defaults set before the Simulator smoke run. `stop_app_sim` also needed the bundle id added to session defaults.
+
+### Workflow Improvements
+
+- For Apple Fitness vs RunSignal interval discrepancies, first separate planned goal, measured HealthKit activity stats, displayed duration basis, goal-normalized pace, and measured pace before changing resolver logic.
+- For future UI validation, keep evidence levels separate: package tests, Simulator nonblank smoke, physical-device install, and physical iPhone real-data semantic proof.
+
+### Docs Updated By This Review
+
+- Added this July 4 section to `docs/project-state/daily-learning-review.md`.
+- Did not edit `docs/project-state/project-status.md` or `docs/bug-log.md` in this review because existing dirty edits already captured the strong July 4 durable state: interval goal-vs-measured display and the HealthKit planned-vs-measured pace-basis gotcha.
+- Did not edit `AGENTS.md` or `docs/project-state/documentation-index.md`: no new durable routing rule or document classification change was stronger than existing guidance.

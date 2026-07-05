@@ -126,8 +126,14 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 - Explicit `Load HealthKit Runs` now records a persisted HealthKit import job and walks summary history through newest-to-oldest yearly windows, with older windows summary-only and an import budget policy for elapsed time, cancellation, Low Power Mode, and thermal state.
 - The app registers `HKObserverQuery` plus HealthKit background delivery for workout changes; observer work runs the lightweight summary-only anchored sync path, not detailed evidence enrichment.
 - Runs pull-to-refresh now uses lightweight anchored sync when an import/cache and anchor exist; Settings remains the explicit full `Load HealthKit Runs` entry point.
+- Settings import status now hides persisted resume cursor dates after pause/completion and uses user-facing pause copy instead of internal budget wording.
+- Best Efforts recompute from persisted detailed evidence after relaunch without hydrating all cached evidence into the main workout list, so exact PRs loaded by `Load HealthKit Runs` survive app restart/force-quit.
 - Package tests cover deleted-workout removal, multi-batch sync aggregation, anchor/sync-state preservation when injected local persistence fails, import job completion/pause state, import cursor persistence, and background observer registration.
 - The HealthFit screen recording reference stays as tracked metadata/UI notes in `docs/validation/healthfit-interval-ui-reference.md`; the ignored local video copy was removed during repo cleanup to keep the workspace light.
+
+## 2026-07-04 Interval Goal Vs Measured Display
+
+- Official interval detail, Raw Debug official rows, and selected Interval Analysis rows now separate WorkoutKit goal distance/time from measured HealthKit distance/time/pace. Distance-goal rows show goal distance, measured distance, measured time, goal-normalized pace, and measured pace; time-goal and open rows stay measured-first without inventing a goal distance.
 
 ## 2026-07-02 Post-Recording Chart And Split Follow-Up
 

@@ -1425,10 +1425,7 @@ private struct IntervalSelectedRowPanel: View {
         if let selectedRow {
             return [
                 MetricItem(title: metric.title, value: IntervalMetricFormatter.value(selectedRow.value(for: metric)?.displayValue, metric: metric), detail: selectedRow.roleAbbreviation),
-                MetricItem(title: "Distance", value: RunFormatters.compactDistance(selectedRow.distanceMeters), detail: selectedRow.plannedGoalDisplayText),
-                MetricItem(title: "Duration", value: RunFormatters.duration(selectedRow.displayDurationSeconds), detail: selectedRow.displayBasisLabel),
-                MetricItem(title: "Pace", value: RunFormatters.pace(selectedRow.paceSecondsPerKm), detail: selectedRow.displayBasisLabel)
-            ]
+            ] + IntervalGoalMeasuredText.metricItems(for: selectedRow)
         }
 
         return [
@@ -1655,10 +1652,7 @@ struct IntervalDetailView: View {
     }
 
     private var intervalMetricItems: [MetricItem] {
-        var items = [
-            MetricItem(title: "Duration", value: RunFormatters.duration(interval.displayDurationSeconds), detail: interval.durationDisplayRule == .activeTimer ? "Active timer" : "Elapsed window"),
-            MetricItem(title: "Distance", value: RunFormatters.compactDistance(interval.actualDistanceMeters), detail: interval.plannedGoalDisplayText),
-            MetricItem(title: "Pace", value: RunFormatters.pace(IntervalRowTimingText.displayPaceSecondsPerKm(for: interval)), detail: IntervalRowTimingText.displayPaceDetail(for: interval)),
+        var items = IntervalGoalMeasuredText.metricItems(for: interval) + [
             MetricItem(title: "Avg HR", value: RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"), detail: "Window"),
             MetricItem(title: "Power", value: RunFormatters.number(interval.averagePower, suffix: " W"), detail: "Avg"),
             MetricItem(title: "Cadence", value: RunFormatters.number(interval.averageCadence, suffix: " spm"), detail: "Avg")

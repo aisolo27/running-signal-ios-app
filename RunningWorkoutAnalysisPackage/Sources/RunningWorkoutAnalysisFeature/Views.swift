@@ -1322,18 +1322,11 @@ struct SplitsAndEventsPanel: View {
 
 enum IntervalRowTimingText {
     static func displayPaceDetail(for interval: ReconstructedWorkoutInterval) -> String {
-        interval.durationDisplayRule == .activeTimer ? "Active timer" : "Elapsed window"
+        IntervalGoalMeasuredText.measuredPaceDetail(for: interval)
     }
 
     static func displayPaceSecondsPerKm(for interval: ReconstructedWorkoutInterval) -> Double? {
-        guard interval.durationDisplayRule == .activeTimer,
-              let distanceMeters = interval.actualDistanceMeters,
-              distanceMeters > 0
-        else {
-            return interval.actualPaceSecondsPerKm
-        }
-
-        return interval.activeTimerDurationSeconds / (distanceMeters / 1_000)
+        IntervalGoalMeasuredText.measuredPaceSecondsPerKm(for: interval)
     }
 
     static func pausedTimingItems(for interval: ReconstructedWorkoutInterval) -> [MetricItem]? {
@@ -1744,8 +1737,7 @@ struct RawHealthKitWorkoutDebugView: View {
                     MetricGrid(items: pausedTimingItems)
                 }
 
-                MetricGrid(items: [
-                    MetricItem(title: "Pace", value: RunFormatters.pace(IntervalRowTimingText.displayPaceSecondsPerKm(for: interval)), detail: IntervalRowTimingText.displayPaceDetail(for: interval)),
+                MetricGrid(items: IntervalGoalMeasuredText.metricItems(for: interval) + [
                     MetricItem(title: "Avg HR", value: RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"), detail: "Window"),
                     MetricItem(title: "Max HR", value: RunFormatters.number(interval.maxHeartRateBpm, suffix: " bpm"), detail: "Window"),
                     MetricItem(title: "Power", value: RunFormatters.number(interval.averagePower, suffix: " W"), detail: "Avg"),

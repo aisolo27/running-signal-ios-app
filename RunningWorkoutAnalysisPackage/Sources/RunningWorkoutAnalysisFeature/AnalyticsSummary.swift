@@ -718,6 +718,8 @@ public struct IntervalAnalysisRow: Identifiable, Equatable, Sendable {
     public var index: Int
     public var label: String
     public var stepType: DerivedIntervalLabel
+    public var plannedGoalType: PlannedWorkoutGoalType
+    public var plannedGoalValue: Double?
     public var plannedGoalDisplayText: String
     public var plannedTargetDisplayText: String?
     public var displayDurationSeconds: Double
@@ -738,6 +740,8 @@ public struct IntervalAnalysisRow: Identifiable, Equatable, Sendable {
         index = interval.index
         label = interval.label
         stepType = interval.stepType
+        plannedGoalType = interval.plannedGoalType
+        plannedGoalValue = interval.plannedGoalValue
         plannedGoalDisplayText = interval.plannedGoalDisplayText
         plannedTargetDisplayText = interval.plannedTargetDisplayText
         displayDurationSeconds = interval.displayDurationSeconds
