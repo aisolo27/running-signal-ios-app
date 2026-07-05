@@ -142,6 +142,9 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 - Workout detail now has a normal full-analysis readiness card with `Summary ready`, `Full analysis queued`, `Analyzing run`, `Full analysis ready`, `Some details unavailable`, and `Analysis failed` states, plus `Load full analysis` / `Refresh full analysis` actions for the selected run.
 - Raw HealthKit Debug is now a secondary `View technical details` path from the readiness card, not the main user workflow for loading or judging detailed evidence.
 - Raw Debug labels now distinguish accepted pause windows from unpaired pause fallback reasons, and Workout detail has extra bottom inset space for the floating tab bar.
+- Follow-up recording review measured long black-screen spans during app relaunch/transition and confirmed manual tag taps still felt blocking; single-row Analytics tag writes now update optimistically with a short guarded delayed save and per-row saving indicator.
+- Workout detail now surfaces a normal user-facing Workout Plan card from structured WorkoutKit planned rows before Workout Intervals, so users can see the prescribed plan without opening Developer Tools.
+- Startup profiling follow-up moved HealthKit background-delivery registration and foreground sync out of the first-render path, skips the first duplicate `.active` scene-phase sync, and adds startup log markers around bootstrap and deferred maintenance. Simulator launch reaches Runs cleanly; physical-iPhone timing still needs a fresh device recording because Simulator uses sample data.
 
 ## 2026-07-02 Post-Recording Chart And Split Follow-Up
 

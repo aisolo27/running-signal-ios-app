@@ -276,6 +276,8 @@ public final class RunningAnalysisStore {
     public private(set) var healthKitImportJobSummary: HealthKitImportJobSummary?
     public private(set) var derivedAnalysisRefreshSummary = DerivedAnalysisRefreshSummary.empty
     public private(set) var analyzingWorkoutIDs: Set<String> = []
+    public private(set) var pendingManualWorkoutIDs: Set<String> = []
+    private var manualWorkoutUpdateVersions: [String: Int] = [:]
 
     public var evidenceRefreshJobSummaries: [EvidenceRefreshJobSummary] {
         evidenceRefreshJobs.map(EvidenceRefreshJobSummary.init(job:))
@@ -984,10 +986,30 @@ public final class RunningAnalysisStore {
         guard let index = workouts.firstIndex(where: { $0.id == workoutID }) else { return }
         workouts[index].manualRunType = manualRunType
         workouts[index].notes = notes
-        if let modelContext {
-            PersistenceService.updateManualFields(id: workoutID, runType: manualRunType, notes: notes, context: modelContext)
+        pendingManualWorkoutIDs.insert(workoutID)
+        let version = (manualWorkoutUpdateVersions[workoutID] ?? 0) + 1
+        manualWorkoutUpdateVersions[workoutID] = version
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            guard manualWorkoutUpdateVersions[workoutID] == version,
+                  let currentIndex = workouts.firstIndex(where: { $0.id == workoutID }) else { return }
+
+            let currentWorkout = workouts[currentIndex]
+            if let modelContext {
+                PersistenceService.updateManualFields(
+                    id: workoutID,
+                    runType: currentWorkout.manualRunType,
+                    notes: currentWorkout.notes,
+                    context: modelContext
+                )
+            }
+            recompute(hydrateEvidence: false, refreshDerivedAnalyses: false)
+
+            if manualWorkoutUpdateVersions[workoutID] == version {
+                pendingManualWorkoutIDs.remove(workoutID)
+            }
         }
-        recompute(hydrateEvidence: false, refreshDerivedAnalyses: false)
     }
 
     public func updateManualFields(_ updates: [ManualWorkoutFieldUpdate]) {

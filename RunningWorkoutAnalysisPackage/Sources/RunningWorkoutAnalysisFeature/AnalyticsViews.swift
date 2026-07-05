@@ -509,8 +509,15 @@ private struct WeeklyWorkoutList: View {
                             }
                             .buttonStyle(.plain)
 
-                            categoryMenu {
-                                update(row: row, category: $0)
+                            if store.pendingManualWorkoutIDs.contains(row.workout.id) {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .frame(width: 34, height: 34)
+                                    .accessibilityLabel("Saving category")
+                            } else {
+                                categoryMenu {
+                                    update(row: row, category: $0)
+                                }
                             }
                         }
                     }

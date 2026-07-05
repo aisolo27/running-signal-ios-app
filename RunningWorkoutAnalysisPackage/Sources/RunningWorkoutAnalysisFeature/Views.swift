@@ -1239,6 +1239,111 @@ struct WorkoutChartsPanel: View {
     }
 }
 
+struct WorkoutPlanOverviewCard: View {
+    let audit: WorkoutPlanAudit
+
+    private var plannedRows: [PlannedWorkoutStep] {
+        audit.plannedSteps.sorted { $0.index < $1.index }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader("Workout Plan")
+
+            VStack(alignment: .leading, spacing: 10) {
+                if let displayName = audit.displayName, !displayName.isEmpty {
+                    Text(displayName)
+                        .font(.headline)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                MetricGrid(items: [
+                    MetricItem(title: "Plan rows", value: "\(plannedRows.count)", detail: audit.planType ?? "WorkoutKit"),
+                    MetricItem(title: "Status", value: audit.status.label, detail: "Planned structure")
+                ])
+
+                VStack(spacing: 8) {
+                    ForEach(Array(plannedRows.enumerated()), id: \.offset) { _, step in
+                        WorkoutPlanStepRow(step: step)
+                    }
+                }
+            }
+            .padding(10)
+            .background(.background)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+    }
+}
+
+private struct WorkoutPlanStepRow: View {
+    let step: PlannedWorkoutStep
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: iconName)
+                .font(.caption.bold())
+                .foregroundStyle(tint)
+                .frame(width: 22, height: 22)
+                .background(tint.opacity(0.16))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(step.index). \(step.label)")
+                    .font(.subheadline.bold())
+                Text(detailText)
+                    .font(.caption2)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+
+            Text(step.plannedGoalDisplayText)
+                .font(.caption.monospacedDigit().bold())
+                .foregroundStyle(tint)
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(8)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var detailText: String {
+        var parts: [String] = []
+        if let repeatBlockIndex = step.repeatBlockIndex, let repeatIndex = step.repeatIndex {
+            parts.append("Block \(repeatBlockIndex), repeat \(repeatIndex)")
+        } else {
+            parts.append(step.stepType.displayName)
+        }
+        if let plannedTargetDisplayText = step.plannedTargetDisplayText, !plannedTargetDisplayText.isEmpty {
+            parts.append(plannedTargetDisplayText)
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private var iconName: String {
+        switch step.stepType {
+        case .warmup: "figure.walk"
+        case .work: "bolt.fill"
+        case .recovery: "arrow.triangle.2.circlepath"
+        case .cooldown: "snowflake"
+        case .open: "infinity"
+        case .unknown: "questionmark"
+        }
+    }
+
+    private var tint: Color {
+        switch step.stepType {
+        case .warmup: .blue
+        case .work: .cyan
+        case .recovery: .yellow
+        case .cooldown: .teal
+        case .open: .orange
+        case .unknown: .secondary
+        }
+    }
+}
+
 struct SplitsAndEventsPanel: View {
     let store: RunningAnalysisStore
     let workout: CanonicalWorkout
@@ -1275,6 +1380,10 @@ struct SplitsAndEventsPanel: View {
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
                 }
+            }
+
+            if let planAudit = workout.evidence?.workoutPlanAudit, !planAudit.plannedSteps.isEmpty {
+                WorkoutPlanOverviewCard(audit: planAudit)
             }
 
             SectionHeader("Workout Intervals")

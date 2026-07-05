@@ -1,11 +1,19 @@
+import OSLog
 import SwiftData
 import SwiftUI
 
 public struct ContentView: View {
+    private static let startupLogger = Logger(
+        subsystem: "com.adrielsolorzano.runninganalysis",
+        category: "Startup"
+    )
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @State private var store = RunningAnalysisStore()
     @State private var selectedTab = AppTab.runs
+    @State private var didScheduleStartupMaintenance = false
+    @State private var didSkipInitialActiveSync = false
 
     public init() {}
 
@@ -30,15 +38,35 @@ public struct ContentView: View {
             .tag(AppTab.settings)
         }
         .task {
+            Self.startupLogger.notice("Bootstrap started")
             await store.bootstrap(modelContext: modelContext)
-            await store.startHealthKitBackgroundDelivery()
-            await store.syncHealthKitChangesOnForeground()
+            Self.startupLogger.notice("Bootstrap finished")
+            scheduleStartupMaintenance()
         }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
+            guard didSkipInitialActiveSync else {
+                didSkipInitialActiveSync = true
+                Self.startupLogger.notice("Initial active phase observed; startup maintenance owns first foreground sync")
+                return
+            }
             Task {
+                Self.startupLogger.notice("Foreground sync requested after reactivation")
                 await store.syncHealthKitChangesOnForeground()
             }
+        }
+    }
+
+    private func scheduleStartupMaintenance() {
+        guard !didScheduleStartupMaintenance else { return }
+        didScheduleStartupMaintenance = true
+
+        Task {
+            Self.startupLogger.notice("Startup maintenance started")
+            await store.startHealthKitBackgroundDelivery()
+            await Task.yield()
+            await store.syncHealthKitChangesOnForeground()
+            Self.startupLogger.notice("Startup maintenance finished")
         }
     }
 }
