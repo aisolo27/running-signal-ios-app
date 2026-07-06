@@ -275,6 +275,7 @@ public final class RunningAnalysisStore {
     public private(set) var evidenceRefreshJobs: [PersistedEvidenceRefreshJob] = []
     public private(set) var healthKitImportJobSummary: HealthKitImportJobSummary?
     public private(set) var derivedAnalysisRefreshSummary = DerivedAnalysisRefreshSummary.empty
+    public private(set) var trainingPeriodSummaries: [CachedTrainingPeriodSummary] = []
     public private(set) var analyzingWorkoutIDs: Set<String> = []
     public private(set) var pendingManualWorkoutIDs: Set<String> = []
     private var manualWorkoutUpdateVersions: [String: Int] = [:]
@@ -318,6 +319,36 @@ public final class RunningAnalysisStore {
     public var shouldSyncHealthKitOnForeground: Bool {
         guard HealthKitSyncStateStore.hasAnchor(defaults: syncDefaults) else { return false }
         return !usesSampleData || healthKitStatus.authorizationState == .authorized || healthKitStatus.authorizationState == .partial || syncState.lastSyncAt != nil
+    }
+
+    public func availableTrainingPeriodStarts(for period: TrainingAnalyticsPeriod) -> [Date] {
+        guard period != .allTime else { return [] }
+        let cached = trainingPeriodSummaries
+            .filter { $0.period == period }
+            .map(\.periodStart)
+            .sorted(by: >)
+        if !cached.isEmpty {
+            return cached
+        }
+        return TrainingPeriodAnalyticsSummary.availablePeriodStarts(workouts: workouts, period: period)
+    }
+
+    public func trainingPeriodSummary(
+        period: TrainingAnalyticsPeriod,
+        periodStart: Date
+    ) -> TrainingPeriodAnalyticsSummary {
+        if let cached = trainingPeriodSummaries.first(where: { $0.period == period && $0.periodStart == periodStart }) {
+            return cached.materializedSummary(workouts: workouts)
+        }
+        return TrainingPeriodAnalyticsSummary.make(workouts: workouts, period: period, periodStart: periodStart)
+    }
+
+    public func defaultTrainingPeriodStart(for period: TrainingAnalyticsPeriod) -> Date {
+        if period == .allTime,
+           let cached = trainingPeriodSummaries.first(where: { $0.period == .allTime }) {
+            return cached.periodStart
+        }
+        return TrainingPeriodAnalyticsSummary.make(workouts: workouts, period: period).periodStart
     }
 
     public func bootstrap(modelContext: ModelContext) async {
@@ -366,8 +397,9 @@ public final class RunningAnalysisStore {
         }
         reviewedRunTypes = RunTypeReviewImportService.loadSavedReviews()
         syncState = HealthKitSyncState(lastSyncAt: HealthKitSyncStateStore.loadLastSyncAt(defaults: syncDefaults))
+        loadPersistedTrainingPeriodSummaries()
         applyReviewedRunTypes()
-        recompute(hydrateEvidence: false, refreshDerivedAnalyses: false)
+        recompute(hydrateEvidence: false, refreshDerivedAnalyses: false, refreshTrainingPeriodSummaries: trainingPeriodSummaries.isEmpty)
         refreshEvidenceRefreshJobs()
         refreshHealthKitImportJobSummary()
     }
@@ -617,6 +649,7 @@ public final class RunningAnalysisStore {
 
         let syncedAt = Date()
         HealthKitSyncStateStore.saveLastSyncAt(syncedAt, defaults: syncDefaults)
+        refreshTrainingPeriodSummaryCache()
         updateHealthKitStatus(
             authorizationState: lastAuthorizationState,
             message: lastMessage ?? "HealthKit sync finished."
@@ -986,6 +1019,7 @@ public final class RunningAnalysisStore {
         guard let index = workouts.firstIndex(where: { $0.id == workoutID }) else { return }
         workouts[index].manualRunType = manualRunType
         workouts[index].notes = notes
+        refreshTrainingPeriodSummaryCache()
         pendingManualWorkoutIDs.insert(workoutID)
         let version = (manualWorkoutUpdateVersions[workoutID] ?? 0) + 1
         manualWorkoutUpdateVersions[workoutID] = version
@@ -1280,12 +1314,18 @@ public final class RunningAnalysisStore {
 
     private func recompute(
         hydrateEvidence shouldHydrateEvidence: Bool = true,
-        refreshDerivedAnalyses shouldRefreshDerivedAnalyses: Bool = true
+        refreshDerivedAnalyses shouldRefreshDerivedAnalyses: Bool = true,
+        refreshTrainingPeriodSummaries shouldRefreshTrainingPeriodSummaries: Bool = true
     ) {
         if shouldHydrateEvidence {
             hydrateCachedEvidence()
         }
         workouts = DuplicateDetector.markDuplicates(workouts)
+        if shouldRefreshTrainingPeriodSummaries {
+            refreshTrainingPeriodSummaryCache()
+        } else if trainingPeriodSummaries.isEmpty {
+            loadPersistedTrainingPeriodSummaries()
+        }
         runTypeReconciliation = RunTypeReviewBridge.reconcile(reviews: reviewedRunTypes, workouts: workouts)
         snapshot = AnalyticsEngine.snapshot(for: workouts, healthContext: healthContext)
         personalBestEffortSummary = PersonalBestEffortEngine.summarize(workouts: workoutsForBestEfforts())
@@ -1331,6 +1371,22 @@ public final class RunningAnalysisStore {
             hydrated.seriesAvailable = hydrated.seriesAvailable || evidence.seriesSampleCount > 0
             return hydrated
         }
+    }
+
+    private func loadPersistedTrainingPeriodSummaries() {
+        guard let modelContext else {
+            trainingPeriodSummaries = CachedTrainingPeriodSummary.makeAll(workouts: workouts)
+            return
+        }
+        trainingPeriodSummaries = PersistenceService.fetchTrainingPeriodSummaries(context: modelContext)
+    }
+
+    private func refreshTrainingPeriodSummaryCache() {
+        guard let modelContext else {
+            trainingPeriodSummaries = CachedTrainingPeriodSummary.makeAll(workouts: workouts)
+            return
+        }
+        trainingPeriodSummaries = PersistenceService.refreshTrainingPeriodSummaries(workouts: workouts, context: modelContext)
     }
 
     private func applyReviewedRunTypes() {

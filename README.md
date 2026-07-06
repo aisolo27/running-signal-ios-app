@@ -42,6 +42,20 @@ For current project direction, assistant rules, and validation state, start with
 
 Use `docs/bug-log.md` as a selective lookup for recurring HealthKit, SwiftUI, startup, and validation gotchas. Archived docs under `docs/archive/` are historical context and should not be loaded by default.
 
+## External Review Guide
+
+If you are reviewing the HealthKit data-processing, cache, or background-sync approach, start here:
+
+- `docs/project-state/data-ingestion-background-reference.md` - current app flow for HealthKit summary import, detailed evidence loading, SwiftData persistence, anchored sync, observer delivery, and known physical-device proof gaps.
+- `docs/project-state/data-ingestion-ai-review-synthesis.md` - consolidated review from prior AI passes with the implemented hardening items and remaining risks.
+- `RunningWorkoutAnalysisPackage/Sources/RunningWorkoutAnalysisFeature/HealthKitService.swift` - HealthKit query entry points.
+- `RunningWorkoutAnalysisPackage/Sources/RunningWorkoutAnalysisFeature/HealthKitWorkoutSyncService.swift` - anchored incremental sync and deletion handling.
+- `RunningWorkoutAnalysisPackage/Sources/RunningWorkoutAnalysisFeature/RunningAnalysisStore.swift` - app-level import, sync, cache, and analytics coordination.
+- `RunningWorkoutAnalysisPackage/Sources/RunningWorkoutAnalysisFeature/PersistenceService.swift` and `Models.swift` - SwiftData cache shape.
+- `RunningWorkoutAnalysisPackage/Sources/RunningWorkoutAnalysisFeature/EvidenceEnrichmentQueue.swift`, `WorkoutEvidenceService.swift`, and `IngestionBudgetPolicy.swift` - detailed-evidence backfill, expensive per-workout reads, and budget controls.
+
+The repo contains a large `docs/archive/` and validation evidence history. Those files are kept for traceability, but they are not the best first stop for a code review. The current source of truth is `docs/project-state/project-status.md`.
+
 ## Project Architecture
 
 ```

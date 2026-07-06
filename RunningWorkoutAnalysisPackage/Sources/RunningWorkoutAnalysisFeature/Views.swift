@@ -234,10 +234,13 @@ struct V1WorkoutRow: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(RunWorkout(workout: workout).displayName)
                     .font(.headline)
+                    .lineLimit(1)
                 Spacer()
-                Text(RunFormatters.shortDate.string(from: workout.startDate))
+                Text(RunFormatters.mediumDateWithYear.string(from: workout.startDate))
                     .font(.caption)
                     .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
             Text("\(RunFormatters.distance(workout.distanceMeters)) · \(RunFormatters.duration(workout.durationSeconds)) · \(RunFormatters.pace(workout.paceSecondsPerKm))")
                 .font(.caption)

@@ -1,6 +1,6 @@
 # RunSignal Project Status
 
-Last updated: 2026-07-05
+Last updated: 2026-07-06
 
 ## Product Direction
 
@@ -64,6 +64,7 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 ## Current Next Work
 
 - Continue data ingestion hardening before expanding analytics depth: measure the new import job, observer delivery, anchored deletions, large backlog sync, thermal behavior, and battery impact on a physical iPhone.
+- Profile the new local training-period summary cache on a physical iPhone with a large real HealthKit history; keep it as a disposable SwiftData projection over HealthKit-backed workouts, not a new source of truth.
 - Keep generalized resolved activity-boundary row behavior stable across archived Apple Fitness fixtures and priority workouts.
 - Re-export the June 30 clean no-pause repeat fixed-cooldown/`Open / Extra` workout from a fresh current-build physical-iPhone install.
 - Confirm visible/export status labels agree with the resolved-row source.
@@ -87,6 +88,8 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 
 ## Recent Proof
 
+- 2026-07-06 Runs dashboard date display: Completed Runs rows now show year-inclusive dates such as `Jun 24, 2024`; `swift test --package-path RunningWorkoutAnalysisPackage` passed with 257 tests.
+- 2026-07-06 local analytics cache verification: `swift test --package-path RunningWorkoutAnalysisPackage` passed, Simulator build/install/launch passed on booted iPhone 17, Analytics tab rendered the cached-summary surface without blank screen, and physical-iPhone build/install/launch passed on `AIS17PM` with `RunSignal com.adrielsolorzano.runninganalysis` confirmed by `xcrun devicectl device info apps`.
 - `docs/validation/apple-fitness-interval-parity-dataset/user-supplied-june30-clean-repeat-tail-review-2026-06-30/` archives June 30 user-supplied evidence for a clean no-pause repeat fixed-cooldown/`Open / Extra` workout.
 - `docs/validation/apple-fitness-interval-parity-dataset/physical-iphone-priority-repeat-proof-2026-06-28/` archives the five-priority physical proof set with Apple Fitness screenshots, typed manual rows, and Raw HealthKit Debug/Parity Lab exports.
 - Health Context follow-up: verify VO2 Max and Resting Heart Rate on the physical iPhone after granting Apple Health read access.
@@ -130,6 +133,14 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 - Best Efforts recompute from persisted detailed evidence after relaunch without hydrating all cached evidence into the main workout list, so exact PRs loaded by `Load HealthKit Runs` survive app restart/force-quit.
 - Package tests cover deleted-workout removal, multi-batch sync aggregation, anchor/sync-state preservation when injected local persistence fails, import job completion/pause state, import cursor persistence, and background observer registration.
 - The HealthFit screen recording reference stays as tracked metadata/UI notes in `docs/validation/healthfit-interval-ui-reference.md`; the ignored local video copy was removed during repo cleanup to keep the workspace light.
+
+## 2026-07-06 Local Analytics Summary Cache Slice
+
+- Analytics period summaries now have a local SwiftData materialized-view cache (`PersistedTrainingPeriodSummary`) for Week, Month, Year, and All-Time summaries.
+- The cache is rebuilt from the current local HealthKit-backed workout summaries after import, foreground/background-ready sync, and manual category changes; it stores compact aggregate totals, bucket totals, category totals, comparison values, and workout IDs rather than full workout payloads.
+- `AnalyticsView` now asks `RunningAnalysisStore` for cached period starts and summaries, with the existing pure `TrainingPeriodAnalyticsSummary.make` path remaining as the fallback when a cache row is missing.
+- The cache remains disposable derived state: HealthKit is still runtime truth, SwiftData workout summaries are the local cache, and detailed evidence stays manual/foreground unless a user explicitly loads full analysis.
+- Package tests cover cache persistence after HealthKit import/relaunch and cache refresh after manual run-type/category edits.
 
 ## 2026-07-04 Interval Goal Vs Measured Display
 

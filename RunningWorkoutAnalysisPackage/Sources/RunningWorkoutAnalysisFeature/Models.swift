@@ -1244,6 +1244,40 @@ public final class PersistedDerivedWorkoutAnalysis {
     }
 }
 
+@Model
+public final class PersistedTrainingPeriodSummary {
+    @Attribute(.unique) public var cacheKey: String
+    public var periodRaw: String
+    public var periodStart: Date
+    public var calculationVersion: String
+    public var inputSignature: String
+    public var summaryData: Data
+    public var updatedAt: Date
+
+    public init(summary: CachedTrainingPeriodSummary) {
+        cacheKey = summary.cacheKey
+        periodRaw = summary.period.rawValue
+        periodStart = summary.periodStart
+        calculationVersion = summary.calculationVersion
+        inputSignature = summary.inputSignature
+        summaryData = (try? JSONEncoder().encode(summary)) ?? Data()
+        updatedAt = summary.computedAt
+    }
+
+    public func update(summary: CachedTrainingPeriodSummary) {
+        periodRaw = summary.period.rawValue
+        periodStart = summary.periodStart
+        calculationVersion = summary.calculationVersion
+        inputSignature = summary.inputSignature
+        summaryData = (try? JSONEncoder().encode(summary)) ?? Data()
+        updatedAt = summary.computedAt
+    }
+
+    public var cachedSummary: CachedTrainingPeriodSummary? {
+        try? JSONDecoder().decode(CachedTrainingPeriodSummary.self, from: summaryData)
+    }
+}
+
 public struct DataQualityReport: Sendable {
     public var workoutCount: Int
     public var includedWorkoutCount: Int

@@ -374,3 +374,48 @@ Scope: reviewed July 4 Codex session logs whose JSON `session_meta.payload.cwd` 
 - Added this July 4 section to `docs/project-state/daily-learning-review.md`.
 - Did not edit `docs/project-state/project-status.md` or `docs/bug-log.md` in this review because existing dirty edits already captured the strong July 4 durable state: interval goal-vs-measured display and the HealthKit planned-vs-measured pace-basis gotcha.
 - Did not edit `AGENTS.md` or `docs/project-state/documentation-index.md`: no new durable routing rule or document classification change was stronger than existing guidance.
+
+## 2026-07-05
+
+Scope: reviewed July 5 Codex session logs whose JSON `session_meta.payload.cwd` exactly matched this RunSignal repo. Excluded the active July 5 daily-learning automation session. Treated as documentation-only review: no Xcode builds, device installs, HealthKit/provider mutations, commits, pushes, or broad repo scans.
+
+### Completed Work
+
+- Confirmed RunSignal was already installed on physical iPhone `AIS17PM` as bundle `com.adrielsolorzano.runninganalysis`, then reinstalled/launched the current build without uninstalling so app data/cache stayed intact. Validation before the device run included `swift test --package-path RunningWorkoutAnalysisPackage` passing with `254` tests and an iPhone 17 Simulator smoke reaching the Runs screen.
+- Reviewed the July 5 physical recording and measured two long black-screen/transition spans: about `13.28 s` and `14.25 s`. The recording also showed Analytics manual category taps feeling blocked and WorkoutKit plan details being hidden behind technical details.
+- Added optimistic single-row Analytics tagging with delayed guarded persistence and a per-row saving indicator, so manual category taps acknowledge immediately instead of making the screen feel frozen.
+- Added a normal user-facing Workout Plan card in workout detail from structured WorkoutKit planned rows, before Workout Intervals, so users can see the prescribed plan without opening Developer Tools.
+- Moved HealthKit background-delivery registration and foreground sync out of first-render launch work, skipped the first duplicate `.active` scene-phase sync, and added startup log markers for future profiling. Simulator build/run reached Runs cleanly after the patch.
+- Installed/launched the patched build on `AIS17PM`, then pushed commit `5c367c4 Improve RunSignal launch and workout review UX` to `origin/main` after package tests and Simulator smoke passed.
+- Later tightened the GitHub-facing README with an External Review Guide for David; that README change remains uncommitted at review time.
+- Checked GitHub repo share-readiness: public repo access had no outside collaborators, deploy keys, webhooks, listed repo secrets, local workflows, or write access beyond the owner. Added a narrow active ruleset protecting `main` from deletion and non-fast-forward pushes, without requiring PRs, reviews, or status checks.
+
+### Pending Work
+
+- Capture a fresh physical-iPhone recording/proof after the July 5 launch-path patch to confirm black-screen duration improves on real HealthKit cache pressure; Simulator sample data cannot prove this.
+- On the phone, verify Analytics tag changes feel immediate, row-level saving is visible, and category persistence survives force-quit/reopen.
+- Verify the new Workout Plan card on a real planned-workout detail screen and compare its prescribed rows with official interval rows/Raw Debug when available.
+- Decide whether to commit the later `README.md` External Review Guide edit or revise it before sharing the repo link.
+- Keep repo sharing safe by leaving collaborators empty unless direct write access is intentionally wanted; branch protection now blocks destructive updates to `main`, but public forks/clones still need normal review before any PR merge.
+
+### Mistakes, Fixes, And Friction
+
+- The first July 5 recording confirmed that simulator success did not expose the real phone's launch/cache pressure. Continue separating package tests, Simulator nonblank smoke, physical install/launch, and physical real-data semantic proof.
+- Manual category writes had already been made lighter, but they still felt blocking because the interactive tap path waited on enough persistence/recompute work to make the menu appear frozen. The next fix moved the user-visible state change ahead of delayed persistence.
+- WorkoutKit plan data existed, but presenting it mainly through Raw HealthKit Debug/Developer Tools made a normal user workflow feel incomplete. Durable UX rule: prescribed plan belongs near executed intervals when structured plan rows are available.
+- XcodeBuildMCP session defaults were empty again for the Simulator/device workflow; set workspace, scheme, simulator/device, and bundle id explicitly before build/run/stop steps.
+- GitHub API form quoting for rulesets was brittle with shell bracket syntax; using a JSON payload was the reliable path.
+
+### Workflow Improvements
+
+- For physical recordings, measure obvious visual stalls in seconds/frames before changing code; the July 5 video made the black-screen issue concrete enough to tie to launch-path work.
+- For app launch issues, inspect first-render tasks and first `.active` scene-phase hooks together. Duplicate startup sync can hide behind otherwise clean Simulator launches.
+- For "push it through my iPhone," keep interpreting it as physical-device install/run, not git push, unless the user later says `push` in the git/GitHub sense.
+- For sharing the repo with an external reviewer, a minimal `main` ruleset that blocks deletion and force-pushes is a useful low-friction guard; do not add PR/review/status-check requirements unless the workflow needs them.
+
+### Docs Updated By This Review
+
+- Added this July 5 section to `docs/project-state/daily-learning-review.md`.
+- Did not edit `docs/project-state/project-status.md` or `docs/bug-log.md`: commit `5c367c4` and the current docs already capture the durable July 5 launch, manual-tag freeze, workout-plan-card, and foreground-sync lessons.
+- Did not edit `AGENTS.md` or `docs/project-state/documentation-index.md`: no new durable routing or document-classification rule was stronger than existing repo guidance.
+- Did not edit `README.md` because it already has unrelated active edits from the external-review guide pass.

@@ -9,17 +9,17 @@ struct AnalyticsView: View {
     @State private var selectedPeriodStart: Date?
 
     private var periodStarts: [Date] {
-        TrainingPeriodAnalyticsSummary.availablePeriodStarts(workouts: store.workouts, period: selectedPeriod)
+        store.availableTrainingPeriodStarts(for: selectedPeriod)
     }
 
     private var activePeriodStart: Date {
         guard selectedPeriod != .allTime else {
-            return TrainingPeriodAnalyticsSummary.make(workouts: store.workouts, period: .allTime).periodStart
+            return store.defaultTrainingPeriodStart(for: .allTime)
         }
         if let selectedPeriodStart, periodStarts.contains(selectedPeriodStart) {
             return selectedPeriodStart
         }
-        return periodStarts.first ?? TrainingPeriodAnalyticsSummary.make(workouts: store.workouts, period: selectedPeriod).periodStart
+        return periodStarts.first ?? store.defaultTrainingPeriodStart(for: selectedPeriod)
     }
 
     var body: some View {
@@ -39,8 +39,7 @@ struct AnalyticsView: View {
 
                 PeriodSignalView(
                     store: store,
-                    summary: TrainingPeriodAnalyticsSummary.make(
-                        workouts: store.workouts,
+                    summary: store.trainingPeriodSummary(
                         period: selectedPeriod,
                         periodStart: activePeriodStart
                     ),

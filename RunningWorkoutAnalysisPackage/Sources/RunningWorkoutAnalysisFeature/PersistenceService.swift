@@ -14,6 +14,42 @@ public enum PersistenceService {
         }
     }
 
+    public static func fetchTrainingPeriodSummaries(context: ModelContext) -> [CachedTrainingPeriodSummary] {
+        fetchPersistedTrainingPeriodSummaries(context: context)
+            .compactMap(\.cachedSummary)
+            .filter { $0.calculationVersion == CachedTrainingPeriodSummary.currentCalculationVersion }
+    }
+
+    @discardableResult
+    public static func refreshTrainingPeriodSummaries(
+        workouts: [CanonicalWorkout],
+        context: ModelContext,
+        now: Date = Date()
+    ) -> [CachedTrainingPeriodSummary] {
+        let summaries = CachedTrainingPeriodSummary.makeAll(workouts: workouts, now: now)
+        var recordsByKey = Dictionary(
+            uniqueKeysWithValues: fetchPersistedTrainingPeriodSummaries(context: context).map { ($0.cacheKey, $0) }
+        )
+        let activeKeys = Set(summaries.map(\.cacheKey))
+
+        for summary in summaries {
+            if let record = recordsByKey[summary.cacheKey] {
+                record.update(summary: summary)
+            } else {
+                let record = PersistedTrainingPeriodSummary(summary: summary)
+                context.insert(record)
+                recordsByKey[summary.cacheKey] = record
+            }
+        }
+
+        for record in recordsByKey.values where !activeKeys.contains(record.cacheKey) {
+            context.delete(record)
+        }
+
+        try? context.save()
+        return summaries
+    }
+
     public static func upsert(_ workouts: [CanonicalWorkout], context: ModelContext) {
         try? upsertAndSave(workouts, context: context)
     }
@@ -566,6 +602,14 @@ public enum PersistenceService {
     private static func fetchPersistedDerivedAnalyses(context: ModelContext) -> [PersistedDerivedWorkoutAnalysis] {
         do {
             return try context.fetch(FetchDescriptor<PersistedDerivedWorkoutAnalysis>())
+        } catch {
+            return []
+        }
+    }
+
+    private static func fetchPersistedTrainingPeriodSummaries(context: ModelContext) -> [PersistedTrainingPeriodSummary] {
+        do {
+            return try context.fetch(FetchDescriptor<PersistedTrainingPeriodSummary>())
         } catch {
             return []
         }

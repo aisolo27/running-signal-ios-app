@@ -66,6 +66,19 @@ import Testing
     #expect(RunFormatters.distance(400) == "0.40 km")
 }
 
+@Test func mediumDateWithYearIncludesRunYear() throws {
+    var components = DateComponents()
+    components.calendar = Calendar(identifier: .gregorian)
+    components.timeZone = TimeZone(secondsFromGMT: 0)
+    components.year = 2024
+    components.month = 6
+    components.day = 24
+    components.hour = 12
+
+    let date = try #require(components.date)
+    #expect(RunFormatters.mediumDateWithYear.string(from: date) == "Jun 24, 2024")
+}
+
 @Test func intervalGoalMeasuredItemsSeparateDistanceGoalStats() {
     let interval = intervalForGoalMeasuredText(
         plannedGoalType: .distance,
@@ -1517,6 +1530,70 @@ private func intervalForGoalMeasuredText(
     #expect(store.workouts.contains { $0.id == imported.id })
     #expect(healthKit.windowedLoadRequests.first?.detailedEvidenceLimit == HealthKitService.defaultDetailedEvidenceLimit)
     #expect(healthKit.windowedLoadRequests.dropFirst().allSatisfy { $0.detailedEvidenceLimit == 0 })
+}
+
+@MainActor
+@Test func healthKitInitialImportPersistsTrainingPeriodSummaryCache() async throws {
+    let context = try inMemoryModelContext()
+    let healthKit = StubHealthKitService()
+    let imported = testWorkout(
+        id: "cached-period-workout",
+        start: Date(timeIntervalSince1970: 8_000),
+        distanceMeters: 6_000,
+        durationSeconds: 1_800
+    )
+    healthKit.windowedLoadResults = [
+        HealthKitLoadResult(
+            authorizationState: .authorized,
+            workouts: [imported],
+            healthContext: HealthContext(),
+            message: nil
+        )
+    ]
+    let store = RunningAnalysisStore(healthKitService: healthKit)
+
+    await store.bootstrap(modelContext: context)
+    await store.refreshFromHealthKit()
+
+    let persistedSummaries = PersistenceService.fetchTrainingPeriodSummaries(context: context)
+    #expect(persistedSummaries.contains { $0.period == .week })
+    #expect(persistedSummaries.contains { $0.period == .month })
+    #expect(persistedSummaries.contains { $0.period == .year })
+    #expect(persistedSummaries.contains { $0.period == .allTime })
+
+    let relaunchedStore = RunningAnalysisStore(healthKitService: healthKit)
+    await relaunchedStore.bootstrap(modelContext: context)
+
+    let weekStart = WeeklyAnalyticsSummary.weekStart(containing: imported.startDate)
+    let weekSummary = relaunchedStore.trainingPeriodSummary(period: .week, periodStart: weekStart)
+    #expect(weekSummary.runCount == 1)
+    #expect(weekSummary.totalDistanceMeters == 6_000)
+}
+
+@MainActor
+@Test func manualRunTypeUpdateRefreshesTrainingPeriodSummaryCache() async throws {
+    let context = try inMemoryModelContext()
+    let workout = testWorkout(
+        id: "manual-category-cache-workout",
+        start: Date(timeIntervalSince1970: 8_000),
+        distanceMeters: 5_000,
+        durationSeconds: 1_500,
+        inferredRunType: .easy
+    )
+    PersistenceService.upsert([workout], context: context)
+    let store = RunningAnalysisStore(healthKitService: StubHealthKitService())
+
+    await store.bootstrap(modelContext: context)
+    let weekStart = WeeklyAnalyticsSummary.weekStart(containing: workout.startDate)
+    #expect(store.trainingPeriodSummary(period: .week, periodStart: weekStart).categoryTotals.first { $0.category == .easy }?.runCount == 1)
+
+    store.updateManualFields([
+        ManualWorkoutFieldUpdate(id: workout.id, runType: .interval, notes: "")
+    ])
+
+    let refreshedSummary = store.trainingPeriodSummary(period: .week, periodStart: weekStart)
+    #expect(refreshedSummary.categoryTotals.first { $0.category == .interval }?.runCount == 1)
+    #expect(PersistenceService.fetchTrainingPeriodSummaries(context: context).first { $0.period == .week && $0.periodStart == weekStart }?.categoryTotals.first { $0.category == .interval }?.runCount == 1)
 }
 
 @MainActor
@@ -6294,7 +6371,8 @@ private func inMemoryModelContext() throws -> ModelContext {
         PersistedEvidenceRefreshJob.self,
         PersistedEvidenceRefreshJobItem.self,
         PersistedHealthKitImportJob.self,
-        PersistedDerivedWorkoutAnalysis.self
+        PersistedDerivedWorkoutAnalysis.self,
+        PersistedTrainingPeriodSummary.self
     ])
     let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
     let container = try ModelContainer(for: schema, configurations: [configuration])

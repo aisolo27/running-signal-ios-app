@@ -1,6 +1,6 @@
 import Foundation
 
-public enum TrainingAnalyticsPeriod: String, CaseIterable, Identifiable, Sendable {
+public enum TrainingAnalyticsPeriod: String, Codable, CaseIterable, Identifiable, Sendable {
     case week
     case month
     case year
@@ -18,7 +18,7 @@ public enum TrainingAnalyticsPeriod: String, CaseIterable, Identifiable, Sendabl
     }
 }
 
-public enum WeeklyRunCategory: String, CaseIterable, Identifiable, Sendable {
+public enum WeeklyRunCategory: String, Codable, CaseIterable, Identifiable, Sendable {
     case easy
     case interval
     case threshold
@@ -61,7 +61,7 @@ public enum WeeklyRunCategory: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-public struct WeeklyRunCategoryTotal: Identifiable, Equatable, Sendable {
+public struct WeeklyRunCategoryTotal: Codable, Identifiable, Equatable, Sendable {
     public var id: WeeklyRunCategory { category }
     public var category: WeeklyRunCategory
     public var runCount: Int
@@ -179,7 +179,7 @@ public struct WeeklyAnalyticsSummary: Equatable, Sendable {
     }
 }
 
-public struct TrainingPeriodDistanceBucket: Identifiable, Equatable, Sendable {
+public struct TrainingPeriodDistanceBucket: Codable, Identifiable, Equatable, Sendable {
     public var id: Date { startDate }
     public var startDate: Date
     public var endDate: Date
@@ -187,7 +187,7 @@ public struct TrainingPeriodDistanceBucket: Identifiable, Equatable, Sendable {
     public var distanceMeters: Double
 }
 
-public struct TrainingPeriodComparison: Equatable, Sendable {
+public struct TrainingPeriodComparison: Codable, Equatable, Sendable {
     public var startDate: Date
     public var endDate: Date
     public var elapsedDayCount: Int
@@ -355,6 +355,130 @@ public struct TrainingPeriodAnalyticsSummary: Equatable, Sendable {
 
     private static func minDate(_ lhs: Date, _ rhs: Date) -> Date {
         lhs < rhs ? lhs : rhs
+    }
+}
+
+public struct CachedTrainingPeriodSummary: Codable, Equatable, Sendable {
+    public static let currentCalculationVersion = "training-period-summary-v1"
+
+    public var period: TrainingAnalyticsPeriod
+    public var periodStart: Date
+    public var periodEnd: Date
+    public var analysisEnd: Date
+    public var elapsedDayCount: Int
+    public var isPeriodToDate: Bool
+    public var workoutIDs: [String]
+    public var distanceBuckets: [TrainingPeriodDistanceBucket]
+    public var categoryTotals: [WeeklyRunCategoryTotal]
+    public var totalDistanceMeters: Double
+    public var totalDurationSeconds: Double
+    public var comparison: TrainingPeriodComparison?
+    public var calculationVersion: String
+    public var inputSignature: String
+    public var computedAt: Date
+
+    public var cacheKey: String {
+        Self.cacheKey(period: period, periodStart: periodStart)
+    }
+
+    public init(
+        summary: TrainingPeriodAnalyticsSummary,
+        inputSignature: String,
+        computedAt: Date = Date()
+    ) {
+        period = summary.period
+        periodStart = summary.periodStart
+        periodEnd = summary.periodEnd
+        analysisEnd = summary.analysisEnd
+        elapsedDayCount = summary.elapsedDayCount
+        isPeriodToDate = summary.isPeriodToDate
+        workoutIDs = summary.workouts.map(\.workout.id)
+        distanceBuckets = summary.distanceBuckets
+        categoryTotals = summary.categoryTotals
+        totalDistanceMeters = summary.totalDistanceMeters
+        totalDurationSeconds = summary.totalDurationSeconds
+        comparison = summary.comparison
+        calculationVersion = Self.currentCalculationVersion
+        self.inputSignature = inputSignature
+        self.computedAt = computedAt
+    }
+
+    public func materializedSummary(workouts allWorkouts: [CanonicalWorkout]) -> TrainingPeriodAnalyticsSummary {
+        let workoutsByID = Dictionary(uniqueKeysWithValues: allWorkouts.map { ($0.id, $0) })
+        let rows = workoutIDs.compactMap { id -> WeeklyWorkoutRow? in
+            guard let workout = workoutsByID[id] else { return nil }
+            return WeeklyWorkoutRow(workout: workout, category: WeeklyRunCategory.make(from: workout))
+        }
+        return TrainingPeriodAnalyticsSummary(
+            period: period,
+            periodStart: periodStart,
+            periodEnd: periodEnd,
+            analysisEnd: analysisEnd,
+            elapsedDayCount: elapsedDayCount,
+            isPeriodToDate: isPeriodToDate,
+            workouts: rows,
+            distanceBuckets: distanceBuckets,
+            categoryTotals: categoryTotals,
+            totalDistanceMeters: totalDistanceMeters,
+            totalDurationSeconds: totalDurationSeconds,
+            comparison: comparison
+        )
+    }
+
+    public static func cacheKey(period: TrainingAnalyticsPeriod, periodStart: Date) -> String {
+        "\(period.rawValue)|\(periodStart.timeIntervalSinceReferenceDate)"
+    }
+
+    public static func makeAll(
+        workouts: [CanonicalWorkout],
+        now: Date = Date(),
+        calendar: Calendar = WeeklyAnalyticsSummary.mondayCalendar
+    ) -> [CachedTrainingPeriodSummary] {
+        let inputSignature = signature(for: workouts)
+        return TrainingAnalyticsPeriod.allCases.flatMap { period -> [CachedTrainingPeriodSummary] in
+            let starts = period == .allTime
+                ? [TrainingPeriodAnalyticsSummary.make(workouts: workouts, period: .allTime, now: now, calendar: calendar).periodStart]
+                : TrainingPeriodAnalyticsSummary.availablePeriodStarts(workouts: workouts, period: period, now: now, calendar: calendar)
+            return starts.map { start in
+                CachedTrainingPeriodSummary(
+                    summary: TrainingPeriodAnalyticsSummary.make(
+                        workouts: workouts,
+                        period: period,
+                        periodStart: start,
+                        now: now,
+                        calendar: calendar
+                    ),
+                    inputSignature: inputSignature,
+                    computedAt: now
+                )
+            }
+        }
+        .sorted { lhs, rhs in
+            if lhs.period.rawValue != rhs.period.rawValue {
+                return lhs.period.rawValue < rhs.period.rawValue
+            }
+            return lhs.periodStart > rhs.periodStart
+        }
+    }
+
+    public static func signature(for workouts: [CanonicalWorkout]) -> String {
+        V1WorkoutFilters.completedRuns(from: workouts)
+            .sorted { $0.id < $1.id }
+            .map { workout in
+                [
+                    workout.id,
+                    workout.startDate.ISO8601Format(),
+                    workout.endDate.ISO8601Format(),
+                    "\(workout.distanceMeters ?? -1)",
+                    "\(workout.durationSeconds)",
+                    "\(workout.elapsedSeconds)",
+                    workout.inferredRunType.rawValue,
+                    workout.manualRunType?.rawValue ?? "nil",
+                    "\(workout.isDuplicate)",
+                    workout.duplicateOfID ?? "nil"
+                ].joined(separator: ":")
+            }
+            .joined(separator: "|")
     }
 }
 
