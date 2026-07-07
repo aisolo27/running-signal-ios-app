@@ -143,9 +143,20 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 - The cache remains disposable derived state: HealthKit is still runtime truth, SwiftData workout summaries are the local cache, and detailed evidence stays manual/foreground unless a user explicitly loads full analysis.
 - Package tests cover cache persistence after HealthKit import/relaunch and cache refresh after manual run-type/category edits.
 
+## 2026-07-07 Workout Detail UX Cleanup Slice
+
+- Physical-iPhone recording review confirmed the branded startup surface is visible but still feels long enough that perceived startup work remains open; the startup spinner is now more visible while deeper first-render timing still needs physical-iPhone measurement.
+- Workout detail now exposes run type/category editing directly on the selected workout through the same lightweight manual-field update path used by Analytics.
+- Route success and detailed evidence sample-count cards are no longer shown in the normal happy path; the route map stands on its own when available and unavailable route states still explain what is missing.
+- Workout Plan now leads with a stacked runner-facing prescription summary: warm-up, repeated work target, indented recovery, and cool-down, while the expanded raw WorkoutKit plan rows sit behind a disclosure.
+- Workout Intervals now lead with work-repeat summary metrics when repeat groups exist; resolved all-row count remains supporting detail instead of the main headline.
+- Workout metric charts now show stronger official interval background bands in addition to scrub selection and boundary markers.
+- Interval detail copy renamed `Goal Pace` to `Planned-Distance Pace`: the Apple-Fitness-comparable pace normalized to the planned distance, while `Measured Pace` remains HealthKit measured distance over displayed time.
+- Verification: `swift test --package-path RunningWorkoutAnalysisPackage` passed with 257 tests, XcodeBuildMCP Simulator build/install/launch passed on iPhone 17, and physical-iPhone build/install/launch passed on `AIS17PM` with `RunSignal com.adrielsolorzano.runninganalysis` confirmed by `xcrun devicectl device info apps`. Simulator snapshot/screenshot checked Runs and sample Workout detail for blank screens/obvious overlap, including the Run Type menu. Sample data has no WorkoutKit plan, so exact stacked plan-card proof still needs checking against a real structured workout on the physical iPhone.
+
 ## 2026-07-04 Interval Goal Vs Measured Display
 
-- Official interval detail, Raw Debug official rows, and selected Interval Analysis rows now separate WorkoutKit goal distance/time from measured HealthKit distance/time/pace. Distance-goal rows show goal distance, measured distance, measured time, goal-normalized pace, and measured pace; time-goal and open rows stay measured-first without inventing a goal distance.
+- Official interval detail, Raw Debug official rows, and selected Interval Analysis rows now separate WorkoutKit goal distance/time from measured HealthKit distance/time/pace. Distance-goal rows show goal distance, measured distance, measured time, planned-distance pace, and measured pace; time-goal and open rows stay measured-first without inventing a goal distance.
 
 ## 2026-07-05 Physical Recording Bug-Fix Pass
 

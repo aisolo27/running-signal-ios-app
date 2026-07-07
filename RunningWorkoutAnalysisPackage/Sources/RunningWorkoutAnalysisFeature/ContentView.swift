@@ -89,7 +89,7 @@ private struct RunSignalStartupView: View {
             Color(red: 0.02, green: 0.027, blue: 0.039)
                 .ignoresSafeArea()
 
-            VStack(spacing: 18) {
+            VStack(spacing: 20) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(Color(red: 0.10, green: 0.22, blue: 0.38))
@@ -111,9 +111,9 @@ private struct RunSignalStartupView: View {
                 }
 
                 ProgressView()
-                    .controlSize(.small)
+                    .controlSize(.regular)
                     .tint(.white.opacity(0.9))
-                    .padding(.top, 6)
+                    .padding(.top, 4)
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("RunSignal loading runs")

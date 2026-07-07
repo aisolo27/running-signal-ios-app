@@ -1034,6 +1034,8 @@ struct WorkoutDetailView: View {
                         )
                     )
 
+                    WorkoutCategoryCard(store: store, workout: workout)
+
                     EvidenceReadinessCard(
                         summary: readiness,
                         queueItem: queueItem,
@@ -1117,6 +1119,70 @@ struct FitnessWorkoutMetrics: View {
     }
 }
 
+private struct WorkoutCategoryCard: View {
+    var store: RunningAnalysisStore
+    let workout: CanonicalWorkout
+
+    private var currentRunType: RunType {
+        workout.manualRunType ?? workout.effectiveRunType
+    }
+
+    private var sourceLabel: String {
+        workout.manualRunType == nil ? "Suggested" : "Reviewed"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Run Type")
+                        .font(.subheadline.bold())
+                    Text(sourceLabel)
+                        .font(.caption2)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
+                }
+
+                Spacer()
+
+                if store.pendingManualWorkoutIDs.contains(workout.id) {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel("Saving run type")
+                }
+            }
+
+            Menu {
+                ForEach(RunType.allCases.filter { $0 != .unknown }) { runType in
+                    Button(runType.label) {
+                        store.update(workoutID: workout.id, manualRunType: runType, notes: workout.notes)
+                    }
+                }
+
+                if workout.manualRunType != nil {
+                    Divider()
+                    Button("Clear Review") {
+                        store.update(workoutID: workout.id, manualRunType: nil, notes: workout.notes)
+                    }
+                }
+            } label: {
+                HStack {
+                    Label(currentRunType.label, systemImage: "tag")
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityLabel("Set run type")
+        }
+        .padding()
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
 struct RouteAndSeriesPanel: View {
     let workout: CanonicalWorkout
 
@@ -1125,13 +1191,14 @@ struct RouteAndSeriesPanel: View {
             SectionHeader("Route")
             if let route = workout.evidence?.route, route.count >= 2 {
                 WorkoutRouteMap(route: route)
+            } else {
+                NoticeCard(
+                    title: routeTitle,
+                    message: routeMessage,
+                    systemImage: routeIcon,
+                    tint: routeTint
+                )
             }
-            NoticeCard(
-                title: routeTitle,
-                message: routeMessage,
-                systemImage: routeIcon,
-                tint: routeTint
-            )
         }
     }
 
@@ -1221,29 +1288,15 @@ struct WorkoutChartsPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader("Evidence")
-            MetricGrid(items: evidenceItems)
             SectionHeader("Charts")
             WorkoutChartDeck(workout: workout)
         }
-    }
-
-    private var evidenceItems: [MetricItem] {
-        [
-            MetricItem(title: "Heart rate", value: sampleValue(workout.heartRateSampleCount), detail: "Samples loaded"),
-            MetricItem(title: "Pace", value: sampleValue(workout.runningSpeedSampleCount + workout.distanceSampleCount), detail: "Speed/distance"),
-            MetricItem(title: "Power", value: sampleValue(workout.runningPowerSampleCount), detail: "Running power"),
-            MetricItem(title: "Cadence", value: sampleValue(workout.cadenceSampleCount + workout.stepCountSampleCount), detail: "Cadence/steps")
-        ]
-    }
-
-    private func sampleValue(_ count: Int) -> String {
-        count > 0 ? "\(count)" : "Unavailable"
     }
 }
 
 struct WorkoutPlanOverviewCard: View {
     let audit: WorkoutPlanAudit
+    @State private var rowsExpanded = false
 
     private var plannedRows: [PlannedWorkoutStep] {
         audit.plannedSteps.sorted { $0.index < $1.index }
@@ -1260,21 +1313,119 @@ struct WorkoutPlanOverviewCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(planSummaryRows) { row in
+                        WorkoutPlanSummaryRow(row: row)
+                    }
+                }
+                .padding(.vertical, 2)
+
                 MetricGrid(items: [
-                    MetricItem(title: "Plan rows", value: "\(plannedRows.count)", detail: audit.planType ?? "WorkoutKit"),
+                    MetricItem(title: "Planned Steps", value: visibleStepSummary, detail: audit.planType ?? "WorkoutKit"),
                     MetricItem(title: "Status", value: audit.status.label, detail: "Planned structure")
                 ])
 
-                VStack(spacing: 8) {
-                    ForEach(Array(plannedRows.enumerated()), id: \.offset) { _, step in
-                        WorkoutPlanStepRow(step: step)
+                DisclosureGroup(isExpanded: $rowsExpanded) {
+                    VStack(spacing: 8) {
+                        ForEach(Array(plannedRows.enumerated()), id: \.offset) { _, step in
+                            WorkoutPlanStepRow(step: step)
+                        }
                     }
+                    .padding(.top, 8)
+                } label: {
+                    Label(rowsExpanded ? "Hide plan rows" : "Show plan rows", systemImage: "list.bullet")
+                        .font(.caption.bold())
                 }
             }
             .padding(10)
             .background(.background)
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
+    }
+
+    private var planSummaryRows: [WorkoutPlanSummaryLine] {
+        var rows: [WorkoutPlanSummaryLine] = []
+
+        if let warmup = plannedRows.first(where: { $0.stepType == .warmup }) {
+            rows.append(
+                WorkoutPlanSummaryLine(text: "Warm-up: \(stepPrescription(warmup))", emphasis: false, isIndented: false)
+            )
+        }
+
+        let workRows = plannedRows.filter { $0.stepType == .work }
+        if let firstWork = workRows.first {
+            let workText = "\(workRows.count) x \(stepPrescription(firstWork))"
+            rows.append(WorkoutPlanSummaryLine(text: workText, emphasis: true, isIndented: false))
+        }
+
+        let recoveryRows = plannedRows.filter { $0.stepType == .recovery }
+        if let firstRecovery = recoveryRows.first {
+            rows.append(
+                WorkoutPlanSummaryLine(text: "Recovery: \(stepPrescription(firstRecovery))", emphasis: false, isIndented: true)
+            )
+        }
+
+        if let cooldown = plannedRows.last(where: { $0.stepType == .cooldown }) {
+            rows.append(
+                WorkoutPlanSummaryLine(text: "Cool-down: \(stepPrescription(cooldown))", emphasis: false, isIndented: false)
+            )
+        }
+
+        return rows.isEmpty
+            ? [WorkoutPlanSummaryLine(text: "Planned structure available.", emphasis: false, isIndented: false)]
+            : rows
+    }
+
+    private var visibleStepSummary: String {
+        let workCount = plannedRows.filter { $0.stepType == .work }.count
+        return workCount > 0 ? "\(workCount) work reps" : "\(plannedRows.count) rows"
+    }
+
+    private func targetSummary(_ step: PlannedWorkoutStep) -> String? {
+        guard let target = step.plannedTargetDisplayText, !target.isEmpty else { return nil }
+        return target
+            .components(separatedBy: ", speed")
+            .first?
+            .replacingOccurrences(of: "pace range ", with: "")
+    }
+
+    private func stepPrescription(_ step: PlannedWorkoutStep) -> String {
+        let goalText: String
+        switch step.plannedGoalType {
+        case .time:
+            goalText = step.plannedGoalValue.map(RunFormatters.duration) ?? step.plannedGoalDisplayText
+        default:
+            goalText = step.plannedGoalDisplayText
+        }
+        guard let target = targetSummary(step) else { return goalText }
+        return "\(goalText) @ \(target)"
+    }
+}
+
+private struct WorkoutPlanSummaryLine: Identifiable {
+    var id: String { text }
+    var text: String
+    var emphasis: Bool
+    var isIndented: Bool
+}
+
+private struct WorkoutPlanSummaryRow: View {
+    let row: WorkoutPlanSummaryLine
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            if row.isIndented {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(RunSignalTextStyle.secondary.opacity(0.35))
+                    .frame(width: 2, height: 24)
+            }
+
+            Text(row.text)
+                .font(row.emphasis ? .title3.bold() : .title3)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.leading, row.isIndented ? 28 : 0)
     }
 }
 

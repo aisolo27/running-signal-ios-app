@@ -89,9 +89,9 @@ import Testing
     )
 
     let items = IntervalGoalMeasuredText.metricItems(for: interval)
-    #expect(items.map(\.title) == ["Goal Distance", "Measured Distance", "Measured Time", "Goal Pace", "Measured Pace"])
+    #expect(items.map(\.title) == ["Goal Distance", "Measured Distance", "Measured Time", "Planned-Distance Pace", "Measured Pace"])
     #expect(items.map(\.value) == ["400 m", "410 m", "1:33", "3:53 /km", "3:47 /km"])
-    #expect(items.map(\.detail) == ["WorkoutKit", "HealthKit", "Elapsed window", "Goal distance", "Elapsed window"])
+    #expect(items.map(\.detail) == ["WorkoutKit", "HealthKit", "Elapsed window", "Normalized to goal", "Elapsed window"])
 }
 
 @Test func intervalGoalMeasuredItemsSeparateTimeGoalStats() {

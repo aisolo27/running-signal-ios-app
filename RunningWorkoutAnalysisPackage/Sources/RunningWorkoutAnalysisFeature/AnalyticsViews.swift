@@ -714,7 +714,12 @@ struct WorkoutChartDeck: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(series) { item in
-                WorkoutChartCard(series: item, intervalMarkers: officialIntervals.chartMarkers(workoutStart: workout.startDate), selectedMinute: $selectedMinute)
+                WorkoutChartCard(
+                    series: item,
+                    intervalMarkers: officialIntervals.chartMarkers(workoutStart: workout.startDate),
+                    intervalSpans: officialIntervals.chartSpans(workoutStart: workout.startDate),
+                    selectedMinute: $selectedMinute
+                )
             }
         }
     }
@@ -723,6 +728,7 @@ struct WorkoutChartDeck: View {
 private struct WorkoutChartCard: View {
     let series: WorkoutChartSeries
     let intervalMarkers: [WorkoutChartIntervalMarker]
+    let intervalSpans: [WorkoutChartIntervalSpan]
     @Binding var selectedMinute: Double?
 
     private var selectedPoint: WorkoutChartPoint? {
@@ -807,6 +813,16 @@ private struct WorkoutChartCard: View {
 
             if series.isRenderable {
                 Chart {
+                    ForEach(intervalSpans) { span in
+                        RectangleMark(
+                            xStart: .value("Interval start", span.startMinute),
+                            xEnd: .value("Interval end", span.endMinute),
+                            yStart: .value("Chart minimum", yDomain.lowerBound),
+                            yEnd: .value("Chart maximum", yDomain.upperBound)
+                        )
+                        .foregroundStyle(span.tint.opacity(span.opacity))
+                    }
+
                     ForEach(intervalMarkers) { marker in
                         RuleMark(x: .value("Interval boundary", marker.offsetMinutes))
                             .foregroundStyle(marker.tint.opacity(0.32))
@@ -897,7 +913,30 @@ private struct WorkoutChartIntervalMarker: Identifiable {
     let tint: Color
 }
 
+private struct WorkoutChartIntervalSpan: Identifiable {
+    let id: String
+    let startMinute: Double
+    let endMinute: Double
+    let tint: Color
+    let opacity: Double
+}
+
 private extension Array where Element == ReconstructedWorkoutInterval {
+    func chartSpans(workoutStart: Date) -> [WorkoutChartIntervalSpan] {
+        compactMap { interval in
+            let start = interval.actualStartDate.timeIntervalSince(workoutStart) / 60
+            let end = interval.actualEndDate.timeIntervalSince(workoutStart) / 60
+            guard end > start else { return nil }
+            return WorkoutChartIntervalSpan(
+                id: "span-\(interval.index)",
+                startMinute: start,
+                endMinute: end,
+                tint: intervalRoleTint(for: interval.stepType),
+                opacity: interval.stepType == .work ? 0.20 : 0.10
+            )
+        }
+    }
+
     func chartMarkers(workoutStart: Date) -> [WorkoutChartIntervalMarker] {
         var seen: Set<Int> = []
         return flatMap { interval in
@@ -1002,7 +1041,7 @@ struct IntervalAnalysisEntryCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Official interval analysis")
+                    Text("Work Repeat Analysis")
                         .font(.subheadline.bold())
                     Text("\(summary.planSource.label) · \(summary.windowSource.label)")
                         .font(.caption2)
@@ -1031,8 +1070,17 @@ struct IntervalAnalysisEntryCard: View {
     }
 
     private var entryItems: [MetricItem] {
+        if let workSummary = summary.workRepeatSummary {
+            return [
+                MetricItem(title: "Work Reps", value: "\(workSummary.repeatCount)", detail: "Official"),
+                MetricItem(title: "Distance", value: RunFormatters.compactDistance(workSummary.totalDistanceMeters), detail: "Work total"),
+                MetricItem(title: "Active Time", value: RunFormatters.duration(workSummary.totalActiveDurationSeconds), detail: "Display basis"),
+                MetricItem(title: "Pace", value: RunFormatters.pace(workSummary.aggregatePaceSecondsPerKm), detail: "Aggregate")
+            ]
+        }
+
         return [
-            MetricItem(title: "Rows", value: "\(summary.rows.count)", detail: "Official"),
+            MetricItem(title: "Rows", value: "\(summary.rows.count)", detail: "Resolved"),
             MetricItem(title: "Distance", value: IntervalMetricFormatter.value(summary.aggregateValue(for: .distance)?.displayValue, metric: .distance), detail: "Total"),
             MetricItem(title: "Time", value: IntervalMetricFormatter.value(summary.aggregateValue(for: .duration)?.displayValue, metric: .duration), detail: "Total"),
             MetricItem(title: "Pace", value: IntervalMetricFormatter.value(summary.aggregateValue(for: .pace)?.displayValue, metric: .pace), detail: "Aggregate")
@@ -1070,11 +1118,11 @@ struct IntervalAnalysisScreen: View {
 
                 IntervalExecutionSummaryPanel(summary: IntervalExecutionUXSummary.make(summary: summary))
 
-                IntervalOverviewPanel(summary: summary)
-
                 if summary.workRepeatSummary != nil {
                     IntervalWorkTotalsPanel(summary: summary)
                 }
+
+                IntervalOverviewPanel(summary: summary)
 
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(alignment: .center) {
@@ -1171,7 +1219,7 @@ private struct IntervalOverviewPanel: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Whole interval breakdown")
+                    Text("Resolved Row Detail")
                         .font(.subheadline.bold())
                     Text("\(summary.planSource.label) · \(summary.windowSource.label)")
                         .font(.caption2)
@@ -1188,7 +1236,7 @@ private struct IntervalOverviewPanel: View {
             }
 
             MetricGrid(items: [
-                MetricItem(title: "Rows", value: "\(summary.rows.count)", detail: "Warmup/work/recovery"),
+                MetricItem(title: "Resolved Rows", value: "\(summary.rows.count)", detail: "Warmup/work/recovery"),
                 MetricItem(title: "Distance", value: IntervalMetricFormatter.value(summary.aggregateValue(for: .distance)?.displayValue, metric: .distance), detail: "All official rows"),
                 MetricItem(title: "Duration", value: IntervalMetricFormatter.value(summary.aggregateValue(for: .duration)?.displayValue, metric: .duration), detail: "Display basis"),
                 MetricItem(title: "Pace", value: IntervalMetricFormatter.value(summary.aggregateValue(for: .pace)?.displayValue, metric: .pace), detail: "Aggregate")

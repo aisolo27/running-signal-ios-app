@@ -55,9 +55,9 @@ enum IntervalGoalMeasuredText {
             ]
             items.append(
                 MetricItem(
-                    title: "Goal Pace",
+                    title: "Planned-Distance Pace",
                     value: RunFormatters.pace(goalPaceSecondsPerKm(durationSeconds: displayDurationSeconds, plannedDistanceMeters: plannedGoalValue)),
-                    detail: "Goal distance"
+                    detail: "Normalized to goal"
                 )
             )
             items.append(MetricItem(title: "Measured Pace", value: RunFormatters.pace(measuredPaceSecondsPerKm), detail: durationBasisLabel))
