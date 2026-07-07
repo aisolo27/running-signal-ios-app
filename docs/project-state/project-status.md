@@ -1,6 +1,6 @@
 # RunSignal Project Status
 
-Last updated: 2026-07-06
+Last updated: 2026-07-07
 
 ## Product Direction
 
@@ -88,6 +88,7 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 
 ## Recent Proof
 
+- 2026-07-06 startup/relaunch polish: User-supplied physical-iPhone recording showed multi-second black-screen spans before RunSignal reopened. RunSignal now uses an explicit branded `LaunchScreen.storyboard`, disables Xcode's generated empty launch screen, and shows a lightweight SwiftUI `RunSignalStartupView` while store bootstrap completes. `swift test --package-path RunningWorkoutAnalysisPackage` passed with 257 tests, Simulator build/install/launch passed on iPhone 17, and the built app bundle contains `UILaunchStoryboardName = LaunchScreen` plus compiled `LaunchScreen.storyboardc`. Fresh physical-iPhone timing still needs a new recording/install check.
 - 2026-07-06 Runs dashboard date display: Completed Runs rows now show year-inclusive dates such as `Jun 24, 2024`; `swift test --package-path RunningWorkoutAnalysisPackage` passed with 257 tests.
 - 2026-07-06 local analytics cache verification: `swift test --package-path RunningWorkoutAnalysisPackage` passed, Simulator build/install/launch passed on booted iPhone 17, Analytics tab rendered the cached-summary surface without blank screen, and physical-iPhone build/install/launch passed on `AIS17PM` with `RunSignal com.adrielsolorzano.runninganalysis` confirmed by `xcrun devicectl device info apps`.
 - `docs/validation/apple-fitness-interval-parity-dataset/user-supplied-june30-clean-repeat-tail-review-2026-06-30/` archives June 30 user-supplied evidence for a clean no-pause repeat fixed-cooldown/`Open / Extra` workout.

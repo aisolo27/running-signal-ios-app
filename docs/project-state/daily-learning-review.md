@@ -419,3 +419,42 @@ Scope: reviewed July 5 Codex session logs whose JSON `session_meta.payload.cwd` 
 - Did not edit `docs/project-state/project-status.md` or `docs/bug-log.md`: commit `5c367c4` and the current docs already capture the durable July 5 launch, manual-tag freeze, workout-plan-card, and foreground-sync lessons.
 - Did not edit `AGENTS.md` or `docs/project-state/documentation-index.md`: no new durable routing or document-classification rule was stronger than existing repo guidance.
 - Did not edit `README.md` because it already has unrelated active edits from the external-review guide pass.
+
+## 2026-07-06
+
+Scope: reviewed July 6 Codex session logs whose JSON `session_meta.payload.cwd` or `turn_context.cwd` exactly matched this RunSignal repo. Found eight exact-cwd logs and excluded the active daily-learning automation session from the lessons. Treated this as documentation-only review: no Xcode builds, device installs, HealthKit/provider mutations, commits, pushes, or broad repo scans.
+
+### Completed Work
+
+- Multiple independent researcher passes converged on the same local-only direction for Joshua's feedback: do not add accounts, CloudKit, backend sync, FIT import, or remote state; add a disposable SwiftData materialized analytics summary cache over HealthKit-derived local workouts.
+- Landed and pushed commit `cd1fe63 Add local analytics cache and run date display`. The session reported `swift test --package-path RunningWorkoutAnalysisPackage` passing with `257` tests, physical iPhone `AIS17PM` build/install/launch success, installed app confirmation for `RunSignal com.adrielsolorzano.runninganalysis`, and a clean `main...origin/main`.
+- The July 6 analytics cache slice made Week, Month, Year, and All-Time period summaries cache-backed through local SwiftData while keeping HealthKit as runtime truth and the pure summary builder as fallback/oracle.
+- Completed Runs rows now show year-inclusive dates such as `Jun 24, 2024`, reducing ambiguity when browsing older HealthKit history.
+- A later physical-recording follow-up implemented startup/relaunch polish: explicit branded `LaunchScreen.storyboard`, generated launch-screen output disabled, and a lightweight SwiftUI `RunSignalStartupView` while store bootstrap completes. The session reported `257` package tests passing, iPhone 17 Simulator build/install/launch success, bundle proof for `UILaunchStoryboardName = LaunchScreen`, and compiled `LaunchScreen.storyboardc`.
+- `docs/project-state/project-status.md` and `docs/bug-log.md` already have uncommitted entries from the startup/relaunch pass recording the black-screen lesson, launch-screen fix, Simulator proof, and remaining physical-iPhone timing proof need.
+
+### Pending Work
+
+- Capture a fresh physical-iPhone install/recording after the launch-screen/startup overlay change to confirm perceived black-screen duration improves on real HealthKit cache pressure.
+- Smoke the analytics cache on the phone with a large real HealthKit history: launch, Analytics tab render, Week/Month/Year/All-Time changes, manual category edits, and force-quit/reopen persistence.
+- Keep local analytics summaries disposable: any cached period summary must be deletable and rebuildable from local HealthKit-derived SwiftData workouts without changing product meaning.
+- Re-export or re-check older real-data screens after fresh installs with `Settings > Load HealthKit Runs` before judging Best Efforts, older-history dates, or analytics completeness.
+
+### Mistakes, Fixes, And Friction
+
+- The recurring daily-review prompt still names deleted `docs/project-state/current-state.md` and `docs/project-state/next-work.md`; this repo currently routes stable state and next work through `docs/project-state/project-status.md`.
+- Raw log inspection is noisy because session files embed full instruction payloads. Use structured JSONL extraction of `session_meta`, `turn_context`, user prompts, final assistant messages, and command/edit evidence instead of broad text dumps.
+- Several researcher sessions validated the same conclusion independently: the main performance risk is stale or expensive local analytics recomputation, not missing remote sync. The strongest objection remains cache correctness; stale totals after deletes, manual category changes, anchored updates, or day-boundary period comparisons are worse than a slower pure calculation.
+- Simulator sample data remains insufficient for startup/cache-pressure proof. Keep package tests, Simulator smoke, physical install/launch, and real HealthKit semantic timing proof as separate evidence levels.
+
+### Workflow Improvements
+
+- For local analytics cache work, keep `TrainingPeriodAnalyticsSummary.make` as the canonical pure builder and test oracle; persisted period summaries should be versioned materialized views, not a second source of truth.
+- Recompute or dirty-mark only affected periods after import windows, anchored sync additions/updates/deletions, manual category edits, and local day-boundary changes; avoid immediate all-time recompute during every import batch.
+- For launch complaints, compare the user-recorded perceived stall against native launch-screen behavior and first SwiftUI frame visibility before assuming the underlying HealthKit/cache work has to be fully eliminated.
+
+### Docs Updated By This Review
+
+- Added this July 6 section to `docs/project-state/daily-learning-review.md`.
+- Did not further edit `docs/project-state/project-status.md` or `docs/bug-log.md`: both already have uncommitted July 6 startup/relaunch entries from the implementation session, and this review should not overwrite in-flight doc work.
+- Did not edit `AGENTS.md` or `docs/project-state/documentation-index.md`: no new durable routing or document-classification rule was stronger than existing repo guidance.

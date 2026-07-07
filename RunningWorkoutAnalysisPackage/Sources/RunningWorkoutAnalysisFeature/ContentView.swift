@@ -14,33 +14,45 @@ public struct ContentView: View {
     @State private var selectedTab = AppTab.runs
     @State private var didScheduleStartupMaintenance = false
     @State private var didSkipInitialActiveSync = false
+    @State private var didFinishBootstrap = false
 
     public init() {}
 
     public var body: some View {
-        TabView(selection: $selectedTab) {
-            NavigationStack {
-                RunsView(store: store)
-            }
-            .tabItem { Label(AppTab.runs.title, systemImage: AppTab.runs.symbol) }
-            .tag(AppTab.runs)
+        ZStack {
+            TabView(selection: $selectedTab) {
+                NavigationStack {
+                    RunsView(store: store)
+                }
+                .tabItem { Label(AppTab.runs.title, systemImage: AppTab.runs.symbol) }
+                .tag(AppTab.runs)
 
-            NavigationStack {
-                AnalyticsView(store: store)
-            }
-            .tabItem { Label(AppTab.analytics.title, systemImage: AppTab.analytics.symbol) }
-            .tag(AppTab.analytics)
+                NavigationStack {
+                    AnalyticsView(store: store)
+                }
+                .tabItem { Label(AppTab.analytics.title, systemImage: AppTab.analytics.symbol) }
+                .tag(AppTab.analytics)
 
-            NavigationStack {
-                SettingsView(store: store)
+                NavigationStack {
+                    SettingsView(store: store)
+                }
+                .tabItem { Label(AppTab.settings.title, systemImage: AppTab.settings.symbol) }
+                .tag(AppTab.settings)
             }
-            .tabItem { Label(AppTab.settings.title, systemImage: AppTab.settings.symbol) }
-            .tag(AppTab.settings)
+
+            if !didFinishBootstrap {
+                RunSignalStartupView()
+                    .transition(.opacity)
+                    .zIndex(1)
+            }
         }
         .task {
             Self.startupLogger.notice("Bootstrap started")
             await store.bootstrap(modelContext: modelContext)
             Self.startupLogger.notice("Bootstrap finished")
+            withAnimation(.easeOut(duration: 0.18)) {
+                didFinishBootstrap = true
+            }
             scheduleStartupMaintenance()
         }
         .onChange(of: scenePhase) { _, newPhase in
@@ -67,6 +79,44 @@ public struct ContentView: View {
             await Task.yield()
             await store.syncHealthKitChangesOnForeground()
             Self.startupLogger.notice("Startup maintenance finished")
+        }
+    }
+}
+
+private struct RunSignalStartupView: View {
+    var body: some View {
+        ZStack {
+            Color(red: 0.02, green: 0.027, blue: 0.039)
+                .ignoresSafeArea()
+
+            VStack(spacing: 18) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color(red: 0.10, green: 0.22, blue: 0.38))
+
+                    Image(systemName: "figure.run")
+                        .font(.system(size: 36, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 82, height: 82)
+
+                VStack(spacing: 6) {
+                    Text("RunSignal")
+                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+
+                    Text("Loading runs")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(.white.opacity(0.9))
+                    .padding(.top, 6)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("RunSignal loading runs")
         }
     }
 }
