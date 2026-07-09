@@ -1621,7 +1621,7 @@ private struct IntervalAnalysisCompactRow: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 3) {
-                Text(RunFormatters.compactDistance(row.distanceMeters))
+                Text(displayDistance)
                     .font(.subheadline.monospacedDigit().bold())
                 Text(RunFormatters.pace(row.paceSecondsPerKm))
                     .font(.caption2.monospacedDigit())
@@ -1631,6 +1631,13 @@ private struct IntervalAnalysisCompactRow: View {
         .padding(showsBackground ? 10 : 4)
         .background(showsBackground ? AnyShapeStyle(.background) : AnyShapeStyle(.clear))
         .clipShape(RoundedRectangle(cornerRadius: showsBackground ? 8 : 0))
+    }
+
+    private var displayDistance: String {
+        if row.plannedGoalType == .distance {
+            return RunFormatters.compactDistance(row.plannedGoalValue)
+        }
+        return RunFormatters.compactDistance(row.distanceMeters)
     }
 }
 
@@ -1706,10 +1713,12 @@ struct IntervalDetailView: View {
     }
 
     private var intervalMetricItems: [MetricItem] {
+        let plannedWindow = interval.plannedDistanceMetricWindow
+        let detailBasis = plannedWindow == nil ? "Window" : "Goal window"
         var items = IntervalGoalMeasuredText.metricItems(for: interval) + [
-            MetricItem(title: "Avg HR", value: RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"), detail: "Window"),
-            MetricItem(title: "Power", value: RunFormatters.number(interval.averagePower, suffix: " W"), detail: "Avg"),
-            MetricItem(title: "Cadence", value: RunFormatters.number(interval.averageCadence, suffix: " spm"), detail: "Avg")
+            MetricItem(title: "Avg HR", value: RunFormatters.number(plannedWindow?.averageHeartRateBpm ?? interval.averageHeartRateBpm, suffix: " bpm"), detail: detailBasis),
+            MetricItem(title: "Cadence", value: RunFormatters.number(plannedWindow?.averageCadence ?? interval.averageCadence, suffix: " spm"), detail: detailBasis),
+            MetricItem(title: "Power", value: RunFormatters.number(plannedWindow?.averagePower ?? interval.averagePower, suffix: " W"), detail: "Avg")
         ]
         if let pausedTimingItems = IntervalRowTimingText.pausedTimingItems(for: interval) {
             items.append(contentsOf: pausedTimingItems)

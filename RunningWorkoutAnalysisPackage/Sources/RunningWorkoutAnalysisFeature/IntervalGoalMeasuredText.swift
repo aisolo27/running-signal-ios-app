@@ -2,7 +2,16 @@ import Foundation
 
 enum IntervalGoalMeasuredText {
     static func metricItems(for interval: ReconstructedWorkoutInterval) -> [MetricItem] {
-        metricItems(
+        if let plannedWindow = interval.plannedDistanceMetricWindow,
+           interval.plannedGoalType == .distance {
+            return [
+                MetricItem(title: "Distance", value: RunFormatters.compactDistance(plannedWindow.distanceMeters), detail: "Workout plan"),
+                MetricItem(title: "Time", value: RunFormatters.duration(plannedWindow.durationSeconds), detail: "Goal window"),
+                MetricItem(title: "Pace", value: RunFormatters.pace(plannedWindow.paceSecondsPerKm), detail: "Planned distance")
+            ]
+        }
+
+        return metricItems(
             plannedGoalType: interval.plannedGoalType,
             plannedGoalValue: interval.plannedGoalValue,
             measuredDistanceMeters: interval.actualDistanceMeters,
@@ -48,20 +57,15 @@ enum IntervalGoalMeasuredText {
     ) -> [MetricItem] {
         switch plannedGoalType {
         case .distance:
-            var items = [
-                MetricItem(title: "Goal Distance", value: RunFormatters.compactDistance(plannedGoalValue), detail: "WorkoutKit"),
-                MetricItem(title: "Measured Distance", value: RunFormatters.compactDistance(measuredDistanceMeters), detail: "HealthKit"),
-                MetricItem(title: "Measured Time", value: RunFormatters.duration(displayDurationSeconds), detail: durationBasisLabel)
-            ]
-            items.append(
+            return [
+                MetricItem(title: "Distance", value: RunFormatters.compactDistance(plannedGoalValue), detail: "Workout plan"),
+                MetricItem(title: "Time", value: RunFormatters.duration(displayDurationSeconds), detail: durationBasisLabel),
                 MetricItem(
-                    title: "Planned-Distance Pace",
+                    title: "Pace",
                     value: RunFormatters.pace(goalPaceSecondsPerKm(durationSeconds: displayDurationSeconds, plannedDistanceMeters: plannedGoalValue)),
-                    detail: "Normalized to goal"
+                    detail: "Planned distance"
                 )
-            )
-            items.append(MetricItem(title: "Measured Pace", value: RunFormatters.pace(measuredPaceSecondsPerKm), detail: durationBasisLabel))
-            return items
+            ]
         case .time:
             return [
                 MetricItem(title: "Goal Time", value: RunFormatters.duration(plannedGoalValue), detail: "WorkoutKit"),

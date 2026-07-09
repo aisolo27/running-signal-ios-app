@@ -129,6 +129,13 @@ public enum CustomWorkoutResolvedIntervalRows {
             ?? average(values(metric: .stepCount, start: start, end: end, evidence: evidence))
         let power = activityAverage(.runningPower, in: activity)
             ?? average(values(metric: .runningPower, start: start, end: end, evidence: evidence))
+        let plannedDistanceWindow = plannedDistanceMetricWindow(
+            plannedGoalType: plannedGoalType,
+            plannedGoalValue: plannedGoalValue,
+            start: start,
+            rowEnd: end,
+            evidence: evidence
+        )
 
         return ReconstructedWorkoutInterval(
             index: index,
@@ -151,6 +158,7 @@ public enum CustomWorkoutResolvedIntervalRows {
             maxHeartRateBpm: maxHeartRate,
             averageCadence: cadence,
             averagePower: power,
+            plannedDistanceMetricWindow: plannedDistanceWindow,
             planSource: .workoutKit,
             windowSource: .healthKitActivityBoundaries,
             boundaryStrategy: nil,
@@ -437,6 +445,132 @@ public enum CustomWorkoutResolvedIntervalRows {
             let overlaps = point.endDate >= start && point.startDate <= end
             return overlaps ? point.value : nil
         } ?? []
+    }
+
+    private static func plannedDistanceMetricWindow(
+        plannedGoalType: PlannedWorkoutGoalType,
+        plannedGoalValue: Double?,
+        start: Date,
+        rowEnd: Date,
+        evidence: WorkoutEvidence
+    ) -> PlannedDistanceMetricWindow? {
+        guard plannedGoalType == .distance,
+              let plannedGoalValue,
+              plannedGoalValue > 0,
+              let startDistance = cumulativeDistance(at: start, evidence: evidence),
+              let endDate = date(atCumulativeDistance: startDistance + plannedGoalValue, evidence: evidence),
+              endDate > start,
+              endDate <= rowEnd.addingTimeInterval(1) else {
+            return nil
+        }
+
+        let heartRates = values(metric: .heartRate, start: start, end: endDate, evidence: evidence)
+        let cadence = average(values(metric: .cadence, start: start, end: endDate, evidence: evidence))
+            ?? average(values(metric: .stepCount, start: start, end: endDate, evidence: evidence))
+        let power = average(values(metric: .runningPower, start: start, end: endDate, evidence: evidence))
+
+        return PlannedDistanceMetricWindow(
+            startDate: start,
+            endDate: endDate,
+            distanceMeters: plannedGoalValue,
+            averageHeartRateBpm: average(heartRates),
+            maxHeartRateBpm: heartRates.max(),
+            averageCadence: cadence,
+            averagePower: power
+        )
+    }
+
+    private static func cumulativeDistance(at date: Date, evidence: WorkoutEvidence) -> Double? {
+        guard let series = evidence.series[.distance] else { return nil }
+        var cumulative = 0.0
+        var previousSampleEnd: Date?
+
+        for point in series.points {
+            let sampleStart = sampleStartDate(for: point, previousSampleEnd: previousSampleEnd)
+            let sampleEnd = sampleEndDate(for: point, sampleStart: sampleStart)
+
+            if date <= sampleStart {
+                return cumulative
+            }
+
+            if date < sampleEnd {
+                return interpolatedDistance(
+                    at: date,
+                    previousDate: sampleStart,
+                    currentDate: sampleEnd,
+                    previousDistance: cumulative,
+                    currentDistance: cumulative + point.value
+                )
+            }
+
+            cumulative += point.value
+            previousSampleEnd = sampleEnd
+        }
+
+        return cumulative
+    }
+
+    private static func date(atCumulativeDistance targetDistance: Double, evidence: WorkoutEvidence) -> Date? {
+        guard let series = evidence.series[.distance] else { return nil }
+        var cumulative = 0.0
+        var previousSampleEnd: Date?
+
+        for point in series.points {
+            let sampleStart = sampleStartDate(for: point, previousSampleEnd: previousSampleEnd)
+            let sampleEnd = sampleEndDate(for: point, sampleStart: sampleStart)
+            let currentDistance = cumulative + point.value
+
+            if currentDistance >= targetDistance {
+                let fraction = interpolationFraction(
+                    targetDistance: targetDistance,
+                    previousDistance: cumulative,
+                    currentDistance: currentDistance
+                )
+                return sampleStart.addingTimeInterval(sampleEnd.timeIntervalSince(sampleStart) * fraction)
+            }
+
+            cumulative = currentDistance
+            previousSampleEnd = sampleEnd
+        }
+
+        return nil
+    }
+
+    private static func sampleStartDate(for point: WorkoutEvidencePoint, previousSampleEnd: Date?) -> Date {
+        if point.startDate < point.endDate {
+            return point.startDate
+        }
+        return previousSampleEnd ?? point.date
+    }
+
+    private static func sampleEndDate(for point: WorkoutEvidencePoint, sampleStart: Date) -> Date {
+        if point.endDate > sampleStart {
+            return point.endDate
+        }
+        return point.date
+    }
+
+    private static func interpolatedDistance(
+        at date: Date,
+        previousDate: Date,
+        currentDate: Date,
+        previousDistance: Double,
+        currentDistance: Double
+    ) -> Double {
+        let duration = currentDate.timeIntervalSince(previousDate)
+        guard duration > 0 else { return currentDistance }
+        let fraction = min(max(date.timeIntervalSince(previousDate) / duration, 0), 1)
+        return previousDistance + (currentDistance - previousDistance) * fraction
+    }
+
+    private static func interpolationFraction(
+        targetDistance: Double,
+        previousDistance: Double,
+        currentDistance: Double
+    ) -> Double {
+        let distanceDelta = currentDistance - previousDistance
+        guard distanceDelta > 0 else { return 0 }
+        return min(max((targetDistance - previousDistance) / distanceDelta, 0), 1)
     }
 
     private static func average(_ values: [Double]) -> Double? {

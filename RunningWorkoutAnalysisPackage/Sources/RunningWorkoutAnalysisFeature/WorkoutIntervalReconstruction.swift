@@ -164,6 +164,7 @@ public struct ReconstructedWorkoutInterval: Codable, Equatable, Sendable {
     public var maxHeartRateBpm: Double?
     public var averageCadence: Double?
     public var averagePower: Double?
+    public var plannedDistanceMetricWindow: PlannedDistanceMetricWindow? = nil
     public var planSource: IntervalPlanSource
     public var windowSource: IntervalWindowSource
     public var boundaryStrategy: DistanceGoalBoundaryStrategy?
@@ -189,6 +190,40 @@ public struct ReconstructedWorkoutInterval: Codable, Equatable, Sendable {
         case .activeTimer:
             activeTimerDurationSeconds
         }
+    }
+}
+
+public struct PlannedDistanceMetricWindow: Codable, Equatable, Sendable {
+    public var startDate: Date
+    public var endDate: Date
+    public var distanceMeters: Double
+    public var durationSeconds: Double
+    public var paceSecondsPerKm: Double?
+    public var averageHeartRateBpm: Double?
+    public var maxHeartRateBpm: Double?
+    public var averageCadence: Double?
+    public var averagePower: Double?
+
+    public init(
+        startDate: Date,
+        endDate: Date,
+        distanceMeters: Double,
+        averageHeartRateBpm: Double?,
+        maxHeartRateBpm: Double?,
+        averageCadence: Double?,
+        averagePower: Double?
+    ) {
+        self.startDate = startDate
+        self.endDate = endDate
+        self.distanceMeters = distanceMeters
+        durationSeconds = max(0, endDate.timeIntervalSince(startDate))
+        paceSecondsPerKm = distanceMeters > 0 && durationSeconds > 0
+            ? durationSeconds / (distanceMeters / 1_000)
+            : nil
+        self.averageHeartRateBpm = averageHeartRateBpm
+        self.maxHeartRateBpm = maxHeartRateBpm
+        self.averageCadence = averageCadence
+        self.averagePower = averagePower
     }
 }
 

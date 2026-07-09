@@ -1051,8 +1051,6 @@ struct WorkoutDetailView: View {
                         }
                     )
 
-                    WorkoutSummaryCard(workout: workout)
-
                     FitnessWorkoutMetrics(workout: workout)
 
                     RouteAndSeriesPanel(workout: workout)
@@ -1313,17 +1311,12 @@ struct WorkoutPlanOverviewCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     ForEach(planSummaryRows) { row in
                         WorkoutPlanSummaryRow(row: row)
                     }
                 }
                 .padding(.vertical, 2)
-
-                MetricGrid(items: [
-                    MetricItem(title: "Planned Steps", value: visibleStepSummary, detail: audit.planType ?? "WorkoutKit"),
-                    MetricItem(title: "Status", value: audit.status.label, detail: "Planned structure")
-                ])
 
                 DisclosureGroup(isExpanded: $rowsExpanded) {
                     VStack(spacing: 8) {
@@ -1348,37 +1341,32 @@ struct WorkoutPlanOverviewCard: View {
 
         if let warmup = plannedRows.first(where: { $0.stepType == .warmup }) {
             rows.append(
-                WorkoutPlanSummaryLine(text: "Warm-up: \(stepPrescription(warmup))", emphasis: false, isIndented: false)
+                WorkoutPlanSummaryLine(text: "Warm-up: \(stepPrescription(warmup))", isIndented: false)
             )
         }
 
         let workRows = plannedRows.filter { $0.stepType == .work }
         if let firstWork = workRows.first {
             let workText = "\(workRows.count) x \(stepPrescription(firstWork))"
-            rows.append(WorkoutPlanSummaryLine(text: workText, emphasis: true, isIndented: false))
+            rows.append(WorkoutPlanSummaryLine(text: workText, isIndented: false))
         }
 
         let recoveryRows = plannedRows.filter { $0.stepType == .recovery }
         if let firstRecovery = recoveryRows.first {
             rows.append(
-                WorkoutPlanSummaryLine(text: "Recovery: \(stepPrescription(firstRecovery))", emphasis: false, isIndented: true)
+                WorkoutPlanSummaryLine(text: "Recovery: \(stepPrescription(firstRecovery))", isIndented: true)
             )
         }
 
         if let cooldown = plannedRows.last(where: { $0.stepType == .cooldown }) {
             rows.append(
-                WorkoutPlanSummaryLine(text: "Cool-down: \(stepPrescription(cooldown))", emphasis: false, isIndented: false)
+                WorkoutPlanSummaryLine(text: "Cool-down: \(stepPrescription(cooldown))", isIndented: false)
             )
         }
 
         return rows.isEmpty
-            ? [WorkoutPlanSummaryLine(text: "Planned structure available.", emphasis: false, isIndented: false)]
+            ? [WorkoutPlanSummaryLine(text: "Planned structure available.", isIndented: false)]
             : rows
-    }
-
-    private var visibleStepSummary: String {
-        let workCount = plannedRows.filter { $0.stepType == .work }.count
-        return workCount > 0 ? "\(workCount) work reps" : "\(plannedRows.count) rows"
     }
 
     private func targetSummary(_ step: PlannedWorkoutStep) -> String? {
@@ -1405,7 +1393,6 @@ struct WorkoutPlanOverviewCard: View {
 private struct WorkoutPlanSummaryLine: Identifiable {
     var id: String { text }
     var text: String
-    var emphasis: Bool
     var isIndented: Bool
 }
 
@@ -1417,11 +1404,11 @@ private struct WorkoutPlanSummaryRow: View {
             if row.isIndented {
                 RoundedRectangle(cornerRadius: 1)
                     .fill(RunSignalTextStyle.secondary.opacity(0.35))
-                    .frame(width: 2, height: 24)
+                    .frame(width: 2, height: 18)
             }
 
             Text(row.text)
-                .font(row.emphasis ? .title3.bold() : .title3)
+                .font(.subheadline)
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -2038,7 +2025,7 @@ struct RawHealthKitWorkoutDebugView: View {
                 title: "\(interval.index). \(interval.label)",
                 subtitle: "\(interval.plannedGoalDisplayText) · \(interval.plannedTargetDisplayText ?? "Target unavailable")",
                 duration: RunFormatters.duration(interval.displayDurationSeconds),
-                distance: RunFormatters.distance(interval.actualDistanceMeters),
+                distance: officialIntervalDisplayDistance(interval),
                 badge: "Official",
                 badgeColor: .blue
             )
@@ -2046,6 +2033,13 @@ struct RawHealthKitWorkoutDebugView: View {
         .padding(10)
         .background(.background)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func officialIntervalDisplayDistance(_ interval: ReconstructedWorkoutInterval) -> String {
+        if interval.plannedGoalType == .distance {
+            return RunFormatters.compactDistance(interval.plannedGoalValue)
+        }
+        return RunFormatters.distance(interval.actualDistanceMeters)
     }
 
     @ViewBuilder

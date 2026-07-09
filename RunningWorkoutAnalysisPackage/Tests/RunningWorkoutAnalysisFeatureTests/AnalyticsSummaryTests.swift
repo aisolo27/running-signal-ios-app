@@ -400,6 +400,48 @@ private func workout(
     )
 }
 
+@Test func intervalAnalysisRowPrefersPlannedDistanceMetricWindow() {
+    let start = Date(timeIntervalSince1970: 1_000)
+    var interval = reconstructedInterval(
+        index: 1,
+        label: "Work 1",
+        stepType: .work,
+        start: start,
+        duration: 95,
+        elapsedDuration: 95,
+        activeDuration: 95,
+        pauseOverlap: 0,
+        displayRule: .elapsedRowWindow,
+        distance: 410,
+        pace: 95 / 0.410,
+        heartRate: 150,
+        maxHeartRate: 158,
+        power: 280,
+        cadence: 180
+    )
+    interval.plannedGoalValue = 400
+    interval.plannedGoalDisplayText = "400 m"
+    interval.plannedDistanceMetricWindow = PlannedDistanceMetricWindow(
+        startDate: start,
+        endDate: start.addingTimeInterval(92),
+        distanceMeters: 400,
+        averageHeartRateBpm: 161,
+        maxHeartRateBpm: 168,
+        averageCadence: 199,
+        averagePower: 307
+    )
+
+    let row = IntervalAnalysisRow(interval: interval, workoutStart: start)
+
+    #expect(row.distanceMeters == 400)
+    #expect(row.displayDurationSeconds == 92)
+    #expect(row.paceSecondsPerKm == 230)
+    #expect(row.averageHeartRateBpm == 161)
+    #expect(row.averageCadence == 199)
+    #expect(row.averagePower == 307)
+    #expect(row.endOffsetSeconds == 92)
+}
+
 private func reconstructedInterval(
     index: Int,
     label: String,

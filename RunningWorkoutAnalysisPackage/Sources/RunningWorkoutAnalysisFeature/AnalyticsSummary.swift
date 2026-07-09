@@ -852,6 +852,7 @@ public struct IntervalAnalysisRow: Identifiable, Equatable, Sendable {
     public var pauseOverlapSeconds: Double?
     public var durationDisplayRule: ReconstructedIntervalDurationDisplayRule
     public var distanceMeters: Double?
+    public var measuredDistanceMeters: Double?
     public var paceSecondsPerKm: Double?
     public var averageHeartRateBpm: Double?
     public var maxHeartRateBpm: Double?
@@ -861,6 +862,7 @@ public struct IntervalAnalysisRow: Identifiable, Equatable, Sendable {
     public var endOffsetSeconds: Double
 
     public init(interval: ReconstructedWorkoutInterval, workoutStart: Date) {
+        let plannedWindow = interval.plannedDistanceMetricWindow
         index = interval.index
         label = interval.label
         stepType = interval.stepType
@@ -868,19 +870,20 @@ public struct IntervalAnalysisRow: Identifiable, Equatable, Sendable {
         plannedGoalValue = interval.plannedGoalValue
         plannedGoalDisplayText = interval.plannedGoalDisplayText
         plannedTargetDisplayText = interval.plannedTargetDisplayText
-        displayDurationSeconds = interval.displayDurationSeconds
+        displayDurationSeconds = plannedWindow?.durationSeconds ?? interval.displayDurationSeconds
         elapsedDurationSeconds = interval.elapsedRowWindowDurationSeconds
         activeDurationSeconds = interval.activeTimerDurationSeconds
         pauseOverlapSeconds = interval.pauseOverlapSeconds
         durationDisplayRule = interval.durationDisplayRule ?? .elapsedRowWindow
-        distanceMeters = interval.actualDistanceMeters
-        paceSecondsPerKm = Self.displayPaceSecondsPerKm(for: interval)
-        averageHeartRateBpm = interval.averageHeartRateBpm
-        maxHeartRateBpm = interval.maxHeartRateBpm
-        averagePower = interval.averagePower
-        averageCadence = interval.averageCadence
+        measuredDistanceMeters = interval.actualDistanceMeters
+        distanceMeters = plannedWindow?.distanceMeters ?? interval.actualDistanceMeters
+        paceSecondsPerKm = plannedWindow?.paceSecondsPerKm ?? Self.displayPaceSecondsPerKm(for: interval)
+        averageHeartRateBpm = plannedWindow?.averageHeartRateBpm ?? interval.averageHeartRateBpm
+        maxHeartRateBpm = plannedWindow?.maxHeartRateBpm ?? interval.maxHeartRateBpm
+        averagePower = plannedWindow?.averagePower ?? interval.averagePower
+        averageCadence = plannedWindow?.averageCadence ?? interval.averageCadence
         startOffsetSeconds = interval.actualStartDate.timeIntervalSince(workoutStart)
-        endOffsetSeconds = interval.actualEndDate.timeIntervalSince(workoutStart)
+        endOffsetSeconds = (plannedWindow?.endDate ?? interval.actualEndDate).timeIntervalSince(workoutStart)
     }
 
     public func value(for metric: IntervalAnalysisMetric) -> IntervalAnalysisMetricValue? {
@@ -957,10 +960,10 @@ public struct IntervalAnalysisSummary: Equatable, Sendable {
         guard !workRows.isEmpty else { return nil }
 
         let totalDistance = workRows
-            .compactMap(\.distanceMeters)
+            .compactMap(\.measuredDistanceMeters)
             .reduce(0, +)
         let totalDuration = workRows
-            .map(\.displayDurationSeconds)
+            .map(\.activeDurationSeconds)
             .reduce(0, +)
 
         return IntervalWorkRepeatSummary(

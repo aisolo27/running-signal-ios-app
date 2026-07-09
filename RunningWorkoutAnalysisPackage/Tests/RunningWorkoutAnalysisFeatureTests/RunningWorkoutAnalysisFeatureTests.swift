@@ -89,9 +89,34 @@ import Testing
     )
 
     let items = IntervalGoalMeasuredText.metricItems(for: interval)
-    #expect(items.map(\.title) == ["Goal Distance", "Measured Distance", "Measured Time", "Planned-Distance Pace", "Measured Pace"])
-    #expect(items.map(\.value) == ["400 m", "410 m", "1:33", "3:53 /km", "3:47 /km"])
-    #expect(items.map(\.detail) == ["WorkoutKit", "HealthKit", "Elapsed window", "Normalized to goal", "Elapsed window"])
+    #expect(items.map(\.title) == ["Distance", "Time", "Pace"])
+    #expect(items.map(\.value) == ["400 m", "1:33", "3:53 /km"])
+    #expect(items.map(\.detail) == ["Workout plan", "Elapsed window", "Planned distance"])
+}
+
+@Test func intervalGoalMeasuredItemsPreferPlannedDistanceWindow() {
+    var interval = intervalForGoalMeasuredText(
+        plannedGoalType: .distance,
+        plannedGoalValue: 400,
+        plannedGoalDisplayText: "400 m",
+        distanceMeters: 410,
+        durationSeconds: 95
+    )
+    let start = interval.actualStartDate
+    interval.plannedDistanceMetricWindow = PlannedDistanceMetricWindow(
+        startDate: start,
+        endDate: start.addingTimeInterval(92),
+        distanceMeters: 400,
+        averageHeartRateBpm: 161,
+        maxHeartRateBpm: 168,
+        averageCadence: 199,
+        averagePower: 307
+    )
+
+    let items = IntervalGoalMeasuredText.metricItems(for: interval)
+    #expect(items.map(\.title) == ["Distance", "Time", "Pace"])
+    #expect(items.map(\.value) == ["400 m", "1:32", "3:50 /km"])
+    #expect(items.map(\.detail) == ["Workout plan", "Goal window", "Planned distance"])
 }
 
 @Test func intervalGoalMeasuredItemsSeparateTimeGoalStats() {
