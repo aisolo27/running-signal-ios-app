@@ -2,15 +2,6 @@ import Foundation
 
 enum IntervalGoalMeasuredText {
     static func metricItems(for interval: ReconstructedWorkoutInterval) -> [MetricItem] {
-        if let plannedWindow = interval.plannedDistanceMetricWindow,
-           interval.plannedGoalType == .distance {
-            return [
-                MetricItem(title: "Distance", value: RunFormatters.compactDistance(plannedWindow.distanceMeters), detail: "Workout plan"),
-                MetricItem(title: "Time", value: RunFormatters.duration(plannedWindow.durationSeconds), detail: "Goal window"),
-                MetricItem(title: "Pace", value: RunFormatters.pace(plannedWindow.paceSecondsPerKm), detail: "Planned distance")
-            ]
-        }
-
         return metricItems(
             plannedGoalType: interval.plannedGoalType,
             plannedGoalValue: interval.plannedGoalValue,

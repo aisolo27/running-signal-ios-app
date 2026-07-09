@@ -870,20 +870,20 @@ public struct IntervalAnalysisRow: Identifiable, Equatable, Sendable {
         plannedGoalValue = interval.plannedGoalValue
         plannedGoalDisplayText = interval.plannedGoalDisplayText
         plannedTargetDisplayText = interval.plannedTargetDisplayText
-        displayDurationSeconds = plannedWindow?.durationSeconds ?? interval.displayDurationSeconds
+        displayDurationSeconds = interval.displayDurationSeconds
         elapsedDurationSeconds = interval.elapsedRowWindowDurationSeconds
         activeDurationSeconds = interval.activeTimerDurationSeconds
         pauseOverlapSeconds = interval.pauseOverlapSeconds
         durationDisplayRule = interval.durationDisplayRule ?? .elapsedRowWindow
         measuredDistanceMeters = interval.actualDistanceMeters
         distanceMeters = plannedWindow?.distanceMeters ?? interval.actualDistanceMeters
-        paceSecondsPerKm = plannedWindow?.paceSecondsPerKm ?? Self.displayPaceSecondsPerKm(for: interval)
+        paceSecondsPerKm = Self.displayPaceSecondsPerKm(for: interval, displayDurationSeconds: displayDurationSeconds)
         averageHeartRateBpm = plannedWindow?.averageHeartRateBpm ?? interval.averageHeartRateBpm
         maxHeartRateBpm = plannedWindow?.maxHeartRateBpm ?? interval.maxHeartRateBpm
         averagePower = plannedWindow?.averagePower ?? interval.averagePower
         averageCadence = plannedWindow?.averageCadence ?? interval.averageCadence
         startOffsetSeconds = interval.actualStartDate.timeIntervalSince(workoutStart)
-        endOffsetSeconds = (plannedWindow?.endDate ?? interval.actualEndDate).timeIntervalSince(workoutStart)
+        endOffsetSeconds = interval.actualEndDate.timeIntervalSince(workoutStart)
     }
 
     public func value(for metric: IntervalAnalysisMetric) -> IntervalAnalysisMetricValue? {
@@ -919,7 +919,16 @@ public struct IntervalAnalysisRow: Identifiable, Equatable, Sendable {
         durationDisplayRule == .activeTimer ? "Active timer" : "Elapsed window"
     }
 
-    private static func displayPaceSecondsPerKm(for interval: ReconstructedWorkoutInterval) -> Double? {
+    private static func displayPaceSecondsPerKm(
+        for interval: ReconstructedWorkoutInterval,
+        displayDurationSeconds: Double
+    ) -> Double? {
+        if interval.plannedGoalType == .distance,
+           let plannedGoalValue = interval.plannedGoalValue,
+           plannedGoalValue > 0 {
+            return displayDurationSeconds / (plannedGoalValue / 1_000)
+        }
+
         guard interval.durationDisplayRule == .activeTimer,
               let distanceMeters = interval.actualDistanceMeters,
               distanceMeters > 0

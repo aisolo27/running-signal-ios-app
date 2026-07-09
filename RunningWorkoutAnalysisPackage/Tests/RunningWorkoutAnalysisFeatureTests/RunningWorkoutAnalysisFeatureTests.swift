@@ -94,7 +94,7 @@ import Testing
     #expect(items.map(\.detail) == ["Workout plan", "Elapsed window", "Planned distance"])
 }
 
-@Test func intervalGoalMeasuredItemsPreferPlannedDistanceWindow() {
+@Test func intervalGoalMeasuredItemsKeepRowTimeWhenPlannedDistanceWindowExists() {
     var interval = intervalForGoalMeasuredText(
         plannedGoalType: .distance,
         plannedGoalValue: 400,
@@ -115,8 +115,8 @@ import Testing
 
     let items = IntervalGoalMeasuredText.metricItems(for: interval)
     #expect(items.map(\.title) == ["Distance", "Time", "Pace"])
-    #expect(items.map(\.value) == ["400 m", "1:32", "3:50 /km"])
-    #expect(items.map(\.detail) == ["Workout plan", "Goal window", "Planned distance"])
+    #expect(items.map(\.value) == ["400 m", "1:35", "3:58 /km"])
+    #expect(items.map(\.detail) == ["Workout plan", "Elapsed window", "Planned distance"])
 }
 
 @Test func intervalGoalMeasuredItemsSeparateTimeGoalStats() {

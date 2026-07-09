@@ -309,7 +309,7 @@ import Testing
 
     #expect(summary.title == "2 work reps official")
     #expect(summary.signals.contains { $0.title == "Work" && $0.value == "2" })
-    #expect(summary.signals.contains { $0.title == "Fade" && $0.value == "+15s/km" })
+    #expect(summary.signals.contains { $0.title == "Fade" && $0.value == "+17s/km" })
     #expect(summary.signals.contains { $0.title == "Pauses" && $0.value == "1" })
 }
 
