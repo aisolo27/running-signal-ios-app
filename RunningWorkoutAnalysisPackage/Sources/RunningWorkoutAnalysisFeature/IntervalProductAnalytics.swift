@@ -129,19 +129,6 @@ public enum WorkTargetEvaluator {
            completionStatus == .completed,
            let plannedDistance = interval.plannedGoalValue,
            plannedDistance > 0 {
-            let hasPause = (interval.pauseOverlapSeconds ?? 0) > 0.5
-            if !hasPause,
-               let window = interval.plannedDistanceMetricWindow,
-               window.distanceMeters > 0,
-               window.durationSeconds > 0 {
-                return WorkPaceMeasurement(
-                    paceSecondsPerKilometer: window.durationSeconds / (window.distanceMeters / 1_000),
-                    durationSeconds: window.durationSeconds,
-                    distanceMeters: window.distanceMeters,
-                    basis: .completedGoalWindow
-                )
-            }
-
             let duration = interval.activeTimerDurationSeconds
             return WorkPaceMeasurement(
                 paceSecondsPerKilometer: pace(durationSeconds: duration, distanceMeters: plannedDistance),
@@ -221,6 +208,68 @@ public struct OfficialIntervalWorkout: Codable, Equatable, Sendable {
         self.startDate = startDate
         self.rows = rows
         self.plannedTargetsByRow = plannedTargetsByRow
+    }
+}
+
+enum OfficialIntervalWorkoutMerger {
+    static func merged(
+        persisted: [OfficialIntervalWorkout],
+        loaded: [OfficialIntervalWorkout]
+    ) -> [OfficialIntervalWorkout] {
+        var workoutsByID: [String: OfficialIntervalWorkout] = [:]
+        for workout in persisted {
+            workoutsByID[workout.workoutID] = workout
+        }
+        for workout in loaded {
+            workoutsByID[workout.workoutID] = workout
+        }
+        return workoutsByID.values.sorted {
+            if $0.startDate != $1.startDate {
+                return $0.startDate > $1.startDate
+            }
+            return $0.workoutID < $1.workoutID
+        }
+    }
+}
+
+enum WorkTargetPresentation {
+    static func badgeLabel(for evaluation: WorkTargetEvaluation) -> String {
+        let result = resultLabel(evaluation.result)
+        switch evaluation.completionStatus {
+        case .shortened:
+            return "\(result) · Shortened"
+        case .openEnded:
+            return "\(result) · Open"
+        case .completed:
+            return result
+        }
+    }
+
+    static func summaryText(_ evaluations: [WorkTargetEvaluation]) -> String {
+        let targeted = evaluations.filter { $0.result != .noTarget }
+        let hit = targeted.count { $0.result == .onTarget }
+        let fast = targeted.count { $0.result == .fast }
+        let slow = targeted.count { $0.result == .slow }
+        let shortened = targeted.count { $0.completionStatus == .shortened }
+        let shortenedText = shortened > 0 ? " · \(shortened) shortened" : ""
+        return "\(hit) of \(targeted.count) on target · \(fast) fast · \(slow) slow\(shortenedText)"
+    }
+
+    static func resultLabel(_ result: WorkTargetResult) -> String {
+        switch result {
+        case .onTarget: "On Target"
+        case .fast: "Fast"
+        case .slow: "Slow"
+        case .noTarget: "No Target"
+        }
+    }
+
+    static func completionLabel(_ completion: WorkCompletionStatus) -> String {
+        switch completion {
+        case .completed: "Completed"
+        case .shortened: "Shortened"
+        case .openEnded: "Open"
+        }
     }
 }
 

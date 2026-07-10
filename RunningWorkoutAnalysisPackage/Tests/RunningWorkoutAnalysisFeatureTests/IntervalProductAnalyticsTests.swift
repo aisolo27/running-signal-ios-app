@@ -83,6 +83,32 @@ import Testing
     #expect(shortenedEvaluation.measurement.paceSecondsPerKilometer == 250)
 }
 
+@Test func completedDistanceTargetUsesActivityRowTimerWhenGoalWindowDiffers() throws {
+    let target = paceTarget(fastest: 230, slowest: 240)
+    var interval = productInterval(
+        goalType: .distance,
+        goalValue: 400,
+        measuredDistance: 410,
+        activeDuration: 95
+    )
+    let start = interval.actualStartDate
+    interval.plannedDistanceMetricWindow = PlannedDistanceMetricWindow(
+        startDate: start,
+        endDate: start.addingTimeInterval(92),
+        distanceMeters: 400,
+        averageHeartRateBpm: 161,
+        maxHeartRateBpm: 168,
+        averageCadence: 199,
+        averagePower: 307
+    )
+
+    let evaluation = try #require(WorkTargetEvaluator.evaluate(interval: interval, plannedTargets: [target]))
+    #expect(evaluation.completionStatus == .completed)
+    #expect(evaluation.measurement.basis == .completedPlannedDistance)
+    #expect(evaluation.measurement.paceSecondsPerKilometer == 237.5)
+    #expect(evaluation.result == .onTarget)
+}
+
 @Test func archivedSkippedTwoKilometerWorkUsesMeasuredDistanceAndActiveTime() throws {
     let target = paceTarget(fastest: 360, slowest: 390)
     let skipped = productInterval(
@@ -99,6 +125,48 @@ import Testing
     #expect(evaluation.measurement.basis == .shortenedMeasured)
     #expect(abs((evaluation.measurement.paceSecondsPerKilometer ?? 0) - 380.58) < 0.1)
     #expect(evaluation.result == .onTarget)
+}
+
+@Test func shortenedOnTargetPresentationKeepsCompletionVisible() throws {
+    let target = paceTarget(fastest: 360, slowest: 390)
+    let skipped = productInterval(
+        goalType: .distance,
+        goalValue: 2_000,
+        measuredDistance: 1_210,
+        activeDuration: 460.5,
+        elapsedDuration: 568.7,
+        pauseOverlap: 108.2
+    )
+    let evaluation = try #require(WorkTargetEvaluator.evaluate(interval: skipped, plannedTargets: [target]))
+
+    #expect(WorkTargetPresentation.badgeLabel(for: evaluation) == "On Target · Shortened")
+    #expect(WorkTargetPresentation.summaryText([evaluation]) == "1 of 1 on target · 0 fast · 0 slow · 1 shortened")
+}
+
+@Test func intervalLibraryMergePrefersLoadedEvidenceForDuplicateWorkoutID() throws {
+    let date = Date(timeIntervalSince1970: 10_000)
+    let persisted = intervalWorkout(
+        id: "duplicate-workout",
+        date: date,
+        workGoal: (.distance, 400),
+        recoveryGoal: (.time, 60),
+        repeats: 4
+    )
+    let loaded = intervalWorkout(
+        id: "duplicate-workout",
+        date: date.addingTimeInterval(1),
+        workGoal: (.distance, 800),
+        recoveryGoal: (.time, 90),
+        repeats: 3
+    )
+
+    let merged = OfficialIntervalWorkoutMerger.merged(
+        persisted: [persisted],
+        loaded: [loaded]
+    )
+
+    #expect(merged.count == 1)
+    #expect(merged[0] == loaded)
 }
 
 @Test func targetEvaluationUsesMeasuredBasisForTimeAndOpenGoals() throws {

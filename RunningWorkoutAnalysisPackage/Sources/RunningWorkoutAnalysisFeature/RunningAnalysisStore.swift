@@ -720,10 +720,7 @@ public final class RunningAnalysisStore {
         }
         guard result.authorizationState == .authorized || result.authorizationState == .partial else {
             if result.authorizationState == .error {
-                updateHealthKitStatus(
-                    authorizationState: result.authorizationState,
-                    message: result.message ?? "Could not register HealthKit background delivery."
-                )
+                message = result.message ?? "Could not register HealthKit background delivery."
             }
             return
         }
@@ -1071,10 +1068,10 @@ public final class RunningAnalysisStore {
         guard let index = workouts.firstIndex(where: { $0.id == workoutID }) else { return }
         workouts[index].manualRunType = manualRunType
         workouts[index].notes = notes
-        refreshTrainingPeriodSummaryCache()
         pendingManualWorkoutIDs.insert(workoutID)
         let version = (manualWorkoutUpdateVersions[workoutID] ?? 0) + 1
         manualWorkoutUpdateVersions[workoutID] = version
+        refreshTrainingPeriodSummaryCache(affectedBy: workouts[index], persist: false)
 
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 150_000_000)
@@ -1090,7 +1087,9 @@ public final class RunningAnalysisStore {
                     context: modelContext
                 )
             }
-            recompute(hydrateEvidence: false, refreshDerivedAnalyses: false)
+            refreshTrainingPeriodSummaryCache(affectedBy: currentWorkout, persist: true)
+            runTypeReconciliation = RunTypeReviewBridge.reconcile(reviews: reviewedRunTypes, workouts: workouts)
+            snapshot = AnalyticsEngine.snapshot(for: workouts, healthContext: healthContext)
 
             if manualWorkoutUpdateVersions[workoutID] == version {
                 pendingManualWorkoutIDs.remove(workoutID)
@@ -1505,6 +1504,39 @@ public final class RunningAnalysisStore {
             return
         }
         trainingPeriodSummaries = PersistenceService.refreshTrainingPeriodSummaries(workouts: workouts, context: modelContext)
+    }
+
+    private func refreshTrainingPeriodSummaryCache(
+        affectedBy workout: CanonicalWorkout,
+        persist: Bool
+    ) {
+        let refreshed: [CachedTrainingPeriodSummary]
+        if persist, let modelContext {
+            refreshed = PersistenceService.refreshTrainingPeriodSummaries(
+                affectedBy: workout,
+                workouts: workouts,
+                context: modelContext
+            )
+        } else {
+            refreshed = CachedTrainingPeriodSummary.makeAffectedByManualChange(
+                workout: workout,
+                workouts: workouts
+            )
+        }
+
+        var summariesByKey: [String: CachedTrainingPeriodSummary] = [:]
+        for summary in trainingPeriodSummaries {
+            summariesByKey[summary.cacheKey] = summary
+        }
+        for summary in refreshed {
+            summariesByKey[summary.cacheKey] = summary
+        }
+        trainingPeriodSummaries = summariesByKey.values.sorted { lhs, rhs in
+            if lhs.period.rawValue != rhs.period.rawValue {
+                return lhs.period.rawValue < rhs.period.rawValue
+            }
+            return lhs.periodStart > rhs.periodStart
+        }
     }
 
     private func applyReviewedRunTypes() {

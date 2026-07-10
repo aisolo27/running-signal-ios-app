@@ -408,7 +408,7 @@ private func workout(
     )
 }
 
-@Test func intervalAnalysisRowUsesPlannedDistancePaceAndGoalWindowMetrics() {
+@Test func intervalAnalysisRowUsesActivityRowPaceAndMetricsForCompletedPlannedDistance() {
     let start = Date(timeIntervalSince1970: 1_000)
     var interval = reconstructedInterval(
         index: 1,
@@ -443,10 +443,10 @@ private func workout(
 
     #expect(row.distanceMeters == 400)
     #expect(row.displayDurationSeconds == 95)
-    #expect(row.paceSecondsPerKm == 230)
-    #expect(row.averageHeartRateBpm == 161)
-    #expect(row.averageCadence == 199)
-    #expect(row.averagePower == 307)
+    #expect(row.paceSecondsPerKm == 237.5)
+    #expect(row.averageHeartRateBpm == 150)
+    #expect(row.averageCadence == 180)
+    #expect(row.averagePower == 280)
     #expect(row.endOffsetSeconds == 95)
 }
 

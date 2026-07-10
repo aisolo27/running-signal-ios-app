@@ -1,6 +1,6 @@
 # RunSignal Project Status
 
-Last updated: 2026-07-09
+Last updated: 2026-07-10
 
 This is the only current project-status and next-work authority. Historical plans, proof notes, and old test counts do not override it.
 
@@ -70,10 +70,14 @@ These conditions produce whole-run detail plus a clear unavailable/review reason
 
 - Run taxonomy is exactly Easy, Long, Interval, Threshold, Race, and Other. Tempo is folded into Threshold.
 - Manual category edits persist and update Analytics without hydrating all detailed evidence.
+- A single manual category edit refreshes only the affected Week, Month, Year, and All-Time caches; unrelated historical period caches remain untouched.
 - Analytics supports Week, Month, Year, and All-Time views, purpose mix, charts, Best Efforts, interval prescriptions, target evaluation, interval library grouping, and like-for-like trends.
+- Analytics merges persisted and currently loaded official interval workouts by workout ID, with current loaded evidence winning, before building the interval library.
 - Structured workouts show their WorkoutKit plan and official interval rows when the resolver passes.
-- Work rows support hit/too-fast/too-slow pace-target evaluation, shortened-work status, and pause-aware measured math.
+- Work rows support hit/too-fast/too-slow pace-target evaluation, visibly distinct shortened-work status, and pause-aware measured math. A shortened target row can say `On Target · Shortened` so pace result never hides completion state.
+- Completed fixed-distance rows show prescribed distance with HealthKit activity-row time, heart rate, cadence, and power. Their displayed pace and target evaluation use that same activity-row timer plus prescribed-distance basis; shortened rows continue to use measured distance and active time.
 - HealthKit history import, anchored foreground sync, deletion handling, background observer registration, resumable summary backfill, compact derived caches, and Low Power/thermal budgets are implemented.
+- Background-delivery registration failures report their own message without downgrading valid cached/query-based HealthKit readiness.
 - Normal bootstrap avoids hydrating the full detailed-evidence table.
 
 ## Current Next Work
@@ -81,7 +85,7 @@ These conditions produce whole-run detail plus a clear unavailable/review reason
 - Observe limited-history authorization, observer delivery, anchored deletions, backlog continuation, interruption/resume, Low Power Mode, thermal behavior, and battery impact on a physical iPhone.
 - Profile the local training-period summary cache with a large real HealthKit history.
 - Re-export the June 30 clean repeat/fixed-cooldown/`Open / Extra` case from a fresh current build and confirm visible/export status agreement.
-- Verify planned-distance pace, heart rate, power, and cadence against real structured workouts on the physical iPhone.
+- Re-verify the July 9 recording cases on a physical iPhone: loaded HealthKit readiness at launch, repeated run-detail-to-Analytics navigation, category-edit responsiveness with the real history, Priority 5 shortened-row copy, and activity-row pace/heart-rate/power/cadence parity against Apple Fitness.
 - Continue tightening explicit fallback reasons without expanding into guessed interval rows.
 
 ## Known Limitations
@@ -93,4 +97,4 @@ These conditions produce whole-run detail plus a clear unavailable/review reason
 
 ## Latest Verification
 
-On 2026-07-09, 281 package tests passed. Simulator build/install/launch passed on iPhone 17, and physical-iPhone build/install/launch passed on `AIS17PM`. Real-data observation for background delivery, large-history behavior, target rows, thermal state, and battery impact remains open.
+On 2026-07-10, all 286 package tests passed. Simulator build/install/launch passed on iPhone 17. In sample-data mode, launch, run detail, an immediate category edit plus follow-on swipe, repeated run-detail-to-Analytics navigation, and Settings-to-Analytics navigation all completed without an app assertion or crash. The captured runtime logs contained no RunSignal fatal/assertion/crash signature; the Simulator runtime emitted one system Accessibility duplicate-class warning. This change set has not been installed or re-verified on the physical iPhone, so real HealthKit readiness, real-history edit latency, shortened-row presentation, and Apple Fitness metric parity remain open device proof.

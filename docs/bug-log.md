@@ -21,6 +21,7 @@ Read only the section relevant to the task. Add entries only for recurring proje
 ## HealthKit And WorkoutKit
 
 - HealthKit authorization completion does not prove every read type was granted. Use successful queries and data availability for user-facing state.
+- Background observer/delivery registration is not the HealthKit readiness authority. A registration failure may update its message, but it must not downgrade valid readiness already established by cached workouts or successful read queries.
 - Full summary import must not cap history at 250 workouts. Keep expensive detailed evidence bounded separately.
 - Associated-workout samples are stronger than source/date fallback; persist provenance.
 - `HKWorkoutRouteQuery` callbacks may be concurrent. Collect route points through thread-safe state.
@@ -38,6 +39,7 @@ Read only the section relevant to the task. Add entries only for recurring proje
 - App activation must stay lightweight and single-flight. Never start unbounded history, detailed hydration, or broad derived recomputation from the foreground hook.
 - First render must not wait for background-delivery registration or HealthKit sync.
 - Manual category writes and bulk actions must batch persistence and avoid full evidence hydration.
+- A single manual category edit must refresh only the Week, Month, Year, and All-Time caches containing that workout. Preserve unrelated historical period caches instead of rebuilding every period.
 - Do not decode the complete detailed-evidence table during normal launch. Use compact derived projections and targeted predicates.
 - Do not clear working cached evidence until replacement HealthKit queries succeed.
 - SwiftData schema changes require an explicit migration plan.
@@ -45,13 +47,15 @@ Read only the section relevant to the task. Add entries only for recurring proje
 ## Interval Rows And Analytics
 
 - Product rows come only from the generalized WorkoutKit-plan plus complete contiguous HealthKit-activity resolver. Raw segment markers and legacy plan/sample reconstruction are debug-only.
+- Persisted compact interval workouts and currently hydrated interval workouts can contain the same workout ID. Merge by ID before building Analytics collections, and let current loaded evidence replace the persisted projection.
 - Missing plans/activities, non-contiguous or excess rows, incomplete repeat context, ambiguous tails, and malformed pauses must fall back to whole-run detail.
 - Stopped-early workouts show the completed planned prefix only and never infer unfinished rows or `Open / Extra`.
 - Planned open cooldown remains `Cooldown`; extra activity is allowed only after a completed fixed final row.
 - Paused rows retain elapsed duration, pause overlap, active/timer duration, and the matching pace basis.
 - A manual skip can leave measured Work shorter than its distance goal. Use measured distance and active time; never chase the planned distance into later rows.
 - Prescribed distance and measured distance are distinct. Runner-facing planned values must not replace measured validation totals.
-- Completion and pace-target status are independent. One-sided pace thresholds are not exact ranges.
+- Completion and pace-target status are independent. Shortened rows must keep `Shortened` visible even when their measured pace is on target; aggregate copy must also retain the shortened count. One-sided pace thresholds are not exact ranges.
+- Completed fixed-distance primary rows use prescribed distance plus the mapped HealthKit activity-row timer and activity-row heart-rate/cadence/power metrics. Displayed pace and target evaluation must use that same basis. Planned-distance goal windows remain internal evidence and must not silently override the primary row; shortened rows use measured distance and active time.
 - Pace is seconds per kilometer; aggregates use total duration over total distance.
 - Best Efforts reject impossible pace windows and summary-only estimates as official records.
 - Cadence is full steps per minute. Elevation gain filters poor-accuracy points and spikes.

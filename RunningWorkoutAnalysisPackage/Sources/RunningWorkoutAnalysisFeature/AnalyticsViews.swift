@@ -30,8 +30,8 @@ struct AnalyticsView: View {
             else { return nil }
             return OfficialIntervalWorkout(workoutID: workout.id, startDate: workout.startDate, rows: result.intervals)
         }
-        let unique = Dictionary(uniqueKeysWithValues: (persisted + loaded).map { ($0.workoutID, $0) })
-        return IntervalLibraryBuilder.groups(from: Array(unique.values))
+        let merged = OfficialIntervalWorkoutMerger.merged(persisted: persisted, loaded: loaded)
+        return IntervalLibraryBuilder.groups(from: merged)
     }
 
     var body: some View {
@@ -2010,12 +2010,11 @@ struct IntervalDetailView: View {
     }
 
     private var intervalMetricItems: [MetricItem] {
-        let plannedWindow = interval.plannedDistanceMetricWindow
-        let detailBasis = plannedWindow == nil ? "Window" : "Goal window"
+        let detailBasis = interval.windowSource == .healthKitActivityBoundaries ? "Activity row" : "Window"
         var items = IntervalGoalMeasuredText.metricItems(for: interval) + [
-            MetricItem(title: "Avg HR", value: RunFormatters.number(plannedWindow?.averageHeartRateBpm ?? interval.averageHeartRateBpm, suffix: " bpm"), detail: detailBasis),
-            MetricItem(title: "Cadence", value: RunFormatters.number(plannedWindow?.averageCadence ?? interval.averageCadence, suffix: " spm"), detail: detailBasis),
-            MetricItem(title: "Power", value: RunFormatters.number(plannedWindow?.averagePower ?? interval.averagePower, suffix: " W"), detail: "Avg")
+            MetricItem(title: "Avg HR", value: RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"), detail: detailBasis),
+            MetricItem(title: "Cadence", value: RunFormatters.number(interval.averageCadence, suffix: " spm"), detail: detailBasis),
+            MetricItem(title: "Power", value: RunFormatters.number(interval.averagePower, suffix: " W"), detail: detailBasis)
         ]
         if let pausedTimingItems = IntervalRowTimingText.pausedTimingItems(for: interval) {
             items.append(contentsOf: pausedTimingItems)
@@ -2028,9 +2027,9 @@ private struct WorkTargetBadge: View {
     let evaluation: WorkTargetEvaluation
 
     var body: some View {
-        Label(evaluation.result.runnerLabel, systemImage: evaluation.result.symbol)
+        Label(WorkTargetPresentation.badgeLabel(for: evaluation), systemImage: evaluation.result.symbol)
             .font(.caption2.bold())
-            .foregroundStyle(evaluation.result.tint)
+            .foregroundStyle(evaluation.completionStatus == .shortened ? .orange : evaluation.result.tint)
             .labelStyle(.titleAndIcon)
             .accessibilityLabel("Pace result \(evaluation.result.runnerLabel), completion \(evaluation.completionStatus.runnerLabel)")
     }
@@ -2066,21 +2065,12 @@ private struct WorkTargetDetailGrid: View {
 }
 
 private func workTargetSummaryText(_ evaluations: [WorkTargetEvaluation]) -> String {
-    let targeted = evaluations.filter { $0.result != .noTarget }
-    let hit = targeted.count { $0.result == .onTarget }
-    let fast = targeted.count { $0.result == .fast }
-    let slow = targeted.count { $0.result == .slow }
-    return "\(hit) of \(targeted.count) on target · \(fast) fast · \(slow) slow"
+    WorkTargetPresentation.summaryText(evaluations)
 }
 
 private extension WorkTargetResult {
     var runnerLabel: String {
-        switch self {
-        case .onTarget: "On Target"
-        case .fast: "Fast"
-        case .slow: "Slow"
-        case .noTarget: "No Target"
-        }
+        WorkTargetPresentation.resultLabel(self)
     }
 
     var symbol: String {
@@ -2104,11 +2094,7 @@ private extension WorkTargetResult {
 
 private extension WorkCompletionStatus {
     var runnerLabel: String {
-        switch self {
-        case .completed: "Completed"
-        case .shortened: "Shortened"
-        case .openEnded: "Open"
-        }
+        WorkTargetPresentation.completionLabel(self)
     }
 }
 

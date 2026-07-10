@@ -50,6 +50,37 @@ public enum PersistenceService {
         return summaries
     }
 
+    @discardableResult
+    public static func refreshTrainingPeriodSummaries(
+        affectedBy workout: CanonicalWorkout,
+        workouts: [CanonicalWorkout],
+        context: ModelContext,
+        now: Date = Date()
+    ) -> [CachedTrainingPeriodSummary] {
+        let summaries = CachedTrainingPeriodSummary.makeAffectedByManualChange(
+            workout: workout,
+            workouts: workouts,
+            now: now
+        )
+        var recordsByKey: [String: PersistedTrainingPeriodSummary] = [:]
+        for record in fetchPersistedTrainingPeriodSummaries(context: context) {
+            recordsByKey[record.cacheKey] = record
+        }
+
+        for summary in summaries {
+            if let record = recordsByKey[summary.cacheKey] {
+                record.update(summary: summary)
+            } else {
+                let record = PersistedTrainingPeriodSummary(summary: summary)
+                context.insert(record)
+                recordsByKey[summary.cacheKey] = record
+            }
+        }
+
+        try? context.save()
+        return summaries
+    }
+
     public static func upsert(_ workouts: [CanonicalWorkout], context: ModelContext) {
         try? upsertAndSave(workouts, context: context)
     }

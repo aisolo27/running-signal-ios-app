@@ -1639,6 +1639,54 @@ private func intervalForGoalMeasuredText(
 }
 
 @MainActor
+@Test func singleManualRunTypeUpdateLeavesUnrelatedPeriodCachesUntouched() async throws {
+    let context = try inMemoryModelContext()
+    let calendar = fixedCalendar()
+    let olderStart = calendar.date(from: DateComponents(year: 2026, month: 1, day: 5, hour: 7))!
+    let currentStart = calendar.date(from: DateComponents(year: 2026, month: 7, day: 9, hour: 7))!
+    let older = testWorkout(
+        id: "older-cache-workout",
+        start: olderStart,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500,
+        inferredRunType: .easy
+    )
+    let current = testWorkout(
+        id: "current-cache-workout",
+        start: currentStart,
+        distanceMeters: 8_000,
+        durationSeconds: 2_400,
+        inferredRunType: .easy
+    )
+    PersistenceService.upsert([older, current], context: context)
+    let store = RunningAnalysisStore(healthKitService: StubHealthKitService())
+
+    await store.bootstrap(modelContext: context)
+    let olderWeekStart = WeeklyAnalyticsSummary.weekStart(containing: olderStart)
+    let olderCacheBefore = try #require(
+        store.trainingPeriodSummaries.first { $0.period == .week && $0.periodStart == olderWeekStart }
+    )
+
+    store.update(workoutID: current.id, manualRunType: .interval, notes: "")
+
+    let olderCacheAfter = try #require(
+        store.trainingPeriodSummaries.first { $0.period == .week && $0.periodStart == olderWeekStart }
+    )
+    let currentWeekStart = WeeklyAnalyticsSummary.weekStart(containing: currentStart)
+    let currentSummary = store.trainingPeriodSummary(period: .week, periodStart: currentWeekStart)
+    #expect(olderCacheAfter.computedAt == olderCacheBefore.computedAt)
+    #expect(currentSummary.categoryTotals.first { $0.category == .interval }?.runCount == 1)
+    #expect(store.pendingManualWorkoutIDs.contains(current.id))
+
+    for _ in 0..<80 where store.pendingManualWorkoutIDs.contains(current.id) {
+        try await Task.sleep(for: .milliseconds(25))
+    }
+    let persisted = try #require(PersistenceService.fetchWorkouts(context: context).first { $0.id == current.id })
+    #expect(persisted.manualRunType == .interval)
+    #expect(!store.pendingManualWorkoutIDs.contains(current.id))
+}
+
+@MainActor
 @Test func healthKitInitialImportPausesWhenBudgetExpires() async throws {
     let context = try inMemoryModelContext()
     let healthKit = StubHealthKitService()
@@ -1756,6 +1804,37 @@ private func intervalForGoalMeasuredText(
     await store.startHealthKitBackgroundDelivery()
 
     #expect(syncService.observerStartCount == 0)
+}
+
+@MainActor
+@Test func backgroundDeliveryFailurePreservesLoadedHealthKitReadiness() async throws {
+    let context = try inMemoryModelContext()
+    let workout = testWorkout(
+        id: "cached-healthkit-readiness",
+        start: Date(timeIntervalSince1970: 10_000),
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    PersistenceService.upsert([workout], context: context)
+    let syncService = StubHealthKitWorkoutSyncService()
+    syncService.observerResult = HealthKitWorkoutSyncResult(
+        authorizationState: .error,
+        message: "Could not enable HealthKit background delivery."
+    )
+    let store = RunningAnalysisStore(
+        healthKitService: StubHealthKitService(),
+        syncService: syncService
+    )
+
+    await store.bootstrap(modelContext: context)
+    #expect(store.authorizationState == .partial)
+
+    await store.startHealthKitBackgroundDelivery()
+
+    #expect(syncService.observerStartCount == 1)
+    #expect(store.authorizationState == .partial)
+    #expect(store.workouts.count == 1)
+    #expect(store.message == "Could not enable HealthKit background delivery.")
 }
 
 @MainActor

@@ -466,6 +466,28 @@ public struct CachedTrainingPeriodSummary: Codable, Equatable, Sendable {
         }
     }
 
+    public static func makeAffectedByManualChange(
+        workout: CanonicalWorkout,
+        workouts: [CanonicalWorkout],
+        now: Date = Date(),
+        calendar: Calendar = WeeklyAnalyticsSummary.mondayCalendar
+    ) -> [CachedTrainingPeriodSummary] {
+        let inputSignature = signature(for: workouts)
+        return TrainingAnalyticsPeriod.allCases.map { period in
+            CachedTrainingPeriodSummary(
+                summary: TrainingPeriodAnalyticsSummary.make(
+                    workouts: workouts,
+                    period: period,
+                    containing: workout.startDate,
+                    now: now,
+                    calendar: calendar
+                ),
+                inputSignature: inputSignature,
+                computedAt: now
+            )
+        }
+    }
+
     public static func signature(for workouts: [CanonicalWorkout]) -> String {
         V1WorkoutFilters.completedRuns(from: workouts)
             .sorted { $0.id < $1.id }
@@ -871,7 +893,6 @@ public struct IntervalAnalysisRow: Identifiable, Equatable, Sendable {
     public var endOffsetSeconds: Double
 
     public init(interval: ReconstructedWorkoutInterval, workoutStart: Date) {
-        let plannedWindow = interval.plannedDistanceMetricWindow
         index = interval.index
         label = interval.label
         stepType = interval.stepType
@@ -886,12 +907,12 @@ public struct IntervalAnalysisRow: Identifiable, Equatable, Sendable {
         pauseOverlapSeconds = interval.pauseOverlapSeconds
         durationDisplayRule = interval.durationDisplayRule ?? .elapsedRowWindow
         measuredDistanceMeters = interval.actualDistanceMeters
-        distanceMeters = plannedWindow?.distanceMeters ?? interval.actualDistanceMeters
+        distanceMeters = Self.displayDistanceMeters(for: interval)
         paceSecondsPerKm = Self.displayPaceSecondsPerKm(for: interval, displayDurationSeconds: displayDurationSeconds)
-        averageHeartRateBpm = plannedWindow?.averageHeartRateBpm ?? interval.averageHeartRateBpm
-        maxHeartRateBpm = plannedWindow?.maxHeartRateBpm ?? interval.maxHeartRateBpm
-        averagePower = plannedWindow?.averagePower ?? interval.averagePower
-        averageCadence = plannedWindow?.averageCadence ?? interval.averageCadence
+        averageHeartRateBpm = interval.averageHeartRateBpm
+        maxHeartRateBpm = interval.maxHeartRateBpm
+        averagePower = interval.averagePower
+        averageCadence = interval.averageCadence
         startOffsetSeconds = interval.actualStartDate.timeIntervalSince(workoutStart)
         endOffsetSeconds = interval.actualEndDate.timeIntervalSince(workoutStart)
     }
@@ -934,8 +955,12 @@ public struct IntervalAnalysisRow: Identifiable, Equatable, Sendable {
         displayDurationSeconds: Double
     ) -> Double? {
         if interval.plannedGoalType == .distance,
-           let plannedWindow = interval.plannedDistanceMetricWindow {
-            return plannedWindow.paceSecondsPerKm
+           let plannedDistance = interval.plannedGoalValue,
+           plannedDistance > 0,
+           let measuredDistance = interval.actualDistanceMeters,
+           measuredDistance >= plannedDistance * 0.9,
+           displayDurationSeconds > 0 {
+            return displayDurationSeconds / (plannedDistance / 1_000)
         }
 
         guard let distanceMeters = interval.actualDistanceMeters,
@@ -945,6 +970,17 @@ public struct IntervalAnalysisRow: Identifiable, Equatable, Sendable {
         }
 
         return interval.activeTimerDurationSeconds / (distanceMeters / 1_000)
+    }
+
+    private static func displayDistanceMeters(for interval: ReconstructedWorkoutInterval) -> Double? {
+        guard interval.plannedGoalType == .distance,
+              let plannedDistance = interval.plannedGoalValue,
+              plannedDistance > 0,
+              let measuredDistance = interval.actualDistanceMeters,
+              measuredDistance >= plannedDistance * 0.9 else {
+            return interval.actualDistanceMeters
+        }
+        return plannedDistance
     }
 }
 
