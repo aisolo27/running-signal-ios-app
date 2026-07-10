@@ -109,8 +109,8 @@ public final class HealthKitWorkoutSyncService: HealthKitWorkoutSyncServicing, @
         }
 
         let state = await healthKitService.requestAuthorization()
-        guard state == .authorized else {
-            return [HealthKitWorkoutSyncResult(authorizationState: state, message: "HealthKit permission is not fully available.")]
+        guard state == .authorized || state == .partial else {
+            return [HealthKitWorkoutSyncResult(authorizationState: state, message: "The HealthKit authorization request could not be completed.")]
         }
 
         do {
@@ -126,7 +126,7 @@ public final class HealthKitWorkoutSyncService: HealthKitWorkoutSyncServicing, @
                     probeRoutesWhenEvidenceMissing: false
                 )
                 let batch = HealthKitWorkoutSyncResult(
-                    authorizationState: canonical.isEmpty && anchored.deletedWorkoutIDs.isEmpty ? .partial : .authorized,
+                    authorizationState: .partial,
                     fetchedWorkouts: DuplicateDetector.markDuplicates(canonical),
                     deletedWorkoutIDs: anchored.deletedWorkoutIDs,
                     newAnchor: anchored.anchor,
@@ -160,8 +160,8 @@ public final class HealthKitWorkoutSyncService: HealthKitWorkoutSyncServicing, @
         }
 
         let state = await healthKitService.requestAuthorization()
-        guard state == .authorized else {
-            return HealthKitWorkoutSyncResult(authorizationState: state, message: "HealthKit permission is not fully available.")
+        guard state == .authorized || state == .partial else {
+            return HealthKitWorkoutSyncResult(authorizationState: state, message: "The HealthKit authorization request could not be completed.")
         }
 
         let workoutType = HKObjectType.workoutType()
@@ -185,7 +185,7 @@ public final class HealthKitWorkoutSyncService: HealthKitWorkoutSyncServicing, @
         do {
             try await enableBackgroundDelivery(for: workoutType)
             return HealthKitWorkoutSyncResult(
-                authorizationState: .authorized,
+                authorizationState: .partial,
                 message: "HealthKit background delivery is registered for running workout summaries."
             )
         } catch {

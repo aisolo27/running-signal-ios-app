@@ -458,3 +458,75 @@ Scope: reviewed July 6 Codex session logs whose JSON `session_meta.payload.cwd` 
 - Added this July 6 section to `docs/project-state/daily-learning-review.md`.
 - Did not further edit `docs/project-state/project-status.md` or `docs/bug-log.md`: both already have uncommitted July 6 startup/relaunch entries from the implementation session, and this review should not overwrite in-flight doc work.
 - Did not edit `AGENTS.md` or `docs/project-state/documentation-index.md`: no new durable routing or document-classification rule was stronger than existing repo guidance.
+
+## 2026-07-07
+
+Scope: reviewed July 7 Codex session logs whose JSON `session_meta.payload.cwd` or `turn_context.cwd` exactly matched this RunSignal repo. Found three exact-cwd logs and excluded the active daily-learning automation session from the lessons. Treated this as documentation-only review: no Xcode builds, device installs, HealthKit/provider mutations, commits, pushes, or broad repo scans.
+
+### Completed Work
+
+- Reviewed the July 7 physical-iPhone recording for workout-detail public-app polish. The session found the branded startup surface was visible on-device, but still needed perceived-progress polish; route and sample-count evidence cards were too developer-facing for the normal happy path; the Workout Plan card needed a runner-facing prescription summary; interval row counts were too prominent; and `Goal Pace` sounded like a prescribed target instead of Apple-Fitness-comparable planned-distance pace.
+- Implemented and pushed commit `63e9b68 Polish workout detail experience`. Reported validation was `swift test --package-path RunningWorkoutAnalysisPackage` with `257` passing tests, iPhone 17 Simulator build/install/launch, physical iPhone `AIS17PM` build/install/launch, and installed bundle confirmation for `RunSignal com.adrielsolorzano.runninganalysis`.
+- Added a follow-up Workout Plan layout shaped like the user-supplied reference: warm-up, work target, indented recovery, and cool-down, with raw WorkoutKit plan rows still behind disclosure. The follow-up reported `257` package tests passing, iPhone 17 Simulator launch/screenshot checks, and physical iPhone install/launch.
+- Fixed the same-day typography regression after the user screenshot showed the work prescription row was oversized and bold compared with the rest of the app. The active local diff changes the plan summary to compact uniform `.subheadline` styling and updates `docs/project-state/project-status.md` to describe compact uniform typography.
+
+### Pending Work
+
+- Check the stacked Workout Plan card against a real structured workout on the physical iPhone. Simulator sample data did not include a WorkoutKit plan, so it could prove nonblank layout only, not exact real-plan visual parity.
+- Confirm the physical phone's perceived startup experience after the July 7 polish: the app mark/startup shell appears, but user-facing progress/motion may still matter if first real content takes multiple seconds.
+- The typography fix and `project-status.md` note are still local uncommitted changes at review time: `RunningWorkoutAnalysisPackage/Sources/RunningWorkoutAnalysisFeature/Views.swift` and `docs/project-state/project-status.md`.
+
+### Mistakes, Fixes, And Friction
+
+- Product-facing cards can inherit technically correct labels that are confusing in runner language. `Goal Pace` matched Apple Fitness because it normalized measured time to planned distance; the clearer durable label is `Planned-Distance Pace`, with HealthKit measured pace remaining secondary.
+- The first stacked plan implementation used `.title3` and bold emphasis for the work prescription, which made `12 x 200 m` visually overpower neighboring detail rows. Compact cards should use the same small typography scale as nearby workout-detail sections unless there is an intentional hierarchy change.
+- Simulator visual proof remains limited for WorkoutKit plan UI because sample workouts may not include structured plans. Real structured-workout visual checks still need the physical phone or cached real-data fixture path.
+
+### Workflow Improvements
+
+- For user-recorded UX complaints, first split the issue into product-language cleanup, information hierarchy, visual hierarchy, and proof level. That made it easier to improve visible cards without touching interval resolver math.
+- When the user compares Apple Fitness to RunSignal, verify whether the apparent mismatch is source semantics: planned-distance pace can intentionally match Apple Fitness while measured HealthKit pace explains distance drift.
+- For same-day UI follow-ups, keep a screenshot-driven typography pass separate from the larger UX patch; it makes the final diff smaller and avoids reworking resolver or data paths.
+
+### Docs Updated By This Review
+
+- Added this July 7 section to `docs/project-state/daily-learning-review.md`.
+- Did not further edit `docs/project-state/project-status.md`: it already has an active uncommitted July 7 Workout Detail UX section and this review should not overwrite in-flight status edits.
+- Did not edit `docs/bug-log.md`: the oversized plan typography was a fixed one-off UI regression, not a recurring bug, toolchain gotcha, or durable verification rule beyond the daily note above.
+- Did not edit `AGENTS.md` or `docs/project-state/documentation-index.md`: no new durable routing or document-classification rule was stronger than existing repo guidance.
+
+## 2026-07-08
+
+Scope: reviewed July 8 Codex session logs whose JSON `session_meta.payload.cwd` or `turn_context.cwd` exactly matched this RunSignal repo. Found two exact-cwd logs and excluded the active daily-learning automation session from lessons. Treated this as documentation-only review: no Xcode builds, device installs, HealthKit/provider mutations, commits, pushes, or broad repo scans.
+
+### Completed Work
+
+- Reviewed user-supplied workout-detail recording `/Users/adrielsolorzano/Downloads/RPReplay_Final1783552147.MP4` for redundant workout summary, runner-facing Workout Plan value, and interval display mismatches against Apple Fitness.
+- Implemented and pushed commit `b75fbfe Update interval metrics for planned distance`. The slice uses goal-distance windows for fixed-distance interval rows so time, pace, heart rate, power, and cadence align to the planned target distance while official measured activity rows remain the validation totals.
+- The same slice removed/reduced redundant workout-detail UI, simplified runner-facing plan/status copy, and kept measured HealthKit pace/distance available where it explains overrun or drift.
+- Reported verification: `swift test --package-path RunningWorkoutAnalysisPackage` passed with `259` tests, XcodeBuildMCP Simulator build/install/launch passed on iPhone 17, physical iPhone `AIS17PM` build/install/launch passed, and `main` was pushed to `origin/main`.
+
+### Pending Work
+
+- On the physical iPhone, open a real structured interval workout and verify fixed-distance rows show the planned target distance/time/pace and that interval detail HR/cadence/power come from the goal-distance window.
+- Continue treating Simulator screenshots as layout proof only for this specific area; sample data cannot prove real WorkoutKit plan row semantics or HealthKit goal-window metrics.
+- Keep an eye on user-facing confusion between planned-distance pace and measured pace: the app should explain both without making validation totals look like they changed.
+
+### Mistakes, Fixes, And Friction
+
+- The key semantic trap was letting HealthKit activity-row overrun distance dominate runner-facing fixed-distance intervals. The fix is not to change official validation rows; it is to add a provable planned-distance metric window for display metrics.
+- A prior interpolation bug produced impossible short planned-distance durations when a distance sample ended exactly at an interval boundary. The durable fix was to use each distance sample start/end window so row-start cumulative distance is not double-counted.
+- The final working tree intentionally left `docs/project-state/daily-learning-review.md` modified and unpushed; code, tests, `docs/bug-log.md`, and `docs/project-state/project-status.md` were included in `b75fbfe`.
+
+### Workflow Improvements
+
+- For Apple Fitness interval comparisons, separate four concepts before editing: planned target distance, HealthKit measured activity distance, goal-window metrics, and official validation totals.
+- When the user asks for Apple-Fitness-like interval display, first verify whether the requested match is a product display choice or a resolver promotion rule. This avoids weakening evidence gates to satisfy UI parity.
+- For fixed-distance interval metrics, keep regression tests around both the display metric window and the measured official-row totals so one cannot silently replace the other.
+
+### Docs Updated By This Review
+
+- Added this July 8 section to `docs/project-state/daily-learning-review.md`.
+- Did not further edit `docs/project-state/project-status.md`: commit `b75fbfe` already updated current state, next work, and known limitation text for the July 8 goal-distance window slice.
+- Did not further edit `docs/bug-log.md`: commit `b75fbfe` already added the durable goal-distance interpolation gotcha, and the existing bug-log index covers the related recurring proof/validation lessons.
+- Did not edit `AGENTS.md` or `docs/project-state/documentation-index.md`: no new durable routing, tooling, or document-classification rule was stronger than existing guidance.

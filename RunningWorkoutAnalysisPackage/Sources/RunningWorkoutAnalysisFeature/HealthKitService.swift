@@ -19,8 +19,37 @@ public protocol HealthKitServicing: AnyObject, Sendable {
         detailedEvidenceLimit: Int,
         probeRoutesWhenEvidenceMissing: Bool
     ) async -> HealthKitLoadResult
+    func loadRunningWorkouts(
+        startDate: Date?,
+        endDate: Date?,
+        detailedEvidenceLimit: Int,
+        probeRoutesWhenEvidenceMissing: Bool,
+        requestsAuthorization: Bool,
+        loadsHealthContext: Bool
+    ) async -> HealthKitLoadResult
     func enrichRunningWorkouts(ids: [String]) async -> HealthKitLoadResult
     func loadHealthContext() async -> HealthContext
+    func earliestPermittedSampleDate() async -> Date?
+}
+
+public extension HealthKitServicing {
+    func loadRunningWorkouts(
+        startDate: Date?,
+        endDate: Date?,
+        detailedEvidenceLimit: Int,
+        probeRoutesWhenEvidenceMissing: Bool,
+        requestsAuthorization: Bool,
+        loadsHealthContext: Bool
+    ) async -> HealthKitLoadResult {
+        await loadRunningWorkouts(
+            startDate: startDate,
+            endDate: endDate,
+            detailedEvidenceLimit: detailedEvidenceLimit,
+            probeRoutesWhenEvidenceMissing: probeRoutesWhenEvidenceMissing
+        )
+    }
+
+    func earliestPermittedSampleDate() async -> Date? { nil }
 }
 
 public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
@@ -37,7 +66,9 @@ public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
         guard isAvailable else { return .unavailable }
         do {
             try await store.requestAuthorization(toShare: [], read: readTypes)
-            return .authorized
+            // HealthKit confirms that the authorization sheet completed, but it
+            // intentionally does not disclose whether every read type was granted.
+            return .partial
         } catch {
             return .error
         }
@@ -58,18 +89,38 @@ public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
         detailedEvidenceLimit: Int,
         probeRoutesWhenEvidenceMissing: Bool
     ) async -> HealthKitLoadResult {
+        await loadRunningWorkouts(
+            startDate: startDate,
+            endDate: endDate,
+            detailedEvidenceLimit: detailedEvidenceLimit,
+            probeRoutesWhenEvidenceMissing: probeRoutesWhenEvidenceMissing,
+            requestsAuthorization: true,
+            loadsHealthContext: true
+        )
+    }
+
+    public func loadRunningWorkouts(
+        startDate: Date?,
+        endDate: Date?,
+        detailedEvidenceLimit: Int,
+        probeRoutesWhenEvidenceMissing: Bool,
+        requestsAuthorization: Bool,
+        loadsHealthContext: Bool
+    ) async -> HealthKitLoadResult {
         guard isAvailable else {
             return HealthKitLoadResult(authorizationState: .unavailable, workouts: [], healthContext: HealthContext(), message: "HealthKit is not available on this device.")
         }
 
-        let state = await requestAuthorization()
-        guard state == .authorized else {
-            return HealthKitLoadResult(authorizationState: state, workouts: [], healthContext: HealthContext(), message: "HealthKit permission is not fully available.")
+        if requestsAuthorization {
+            let state = await requestAuthorization()
+            guard state == .authorized || state == .partial else {
+                return HealthKitLoadResult(authorizationState: state, workouts: [], healthContext: HealthContext(), message: "The HealthKit authorization request could not be completed.")
+            }
         }
 
         do {
             let workouts = try await queryRunningWorkouts(startDate: startDate, endDate: endDate)
-            let healthContext = await queryHealthContext()
+            let healthContext = loadsHealthContext ? await queryHealthContext() : HealthContext()
             let canonical = await HealthKitWorkoutMapper.normalize(
                 workouts,
                 store: store,
@@ -77,7 +128,7 @@ public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
                 probeRoutesWhenEvidenceMissing: probeRoutesWhenEvidenceMissing
             )
             return HealthKitLoadResult(
-                authorizationState: canonical.isEmpty ? .partial : .authorized,
+                authorizationState: .partial,
                 workouts: DuplicateDetector.markDuplicates(canonical),
                 healthContext: healthContext,
                 message: canonical.isEmpty ? "HealthKit Loaded: no completed running workouts were returned." : nil
@@ -93,8 +144,8 @@ public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
         }
 
         let state = await requestAuthorization()
-        guard state == .authorized else {
-            return HealthKitLoadResult(authorizationState: state, workouts: [], healthContext: HealthContext(), message: "HealthKit permission is not fully available.")
+        guard state == .authorized || state == .partial else {
+            return HealthKitLoadResult(authorizationState: state, workouts: [], healthContext: HealthContext(), message: "The HealthKit authorization request could not be completed.")
         }
 
         do {
@@ -105,7 +156,7 @@ public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
                 detailedEvidenceLimit: workouts.count
             )
             return HealthKitLoadResult(
-                authorizationState: canonical.isEmpty ? .partial : .authorized,
+                authorizationState: .partial,
                 workouts: DuplicateDetector.markDuplicates(canonical),
                 healthContext: HealthContext(),
                 message: canonical.isEmpty ? "No matching HealthKit running workouts were found for enrichment." : "Enriched \(canonical.count) HealthKit running workouts."
@@ -118,6 +169,11 @@ public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
     public func loadHealthContext() async -> HealthContext {
         guard isAvailable else { return HealthContext() }
         return await queryHealthContext()
+    }
+
+    public func earliestPermittedSampleDate() async -> Date? {
+        guard isAvailable else { return nil }
+        return store.earliestPermittedSampleDate()
     }
 
     private var readTypes: Set<HKObjectType> {

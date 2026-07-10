@@ -40,9 +40,17 @@ import Testing
     #expect(WeeklyRunCategory.make(from: workout(id: "tempo", type: .tempo)) == .threshold)
     #expect(WeeklyRunCategory.make(from: workout(id: "threshold", type: .threshold)) == .threshold)
     #expect(WeeklyRunCategory.make(from: workout(id: "long", type: .longRun)) == .longRun)
-    #expect(WeeklyRunCategory.make(from: workout(id: "recovery", type: .recovery)) == .warmupCooldown)
+    #expect(WeeklyRunCategory.make(from: workout(id: "recovery", type: .recovery)) == .easy)
     #expect(WeeklyRunCategory.make(from: workout(id: "race", type: .race)) == .race)
     #expect(WeeklyRunCategory.make(from: workout(id: "hills", type: .hills)) == .other)
+}
+
+@Test func visibleRunTaxonomyIsExactlyTheApprovedSixAndFoldsLegacyValues() {
+    #expect(RunType.visibleCases.map(\.label) == ["Easy", "Long Run", "Interval", "Threshold", "Race", "Other"])
+    #expect(RunType.recovery.visibleCategory == .easy)
+    #expect(RunType.tempo.visibleCategory == .threshold)
+    #expect(RunType.progression.visibleCategory == .unknown)
+    #expect(RunType.hills.visibleCategory == .unknown)
 }
 
 @Test func periodAnalyticsComparesCurrentWeekToSameElapsedDaysLastWeek() throws {
@@ -435,7 +443,7 @@ private func workout(
 
     #expect(row.distanceMeters == 400)
     #expect(row.displayDurationSeconds == 95)
-    #expect(row.paceSecondsPerKm == 237.5)
+    #expect(row.paceSecondsPerKm == 230)
     #expect(row.averageHeartRateBpm == 161)
     #expect(row.averageCadence == 199)
     #expect(row.averagePower == 307)

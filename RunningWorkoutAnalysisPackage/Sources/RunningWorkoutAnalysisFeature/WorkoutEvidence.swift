@@ -115,26 +115,45 @@ public struct WorkoutRoutePoint: Codable, Equatable, Sendable {
     public var longitude: Double
     public var altitudeMeters: Double?
     public var speedMetersPerSecond: Double?
+    public var horizontalAccuracyMeters: Double?
+    public var verticalAccuracyMeters: Double?
 
     public init(
         date: Date,
         latitude: Double,
         longitude: Double,
         altitudeMeters: Double? = nil,
-        speedMetersPerSecond: Double? = nil
+        speedMetersPerSecond: Double? = nil,
+        horizontalAccuracyMeters: Double? = nil,
+        verticalAccuracyMeters: Double? = nil
     ) {
         self.date = date
         self.latitude = latitude
         self.longitude = longitude
         self.altitudeMeters = altitudeMeters
         self.speedMetersPerSecond = speedMetersPerSecond
+        self.horizontalAccuracyMeters = horizontalAccuracyMeters
+        self.verticalAccuracyMeters = verticalAccuracyMeters
     }
+}
+
+public enum WorkoutEvidenceEventKind: String, Codable, Equatable, Sendable {
+    case pause
+    case resume
+    case lap
+    case marker
+    case motionPaused
+    case motionResumed
+    case segment
+    case pauseOrResumeRequest
+    case unknown
 }
 
 public struct WorkoutEvidenceEvent: Codable, Equatable, Sendable {
     public var startDate: Date
     public var endDate: Date
     public var type: String
+    public var kind: WorkoutEvidenceEventKind?
     public var label: String?
     public var metadataKeys: [String]?
 
@@ -142,12 +161,14 @@ public struct WorkoutEvidenceEvent: Codable, Equatable, Sendable {
         startDate: Date,
         endDate: Date,
         type: String,
+        kind: WorkoutEvidenceEventKind? = nil,
         label: String? = nil,
         metadataKeys: [String]? = nil
     ) {
         self.startDate = startDate
         self.endDate = endDate
         self.type = type
+        self.kind = kind
         self.label = label
         self.metadataKeys = metadataKeys
     }
@@ -155,6 +176,9 @@ public struct WorkoutEvidenceEvent: Codable, Equatable, Sendable {
     public var displayLabel: String {
         if let label, !label.isEmpty {
             return label
+        }
+        if let kind, kind != .unknown {
+            return kind.displayLabel
         }
         return Self.displayLabel(for: type)
     }
@@ -185,6 +209,22 @@ public struct WorkoutEvidenceEvent: Codable, Equatable, Sendable {
         if normalized.contains("rawvalue: 7") { return "Segment" }
         if normalized.contains("rawvalue: 8") { return "Pause/resume request" }
         return "Workout event"
+    }
+}
+
+private extension WorkoutEvidenceEventKind {
+    var displayLabel: String {
+        switch self {
+        case .pause: "Pause"
+        case .resume: "Resume"
+        case .lap: "Lap"
+        case .marker: "Marker"
+        case .motionPaused: "Motion paused"
+        case .motionResumed: "Motion resumed"
+        case .segment: "Segment"
+        case .pauseOrResumeRequest: "Pause/resume request"
+        case .unknown: "Workout event"
+        }
     }
 }
 
@@ -318,6 +358,15 @@ public struct WorkoutMetricSeries: Codable, Equatable, Sendable {
 
     public var average: Double? {
         guard !points.isEmpty else { return nil }
+        let durationWeighted = points.reduce(into: (weighted: 0.0, duration: 0.0)) { partial, point in
+            let duration = max(0, point.endDate.timeIntervalSince(point.startDate))
+            guard duration > 0 else { return }
+            partial.weighted += point.value * duration
+            partial.duration += duration
+        }
+        if durationWeighted.duration > 0 {
+            return durationWeighted.weighted / durationWeighted.duration
+        }
         return points.map(\.value).reduce(0, +) / Double(points.count)
     }
 
@@ -392,12 +441,29 @@ public struct WorkoutEvidence: Codable, Equatable, Sendable {
     }
 
     public var elevationGainMeters: Double? {
-        let altitudes = route.compactMap(\.altitudeMeters)
-        guard altitudes.count >= 2 else { return nil }
+        let accuratePoints = route
+            .filter { point in
+                guard point.altitudeMeters?.isFinite == true else { return false }
+                let verticalIsUsable = point.verticalAccuracyMeters.map { $0 >= 0 && $0 <= 20 } ?? true
+                let horizontalIsUsable = point.horizontalAccuracyMeters.map { $0 >= 0 && $0 <= 100 } ?? true
+                return verticalIsUsable && horizontalIsUsable
+            }
+            .sorted { $0.date < $1.date }
+        guard accuratePoints.count >= 2 else { return nil }
 
-        let gain = zip(altitudes, altitudes.dropFirst())
-            .map { current, next in max(0, next - current) }
-            .reduce(0, +)
+        // A short median filter removes isolated GPS altitude spikes without flattening
+        // sustained climbs. Legacy evidence has no accuracy fields and still benefits.
+        let rawAltitudes = accuratePoints.compactMap(\.altitudeMeters)
+        let altitudes: [Double] = rawAltitudes.indices.map { index -> Double in
+            let lower = max(rawAltitudes.startIndex, index - 1)
+            let upper = min(rawAltitudes.index(before: rawAltitudes.endIndex), index + 1)
+            let window = rawAltitudes[lower...upper].sorted()
+            return window[window.count / 2]
+        }
+        let gain = altitudes.indices.dropFirst().reduce(0.0) { total, index in
+            let rise = altitudes[index] - altitudes[index - 1]
+            return total + (rise >= 0.5 && rise <= 20 ? rise : 0)
+        }
 
         return gain > 0 ? gain : nil
     }

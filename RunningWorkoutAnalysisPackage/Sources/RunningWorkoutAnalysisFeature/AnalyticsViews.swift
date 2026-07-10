@@ -22,6 +22,18 @@ struct AnalyticsView: View {
         return periodStarts.first ?? store.defaultTrainingPeriodStart(for: selectedPeriod)
     }
 
+    private var intervalLibraryGroups: [IntervalLibraryGroup] {
+        let persisted = store.derivedAnalysesByWorkoutID.values.compactMap(\.officialIntervalWorkout)
+        let loaded = store.workouts.compactMap { workout -> OfficialIntervalWorkout? in
+            guard let evidence = workout.evidence,
+                  let result = CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence)
+            else { return nil }
+            return OfficialIntervalWorkout(workoutID: workout.id, startDate: workout.startDate, rows: result.intervals)
+        }
+        let unique = Dictionary(uniqueKeysWithValues: (persisted + loaded).map { ($0.workoutID, $0) })
+        return IntervalLibraryBuilder.groups(from: Array(unique.values))
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -36,6 +48,34 @@ struct AnalyticsView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+
+                NavigationLink {
+                    IntervalLibraryView(groups: intervalLibraryGroups)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "repeat.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(.cyan)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Interval Library")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                            Text(intervalLibraryGroups.isEmpty
+                                 ? "Official custom workout groups appear as evidence is processed."
+                                 : "\(intervalLibraryGroups.count) like-for-like prescriptions · targets and trends")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.leading)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .background(.background)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
 
                 PeriodSignalView(
                     store: store,
@@ -57,6 +97,166 @@ struct AnalyticsView: View {
         .onChange(of: selectedPeriod) {
             selectedPeriodStart = nil
         }
+    }
+}
+
+private struct IntervalLibraryView: View {
+    let groups: [IntervalLibraryGroup]
+
+    private var broadGroups: [(key: [IntervalGoalSignature], groups: [IntervalLibraryGroup])] {
+        Dictionary(grouping: groups, by: { $0.signature.workGoals })
+            .map { (key: $0.key, groups: $0.value) }
+            .sorted { intervalGoalListLabel($0.key) < intervalGoalListLabel($1.key) }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Official WorkoutKit prescriptions grouped by planned Work target, then by the complete Work and Recovery prescription.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if broadGroups.isEmpty {
+                    EmptyStateView(
+                        title: "No official interval groups yet",
+                        message: "Whole-run analytics remain available. Interval groups appear only after a WorkoutKit plan and complete HealthKit activity-boundary rows pass the evidence gate."
+                    )
+                } else {
+                    ForEach(Array(broadGroups.enumerated()), id: \.offset) { _, broad in
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("\(intervalGoalListLabel(broad.key)) Work")
+                                .font(.headline)
+                            ForEach(broad.groups) { group in
+                                NavigationLink {
+                                    IntervalTrendView(group: group)
+                                } label: {
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(intervalPrescriptionLabel(group.signature))
+                                                .font(.subheadline.bold())
+                                                .foregroundStyle(.primary)
+                                            Text("\(group.workouts.count) workout\(group.workouts.count == 1 ? "" : "s")")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chart.xyaxis.line")
+                                            .foregroundStyle(.cyan)
+                                    }
+                                    .padding(10)
+                                    .background(.secondary.opacity(0.08))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding()
+                        .background(.background)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+            }
+            .padding()
+            .padding(.bottom, 120)
+        }
+        .navigationTitle("Interval Library")
+    }
+}
+
+private struct IntervalTrendView: View {
+    let group: IntervalLibraryGroup
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HeaderBlock(
+                    title: intervalPrescriptionLabel(group.signature),
+                    subtitle: "Like-for-like trend across the same planned Work and Recovery prescription."
+                )
+
+                MetricGrid(items: [
+                    MetricItem(title: "Sessions", value: "\(group.trendPoints.count)", detail: "Comparable"),
+                    MetricItem(title: "Latest Pace", value: RunFormatters.pace(group.trendPoints.last?.aggregatePaceSecondsPerKilometer), detail: "Work aggregate"),
+                    MetricItem(title: "On Target", value: "\(group.trendPoints.reduce(0) { $0 + $1.onTargetCount })", detail: "All sessions"),
+                    MetricItem(title: "Shortened", value: "\(group.trendPoints.reduce(0) { $0 + $1.shortenedCount })", detail: "Completion")
+                ])
+
+                if !group.trendPoints.isEmpty {
+                    Chart(group.trendPoints) { point in
+                        if let pace = point.aggregatePaceSecondsPerKilometer, pace > 0 {
+                            LineMark(
+                                x: .value("Date", point.startDate),
+                                y: .value("Pace", 3_600 / pace)
+                            )
+                            .foregroundStyle(.cyan)
+                            PointMark(
+                                x: .value("Date", point.startDate),
+                                y: .value("Pace", 3_600 / pace)
+                            )
+                            .foregroundStyle(.cyan)
+                        }
+                    }
+                    .frame(height: 240)
+                    .chartYAxis {
+                        AxisMarks(position: .leading) { value in
+                            AxisGridLine()
+                            AxisValueLabel {
+                                if let speedLike = value.as(Double.self), speedLike > 0 {
+                                    Text(RunFormatters.pace(3_600 / speedLike))
+                                }
+                            }
+                        }
+                    }
+                    .accessibilityLabel("Aggregate Work pace trend")
+                }
+
+                ForEach(group.trendPoints.reversed()) { point in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(RunFormatters.mediumDateWithYear.string(from: point.startDate))
+                                .font(.subheadline.bold())
+                            Spacer()
+                            Text(RunFormatters.pace(point.aggregatePaceSecondsPerKilometer))
+                                .font(.subheadline.monospacedDigit())
+                        }
+                        Text("\(point.onTargetCount) on target · \(point.fastCount) fast · \(point.slowCount) slow · \(point.shortenedCount) shortened")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .background(.background)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+            }
+            .padding()
+            .padding(.bottom, 120)
+        }
+        .navigationTitle("Interval Trend")
+    }
+}
+
+private func intervalPrescriptionLabel(_ signature: IntervalPrescriptionSignature) -> String {
+    let work = intervalGoalListLabel(signature.workGoals)
+    let recovery = intervalGoalListLabel(signature.recoveryGoals)
+    let recoveryText = signature.recoveryCount > 0 ? " / \(recovery) Recovery" : ""
+    return "\(signature.workCount) × \(work)\(recoveryText)"
+}
+
+private func intervalGoalListLabel(_ goals: [IntervalGoalSignature]) -> String {
+    guard !goals.isEmpty else { return "Open" }
+    return goals.map(intervalGoalLabel).joined(separator: " + ")
+}
+
+private func intervalGoalLabel(_ goal: IntervalGoalSignature) -> String {
+    switch goal.type {
+    case .distance:
+        return RunFormatters.compactDistance(goal.value)
+    case .time:
+        return goal.value.map { RunFormatters.duration($0) } ?? "Timed"
+    case .open: return "Open"
+    case .energy: return goal.value.map { "\(Int($0.rounded())) kcal" } ?? "Energy"
+    case .unavailable: return "Other"
     }
 }
 
@@ -666,7 +866,7 @@ private extension WeeklyRunCategory {
         case .longRun:
             return .longRun
         case .warmupCooldown:
-            return .recovery
+            return .easy
         case .race:
             return .race
         case .other:
@@ -1037,6 +1237,10 @@ struct IntervalAnalysisEntryCard: View {
         IntervalAnalysisSummary(workout: workout, result: result)
     }
 
+    private var targetEvaluations: [WorkTargetEvaluation] {
+        result.intervals.compactMap { WorkTargetEvaluator.evaluate(interval: $0) }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
@@ -1055,6 +1259,13 @@ struct IntervalAnalysisEntryCard: View {
             }
 
             MetricGrid(items: entryItems)
+
+            if targetEvaluations.contains(where: { $0.result != .noTarget }) {
+                Text(workTargetSummaryText(targetEvaluations))
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Pace targets: \(workTargetSummaryText(targetEvaluations))")
+            }
 
             NavigationLink {
                 IntervalAnalysisScreen(workout: workout, result: result)
@@ -1108,6 +1319,15 @@ struct IntervalAnalysisScreen: View {
         return summary.rows.first { $0.index == selectedIntervalIndex }
     }
 
+    private var selectedInterval: ReconstructedWorkoutInterval? {
+        guard let selectedIntervalIndex else { return nil }
+        return result.intervals.first { $0.index == selectedIntervalIndex }
+    }
+
+    private var targetEvaluations: [WorkTargetEvaluation] {
+        result.intervals.compactMap { WorkTargetEvaluator.evaluate(interval: $0) }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -1117,6 +1337,8 @@ struct IntervalAnalysisScreen: View {
                 )
 
                 IntervalExecutionSummaryPanel(summary: IntervalExecutionUXSummary.make(summary: summary))
+
+                WorkTargetSummaryPanel(evaluations: targetEvaluations)
 
                 if summary.workRepeatSummary != nil {
                     IntervalWorkTotalsPanel(summary: summary)
@@ -1137,6 +1359,7 @@ struct IntervalAnalysisScreen: View {
 
                     IntervalPrimaryScrubChart(
                         summary: summary,
+                        intervals: result.intervals,
                         metric: selectedMetric,
                         selectedIntervalIndex: $selectedIntervalIndex
                     )
@@ -1148,7 +1371,8 @@ struct IntervalAnalysisScreen: View {
                 IntervalSelectedRowPanel(
                     summary: summary,
                     metric: selectedMetric,
-                    selectedRow: selectedRow
+                    selectedRow: selectedRow,
+                    selectedInterval: selectedInterval
                 )
 
                 IntervalAnalysisRowsPanel(
@@ -1179,6 +1403,38 @@ struct IntervalAnalysisScreen: View {
             return
         }
         selectedIntervalIndex = summary.rows.first?.index
+    }
+}
+
+private struct WorkTargetSummaryPanel: View {
+    let evaluations: [WorkTargetEvaluation]
+
+    private var targeted: [WorkTargetEvaluation] {
+        evaluations.filter { $0.result != .noTarget }
+    }
+
+    var body: some View {
+        if !targeted.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Label("Work Pace Targets", systemImage: "scope")
+                        .font(.subheadline.bold())
+                    Spacer()
+                    Text("\(targeted.count) reps")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.blue)
+                }
+                Text(workTargetSummaryText(targeted))
+                    .font(.headline.monospacedDigit())
+                Text("Target status and completion are separate, so a shortened rep is never presented as completed.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+            .background(.background)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .accessibilityElement(children: .combine)
+        }
     }
 }
 
@@ -1325,6 +1581,7 @@ private struct IntervalMetricMenu: View {
 
 private struct IntervalPrimaryScrubChart: View {
     let summary: IntervalAnalysisSummary
+    let intervals: [ReconstructedWorkoutInterval]
     let metric: IntervalAnalysisMetric
     @Binding var selectedIntervalIndex: Int?
 
@@ -1353,6 +1610,20 @@ private struct IntervalPrimaryScrubChart: View {
             }
 
             Chart {
+                if metric == .pace {
+                    ForEach(intervals, id: \.index) { interval in
+                        if let range = WorkTargetEvaluator.evaluate(interval: interval)?.targetRange {
+                            RectangleMark(
+                                xStart: .value("Target start", Double(interval.index) - 0.42),
+                                xEnd: .value("Target end", Double(interval.index) + 0.42),
+                                yStart: .value("Target slow", 3_600 / range.slowestSecondsPerKilometer),
+                                yEnd: .value("Target fast", 3_600 / range.fastestSecondsPerKilometer)
+                            )
+                            .foregroundStyle(.green.opacity(0.16))
+                        }
+                    }
+                }
+
                 if let aggregate = summary.aggregateValue(for: metric) {
                     RuleMark(y: .value("Average", aggregate.chartValue))
                         .foregroundStyle(.secondary.opacity(0.6))
@@ -1423,6 +1694,7 @@ private struct IntervalSelectedRowPanel: View {
     let summary: IntervalAnalysisSummary
     let metric: IntervalAnalysisMetric
     let selectedRow: IntervalAnalysisRow?
+    let selectedInterval: ReconstructedWorkoutInterval?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -1452,6 +1724,12 @@ private struct IntervalSelectedRowPanel: View {
                     MetricItem(title: "Pause", value: RunFormatters.duration(pauseOverlap), detail: "Paired overlap"),
                     MetricItem(title: "Active", value: RunFormatters.duration(selectedRow.activeDurationSeconds), detail: "Timer duration")
                 ])
+            }
+
+            if let selectedInterval,
+               let evaluation = WorkTargetEvaluator.evaluate(interval: selectedInterval),
+               evaluation.result != .noTarget {
+                WorkTargetDetailGrid(evaluation: evaluation)
             }
 
             MetricGrid(items: metricItems)
@@ -1557,7 +1835,10 @@ private struct IntervalAnalysisRowsPanel: View {
             NavigationLink {
                 IntervalDetailView(workout: workout, interval: interval)
             } label: {
-                IntervalAnalysisCompactRow(row: row)
+                IntervalAnalysisCompactRow(
+                    row: row,
+                    evaluation: WorkTargetEvaluator.evaluate(interval: interval)
+                )
             }
             .buttonStyle(.plain)
         } else {
@@ -1585,7 +1866,11 @@ private struct IntervalRepeatGroupCard: View {
                     NavigationLink {
                         IntervalDetailView(workout: workout, interval: interval)
                     } label: {
-                        IntervalAnalysisCompactRow(row: row, showsBackground: false)
+                        IntervalAnalysisCompactRow(
+                            row: row,
+                            evaluation: WorkTargetEvaluator.evaluate(interval: interval),
+                            showsBackground: false
+                        )
                     }
                     .buttonStyle(.plain)
                 } else {
@@ -1605,6 +1890,7 @@ private struct IntervalRepeatGroupCard: View {
 
 private struct IntervalAnalysisCompactRow: View {
     let row: IntervalAnalysisRow
+    var evaluation: WorkTargetEvaluation? = nil
     var showsBackground = true
 
     var body: some View {
@@ -1621,6 +1907,9 @@ private struct IntervalAnalysisCompactRow: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 3) {
+                if let evaluation, evaluation.result != .noTarget {
+                    WorkTargetBadge(evaluation: evaluation)
+                }
                 Text(displayDistance)
                     .font(.subheadline.monospacedDigit().bold())
                 Text(RunFormatters.pace(row.paceSecondsPerKm))
@@ -1691,6 +1980,14 @@ struct IntervalDetailView: View {
 
                 MetricGrid(items: intervalMetricItems)
 
+                if let evaluation = WorkTargetEvaluator.evaluate(interval: interval),
+                   evaluation.result != .noTarget {
+                    VStack(alignment: .leading, spacing: 10) {
+                        SectionHeader("Pace Target")
+                        WorkTargetDetailGrid(evaluation: evaluation)
+                    }
+                }
+
                 if let pausedTimingDetail = IntervalRowTimingText.pausedTimingDetail(for: interval) {
                     NoticeCard(
                         title: "Pause-aware timing",
@@ -1724,5 +2021,105 @@ struct IntervalDetailView: View {
             items.append(contentsOf: pausedTimingItems)
         }
         return items
+    }
+}
+
+private struct WorkTargetBadge: View {
+    let evaluation: WorkTargetEvaluation
+
+    var body: some View {
+        Label(evaluation.result.runnerLabel, systemImage: evaluation.result.symbol)
+            .font(.caption2.bold())
+            .foregroundStyle(evaluation.result.tint)
+            .labelStyle(.titleAndIcon)
+            .accessibilityLabel("Pace result \(evaluation.result.runnerLabel), completion \(evaluation.completionStatus.runnerLabel)")
+    }
+}
+
+private struct WorkTargetDetailGrid: View {
+    let evaluation: WorkTargetEvaluation
+
+    var body: some View {
+        MetricGrid(items: [
+            MetricItem(title: "Target", value: targetText, detail: "WorkoutKit range"),
+            MetricItem(title: "Actual", value: RunFormatters.pace(evaluation.measurement.paceSecondsPerKilometer), detail: evaluation.measurement.basis.runnerLabel),
+            MetricItem(title: "Result", value: evaluation.result.runnerLabel, detail: deltaText),
+            MetricItem(title: "Completion", value: evaluation.completionStatus.runnerLabel, detail: "Separate from pace")
+        ])
+    }
+
+    private var targetText: String {
+        guard let range = evaluation.targetRange else { return "Unavailable" }
+        return "\(RunFormatters.pace(range.fastestSecondsPerKilometer))–\(RunFormatters.pace(range.slowestSecondsPerKilometer))"
+    }
+
+    private var deltaText: String {
+        guard let pace = evaluation.measurement.paceSecondsPerKilometer,
+              let range = evaluation.targetRange else { return "No comparison" }
+        if range.contains(pace) { return "Inside target" }
+        let edge = pace < range.fastestSecondsPerKilometer
+            ? range.fastestSecondsPerKilometer
+            : range.slowestSecondsPerKilometer
+        let delta = Int(abs(pace - edge).rounded())
+        return "\(delta)s/km \(pace < edge ? "faster" : "slower")"
+    }
+}
+
+private func workTargetSummaryText(_ evaluations: [WorkTargetEvaluation]) -> String {
+    let targeted = evaluations.filter { $0.result != .noTarget }
+    let hit = targeted.count { $0.result == .onTarget }
+    let fast = targeted.count { $0.result == .fast }
+    let slow = targeted.count { $0.result == .slow }
+    return "\(hit) of \(targeted.count) on target · \(fast) fast · \(slow) slow"
+}
+
+private extension WorkTargetResult {
+    var runnerLabel: String {
+        switch self {
+        case .onTarget: "On Target"
+        case .fast: "Fast"
+        case .slow: "Slow"
+        case .noTarget: "No Target"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .onTarget: "checkmark.circle.fill"
+        case .fast: "arrow.up.circle.fill"
+        case .slow: "arrow.down.circle.fill"
+        case .noTarget: "minus.circle"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .onTarget: .green
+        case .fast: .orange
+        case .slow: .red
+        case .noTarget: .secondary
+        }
+    }
+}
+
+private extension WorkCompletionStatus {
+    var runnerLabel: String {
+        switch self {
+        case .completed: "Completed"
+        case .shortened: "Shortened"
+        case .openEnded: "Open"
+        }
+    }
+}
+
+private extension WorkPaceMeasurementBasis {
+    var runnerLabel: String {
+        switch self {
+        case .completedGoalWindow: "Goal window"
+        case .completedPlannedDistance: "Active timer"
+        case .shortenedMeasured: "Measured shortened rep"
+        case .measured: "Measured"
+        case .unavailable: "Unavailable"
+        }
     }
 }

@@ -48,6 +48,18 @@ enum IntervalGoalMeasuredText {
     ) -> [MetricItem] {
         switch plannedGoalType {
         case .distance:
+            let completedGoal = {
+                guard let plannedGoalValue, plannedGoalValue > 0,
+                      let measuredDistanceMeters else { return false }
+                return measuredDistanceMeters >= plannedGoalValue * 0.9
+            }()
+            if !completedGoal {
+                return [
+                    MetricItem(title: "Distance", value: RunFormatters.compactDistance(measuredDistanceMeters), detail: "Shortened · HealthKit"),
+                    MetricItem(title: "Time", value: RunFormatters.duration(displayDurationSeconds), detail: durationBasisLabel),
+                    MetricItem(title: "Pace", value: RunFormatters.pace(measuredPaceSecondsPerKm), detail: "Measured distance")
+                ]
+            }
             return [
                 MetricItem(title: "Distance", value: RunFormatters.compactDistance(plannedGoalValue), detail: "Workout plan"),
                 MetricItem(title: "Time", value: RunFormatters.duration(displayDurationSeconds), detail: durationBasisLabel),
@@ -59,10 +71,9 @@ enum IntervalGoalMeasuredText {
             ]
         case .time:
             return [
-                MetricItem(title: "Goal Time", value: RunFormatters.duration(plannedGoalValue), detail: "WorkoutKit"),
-                MetricItem(title: "Measured Time", value: RunFormatters.duration(displayDurationSeconds), detail: durationBasisLabel),
-                MetricItem(title: "Measured Distance", value: RunFormatters.compactDistance(measuredDistanceMeters), detail: "HealthKit"),
-                MetricItem(title: "Measured Pace", value: RunFormatters.pace(measuredPaceSecondsPerKm), detail: durationBasisLabel)
+                MetricItem(title: "Distance", value: RunFormatters.compactDistance(measuredDistanceMeters), detail: "HealthKit"),
+                MetricItem(title: "Time", value: RunFormatters.duration(displayDurationSeconds), detail: durationBasisLabel),
+                MetricItem(title: "Pace", value: RunFormatters.pace(measuredPaceSecondsPerKm), detail: durationBasisLabel)
             ]
         case .open, .energy, .unavailable:
             return [

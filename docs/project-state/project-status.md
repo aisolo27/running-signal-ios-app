@@ -1,6 +1,6 @@
 # RunSignal Project Status
 
-Last updated: 2026-07-08
+Last updated: 2026-07-09
 
 ## Product Direction
 
@@ -63,7 +63,7 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 
 ## Current Next Work
 
-- Continue data ingestion hardening before expanding analytics depth: measure the new import job, observer delivery, anchored deletions, large backlog sync, thermal behavior, and battery impact on a physical iPhone.
+- Run physical-iPhone proof for limited-history authorization, observer delivery, anchored deletions, large backlog continuation, interruption/resume, Low Power Mode, thermal behavior, and battery impact. Package/Simulator proof cannot establish these device-only behaviors.
 - Profile the new local training-period summary cache on a physical iPhone with a large real HealthKit history; keep it as a disposable SwiftData projection over HealthKit-backed workouts, not a new source of truth.
 - Keep generalized resolved activity-boundary row behavior stable across archived Apple Fitness fixtures and priority workouts.
 - Re-export the June 30 clean no-pause repeat fixed-cooldown/`Open / Extra` workout from a fresh current-build physical-iPhone install.
@@ -82,14 +82,16 @@ Paused timing semantics use a pause-window state machine for explicit pause/resu
 ## Known Limitations
 
 - Some older runs are summary-only because detailed HealthKit series may be unavailable.
-- First-install all-history summary import, anchored deletion sync, observer delivery, and long detailed-evidence refreshes are not yet proven against large real HealthKit histories, true background delivery, cancellation, or thermal adaptation on a physical iPhone.
+- First-install all-history summary import, limited-history authorization, anchored deletion sync, observer delivery, and long detailed-evidence refreshes are implemented but not yet proven against a large real HealthKit history, true background delivery, cancellation, or thermal adaptation on a physical iPhone.
 - FIT does not prove exact Apple Fitness UI presentation parity or private Apple smoothing/labeling rules.
 - WorkoutKit plan data can be unavailable or throw and must stay optional.
 - Distance-goal interval UI displays Apple-style planned distance with the official resolved row time and planned-distance pace. Goal-distance-clipped sample windows can still enrich HR, power, and cadence when available, but physical-iPhone proof against real structured workouts is still needed.
+- Time-goal interval UI, commonly recovery rows, displays the same Apple-style Distance, Time, and Pace surface using measured HealthKit distance during the official resolved row time.
 - Mechanics, trends, stronger run-type claims, and interval-row analytics remain confidence-gated.
 
 ## Recent Proof
 
+- 2026-07-09 correctness/performance/product analytics program: all-history windows now union in memory, preserve manual fields, honor HealthKit's earliest permitted sample date, request authorization/health context once, and apply Low Power/thermal budgets before detailed work. Foreground and observer sync share one in-flight task. Persistence uses targeted predicates instead of normal-path full-table evidence scans, exact Best Efforts and official interval prescriptions persist as compact derived projections, and normal bootstrap does not hydrate every evidence blob. HealthKit event types are normalized from the real enum, route accuracy is retained, elevation gain filters inaccurate/spike points, distance-chart fallback treats HealthKit distance samples as incremental, and heart-rate drift uses aligned time windows. Runner-facing taxonomy is exactly Easy, Long, Interval, Threshold, Race, Other; no-plan runs default Other with whole-run analytics only. Official Work rows now support typed pace-range target evaluation with separate completion and target status, paused/shortened measured math, target bands, row badges, detail deltas, dynamic Work-target/full-prescription library grouping, and like-for-like trends. The archived Priority 5 paused/skipped 2 km Work regression remains covered without hard-coded distances. Verification: 281 package tests passed; Simulator build/install/launch passed on iPhone 17 and the Analytics/Interval Library screens were inspected; physical-iPhone build/install/launch passed on `AIS17PM`. Real HealthKit target rows plus limited-history, observer, interruption, Low Power, thermal, and battery behavior still require app-visible physical-device observation.
 - 2026-07-08 workout detail recording-feedback slice: Reviewed the Apple Fitness interval recording frame-by-frame. Apple Fitness opens Intervals as a sheet with a dense scrollable table: Distance, Time, Pace, Heart Rate, Power, and Cadence, while fixed-distance rows show the planned target distance such as `200m` instead of the HealthKit row overrun. RunSignal now removes the redundant workout-detail summary card, simplifies Workout Plan by removing runner-facing plan/status metric badges, and displays fixed-distance interval Distance/Time/Pace as planned distance plus official resolved row time. Goal-distance-clipped windows can still enrich HR, cadence, and power when available, while work-repeat aggregate summaries still use official measured HealthKit activity rows so validation gates do not silently change. Verification: `swift test --package-path RunningWorkoutAnalysisPackage` passed with 259 tests, XcodeBuildMCP Simulator build/install/launch passed on iPhone 17, and screenshot showed Runs screen without blank screen or obvious overlap. Real structured WorkoutKit plan proof still requires physical-iPhone data.
 - 2026-07-06 startup/relaunch polish: User-supplied physical-iPhone recording showed multi-second black-screen spans before RunSignal reopened. RunSignal now uses an explicit branded `LaunchScreen.storyboard`, disables Xcode's generated empty launch screen, and shows a lightweight SwiftUI `RunSignalStartupView` while store bootstrap completes. `swift test --package-path RunningWorkoutAnalysisPackage` passed with 257 tests, Simulator build/install/launch passed on iPhone 17, and the built app bundle contains `UILaunchStoryboardName = LaunchScreen` plus compiled `LaunchScreen.storyboardc`. Fresh physical-iPhone timing still needs a new recording/install check.
 - 2026-07-06 Runs dashboard date display: Completed Runs rows now show year-inclusive dates such as `Jun 24, 2024`; `swift test --package-path RunningWorkoutAnalysisPackage` passed with 257 tests.

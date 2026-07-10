@@ -118,6 +118,13 @@ public enum PlannedWorkoutTargetKind: String, Codable, Sendable {
     case unknown
 }
 
+public enum PlannedWorkoutTargetSemantics: String, Codable, Sendable {
+    case range
+    case threshold
+    case zone
+    case unknown
+}
+
 public struct PlannedWorkoutTarget: Codable, Equatable, Sendable {
     public var kind: PlannedWorkoutTargetKind
     public var lowerBound: Double?
@@ -125,6 +132,7 @@ public struct PlannedWorkoutTarget: Codable, Equatable, Sendable {
     public var unit: String?
     public var displayText: String
     public var source: String
+    public var semantics: PlannedWorkoutTargetSemantics?
 
     public init(
         kind: PlannedWorkoutTargetKind,
@@ -132,7 +140,8 @@ public struct PlannedWorkoutTarget: Codable, Equatable, Sendable {
         upperBound: Double? = nil,
         unit: String? = nil,
         displayText: String,
-        source: String = "WorkoutKit"
+        source: String = "WorkoutKit",
+        semantics: PlannedWorkoutTargetSemantics? = .range
     ) {
         self.kind = kind
         self.lowerBound = lowerBound
@@ -140,6 +149,7 @@ public struct PlannedWorkoutTarget: Codable, Equatable, Sendable {
         self.unit = unit
         self.displayText = displayText
         self.source = source
+        self.semantics = semantics
     }
 }
 
@@ -151,6 +161,7 @@ public struct ReconstructedWorkoutInterval: Codable, Equatable, Sendable {
     public var plannedGoalValue: Double?
     public var plannedGoalDisplayText: String
     public var plannedTargetDisplayText: String?
+    public var plannedTargets: [PlannedWorkoutTarget]?
     public var actualStartDate: Date
     public var actualEndDate: Date
     public var actualDurationSeconds: Double
@@ -315,6 +326,12 @@ enum PauseWindowResolver {
 
 fileprivate enum WorkoutPauseTimingSemantics {
     static func pauseEventKind(for event: WorkoutEvidenceEvent) -> PauseResolutionEventKind? {
+        switch event.kind {
+        case .pause, .motionPaused: return .pause
+        case .resume, .motionResumed: return .resume
+        case .pauseOrResumeRequest: return .toggle
+        case .lap, .marker, .segment, .unknown, .none: break
+        }
         let normalizedType = normalizedPauseText(event.type)
         let normalizedLabel = normalizedPauseText(event.displayLabel)
 
@@ -724,6 +741,7 @@ public enum WorkoutIntervalReconstructionEngine {
             plannedGoalValue: step.plannedGoalValue,
             plannedGoalDisplayText: step.plannedGoalDisplayText,
             plannedTargetDisplayText: step.plannedTargetDisplayText,
+            plannedTargets: step.plannedTargets,
             actualStartDate: start,
             actualEndDate: end,
             actualDurationSeconds: duration,

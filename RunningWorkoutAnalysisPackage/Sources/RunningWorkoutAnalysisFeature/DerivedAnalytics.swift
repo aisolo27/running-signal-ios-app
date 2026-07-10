@@ -165,7 +165,7 @@ public struct DerivedWorkoutInterval: Codable, Equatable, Sendable {
 }
 
 public struct DerivedWorkoutAnalysis: Codable, Equatable, Sendable {
-    public static let currentVersion = "derived-workout-v2"
+    public static let currentVersion = "derived-workout-v3"
 
     public var workoutID: String
     public var calculationVersion: String
@@ -183,9 +183,11 @@ public struct DerivedWorkoutAnalysis: Codable, Equatable, Sendable {
     public var groundContactAverage: Double?
     public var mechanicsConfidence: ConfidenceLevel
     public var bestEffortEstimates: [DerivedBestEffortEstimate]
+    public var personalBestEffortRecords: [PersonalBestEffortRecord]? = nil
     public var splitEstimates: [DerivedSplitEstimate]?
     public var executionSegments: [DerivedExecutionSegment]?
     public var intervalCandidates: [DerivedWorkoutInterval]?
+    public var officialIntervalWorkout: OfficialIntervalWorkout? = nil
     public var intervalCount: Int
     public var intervalConfidence: ConfidenceLevel
     public var readinessConfidence: ConfidenceLevel
@@ -222,7 +224,7 @@ public enum DerivedAnalyticsEngine {
             pacingShapeConfidence = .unavailable
         }
 
-        let heartRateDrift = heartRateSeries.flatMap { driftPercent(values: $0.points.map(\.value)) }
+        let heartRateDrift = heartRateSeries.flatMap { driftPercent(points: $0.points) }
         let heartRateDriftConfidence: ConfidenceLevel = heartRateDrift == nil ? .unavailable : .moderate
         let mechanicsConfidence: ConfidenceLevel = coverage.mechanics ? (coverage.speedOrDistance ? .moderate : .limited) : .unavailable
 
@@ -234,6 +236,18 @@ public enum DerivedAnalyticsEngine {
             caveats.append("Heart-rate drift is unavailable without enough heart-rate samples.")
         }
         let resolvedRows = resolvedIntervalRows(workout: workout, evidence: evidence)
+        let officialIntervalWorkout = CustomWorkoutNormalDetailGate
+            .supportedIntervals(workout: workout, evidence: evidence)
+            .map {
+                OfficialIntervalWorkout(
+                    workoutID: workout.id,
+                    startDate: workout.startDate,
+                    rows: $0.intervals
+                )
+            }
+        var evidenceWorkout = workout
+        evidenceWorkout.evidence = evidence
+        let personalBestEffortRecords = PersonalBestEffortEngine.records(for: evidenceWorkout)
 
         return DerivedWorkoutAnalysis(
             workoutID: workout.id,
@@ -257,9 +271,11 @@ public enum DerivedAnalyticsEngine {
                 paceEstimate: pace,
                 paceConfidence: paceConfidence
             ),
+            personalBestEffortRecords: personalBestEffortRecords,
             splitEstimates: splitEstimates(workout: workout, evidence: evidence),
             executionSegments: executionSegments(heartRateSeries: heartRateSeries, speedSeries: speedSeries),
             intervalCandidates: resolvedRows.isEmpty ? nil : resolvedRows,
+            officialIntervalWorkout: officialIntervalWorkout,
             intervalCount: evidence.events.count,
             intervalConfidence: resolvedRows.isEmpty ? .unavailable : .moderate,
             readinessConfidence: minConfidence(coverage.confidence, paceConfidence),
@@ -276,15 +292,39 @@ public enum DerivedAnalyticsEngine {
         return "Even"
     }
 
-    private static func driftPercent(values: [Double]) -> Double? {
-        guard values.count >= 4 else { return nil }
-        let midpoint = values.count / 2
-        let firstHalf = Array(values.prefix(midpoint))
-        let secondHalf = Array(values.suffix(values.count - midpoint))
-        let firstAverage = firstHalf.reduce(0, +) / Double(firstHalf.count)
+    private static func driftPercent(points: [WorkoutEvidencePoint]) -> Double? {
+        let points = points.sorted { $0.date < $1.date }
+        guard points.count >= 4,
+              let start = points.first?.date,
+              let end = points.last?.date,
+              end > start else { return nil }
+        let midpoint = start.addingTimeInterval(end.timeIntervalSince(start) / 2)
+        let firstHalf = points.filter { $0.date <= midpoint }
+        let secondHalf = points.filter { $0.date > midpoint }
+        guard !firstHalf.isEmpty, !secondHalf.isEmpty else { return nil }
+        let firstAverage = timeWeightedAverage(firstHalf, windowEnd: midpoint)
         guard firstAverage > 0 else { return nil }
-        let secondAverage = secondHalf.reduce(0, +) / Double(secondHalf.count)
+        let secondAverage = timeWeightedAverage(secondHalf, windowEnd: end)
         return ((secondAverage - firstAverage) / firstAverage) * 100
+    }
+
+    private static func timeWeightedAverage(
+        _ points: [WorkoutEvidencePoint],
+        windowEnd: Date
+    ) -> Double {
+        let sorted = points.sorted { $0.date < $1.date }
+        let totals = sorted.indices.reduce(into: (weighted: 0.0, duration: 0.0)) { partial, index in
+            let point = sorted[index]
+            let nextDate = index + 1 < sorted.count ? sorted[index + 1].date : windowEnd
+            let duration = max(0, nextDate.timeIntervalSince(point.date))
+            guard duration > 0 else { return }
+            partial.weighted += point.value * duration
+            partial.duration += duration
+        }
+        guard totals.duration > 0 else {
+            return sorted.map(\.value).reduce(0, +) / Double(sorted.count)
+        }
+        return totals.weighted / totals.duration
     }
 
     private static func bestEffortEstimates(

@@ -119,7 +119,7 @@ import Testing
     #expect(items.map(\.detail) == ["Workout plan", "Elapsed window", "Planned distance"])
 }
 
-@Test func intervalGoalMeasuredItemsSeparateTimeGoalStats() {
+@Test func intervalGoalMeasuredItemsUseAppleStyleTimeGoalStats() {
     let interval = intervalForGoalMeasuredText(
         plannedGoalType: .time,
         plannedGoalValue: 120,
@@ -129,9 +129,9 @@ import Testing
     )
 
     let items = IntervalGoalMeasuredText.metricItems(for: interval)
-    #expect(items.map(\.title) == ["Goal Time", "Measured Time", "Measured Distance", "Measured Pace"])
-    #expect(items.map(\.value) == ["2:00", "2:00", "178 m", "11:12 /km"])
-    #expect(items.map(\.detail) == ["WorkoutKit", "Elapsed window", "HealthKit", "Elapsed window"])
+    #expect(items.map(\.title) == ["Distance", "Time", "Pace"])
+    #expect(items.map(\.value) == ["178 m", "2:00", "11:12 /km"])
+    #expect(items.map(\.detail) == ["HealthKit", "Elapsed window", "Elapsed window"])
 }
 
 @Test func intervalGoalMeasuredItemsKeepOpenRowsMeasuredOnly() {
@@ -147,6 +147,23 @@ import Testing
     #expect(items.map(\.title) == ["Measured Distance", "Measured Time", "Measured Pace"])
     #expect(items.map(\.value) == ["43 m", "0:19", "7:14 /km"])
     #expect(items.map(\.detail) == ["HealthKit", "Elapsed window", "Elapsed window"])
+}
+
+@Test func intervalGoalMeasuredItemsUseMeasuredStatsForShortenedDistanceWork() {
+    var interval = intervalForGoalMeasuredText(
+        plannedGoalType: .distance,
+        plannedGoalValue: 2_000,
+        plannedGoalDisplayText: "2 km",
+        distanceMeters: 1_210,
+        durationSeconds: 568.7
+    )
+    interval.activeDurationSeconds = 460.5
+    interval.pauseOverlapSeconds = 108.2
+    interval.durationDisplayRule = .activeTimer
+
+    let items = IntervalGoalMeasuredText.metricItems(for: interval)
+    #expect(items.map(\.value) == ["1.21 km", "7:41", "6:21 /km"])
+    #expect(items.map(\.detail) == ["Shortened · HealthKit", "Active timer", "Measured distance"])
 }
 
 @Test func weightedPaceAggregatesDurationOverDistance() {

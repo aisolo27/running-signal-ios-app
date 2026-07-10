@@ -251,6 +251,7 @@ public struct DerivedAnalysisRefreshSummary: Equatable, Sendable {
 @MainActor
 @Observable
 public final class RunningAnalysisStore {
+    private static let personalBestCacheKey = "RunSignal.PersonalBestEffortSummary.v1"
     private static let refreshLogger = Logger(
         subsystem: "com.adrielsolorzano.runninganalysis",
         category: "EvidenceRefresh"
@@ -292,6 +293,7 @@ public final class RunningAnalysisStore {
     private var didBootstrap = false
     private var lastForegroundSyncAt: Date?
     private var isForegroundSyncInFlight = false
+    private var healthKitSyncTask: Task<Void, Never>?
     private weak var modelContext: ModelContext?
 
     public init(
@@ -390,8 +392,8 @@ public final class RunningAnalysisStore {
                 )
             } else {
                 updateHealthKitStatus(
-                    authorizationState: .authorized,
-                    message: "HealthKit Loaded from local cache: \(workouts.count) completed running workouts."
+                    authorizationState: .partial,
+                    message: "Loaded \(workouts.count) completed running workouts from the local HealthKit cache. Current read access is confirmed only by new HealthKit query results."
                 )
             }
         }
@@ -414,8 +416,18 @@ public final class RunningAnalysisStore {
         }
 
         let budget = makeImportBudgetPolicy()
+        let authorizationState = await healthKitService.requestAuthorization()
+        guard authorizationState == .authorized || authorizationState == .partial else {
+            PersistenceService.finishHealthKitImportJob(status: .blocked, message: "The HealthKit authorization request could not be completed.", context: modelContext)
+            refreshHealthKitImportJobSummary()
+            updateHealthKitStatus(authorizationState: authorizationState, message: "The HealthKit authorization request could not be completed.")
+            return
+        }
+        healthContext = await healthKitService.loadHealthContext()
+        let earliestPermittedDate = await healthKitService.earliestPermittedSampleDate()
         let windows = healthKitImportWindows(
-            resumingFrom: PersistenceService.fetchHealthKitImportJob(context: modelContext)?.currentWindowEnd
+            resumingFrom: PersistenceService.fetchHealthKitImportJob(context: modelContext)?.currentWindowEnd,
+            earliestPermittedDate: earliestPermittedDate
         )
         guard let firstWindow = windows.first else {
             PersistenceService.finishHealthKitImportJob(status: .completed, message: nil, context: modelContext)
@@ -433,7 +445,8 @@ public final class RunningAnalysisStore {
         var importedTotal = 0
         var sawAuthorizedEmptyWindow = false
         for (index, window) in windows.enumerated() {
-            if let reason = budget.pauseReason(allowsDetailedEvidence: false) {
+            let loadsDetailedEvidence = index == 0
+            if let reason = budget.pauseReason(allowsDetailedEvidence: loadsDetailedEvidence) {
                 PersistenceService.pauseHealthKitImportJob(reason: reason, context: modelContext)
                 refreshHealthKitImportJobSummary()
                 updateHealthKitStatus(authorizationState: authorizationState, message: reason.message)
@@ -445,9 +458,10 @@ public final class RunningAnalysisStore {
                 startDate: window.start,
                 endDate: window.end,
                 detailedEvidenceLimit: index == 0 ? HealthKitService.defaultDetailedEvidenceLimit : 0,
-                probeRoutesWhenEvidenceMissing: index == 0
+                probeRoutesWhenEvidenceMissing: index == 0,
+                requestsAuthorization: false,
+                loadsHealthContext: false
             )
-            healthContext = result.healthContext
             let importMessage = result.workouts.isEmpty
                 ? "Checking older HealthKit running history."
                 : "Imported \(result.workouts.count) HealthKit running workouts."
@@ -474,7 +488,7 @@ public final class RunningAnalysisStore {
             importedTotal += result.workouts.count
             if !result.workouts.isEmpty {
                 usesSampleData = false
-                workouts = removeSampleWorkoutsIfRealDataExists(mergeManualFields(incoming: result.workouts, current: workouts))
+                workouts = Self.mergeImportedWorkouts(incoming: result.workouts, current: workouts)
                 deletePersistedSampleWorkoutsIfNeeded()
                 applyReviewedRunTypes()
                 persistCurrent()
@@ -489,7 +503,7 @@ public final class RunningAnalysisStore {
             await Task.yield()
         }
 
-        if importedTotal == 0 && sawAuthorizedEmptyWindow {
+        if importedTotal == 0 && sawAuthorizedEmptyWindow && workouts.allSatisfy(isSampleWorkout) {
             usesSampleData = false
             let previousSampleIDs = sampleWorkoutIDs(in: workouts)
             workouts = []
@@ -506,7 +520,7 @@ public final class RunningAnalysisStore {
         refreshHealthKitImportJobSummary()
         updateHealthKitStatus(
             authorizationState: authorizationState,
-            message: "HealthKit import finished."
+            message: healthKitImportFinishedMessage(earliestPermittedDate: earliestPermittedDate)
         )
         await startHealthKitBackgroundDelivery()
         recompute()
@@ -538,7 +552,7 @@ public final class RunningAnalysisStore {
         }
 
         usesSampleData = false
-        workouts = removeSampleWorkoutsIfRealDataExists(mergeManualFields(incoming: result.workouts, current: workouts))
+        workouts = Self.mergeImportedWorkouts(incoming: result.workouts, current: workouts)
         deletePersistedSampleWorkoutsIfNeeded()
         applyReviewedRunTypes()
         persistCurrent()
@@ -554,6 +568,20 @@ public final class RunningAnalysisStore {
     }
 
     public func syncHealthKitChanges(includePostSyncMaintenance: Bool = true) async {
+        if let healthKitSyncTask {
+            await healthKitSyncTask.value
+            return
+        }
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.performHealthKitChangesSync(includePostSyncMaintenance: includePostSyncMaintenance)
+        }
+        healthKitSyncTask = task
+        await task.value
+        healthKitSyncTask = nil
+    }
+
+    private func performHealthKitChangesSync(includePostSyncMaintenance: Bool) async {
         isLoading = true
         defer { isLoading = false }
 
@@ -690,7 +718,7 @@ public final class RunningAnalysisStore {
             guard let self else { return }
             await self.syncHealthKitChanges(includePostSyncMaintenance: false)
         }
-        guard result.authorizationState == .authorized else {
+        guard result.authorizationState == .authorized || result.authorizationState == .partial else {
             if result.authorizationState == .error {
                 updateHealthKitStatus(
                     authorizationState: result.authorizationState,
@@ -706,6 +734,11 @@ public final class RunningAnalysisStore {
     }
 
     public func enrichNextHealthKitAuditBatch(limit: Int = HealthKitService.defaultDetailedEvidenceLimit) async {
+        let budget = makeImportBudgetPolicy()
+        if let reason = budget.pauseReason(allowsDetailedEvidence: true) {
+            message = reason.message
+            return
+        }
         let candidates = nextEvidenceQueueCandidateIDs(limit: limit)
 
         guard !candidates.isEmpty else {
@@ -754,6 +787,11 @@ public final class RunningAnalysisStore {
             message = "HealthKit evidence refresh is already running."
             return
         }
+        let budget = makeImportBudgetPolicy()
+        if let reason = budget.pauseReason(allowsDetailedEvidence: true) {
+            message = reason.message
+            return
+        }
 
         isEnrichingAudit = true
         analyzingWorkoutIDs.insert(workoutID)
@@ -799,6 +837,11 @@ public final class RunningAnalysisStore {
                 authorizationState: .error,
                 message: "Workout is not loaded in the current RunSignal store."
             )
+            return
+        }
+        let budget = makeImportBudgetPolicy()
+        if let reason = budget.pauseReason(allowsDetailedEvidence: true) {
+            message = reason.message
             return
         }
 
@@ -874,6 +917,7 @@ public final class RunningAnalysisStore {
 
         isEnrichingAudit = true
         defer { isEnrichingAudit = false }
+        let budget = makeImportBudgetPolicy()
 
         let job = modelContext.map {
             PersistenceService.startEvidenceRefreshJob(
@@ -901,6 +945,14 @@ public final class RunningAnalysisStore {
         )
 
         for workout in monthWorkouts {
+            if let reason = budget.pauseReason(allowsDetailedEvidence: true) {
+                message = reason.message
+                if let modelContext {
+                    PersistenceService.pauseRunningEvidenceRefreshJobs(context: modelContext, message: reason.message)
+                    refreshEvidenceRefreshJobs()
+                }
+                break
+            }
             let requestedAt = Date()
             let cacheWasPresent = workout.evidence != nil
                 || (modelContext.map { PersistenceService.fetchEvidence(workoutID: workout.id, context: $0) } ?? nil) != nil
@@ -1091,8 +1143,8 @@ public final class RunningAnalysisStore {
         }
         return EvidenceEnrichmentQueue.items(
             workouts: workouts,
-            cachedEvidenceIDs: PersistenceService.fetchEvidenceIDs(context: modelContext),
-            failedStates: PersistenceService.fetchEnrichmentStateByID(context: modelContext)
+            cachedEvidenceIDs: PersistenceService.fetchEvidenceIDs(workoutIDs: [workoutID], context: modelContext),
+            failedStates: PersistenceService.fetchEnrichmentStateByID(workoutIDs: [workoutID], context: modelContext)
         )
         .first { $0.workoutID == workoutID }
     }
@@ -1212,9 +1264,10 @@ public final class RunningAnalysisStore {
         return evidenceRefreshJobSummaries.first { $0.scopeKey == scopeKey }
     }
 
-    private func mergeManualFields(incoming: [CanonicalWorkout], current: [CanonicalWorkout]) -> [CanonicalWorkout] {
+    static func mergeImportedWorkouts(incoming: [CanonicalWorkout], current: [CanonicalWorkout]) -> [CanonicalWorkout] {
         let currentByID = Dictionary(uniqueKeysWithValues: current.map { ($0.id, $0) })
-        return incoming.map { workout in
+        var byID = currentByID
+        for workout in incoming {
             var merged = workout
             if let existing = currentByID[workout.id] {
                 merged.manualRunType = existing.manualRunType
@@ -1222,8 +1275,14 @@ public final class RunningAnalysisStore {
                 merged.importedReviewID = existing.importedReviewID
                 merged.notes = existing.notes
             }
-            return merged
+            byID[workout.id] = merged
         }
+        let merged = Array(byID.values)
+        let sampleIDs = Set(SampleData.workouts.map(\.id))
+        let withoutSamples = merged.contains(where: { !sampleIDs.contains($0.id) })
+            ? merged.filter { !sampleIDs.contains($0.id) }
+            : merged
+        return DuplicateDetector.markDuplicates(withoutSamples.sorted { $0.startDate > $1.startDate })
     }
 
     private func mergeSyncedWorkouts(changes: [CanonicalWorkout], current: [CanonicalWorkout]) -> [CanonicalWorkout] {
@@ -1252,10 +1311,14 @@ public final class RunningAnalysisStore {
         PersistenceService.deleteWorkouts(ids: Set(SampleData.workouts.map(\.id)), context: modelContext)
     }
 
-    private func healthKitImportWindows(resumingFrom resumeEnd: Date?) -> [(start: Date, end: Date)] {
+    private func healthKitImportWindows(
+        resumingFrom resumeEnd: Date?,
+        earliestPermittedDate: Date? = nil
+    ) -> [(start: Date, end: Date)] {
         let calendar = Calendar(identifier: .gregorian)
         let now = Date()
-        let lowerBound = calendar.date(from: DateComponents(year: 2000, month: 1, day: 1)) ?? Date(timeIntervalSince1970: 0)
+        let productLowerBound = calendar.date(from: DateComponents(year: 2000, month: 1, day: 1)) ?? Date(timeIntervalSince1970: 0)
+        let lowerBound = max(productLowerBound, earliestPermittedDate ?? productLowerBound)
         var end = resumeEnd ?? now
         var windows: [(start: Date, end: Date)] = []
         while end > lowerBound {
@@ -1264,6 +1327,15 @@ public final class RunningAnalysisStore {
             end = start
         }
         return windows
+    }
+
+    private func healthKitImportFinishedMessage(earliestPermittedDate: Date?) -> String {
+        let calendar = Calendar(identifier: .gregorian)
+        let productLowerBound = calendar.date(from: DateComponents(year: 2000, month: 1, day: 1)) ?? Date(timeIntervalSince1970: 0)
+        guard let earliestPermittedDate, earliestPermittedDate > productLowerBound else {
+            return "HealthKit import finished. Read access is reflected by the workouts HealthKit returned."
+        }
+        return "HealthKit import finished for the history HealthKit permits from \(earliestPermittedDate.formatted(date: .abbreviated, time: .omitted))."
     }
 
     private func invalidateLoadedEvidence(workoutID: String) {
@@ -1328,19 +1400,22 @@ public final class RunningAnalysisStore {
         }
         runTypeReconciliation = RunTypeReviewBridge.reconcile(reviews: reviewedRunTypes, workouts: workouts)
         snapshot = AnalyticsEngine.snapshot(for: workouts, healthContext: healthContext)
-        personalBestEffortSummary = PersonalBestEffortEngine.summarize(workouts: workoutsForBestEfforts())
+        if !shouldRefreshDerivedAnalyses {
+            loadPersistedDerivedAnalyses()
+        }
+        refreshPersonalBestEffortsFromInMemoryEvidence()
         refreshEvidenceQueueSummary()
         if shouldRefreshDerivedAnalyses {
             derivedAnalysisRefreshSummary = refreshDerivedAnalyses()
         } else {
-            loadPersistedDerivedAnalyses()
             derivedAnalysisRefreshSummary = .empty
         }
     }
 
     private func hydrateCachedEvidence() {
         guard let modelContext else { return }
-        let evidenceByID = PersistenceService.fetchEvidenceByWorkoutID(context: modelContext)
+        let missingIDs = workouts.filter { $0.evidence == nil }.map(\.id)
+        let evidenceByID = PersistenceService.fetchEvidenceByWorkoutID(workoutIDs: missingIDs, context: modelContext)
         guard !evidenceByID.isEmpty else { return }
         workouts = workouts.map { workout in
             guard workout.evidence == nil, let evidence = evidenceByID[workout.id] else {
@@ -1356,21 +1431,64 @@ public final class RunningAnalysisStore {
         }
     }
 
-    private func workoutsForBestEfforts() -> [CanonicalWorkout] {
-        guard let modelContext else { return workouts }
-        let evidenceByID = PersistenceService.fetchEvidenceByWorkoutID(context: modelContext)
-        guard !evidenceByID.isEmpty else { return workouts }
-        return workouts.map { workout in
-            guard workout.evidence == nil, let evidence = evidenceByID[workout.id] else {
-                return workout
-            }
-            var hydrated = workout
-            hydrated.evidence = evidence
-            hydrated.distanceSampleCount = max(hydrated.distanceSampleCount, evidence.series[.distance]?.points.count ?? 0)
-            hydrated.seriesSampleCount = max(hydrated.seriesSampleCount, evidence.seriesSampleCount)
-            hydrated.seriesAvailable = hydrated.seriesAvailable || evidence.seriesSampleCount > 0
-            return hydrated
+    private func refreshPersonalBestEffortsFromInMemoryEvidence() {
+        let currentIDs = Set(workouts.map(\.id))
+        let cached: PersonalBestEffortSummary? = loadPersonalBestEffortCache().flatMap { summary in
+            let records = summary.allTime.filter { currentIDs.contains($0.workoutID) }
+            return records.isEmpty ? nil : PersonalBestEffortSummary(allTime: records)
         }
+        let hasDetailedEvidence = workouts.contains { $0.evidence != nil }
+        guard hasDetailedEvidence || cached == nil else {
+            personalBestEffortSummary = cached ?? PersonalBestEffortSummary(allTime: [])
+            return
+        }
+
+        let computed = PersonalBestEffortEngine.summarize(workouts: workouts)
+        let derived = PersonalBestEffortSummary(
+            allTime: derivedAnalysesByWorkoutID.values.flatMap { $0.personalBestEffortRecords ?? [] }
+        )
+        personalBestEffortSummary = mergePersonalBestEfforts(
+            cached: mergePersonalBestEfforts(cached: cached, computed: derived),
+            computed: computed
+        )
+        savePersonalBestEffortCache(personalBestEffortSummary)
+    }
+
+    private func mergePersonalBestEfforts(
+        cached: PersonalBestEffortSummary?,
+        computed: PersonalBestEffortSummary
+    ) -> PersonalBestEffortSummary {
+        let candidates = (cached?.allTime ?? []) + computed.allTime
+        let grouped = Dictionary(grouping: candidates, by: \.bucket)
+        let selected = PersonalBestEffortBucket.allCases.compactMap { bucket -> PersonalBestEffortRecord? in
+            guard let records = grouped[bucket], !records.isEmpty else { return nil }
+            return records.sorted { lhs, rhs in
+                let lhsRank = personalBestConfidenceRank(lhs.confidence)
+                let rhsRank = personalBestConfidenceRank(rhs.confidence)
+                if lhsRank != rhsRank { return lhsRank > rhsRank }
+                if bucket == .longestRun { return lhs.distanceMeters > rhs.distanceMeters }
+                return (lhs.durationSeconds ?? .greatestFiniteMagnitude) < (rhs.durationSeconds ?? .greatestFiniteMagnitude)
+            }.first
+        }
+        return PersonalBestEffortSummary(allTime: selected)
+    }
+
+    private func personalBestConfidenceRank(_ confidence: PersonalBestEffortConfidence) -> Int {
+        switch confidence {
+        case .exact, .exactTotal: 2
+        case .estimated: 1
+        case .unavailable: 0
+        }
+    }
+
+    private func loadPersonalBestEffortCache() -> PersonalBestEffortSummary? {
+        guard let data = syncDefaults.data(forKey: Self.personalBestCacheKey) else { return nil }
+        return try? JSONDecoder().decode(PersonalBestEffortSummary.self, from: data)
+    }
+
+    private func savePersonalBestEffortCache(_ summary: PersonalBestEffortSummary) {
+        guard let data = try? JSONEncoder().encode(summary) else { return }
+        syncDefaults.set(data, forKey: Self.personalBestCacheKey)
     }
 
     private func loadPersistedTrainingPeriodSummaries() {
@@ -1404,8 +1522,8 @@ public final class RunningAnalysisStore {
         }
         return EvidenceEnrichmentQueue.nextPendingIDs(
             workouts: workouts,
-            cachedEvidenceIDs: PersistenceService.fetchEvidenceIDs(context: modelContext),
-            failedStates: PersistenceService.fetchEnrichmentStateByID(context: modelContext),
+            cachedEvidenceIDs: PersistenceService.fetchEvidenceIDs(workoutIDs: workouts.map(\.id), context: modelContext),
+            failedStates: PersistenceService.fetchEnrichmentStateByID(workoutIDs: workouts.map(\.id), context: modelContext),
             limit: limit
         )
     }
@@ -1423,8 +1541,8 @@ public final class RunningAnalysisStore {
         }
         let items = EvidenceEnrichmentQueue.items(
             workouts: workouts,
-            cachedEvidenceIDs: PersistenceService.fetchEvidenceIDs(context: modelContext),
-            failedStates: PersistenceService.fetchEnrichmentStateByID(context: modelContext)
+            cachedEvidenceIDs: PersistenceService.fetchEvidenceIDs(workoutIDs: workouts.map(\.id), context: modelContext),
+            failedStates: PersistenceService.fetchEnrichmentStateByID(workoutIDs: workouts.map(\.id), context: modelContext)
         )
         evidenceQueueSummary = EvidenceEnrichmentQueue.summary(for: items)
     }
@@ -1440,10 +1558,10 @@ public final class RunningAnalysisStore {
             let outdatedIDs = PersistenceService.outdatedDerivedAnalysisVersionIDs(context: modelContext)
             let staleIDs = PersistenceService.staleDerivedAnalysisIDs(context: modelContext)
             refreshedWorkoutIDs = Array(Set(outdatedIDs + staleIDs)).sorted()
-            PersistenceService.refreshDerivedAnalyses(context: modelContext)
+            PersistenceService.refreshDerivedAnalyses(workoutIDs: refreshedWorkoutIDs, context: modelContext)
         } else {
             refreshedWorkoutIDs = PersistenceService.staleDerivedAnalysisIDs(context: modelContext)
-            PersistenceService.refreshStaleDerivedAnalyses(context: modelContext)
+            PersistenceService.refreshDerivedAnalyses(workoutIDs: refreshedWorkoutIDs, context: modelContext)
         }
         derivedAnalysesByWorkoutID = Dictionary(
             uniqueKeysWithValues: PersistenceService.fetchDerivedAnalysisSummaries(context: modelContext).compactMap { record in

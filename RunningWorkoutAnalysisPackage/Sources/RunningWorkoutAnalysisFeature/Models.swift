@@ -181,18 +181,33 @@ public enum RunType: String, Codable, CaseIterable, Identifiable, Sendable {
 
     public var id: String { rawValue }
 
+    public static let visibleCases: [RunType] = [
+        .easy, .longRun, .interval, .threshold, .race, .unknown
+    ]
+
+    public var visibleCategory: RunType {
+        switch self {
+        case .easy, .recovery: .easy
+        case .longRun: .longRun
+        case .tempo, .threshold: .threshold
+        case .interval: .interval
+        case .race: .race
+        case .progression, .hills, .unknown: .unknown
+        }
+    }
+
     var label: String {
         switch self {
         case .easy: "Easy"
-        case .recovery: "Recovery"
+        case .recovery: "Easy"
         case .longRun: "Long Run"
-        case .tempo: "Tempo"
+        case .tempo: "Threshold"
         case .threshold: "Threshold"
         case .interval: "Interval"
         case .race: "Race"
-        case .progression: "Progression"
-        case .hills: "Hills"
-        case .unknown: "Unknown"
+        case .progression: "Other"
+        case .hills: "Other"
+        case .unknown: "Other"
         }
     }
 }
@@ -263,9 +278,9 @@ public enum AuthorizationState: String, Sendable {
         case .notDetermined: "Not Requested"
         case .unavailable: "Unavailable"
         case .requesting: "Requesting"
-        case .authorized: "Authorized"
+        case .authorized: "Data Available"
         case .denied: "Denied"
-        case .partial: "Partial"
+        case .partial: "Access Requested"
         case .error: "Error"
         }
     }

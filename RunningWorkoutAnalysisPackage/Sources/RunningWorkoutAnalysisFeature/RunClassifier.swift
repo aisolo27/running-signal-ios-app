@@ -2,22 +2,36 @@ import Foundation
 
 public enum RunClassifier {
     public static func inferRunType(for workout: CanonicalWorkout) -> RunType {
-        guard let distanceKm = workout.distanceKilometers else { return .unknown }
-        let pace = workout.paceSecondsPerKm
+        inferRunType(
+            for: workout,
+            officialIntervalRows: officialIntervalRows(for: workout)
+        )
+    }
 
-        if distanceKm >= 12 {
-            return .longRun
-        }
-        if let pace, pace <= RunningGoal.sub20FiveK.targetPaceSecondsPerKm + 25, distanceKm >= 3 {
-            return .threshold
-        }
-        if distanceKm < 2.5, workout.durationSeconds < 20 * 60 {
-            return .recovery
-        }
-        if workout.averageHeartRate != nil, distanceKm >= 4 {
-            return .easy
+    public static func inferRunType(
+        for workout: CanonicalWorkout,
+        officialIntervalRows: [ReconstructedWorkoutInterval]
+    ) -> RunType {
+        if isStructuredIntervalWorkout(officialIntervalRows) {
+            return .interval
         }
         return .unknown
+    }
+
+    public static func isStructuredIntervalWorkout(_ rows: [ReconstructedWorkoutInterval]) -> Bool {
+        let officialRows = rows.filter { $0.planSource == .workoutKit }
+        let workCount = officialRows.filter { $0.stepType == .work }.count
+        let hasRecovery = officialRows.contains { $0.stepType == .recovery }
+        return workCount >= 2 || (workCount == 1 && hasRecovery)
+    }
+
+    private static func officialIntervalRows(for workout: CanonicalWorkout) -> [ReconstructedWorkoutInterval] {
+        guard let evidence = workout.evidence,
+              let result = CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence)
+        else {
+            return []
+        }
+        return result.intervals
     }
 }
 

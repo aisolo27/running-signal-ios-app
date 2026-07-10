@@ -1122,7 +1122,7 @@ private struct WorkoutCategoryCard: View {
     let workout: CanonicalWorkout
 
     private var currentRunType: RunType {
-        workout.manualRunType ?? workout.effectiveRunType
+        (workout.manualRunType ?? workout.effectiveRunType).visibleCategory
     }
 
     private var sourceLabel: String {
@@ -1150,7 +1150,7 @@ private struct WorkoutCategoryCard: View {
             }
 
             Menu {
-                ForEach(RunType.allCases.filter { $0 != .unknown }) { runType in
+                ForEach(RunType.visibleCases) { runType in
                     Button(runType.label) {
                         store.update(workoutID: workout.id, manualRunType: runType, notes: workout.notes)
                     }

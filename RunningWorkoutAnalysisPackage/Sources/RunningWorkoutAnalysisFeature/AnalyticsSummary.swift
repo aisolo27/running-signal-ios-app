@@ -27,13 +27,18 @@ public enum WeeklyRunCategory: String, Codable, CaseIterable, Identifiable, Send
     case race
     case other
 
+    // Keep the legacy case decodable while presenting one product taxonomy.
+    public static let allCases: [WeeklyRunCategory] = [
+        .easy, .longRun, .interval, .threshold, .race, .other
+    ]
+
     public var id: String { rawValue }
 
     var label: String {
         switch self {
         case .easy: "Easy Run"
         case .interval: "Interval Run"
-        case .threshold: "Threshold / Tempo"
+        case .threshold: "Threshold"
         case .longRun: "Long Run"
         case .warmupCooldown: "Warm-up / Cool-down"
         case .race: "Race"
@@ -52,7 +57,7 @@ public enum WeeklyRunCategory: String, Codable, CaseIterable, Identifiable, Send
         case .longRun:
             return .longRun
         case .recovery:
-            return .warmupCooldown
+            return .easy
         case .race:
             return .race
         case .progression, .hills, .unknown:
@@ -739,22 +744,25 @@ public enum WorkoutChartSeriesBuilder {
             }
         }
 
-        guard let distance = workout.evidence?.series[.distance], distance.points.count >= 2 else { return [] }
-        var previous = WorkoutEvidencePoint(date: workout.startDate, value: 0)
+        guard let distance = workout.evidence?.series[.distance] else { return [] }
+        var previousEnd = workout.startDate
         var points: [WorkoutChartPoint] = []
         for point in distance.points {
-            let seconds = point.date.timeIntervalSince(previous.date)
-            let meters = point.value - previous.value
+            let hasSampleWindow = point.endDate > point.startDate
+            let sampleStart = hasSampleWindow ? point.startDate : previousEnd
+            let sampleEnd = hasSampleWindow ? point.endDate : point.date
+            let seconds = sampleEnd.timeIntervalSince(sampleStart)
+            let meters = point.value
             if seconds > 0, meters > 0 {
                 points.append(
                     WorkoutChartPoint(
-                        date: point.date,
-                        offsetSeconds: point.date.timeIntervalSince(workout.startDate),
+                        date: sampleEnd,
+                        offsetSeconds: sampleEnd.timeIntervalSince(workout.startDate),
                         value: seconds / (meters / 1_000)
                     )
                 )
             }
-            previous = point
+            previousEnd = max(previousEnd, sampleEnd)
         }
         return points
     }
@@ -846,6 +854,7 @@ public struct IntervalAnalysisRow: Identifiable, Equatable, Sendable {
     public var plannedGoalValue: Double?
     public var plannedGoalDisplayText: String
     public var plannedTargetDisplayText: String?
+    public var plannedTargets: [PlannedWorkoutTarget]?
     public var displayDurationSeconds: Double
     public var elapsedDurationSeconds: Double
     public var activeDurationSeconds: Double
@@ -870,6 +879,7 @@ public struct IntervalAnalysisRow: Identifiable, Equatable, Sendable {
         plannedGoalValue = interval.plannedGoalValue
         plannedGoalDisplayText = interval.plannedGoalDisplayText
         plannedTargetDisplayText = interval.plannedTargetDisplayText
+        plannedTargets = interval.plannedTargets
         displayDurationSeconds = interval.displayDurationSeconds
         elapsedDurationSeconds = interval.elapsedRowWindowDurationSeconds
         activeDurationSeconds = interval.activeTimerDurationSeconds
@@ -924,13 +934,11 @@ public struct IntervalAnalysisRow: Identifiable, Equatable, Sendable {
         displayDurationSeconds: Double
     ) -> Double? {
         if interval.plannedGoalType == .distance,
-           let plannedGoalValue = interval.plannedGoalValue,
-           plannedGoalValue > 0 {
-            return displayDurationSeconds / (plannedGoalValue / 1_000)
+           let plannedWindow = interval.plannedDistanceMetricWindow {
+            return plannedWindow.paceSecondsPerKm
         }
 
-        guard interval.durationDisplayRule == .activeTimer,
-              let distanceMeters = interval.actualDistanceMeters,
+        guard let distanceMeters = interval.actualDistanceMeters,
               distanceMeters > 0
         else {
             return interval.actualPaceSecondsPerKm
@@ -1019,8 +1027,11 @@ public struct IntervalAnalysisSummary: Equatable, Sendable {
         switch metric {
         case .pace:
             let totals = sourceRows.reduce(into: (duration: 0.0, distance: 0.0)) { partial, row in
-                guard let distance = row.distanceMeters, distance > 0 else { return }
-                partial.duration += row.displayDurationSeconds
+                guard let distance = row.distanceMeters,
+                      distance > 0,
+                      let pace = row.paceSecondsPerKm,
+                      pace > 0 else { return }
+                partial.duration += pace * (distance / 1_000)
                 partial.distance += distance
             }
             guard totals.duration > 0, totals.distance > 0 else { return nil }

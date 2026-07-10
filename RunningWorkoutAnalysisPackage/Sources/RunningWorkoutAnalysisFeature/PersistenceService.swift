@@ -71,44 +71,38 @@ public enum PersistenceService {
     }
 
     private static func applyUpserts(_ workouts: [CanonicalWorkout], context: ModelContext) {
-        let existing = fetchPersisted(context: context)
-        var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
-        let existingEvidence = fetchPersistedEvidence(context: context)
-        var evidenceByID = Dictionary(uniqueKeysWithValues: existingEvidence.map { ($0.workoutID, $0) })
-        let existingDerivedAnalyses = fetchPersistedDerivedAnalyses(context: context)
-        var derivedAnalysisByID = Dictionary(uniqueKeysWithValues: existingDerivedAnalyses.map { ($0.workoutID, $0) })
-
         for workout in workouts {
             let record: PersistedWorkout
-            if let existingRecord = byID[workout.id] {
+            if let existingRecord = fetchPersistedWorkout(id: workout.id, context: context) {
                 existingRecord.update(from: workout, preservingManualFields: true)
                 record = existingRecord
             } else {
                 let newRecord = PersistedWorkout(workout: workout)
                 context.insert(newRecord)
-                byID[workout.id] = newRecord
                 record = newRecord
             }
 
             let sourceSummary = "\(workout.sourceName) · \(workout.startDate.ISO8601Format())"
+            let evidenceRecord = fetchPersistedEvidence(workoutID: workout.id, context: context)
             if let evidence = workout.evidence {
-                if let evidenceRecord = evidenceByID[workout.id] {
+                if let evidenceRecord {
                     evidenceRecord.update(evidence: evidence, sourceSummary: sourceSummary)
                 } else {
                     let evidenceRecord = PersistedWorkoutEvidence(workoutID: workout.id, evidence: evidence, sourceSummary: sourceSummary)
                     context.insert(evidenceRecord)
-                    evidenceByID[workout.id] = evidenceRecord
                 }
             }
 
-            guard let evidence = workout.evidence ?? evidenceByID[workout.id]?.evidence else { continue }
+            // A summary refresh can change duration or other workout-level inputs, so its
+            // derived analysis still needs refreshing. Decode only this workout's cached
+            // evidence rather than faulting every evidence blob in the store.
+            guard let evidence = workout.evidence ?? evidenceRecord?.evidence else { continue }
             let analysis = DerivedAnalyticsEngine.analyze(workout: record.canonical, evidence: evidence)
-            if let analysisRecord = derivedAnalysisByID[workout.id] {
+            if let analysisRecord = fetchPersistedDerivedAnalysis(workoutID: workout.id, context: context) {
                 analysisRecord.update(analysis: analysis)
             } else {
                 let analysisRecord = PersistedDerivedWorkoutAnalysis(analysis: analysis)
                 context.insert(analysisRecord)
-                derivedAnalysisByID[workout.id] = analysisRecord
             }
         }
 
@@ -125,38 +119,34 @@ public enum PersistenceService {
 
     private static func applyWorkoutDeletes(ids: Set<String>, context: ModelContext) {
         guard !ids.isEmpty else { return }
-        for record in fetchPersisted(context: context) where ids.contains(record.id) {
-            context.delete(record)
-        }
-        for record in fetchPersistedEvidence(context: context) where ids.contains(record.workoutID) {
-            context.delete(record)
-        }
-        for record in fetchEnrichmentStates(context: context) where ids.contains(record.workoutID) {
-            context.delete(record)
-        }
-        for record in fetchPersistedDerivedAnalyses(context: context) where ids.contains(record.workoutID) {
-            context.delete(record)
+        for id in ids {
+            fetchPersistedWorkout(id: id, context: context).map(context.delete)
+            fetchPersistedEvidence(workoutID: id, context: context).map(context.delete)
+            fetchEnrichmentState(workoutID: id, context: context).map(context.delete)
+            fetchPersistedDerivedAnalysis(workoutID: id, context: context).map(context.delete)
         }
     }
 
     public static func deleteEvidence(ids: Set<String>, context: ModelContext) {
         guard !ids.isEmpty else { return }
-        for record in fetchPersistedEvidence(context: context) where ids.contains(record.workoutID) {
-            context.delete(record)
-        }
-        for record in fetchEnrichmentStates(context: context) where ids.contains(record.workoutID) {
-            context.delete(record)
-        }
-        for record in fetchPersistedDerivedAnalyses(context: context) where ids.contains(record.workoutID) {
-            context.delete(record)
+        for id in ids {
+            fetchPersistedEvidence(workoutID: id, context: context).map(context.delete)
+            fetchEnrichmentState(workoutID: id, context: context).map(context.delete)
+            fetchPersistedDerivedAnalysis(workoutID: id, context: context).map(context.delete)
         }
         try? context.save()
     }
 
     public static func fetchEvidence(workoutID: String, context: ModelContext) -> WorkoutEvidence? {
-        fetchPersistedEvidence(context: context)
-            .first { $0.workoutID == workoutID }?
-            .evidence
+        fetchPersistedEvidence(workoutID: workoutID, context: context)?.evidence
+    }
+
+    /// Fetches one evidence cache row without decoding its evidence blob.
+    public static func fetchEvidenceSummary(
+        workoutID: String,
+        context: ModelContext
+    ) -> PersistedWorkoutEvidence? {
+        fetchPersistedEvidence(workoutID: workoutID, context: context)
     }
 
     public static func fetchEvidenceByWorkoutID(context: ModelContext) -> [String: WorkoutEvidence] {
@@ -164,6 +154,17 @@ public enum PersistenceService {
             guard let evidence = record.evidence else { return nil }
             return (record.workoutID, evidence)
         })
+    }
+
+    public static func fetchEvidenceByWorkoutID(
+        workoutIDs: some Sequence<String>,
+        context: ModelContext
+    ) -> [String: WorkoutEvidence] {
+        var result: [String: WorkoutEvidence] = [:]
+        for id in Set(workoutIDs) {
+            result[id] = fetchPersistedEvidence(workoutID: id, context: context)?.evidence
+        }
+        return result
     }
 
     public static func fetchEvidenceSummaries(context: ModelContext) -> [PersistedWorkoutEvidence] {
@@ -174,14 +175,58 @@ public enum PersistenceService {
         Set(fetchPersistedEvidence(context: context).map(\.workoutID))
     }
 
+    /// Returns only the requested IDs that currently have persisted evidence.
+    /// Use this for bounded queues to avoid materializing the complete evidence table.
+    public static func fetchEvidenceIDs(
+        workoutIDs: some Sequence<String>,
+        context: ModelContext
+    ) -> Set<String> {
+        Set(workoutIDs.compactMap { id in
+            fetchPersistedEvidence(workoutID: id, context: context)?.workoutID
+        })
+    }
+
     public static func fetchDerivedAnalysis(workoutID: String, context: ModelContext) -> DerivedWorkoutAnalysis? {
-        fetchPersistedDerivedAnalyses(context: context)
-            .first { $0.workoutID == workoutID }?
-            .analysis
+        fetchPersistedDerivedAnalysis(workoutID: workoutID, context: context)?.analysis
+    }
+
+    /// Fetches one derived-analysis cache row without decoding its analysis blob.
+    public static func fetchDerivedAnalysisSummary(
+        workoutID: String,
+        context: ModelContext
+    ) -> PersistedDerivedWorkoutAnalysis? {
+        fetchPersistedDerivedAnalysis(workoutID: workoutID, context: context)
     }
 
     public static func fetchDerivedAnalysisSummaries(context: ModelContext) -> [PersistedDerivedWorkoutAnalysis] {
         fetchPersistedDerivedAnalyses(context: context)
+    }
+
+    /// Refreshes derived analytics for a bounded set of workouts. Missing workout
+    /// summaries or evidence are left untouched, which preserves the last valid cache.
+    @discardableResult
+    public static func refreshDerivedAnalyses(
+        workoutIDs: some Sequence<String>,
+        context: ModelContext
+    ) -> Int {
+        var refreshedCount = 0
+        for workoutID in workoutIDs {
+            guard let workout = fetchPersistedWorkout(id: workoutID, context: context)?.canonical,
+                  let evidence = fetchPersistedEvidence(workoutID: workoutID, context: context)?.evidence else {
+                continue
+            }
+            let analysis = DerivedAnalyticsEngine.analyze(workout: workout, evidence: evidence)
+            if let record = fetchPersistedDerivedAnalysis(workoutID: workoutID, context: context) {
+                record.update(analysis: analysis)
+            } else {
+                context.insert(PersistedDerivedWorkoutAnalysis(analysis: analysis))
+            }
+            refreshedCount += 1
+        }
+        if refreshedCount > 0 {
+            try? context.save()
+        }
+        return refreshedCount
     }
 
     @discardableResult
@@ -250,6 +295,17 @@ public enum PersistenceService {
         Dictionary(uniqueKeysWithValues: fetchEnrichmentStates(context: context).map { ($0.workoutID, $0) })
     }
 
+    public static func fetchEnrichmentStateByID(
+        workoutIDs: some Sequence<String>,
+        context: ModelContext
+    ) -> [String: PersistedEvidenceEnrichmentState] {
+        var result: [String: PersistedEvidenceEnrichmentState] = [:]
+        for id in Set(workoutIDs) {
+            result[id] = fetchEnrichmentState(workoutID: id, context: context)
+        }
+        return result
+    }
+
     public static func outdatedDerivedAnalysisVersionIDs(context: ModelContext) -> [String] {
         fetchPersistedDerivedAnalyses(context: context)
             .filter { $0.calculationVersion != DerivedWorkoutAnalysis.currentVersion }
@@ -284,9 +340,8 @@ public enum PersistenceService {
         at date: Date = Date()
     ) {
         guard !ids.isEmpty else { return }
-        var byID = fetchEnrichmentStateByID(context: context)
         for id in ids {
-            if let record = byID[id] {
+            if let record = fetchEnrichmentState(workoutID: id, context: context) {
                 record.markAttempt(status: status, message: message, at: date)
             } else {
                 let record = PersistedEvidenceEnrichmentState(
@@ -297,7 +352,6 @@ public enum PersistenceService {
                     message: message
                 )
                 context.insert(record)
-                byID[id] = record
             }
         }
         try? context.save()
@@ -308,14 +362,28 @@ public enum PersistenceService {
             .sorted { $0.updatedAt > $1.updatedAt }
     }
 
+    public static func fetchEvidenceRefreshJob(
+        jobID: String,
+        context: ModelContext
+    ) -> PersistedEvidenceRefreshJob? {
+        fetchRefreshJob(jobID: jobID, context: context)
+    }
+
     public static func fetchEvidenceRefreshItems(jobID: String, context: ModelContext) -> [PersistedEvidenceRefreshJobItem] {
-        fetchRefreshJobItems(context: context)
-            .filter { $0.jobID == jobID }
+        fetchRefreshJobItems(jobID: jobID, context: context)
             .sorted { $0.workoutID < $1.workoutID }
     }
 
+    public static func fetchEvidenceRefreshItem(
+        jobID: String,
+        workoutID: String,
+        context: ModelContext
+    ) -> PersistedEvidenceRefreshJobItem? {
+        fetchRefreshJobItem(jobID: jobID, workoutID: workoutID, context: context)
+    }
+
     public static func fetchHealthKitImportJob(context: ModelContext) -> PersistedHealthKitImportJob? {
-        fetchHealthKitImportJobs(context: context).first
+        fetchHealthKitImportJob(jobID: "initial-healthkit-import", context: context)
     }
 
     @discardableResult
@@ -388,9 +456,8 @@ public enum PersistenceService {
             scopeKey: scopeKey
         )
         let activeStatuses: Set<EvidenceRefreshJobStatus> = [.queued, .running, .paused, .failed, .blocked]
-        let job = fetchRefreshJobs(context: context).first {
-            $0.dedupKey == dedupKey && activeStatuses.contains($0.status)
-        } ?? {
+        let job = fetchRefreshJobs(dedupKey: dedupKey, context: context)
+            .first { activeStatuses.contains($0.status) } ?? {
             let job = PersistedEvidenceRefreshJob(
                 refreshKind: refreshKind,
                 scopeType: scopeType,
@@ -406,8 +473,7 @@ public enum PersistenceService {
         job.markRunning(at: date)
 
         var itemsByID = Dictionary(
-            uniqueKeysWithValues: fetchRefreshJobItems(context: context)
-                .filter { $0.jobID == job.jobID }
+            uniqueKeysWithValues: fetchRefreshJobItems(jobID: job.jobID, context: context)
                 .map { ($0.workoutID, $0) }
         )
         for workoutID in workoutIDs where itemsByID[workoutID] == nil {
@@ -426,8 +492,7 @@ public enum PersistenceService {
         context: ModelContext,
         at date: Date = Date()
     ) {
-        guard let item = fetchRefreshJobItems(context: context)
-            .first(where: { $0.jobID == jobID && $0.workoutID == workoutID }) else { return }
+        guard let item = fetchRefreshJobItem(jobID: jobID, workoutID: workoutID, context: context) else { return }
         item.markRunning(at: date)
         try? context.save()
     }
@@ -442,8 +507,7 @@ public enum PersistenceService {
         context: ModelContext,
         at date: Date = Date()
     ) {
-        guard let item = fetchRefreshJobItems(context: context)
-            .first(where: { $0.jobID == jobID && $0.workoutID == workoutID }) else { return }
+        guard let item = fetchRefreshJobItem(jobID: jobID, workoutID: workoutID, context: context) else { return }
         item.finish(
             status: status,
             message: message,
@@ -451,7 +515,7 @@ public enum PersistenceService {
             newEvidenceCommitted: newEvidenceCommitted,
             at: date
         )
-        if let job = fetchRefreshJobs(context: context).first(where: { $0.jobID == jobID }) {
+        if let job = fetchRefreshJob(jobID: jobID, context: context) {
             refreshEvidenceRefreshJobCounts(job: job, context: context, at: date)
         }
         try? context.save()
@@ -462,7 +526,7 @@ public enum PersistenceService {
         context: ModelContext,
         at date: Date = Date()
     ) {
-        guard let job = fetchRefreshJobs(context: context).first(where: { $0.jobID == jobID }) else { return }
+        guard let job = fetchRefreshJob(jobID: jobID, context: context) else { return }
         refreshEvidenceRefreshJobCounts(job: job, context: context, at: date)
         let status: EvidenceRefreshJobStatus
         if job.completedCount + job.failedCount + job.skippedCount >= job.totalCount {
@@ -500,7 +564,7 @@ public enum PersistenceService {
         message: String = "Paused after app relaunch before completion."
     ) -> Int {
         var pausedCount = 0
-        for job in fetchRefreshJobs(context: context) where job.status == .running {
+        for job in fetchRefreshJobs(status: .running, context: context) {
             job.markPaused(at: date, message: message)
             pausedCount += 1
         }
@@ -511,7 +575,7 @@ public enum PersistenceService {
     }
 
     public static func updateManualFields(id: String, runType: RunType?, notes: String, context: ModelContext) {
-        guard let record = fetchPersisted(context: context).first(where: { $0.id == id }) else { return }
+        guard let record = fetchPersistedWorkout(id: id, context: context) else { return }
         record.manualRunTypeRaw = runType?.rawValue
         record.notes = notes
         record.updatedAt = Date()
@@ -520,12 +584,11 @@ public enum PersistenceService {
 
     public static func updateManualFields(updates: [ManualWorkoutFieldUpdate], context: ModelContext) {
         guard !updates.isEmpty else { return }
-        let updatesByID = Dictionary(uniqueKeysWithValues: updates.map { ($0.id, $0) })
         var changed = false
         let date = Date()
 
-        for record in fetchPersisted(context: context) {
-            guard let update = updatesByID[record.id] else { continue }
+        for update in updates {
+            guard let record = fetchPersistedWorkout(id: update.id, context: context) else { continue }
             record.manualRunTypeRaw = update.runType?.rawValue
             record.notes = update.notes
             record.updatedAt = date
@@ -542,7 +605,7 @@ public enum PersistenceService {
         context: ModelContext,
         at date: Date
     ) {
-        let items = fetchRefreshJobItems(context: context).filter { $0.jobID == job.jobID }
+        let items = fetchRefreshJobItems(jobID: job.jobID, context: context)
         job.updateCounts(
             completed: items.filter { $0.status == .success }.count,
             failed: items.filter { $0.status == .failed }.count,
@@ -559,12 +622,31 @@ public enum PersistenceService {
         }
     }
 
+    private static func fetchPersistedWorkout(id: String, context: ModelContext) -> PersistedWorkout? {
+        var descriptor = FetchDescriptor<PersistedWorkout>(
+            predicate: #Predicate { $0.id == id }
+        )
+        descriptor.fetchLimit = 1
+        return try? context.fetch(descriptor).first
+    }
+
     private static func fetchPersistedEvidence(context: ModelContext) -> [PersistedWorkoutEvidence] {
         do {
             return try context.fetch(FetchDescriptor<PersistedWorkoutEvidence>())
         } catch {
             return []
         }
+    }
+
+    private static func fetchPersistedEvidence(
+        workoutID: String,
+        context: ModelContext
+    ) -> PersistedWorkoutEvidence? {
+        var descriptor = FetchDescriptor<PersistedWorkoutEvidence>(
+            predicate: #Predicate { $0.workoutID == workoutID }
+        )
+        descriptor.fetchLimit = 1
+        return try? context.fetch(descriptor).first
     }
 
     private static func fetchEnrichmentStates(context: ModelContext) -> [PersistedEvidenceEnrichmentState] {
@@ -575,12 +657,55 @@ public enum PersistenceService {
         }
     }
 
+    private static func fetchEnrichmentState(
+        workoutID: String,
+        context: ModelContext
+    ) -> PersistedEvidenceEnrichmentState? {
+        var descriptor = FetchDescriptor<PersistedEvidenceEnrichmentState>(
+            predicate: #Predicate { $0.workoutID == workoutID }
+        )
+        descriptor.fetchLimit = 1
+        return try? context.fetch(descriptor).first
+    }
+
     private static func fetchRefreshJobs(context: ModelContext) -> [PersistedEvidenceRefreshJob] {
         do {
             return try context.fetch(FetchDescriptor<PersistedEvidenceRefreshJob>())
         } catch {
             return []
         }
+    }
+
+    private static func fetchRefreshJob(
+        jobID: String,
+        context: ModelContext
+    ) -> PersistedEvidenceRefreshJob? {
+        var descriptor = FetchDescriptor<PersistedEvidenceRefreshJob>(
+            predicate: #Predicate { $0.jobID == jobID }
+        )
+        descriptor.fetchLimit = 1
+        return try? context.fetch(descriptor).first
+    }
+
+    private static func fetchRefreshJobs(
+        dedupKey: String,
+        context: ModelContext
+    ) -> [PersistedEvidenceRefreshJob] {
+        let descriptor = FetchDescriptor<PersistedEvidenceRefreshJob>(
+            predicate: #Predicate { $0.dedupKey == dedupKey }
+        )
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    private static func fetchRefreshJobs(
+        status: EvidenceRefreshJobStatus,
+        context: ModelContext
+    ) -> [PersistedEvidenceRefreshJob] {
+        let statusRaw = status.rawValue
+        let descriptor = FetchDescriptor<PersistedEvidenceRefreshJob>(
+            predicate: #Predicate { $0.statusRaw == statusRaw }
+        )
+        return (try? context.fetch(descriptor)) ?? []
     }
 
     private static func fetchRefreshJobItems(context: ModelContext) -> [PersistedEvidenceRefreshJobItem] {
@@ -591,6 +716,29 @@ public enum PersistenceService {
         }
     }
 
+    private static func fetchRefreshJobItems(
+        jobID: String,
+        context: ModelContext
+    ) -> [PersistedEvidenceRefreshJobItem] {
+        let descriptor = FetchDescriptor<PersistedEvidenceRefreshJobItem>(
+            predicate: #Predicate { $0.jobID == jobID }
+        )
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    private static func fetchRefreshJobItem(
+        jobID: String,
+        workoutID: String,
+        context: ModelContext
+    ) -> PersistedEvidenceRefreshJobItem? {
+        let itemID = PersistedEvidenceRefreshJobItem.makeItemID(jobID: jobID, workoutID: workoutID)
+        var descriptor = FetchDescriptor<PersistedEvidenceRefreshJobItem>(
+            predicate: #Predicate { $0.itemID == itemID }
+        )
+        descriptor.fetchLimit = 1
+        return try? context.fetch(descriptor).first
+    }
+
     private static func fetchHealthKitImportJobs(context: ModelContext) -> [PersistedHealthKitImportJob] {
         do {
             return try context.fetch(FetchDescriptor<PersistedHealthKitImportJob>())
@@ -599,12 +747,34 @@ public enum PersistenceService {
         }
     }
 
+    private static func fetchHealthKitImportJob(
+        jobID: String,
+        context: ModelContext
+    ) -> PersistedHealthKitImportJob? {
+        var descriptor = FetchDescriptor<PersistedHealthKitImportJob>(
+            predicate: #Predicate { $0.jobID == jobID }
+        )
+        descriptor.fetchLimit = 1
+        return try? context.fetch(descriptor).first
+    }
+
     private static func fetchPersistedDerivedAnalyses(context: ModelContext) -> [PersistedDerivedWorkoutAnalysis] {
         do {
             return try context.fetch(FetchDescriptor<PersistedDerivedWorkoutAnalysis>())
         } catch {
             return []
         }
+    }
+
+    private static func fetchPersistedDerivedAnalysis(
+        workoutID: String,
+        context: ModelContext
+    ) -> PersistedDerivedWorkoutAnalysis? {
+        var descriptor = FetchDescriptor<PersistedDerivedWorkoutAnalysis>(
+            predicate: #Predicate { $0.workoutID == workoutID }
+        )
+        descriptor.fetchLimit = 1
+        return try? context.fetch(descriptor).first
     }
 
     private static func fetchPersistedTrainingPeriodSummaries(context: ModelContext) -> [PersistedTrainingPeriodSummary] {

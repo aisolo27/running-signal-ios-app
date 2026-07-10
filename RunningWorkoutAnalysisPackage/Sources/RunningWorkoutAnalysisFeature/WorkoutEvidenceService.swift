@@ -291,6 +291,7 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
             startDate: event.dateInterval.start,
             endDate: event.dateInterval.end,
             type: eventTypeLabel(event.type),
+            kind: eventKind(event.type),
             label: eventLabel(event),
             metadataKeys: event.metadata.map { metadata in
                 metadata.keys.map { String(describing: $0) }.sorted()
@@ -418,7 +419,21 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
     }
 
     private func eventTypeLabel(_ type: HKWorkoutEventType) -> String {
-        String(describing: type)
+        eventKind(type).rawValue
+    }
+
+    private func eventKind(_ type: HKWorkoutEventType) -> WorkoutEvidenceEventKind {
+        switch type {
+        case .pause: .pause
+        case .resume: .resume
+        case .lap: .lap
+        case .marker: .marker
+        case .motionPaused: .motionPaused
+        case .motionResumed: .motionResumed
+        case .segment: .segment
+        case .pauseOrResumeRequest: .pauseOrResumeRequest
+        @unknown default: .unknown
+        }
     }
 
     private func eventLabel(_ event: HKWorkoutEvent) -> String? {
@@ -778,21 +793,45 @@ private enum WorkoutKitPlanAuditFormatter {
         switch alert {
         case let alert as SpeedRangeAlert:
             let metric = String(describing: alert.metric).lowercased()
+            let lowerSpeed = alert.target.lowerBound.converted(to: .metersPerSecond).value
+            let upperSpeed = alert.target.upperBound.converted(to: .metersPerSecond).value
+            if metric.contains("pace") {
+                return PlannedWorkoutTarget(
+                    kind: .pace,
+                    lowerBound: WorkoutIntervalReconstructionFormat.paceSecondsPerKilometer(speedMetersPerSecond: upperSpeed),
+                    upperBound: WorkoutIntervalReconstructionFormat.paceSecondsPerKilometer(speedMetersPerSecond: lowerSpeed),
+                    unit: "s/km",
+                    displayText: display
+                )
+            }
             return PlannedWorkoutTarget(
-                kind: metric.contains("pace") ? .pace : .speed,
-                lowerBound: alert.target.lowerBound.value,
-                upperBound: alert.target.upperBound.value,
-                unit: alert.target.lowerBound.unit.symbol,
+                kind: .speed,
+                lowerBound: lowerSpeed,
+                upperBound: upperSpeed,
+                unit: "m/s",
                 displayText: display
             )
         case let alert as SpeedThresholdAlert:
             let metric = String(describing: alert.metric).lowercased()
+            let speed = alert.target.converted(to: .metersPerSecond).value
+            if metric.contains("pace") {
+                let pace = WorkoutIntervalReconstructionFormat.paceSecondsPerKilometer(speedMetersPerSecond: speed)
+                return PlannedWorkoutTarget(
+                    kind: .pace,
+                    lowerBound: pace,
+                    upperBound: pace,
+                    unit: "s/km",
+                    displayText: display,
+                    semantics: .threshold
+                )
+            }
             return PlannedWorkoutTarget(
-                kind: metric.contains("pace") ? .pace : .speed,
-                lowerBound: alert.target.value,
-                upperBound: alert.target.value,
-                unit: alert.target.unit.symbol,
-                displayText: display
+                kind: .speed,
+                lowerBound: speed,
+                upperBound: speed,
+                unit: "m/s",
+                displayText: display,
+                semantics: .threshold
             )
         case let alert as HeartRateRangeAlert:
             return PlannedWorkoutTarget(
@@ -803,7 +842,7 @@ private enum WorkoutKitPlanAuditFormatter {
                 displayText: display
             )
         case _ as HeartRateZoneAlert:
-            return PlannedWorkoutTarget(kind: .zone, unit: "heart-rate zone", displayText: display)
+            return PlannedWorkoutTarget(kind: .zone, unit: "heart-rate zone", displayText: display, semantics: .zone)
         case let alert as PowerRangeAlert:
             return PlannedWorkoutTarget(
                 kind: .power,
@@ -813,9 +852,9 @@ private enum WorkoutKitPlanAuditFormatter {
                 displayText: display
             )
         case let alert as PowerThresholdAlert:
-            return PlannedWorkoutTarget(kind: .power, lowerBound: alert.target.value, upperBound: alert.target.value, unit: alert.target.unit.symbol, displayText: display)
+            return PlannedWorkoutTarget(kind: .power, lowerBound: alert.target.value, upperBound: alert.target.value, unit: alert.target.unit.symbol, displayText: display, semantics: .threshold)
         case _ as PowerZoneAlert:
-            return PlannedWorkoutTarget(kind: .zone, unit: "power zone", displayText: display)
+            return PlannedWorkoutTarget(kind: .zone, unit: "power zone", displayText: display, semantics: .zone)
         case let alert as CadenceRangeAlert:
             return PlannedWorkoutTarget(
                 kind: .cadence,
@@ -825,7 +864,7 @@ private enum WorkoutKitPlanAuditFormatter {
                 displayText: display
             )
         case let alert as CadenceThresholdAlert:
-            return PlannedWorkoutTarget(kind: .cadence, lowerBound: alert.target.value, upperBound: alert.target.value, unit: alert.target.unit.symbol, displayText: display)
+            return PlannedWorkoutTarget(kind: .cadence, lowerBound: alert.target.value, upperBound: alert.target.value, unit: alert.target.unit.symbol, displayText: display, semantics: .threshold)
         default:
             return PlannedWorkoutTarget(kind: .unknown, displayText: display)
         }
@@ -891,6 +930,8 @@ private func locationPoint(_ location: CLLocation) -> WorkoutRoutePoint {
         latitude: location.coordinate.latitude,
         longitude: location.coordinate.longitude,
         altitudeMeters: location.verticalAccuracy >= 0 ? location.altitude : nil,
-        speedMetersPerSecond: location.speed >= 0 ? location.speed : nil
+        speedMetersPerSecond: location.speed >= 0 ? location.speed : nil,
+        horizontalAccuracyMeters: location.horizontalAccuracy >= 0 ? location.horizontalAccuracy : nil,
+        verticalAccuracyMeters: location.verticalAccuracy >= 0 ? location.verticalAccuracy : nil
     )
 }
