@@ -187,10 +187,18 @@ public enum CustomWorkoutResolvedIntervalRows {
             }
             let label = event.displayLabel.lowercased()
             let type = event.type.lowercased()
-            let isPause = (label.contains("pause") && !label.contains("resume"))
+            let isPause = event.kind == .pause
+                || event.kind == .motionPaused
+                || (label.contains("pause") && !label.contains("resume"))
+                || type == "pause"
+                || type == "motionpaused"
                 || type.contains("rawvalue: 1")
                 || type.contains("rawvalue: 5")
-            let isResume = label.contains("resume")
+            let isResume = event.kind == .resume
+                || event.kind == .motionResumed
+                || label.contains("resume")
+                || type == "resume"
+                || type == "motionresumed"
                 || type.contains("rawvalue: 2")
                 || type.contains("rawvalue: 6")
             if isPause {
@@ -222,7 +230,10 @@ public enum CustomWorkoutResolvedIntervalRows {
         workout: CanonicalWorkout
     ) -> Bool {
         let type = event.type.lowercased()
-        guard type.contains("rawvalue: 1") else { return false }
+        let isPause = event.kind == .pause
+            || type == "pause"
+            || type.contains("rawvalue: 1")
+        guard isPause else { return false }
 
         let duration = event.endDate.timeIntervalSince(event.startDate)
         let startsAtWorkoutEnd = abs(event.startDate.timeIntervalSince(workout.endDate)) <= 1

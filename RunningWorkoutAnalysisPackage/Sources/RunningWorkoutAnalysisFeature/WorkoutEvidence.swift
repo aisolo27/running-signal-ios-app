@@ -375,6 +375,26 @@ public struct WorkoutMetricSeries: Codable, Equatable, Sendable {
     }
 }
 
+public struct WorkoutWeather: Codable, Equatable, Sendable {
+    public var temperatureCelsius: Double?
+    public var humidityPercent: Double?
+    public var conditionCode: Int?
+
+    public init(
+        temperatureCelsius: Double? = nil,
+        humidityPercent: Double? = nil,
+        conditionCode: Int? = nil
+    ) {
+        self.temperatureCelsius = temperatureCelsius
+        self.humidityPercent = humidityPercent
+        self.conditionCode = conditionCode
+    }
+
+    public var hasValues: Bool {
+        temperatureCelsius != nil || humidityPercent != nil || conditionCode != nil
+    }
+}
+
 public struct WorkoutEvidence: Codable, Equatable, Sendable {
     public var workoutID: String
     public var loadedAt: Date
@@ -383,6 +403,8 @@ public struct WorkoutEvidence: Codable, Equatable, Sendable {
     public var events: [WorkoutEvidenceEvent]
     public var activities: [WorkoutEvidenceActivity]
     public var workoutPlanAudit: WorkoutPlanAudit?
+    public var weather: WorkoutWeather?
+    public var cityName: String?
     public var diagnostics: WorkoutEvidenceDiagnostics?
 
     private enum CodingKeys: String, CodingKey {
@@ -393,6 +415,8 @@ public struct WorkoutEvidence: Codable, Equatable, Sendable {
         case events
         case activities
         case workoutPlanAudit
+        case weather
+        case cityName
         case diagnostics
     }
 
@@ -404,6 +428,8 @@ public struct WorkoutEvidence: Codable, Equatable, Sendable {
         events: [WorkoutEvidenceEvent] = [],
         activities: [WorkoutEvidenceActivity] = [],
         workoutPlanAudit: WorkoutPlanAudit? = nil,
+        weather: WorkoutWeather? = nil,
+        cityName: String? = nil,
         diagnostics: WorkoutEvidenceDiagnostics? = nil
     ) {
         self.workoutID = workoutID
@@ -413,6 +439,8 @@ public struct WorkoutEvidence: Codable, Equatable, Sendable {
         self.events = events.sorted { $0.startDate < $1.startDate }
         self.activities = activities.sorted { $0.startDate < $1.startDate }
         self.workoutPlanAudit = workoutPlanAudit
+        self.weather = weather
+        self.cityName = cityName
         self.diagnostics = diagnostics
     }
 
@@ -425,6 +453,8 @@ public struct WorkoutEvidence: Codable, Equatable, Sendable {
         events = try container.decode([WorkoutEvidenceEvent].self, forKey: .events).sorted { $0.startDate < $1.startDate }
         activities = try container.decodeIfPresent([WorkoutEvidenceActivity].self, forKey: .activities)?.sorted { $0.startDate < $1.startDate } ?? []
         workoutPlanAudit = try container.decodeIfPresent(WorkoutPlanAudit.self, forKey: .workoutPlanAudit)
+        weather = try container.decodeIfPresent(WorkoutWeather.self, forKey: .weather)
+        cityName = try container.decodeIfPresent(String.self, forKey: .cityName)
         diagnostics = try container.decodeIfPresent(WorkoutEvidenceDiagnostics.self, forKey: .diagnostics)
     }
 

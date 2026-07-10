@@ -109,11 +109,13 @@ struct RunsView: View {
 
 struct SettingsView: View {
     var store: RunningAnalysisStore
+    @AppStorage("RunSignal.DeveloperModeEnabled") private var developerModeEnabled = false
+    @AppStorage("RunSignal.TemperatureUnit") private var temperatureUnitRaw = TemperatureUnitPreference.system.rawValue
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                HeaderBlock(title: "Settings", subtitle: "HealthKit status, data coverage, and v1 debug tools.")
+                HeaderBlock(title: "Settings", subtitle: "HealthKit, workout display, and privacy preferences.")
 
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
@@ -170,30 +172,56 @@ struct SettingsView: View {
                 .background(.background)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
-                SectionHeader("Debug")
-                NavigationLink {
-                    HealthKitAuditView(store: store)
-                } label: {
-                    Label("Raw HealthKit Audit", systemImage: "list.clipboard")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Workout Display", systemImage: "thermometer.medium")
+                        .font(.headline)
+                    HStack {
+                        Text("Temperature")
+                        Spacer()
+                        Picker("Temperature", selection: $temperatureUnitRaw) {
+                            ForEach(TemperatureUnitPreference.allCases) { preference in
+                                Text(preference.label).tag(preference.rawValue)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                    }
 
-                NavigationLink {
-                    GoldenValidationView(store: store)
-                } label: {
-                    Label("Apple Fitness Parity Checklist", systemImage: "checkmark.seal")
-                        .frame(maxWidth: .infinity)
+                    Toggle("Developer Mode", isOn: $developerModeEnabled)
+                    Text("Developer Mode reveals raw HealthKit evidence, audit exports, and parity tools. It stays hidden during normal run review.")
+                        .font(.caption)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                 }
-                .buttonStyle(.bordered)
+                .padding()
+                .background(.background)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
 
-                NavigationLink {
-                    HealthKitPermissionReviewView(store: store)
-                } label: {
-                    Label("HealthKit Permissions", systemImage: "lock.shield")
-                        .frame(maxWidth: .infinity)
+                if developerModeEnabled {
+                    SectionHeader("Developer Tools")
+                    NavigationLink {
+                        HealthKitAuditView(store: store)
+                    } label: {
+                        Label("Raw HealthKit Audit", systemImage: "list.clipboard")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    NavigationLink {
+                        GoldenValidationView(store: store)
+                    } label: {
+                        Label("Apple Fitness Parity Checklist", systemImage: "checkmark.seal")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+
+                    NavigationLink {
+                        HealthKitPermissionReviewView(store: store)
+                    } label: {
+                        Label("HealthKit Permissions", systemImage: "lock.shield")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.bordered)
             }
             .padding()
         }
@@ -762,6 +790,8 @@ struct ReconciliationRowView: View {
 struct WorkoutDetailView: View {
     var store: RunningAnalysisStore
     let workoutID: String
+    @AppStorage("RunSignal.DeveloperModeEnabled") private var developerModeEnabled = false
+    @State private var presentation: WorkoutDetailPresentation?
 
     private var workout: CanonicalWorkout? {
         store.workouts.first { $0.id == workoutID }
@@ -769,60 +799,50 @@ struct WorkoutDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            LazyVStack(alignment: .leading, spacing: 14) {
                 if let workout {
-                    let supportedIntervals = workout.evidence.flatMap {
-                        CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: $0)
-                    }
-                    let intervalBlockedReasons = workout.evidence.map {
-                        CustomWorkoutNormalDetailGate.blockedReasons(workout: workout, evidence: $0)
-                    } ?? ["Detailed HealthKit evidence is missing."]
-                    let queueItem = store.evidenceQueueItem(for: workout.id)
-                    let isProcessing = store.analyzingWorkoutIDs.contains(workout.id)
-                    let readiness = EvidenceReadinessSummary.make(
-                        workout: workout,
-                        queueItem: queueItem,
-                        isProcessing: isProcessing,
-                        supportedIntervals: supportedIntervals,
-                        blockedReasons: intervalBlockedReasons
-                    )
-
-                    WorkoutReviewCard(
-                        summary: WorkoutReviewUXSummary.make(
-                            workout: workout,
-                            supportedIntervals: supportedIntervals,
-                            blockedReasons: intervalBlockedReasons
-                        )
-                    )
+                    WorkoutDetailHero(workout: workout)
 
                     WorkoutCategoryCard(store: store, workout: workout)
 
-                    EvidenceReadinessCard(
-                        summary: readiness,
-                        queueItem: queueItem,
-                        isProcessing: isProcessing,
-                        isDisabled: store.isEnrichingAudit,
-                        loadAction: {
-                            Task {
-                                await store.loadFullAnalysisForWorkout(workoutID: workout.id)
-                            }
-                        },
-                        technicalDestination: {
-                            RawHealthKitWorkoutDebugView(store: store, workout: workout)
+                    if let progress = store.analysisProgressByWorkoutID[workout.id], progress.stage != .ready {
+                        WorkoutAnalysisProgressCard(progress: progress) {
+                            Task { await store.loadFullAnalysisForWorkout(workoutID: workout.id) }
                         }
-                    )
+                    }
 
                     FitnessWorkoutMetrics(workout: workout)
 
-                    RouteAndSeriesPanel(workout: workout)
+                    WorkoutEnvironmentCard(workout: workout)
 
-                    WorkoutChartsPanel(workout: workout)
-
-                    SplitsAndEventsPanel(
-                        store: store,
+                    RouteAndSeriesPanel(
                         workout: workout,
-                        segments: RunWorkoutSegments(workout: workout, analysis: store.derivedAnalysis(for: workout.id))
+                        isLoading: store.analyzingWorkoutIDs.contains(workout.id)
                     )
+
+                    WorkoutChartsPanel(
+                        workout: workout,
+                        isLoading: store.analyzingWorkoutIDs.contains(workout.id)
+                    )
+
+                    if let presentation {
+                        SplitsAndEventsPanel(
+                            workout: workout,
+                            segments: presentation.segments,
+                            supportedIntervals: presentation.supportedIntervals,
+                            intervalUnavailableMessage: presentation.intervalUnavailableMessage
+                        )
+                    }
+
+                    if developerModeEnabled {
+                        NavigationLink {
+                            RawHealthKitWorkoutDebugView(store: store, workout: workout)
+                        } label: {
+                            Label("Developer evidence", systemImage: "wrench.and.screwdriver")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                    }
 
                 } else {
                     EmptyStateView(title: "Workout missing", message: "The selected workout is no longer in local state.")
@@ -831,13 +851,153 @@ struct WorkoutDetailView: View {
             .padding()
             .padding(.bottom, 220)
         }
-        .navigationTitle("Workout")
+        .navigationTitle(workout.map { RunFormatters.workoutNavigationDate.string(from: $0.startDate) } ?? "Workout")
         .safeAreaInset(edge: .bottom) {
             Color.clear.frame(height: 112)
         }
         .task(id: workoutID) {
-            store.hydrateCachedEvidenceIfAvailable(for: workoutID)
+            await store.hydrateCachedEvidenceIfAvailable(for: workoutID)
+            store.prioritizeFullAnalysisForWorkout(workoutID: workoutID)
         }
+        .task(id: workout?.evidence?.loadedAt) {
+            guard let workout else {
+                presentation = nil
+                return
+            }
+            let analysis = store.derivedAnalysis(for: workout.id)
+            presentation = await Task.detached(priority: .userInitiated) {
+                WorkoutDetailPresentation.make(workout: workout, analysis: analysis)
+            }.value
+        }
+    }
+}
+
+private struct WorkoutDetailHero: View {
+    let workout: CanonicalWorkout
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(RunFormatters.workoutFullDate.string(from: workout.startDate))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(RunSignalTextStyle.secondary)
+
+            Text(title)
+                .font(.title2.bold())
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                Label(timeRange, systemImage: "clock")
+                if let cityName = workout.evidence?.cityName {
+                    Label(cityName, systemImage: "location")
+                } else {
+                    Label("\(workout.environment.label) Run", systemImage: "figure.run")
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(RunSignalTextStyle.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .accessibilityIdentifier("workout-detail-hero")
+    }
+
+    private var title: String {
+        let planName = workout.evidence?.workoutPlanAudit?.displayName?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let planName, !planName.isEmpty {
+            return planName
+        }
+        return "\(workout.environment.label) Run"
+    }
+
+    private var timeRange: String {
+        "\(RunFormatters.workoutTime.string(from: workout.startDate))–\(RunFormatters.workoutTime.string(from: workout.endDate))"
+    }
+}
+
+private struct WorkoutAnalysisProgressCard: View {
+    let progress: WorkoutAnalysisProgress
+    let retry: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            if progress.isActive {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Image(systemName: progress.stage == .failed ? "exclamationmark.triangle" : "pause.circle")
+                    .foregroundStyle(progress.stage == .failed ? .red : .orange)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.subheadline.bold())
+                Text(progress.message)
+                    .font(.caption)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if progress.stage == .failed || progress.stage == .paused {
+                    Button("Try Again", action: retry)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(.blue.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .accessibilityIdentifier("workout-analysis-progress")
+    }
+
+    private var title: String {
+        switch progress.stage {
+        case .queued: "Analysis queued"
+        case .readingHealthKit: "Loading workout details"
+        case .processing: "Finishing analysis"
+        case .ready: "Analysis ready"
+        case .paused: "Analysis paused"
+        case .failed: "Analysis needs another try"
+        }
+    }
+}
+
+private struct WorkoutEnvironmentCard: View {
+    let workout: CanonicalWorkout
+    @AppStorage("RunSignal.TemperatureUnit") private var temperatureUnitRaw = TemperatureUnitPreference.system.rawValue
+
+    var body: some View {
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader("Conditions")
+                MetricGrid(items: items)
+            }
+        }
+    }
+
+    private var items: [MetricItem] {
+        var values: [MetricItem] = []
+        if let cityName = workout.evidence?.cityName {
+            values.append(MetricItem(title: "Location", value: cityName, detail: "City-level · cached locally"))
+        }
+        if let temperature = workout.evidence?.weather?.temperatureCelsius {
+            values.append(
+                MetricItem(
+                    title: "Temperature",
+                    value: RunFormatters.temperature(temperature, preference: temperatureUnit),
+                    detail: "Workout weather"
+                )
+            )
+        }
+        if let humidity = workout.evidence?.weather?.humidityPercent {
+            values.append(MetricItem(title: "Humidity", value: RunFormatters.humidity(humidity), detail: "Workout weather"))
+        }
+        return values
+    }
+
+    private var temperatureUnit: TemperatureUnitPreference {
+        TemperatureUnitPreference(rawValue: temperatureUnitRaw) ?? .system
     }
 }
 
@@ -847,19 +1007,42 @@ struct FitnessWorkoutMetrics: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader("Workout Details")
-            MetricGrid(items: [
-                MetricItem(title: "Workout time", value: RunFormatters.duration(workout.durationSeconds), detail: elapsedDetail),
-                MetricItem(title: "Distance", value: RunFormatters.distance(workout.distanceMeters), detail: "HKWorkout"),
-                MetricItem(title: "Active calories", value: RunFormatters.calories(workout.activeEnergyKilocalories), detail: "HealthKit"),
-                MetricItem(title: "Total calories", value: totalCaloriesText, detail: totalCaloriesDetail),
-                MetricItem(title: "Avg pace", value: RunFormatters.pace(workout.paceSecondsPerKm), detail: "Distance/time"),
-                MetricItem(title: "Avg heart rate", value: RunFormatters.number(workout.averageHeartRate, suffix: " bpm"), detail: "Workout-scoped"),
-                MetricItem(title: "Max heart rate", value: RunFormatters.number(workout.maxHeartRate, suffix: " bpm"), detail: "If available"),
-                MetricItem(title: "Avg power", value: RunFormatters.number(workout.averagePower, suffix: " W"), detail: workout.runningPowerSampleCount > 0 ? "Series" : "Summary"),
-                MetricItem(title: "Avg cadence", value: RunFormatters.number(workout.fullStepCadence, suffix: " spm"), detail: "Full steps/min"),
-                MetricItem(title: "Elevation", value: RunFormatters.number(workout.elevationGainMeters, suffix: " m"), detail: workout.routePointCount > 0 ? "Route altitude" : "Unavailable")
-            ])
+            MetricGrid(items: items)
         }
+    }
+
+    private var items: [MetricItem] {
+        var values = [
+            MetricItem(title: "Workout time", value: RunFormatters.duration(workout.durationSeconds), detail: elapsedDetail)
+        ]
+        if workout.distanceMeters != nil {
+            values.append(MetricItem(title: "Distance", value: RunFormatters.distance(workout.distanceMeters), detail: "Apple Health"))
+        }
+        if workout.paceSecondsPerKm != nil {
+            values.append(MetricItem(title: "Avg pace", value: RunFormatters.pace(workout.paceSecondsPerKm), detail: "Distance / time"))
+        }
+        if workout.averageHeartRate != nil {
+            values.append(MetricItem(title: "Avg heart rate", value: RunFormatters.number(workout.averageHeartRate, suffix: " bpm"), detail: "Workout average"))
+        }
+        if workout.activeEnergyKilocalories != nil {
+            values.append(MetricItem(title: "Active calories", value: RunFormatters.calories(workout.activeEnergyKilocalories), detail: "Apple Health"))
+        }
+        if workout.totalEnergyKilocalories != nil {
+            values.append(MetricItem(title: "Total calories", value: totalCaloriesText, detail: totalCaloriesDetail))
+        }
+        if workout.maxHeartRate != nil {
+            values.append(MetricItem(title: "Max heart rate", value: RunFormatters.number(workout.maxHeartRate, suffix: " bpm"), detail: "Workout maximum"))
+        }
+        if workout.averagePower != nil {
+            values.append(MetricItem(title: "Avg power", value: RunFormatters.number(workout.averagePower, suffix: " W"), detail: workout.runningPowerSampleCount > 0 ? "Series" : "Summary"))
+        }
+        if workout.fullStepCadence != nil {
+            values.append(MetricItem(title: "Avg cadence", value: RunFormatters.number(workout.fullStepCadence, suffix: " spm"), detail: "Full steps/min"))
+        }
+        if workout.elevationGainMeters != nil {
+            values.append(MetricItem(title: "Elevation gain", value: RunFormatters.number(workout.elevationGainMeters, suffix: " m"), detail: "Route altitude"))
+        }
+        return values
     }
 
     private var elapsedDetail: String {
@@ -887,7 +1070,11 @@ private struct WorkoutCategoryCard: View {
     }
 
     private var sourceLabel: String {
-        workout.manualRunType == nil ? "Suggested" : "Reviewed"
+        workout.runTypeTrust.kind.label
+    }
+
+    private var suggestion: RunTypeSuggestion? {
+        store.runTypeSuggestion(for: workout.id)
     }
 
     var body: some View {
@@ -935,6 +1122,20 @@ private struct WorkoutCategoryCard: View {
             }
             .buttonStyle(.bordered)
             .accessibilityLabel("Set run type")
+
+            if workout.manualRunType == nil,
+               workout.importedRunType == nil,
+               let suggestion {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(.blue)
+                    Text("Suggested \(suggestion.runType.label): \(suggestion.detail)")
+                        .font(.caption)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityIdentifier("run-type-suggestion")
+            }
         }
         .padding()
         .background(.background)
@@ -944,16 +1145,30 @@ private struct WorkoutCategoryCard: View {
 
 struct RouteAndSeriesPanel: View {
     let workout: CanonicalWorkout
+    let isLoading: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader("Route")
             if let route = workout.evidence?.route, route.count >= 2 {
                 WorkoutRouteMap(route: route)
+            } else if isLoading {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.thinMaterial)
+                    .frame(height: 220)
+                    .overlay {
+                        VStack(spacing: 8) {
+                            ProgressView()
+                            Text("Loading map")
+                                .font(.caption)
+                                .foregroundStyle(RunSignalTextStyle.secondary)
+                        }
+                    }
+                    .accessibilityIdentifier("route-loading-placeholder")
             } else {
                 NoticeCard(
-                    title: routeTitle,
-                    message: routeMessage,
+                    title: "Map unavailable",
+                    message: "Apple Health did not provide route coordinates for this workout.",
                     systemImage: routeIcon,
                     tint: routeTint
                 )
@@ -1044,11 +1259,31 @@ struct WorkoutRouteMap: View {
 
 struct WorkoutChartsPanel: View {
     let workout: CanonicalWorkout
+    let isLoading: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader("Charts")
-            WorkoutChartDeck(workout: workout)
+            if workout.evidence != nil {
+                WorkoutChartDeck(workout: workout)
+            } else if isLoading {
+                VStack(spacing: 10) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(.thinMaterial)
+                            .frame(height: 120)
+                    }
+                }
+                .redacted(reason: .placeholder)
+                .accessibilityIdentifier("charts-loading-placeholder")
+            } else {
+                NoticeCard(
+                    title: "Charts unavailable",
+                    message: "Detailed workout samples were not available from Apple Health.",
+                    systemImage: "chart.xyaxis.line",
+                    tint: .secondary
+                )
+            }
         }
     }
 }
@@ -1247,12 +1482,12 @@ private struct WorkoutPlanStepRow: View {
 }
 
 struct SplitsAndEventsPanel: View {
-    let store: RunningAnalysisStore
     let workout: CanonicalWorkout
     let segments: RunWorkoutSegments
+    let supportedIntervals: WorkoutIntervalReconstructionResult?
+    let intervalUnavailableMessage: String?
 
     var body: some View {
-        let supportedIntervals = normalDetailCustomWorkoutIntervals
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader("1 km Splits")
             if segments.kilometerSplits.isEmpty {
@@ -1286,68 +1521,93 @@ struct SplitsAndEventsPanel: View {
 
             if let planAudit = workout.evidence?.workoutPlanAudit, !planAudit.plannedSteps.isEmpty {
                 WorkoutPlanOverviewCard(audit: planAudit)
-            }
 
-            SectionHeader("Workout Intervals")
-            if let supportedIntervals {
-                IntervalAnalysisEntryCard(workout: workout, result: supportedIntervals)
-            } else {
-                VStack(alignment: .leading, spacing: 10) {
+                SectionHeader("Intervals")
+                if let supportedIntervals {
+                    WorkoutIntervalsCard(workout: workout, result: supportedIntervals)
+                } else if let intervalUnavailableMessage {
                     NoticeCard(
-                        title: "Intervals under review",
-                        message: intervalMessage,
-                        systemImage: "clock.badge.questionmark",
-                        tint: .blue
+                        title: "Intervals unavailable",
+                        message: intervalUnavailableMessage,
+                        systemImage: "list.bullet.rectangle",
+                        tint: .orange
                     )
-                    NavigationLink {
-                        RawHealthKitWorkoutDebugView(store: store, workout: workout)
-                    } label: {
-                        Label("View Interval Evidence", systemImage: "doc.text.magnifyingglass")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
                 }
             }
         }
     }
+}
 
-    private var normalDetailCustomWorkoutIntervals: WorkoutIntervalReconstructionResult? {
-        guard let evidence = workout.evidence else { return nil }
-        let intervals = IntervalDrillDownEligibility.officialRows(workout: workout, evidence: evidence)
-        guard !intervals.isEmpty else { return nil }
-        return CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence)
+private struct WorkoutIntervalsCard: View {
+    let workout: CanonicalWorkout
+    let result: WorkoutIntervalReconstructionResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(result.intervals, id: \.index) { interval in
+                WorkoutIntervalSummaryRow(
+                    interval: interval,
+                    simplifiesSingleWorkLabel: workCount == 1
+                )
+            }
+
+            if RunClassifier.isStructuredIntervalWorkout(result.intervals) {
+                NavigationLink {
+                    IntervalAnalysisScreen(workout: workout, result: result)
+                } label: {
+                    Label("Open Interval Analysis", systemImage: "chart.bar.xaxis")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .accessibilityIdentifier("workout-intervals-card")
     }
 
-    private var intervalMessage: String {
-        guard let evidence = workout.evidence else {
-            return "Whole-run stats are ready. Reload HealthKit evidence on the physical iPhone to review custom interval rows."
-        }
+    private var workCount: Int {
+        result.intervals.filter { $0.stepType == .work }.count
+    }
+}
 
-        if let reviewSummary = intervalReviewSummary(evidence: evidence) {
-            return reviewSummary
-        }
+private struct WorkoutIntervalSummaryRow: View {
+    let interval: ReconstructedWorkoutInterval
+    let simplifiesSingleWorkLabel: Bool
 
-        let reasons = CustomWorkoutNormalDetailGate.blockedReasons(workout: workout, evidence: evidence)
-        guard !reasons.isEmpty else {
-            return "Whole-run stats are ready. RunSignal is still reviewing interval evidence for this workout."
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(label)
+                    .font(.headline)
+                Spacer()
+                if let target = interval.plannedTargetDisplayText, !target.isEmpty {
+                    Text(target.replacingOccurrences(of: "heart rate ", with: "", options: .caseInsensitive))
+                        .font(.caption.bold())
+                        .foregroundStyle(.blue)
+                }
+            }
+            MetricGrid(items: intervalItems)
         }
-        return "Whole-run stats are ready. \(reasons[0])"
+        .padding()
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
-    private func intervalReviewSummary(evidence: WorkoutEvidence) -> String? {
-        let activities = evidence.activities.sorted { $0.startDate < $1.startDate }
-        guard let audit = evidence.workoutPlanAudit,
-              !audit.plannedSteps.isEmpty,
-              let lastActivityEnd = activities.last?.endDate else {
-            return nil
+    private var label: String {
+        if simplifiesSingleWorkLabel, interval.stepType == .work {
+            return "Work"
         }
-        let plannedSteps = audit.plannedSteps.sorted { $0.index < $1.index }
-        let hasFixedCooldownTail = plannedSteps.last?.stepType == .cooldown
-            && plannedSteps.last?.plannedGoalType != .open
-            && workout.endDate.timeIntervalSince(lastActivityEnd) > 0.5
-        guard hasFixedCooldownTail else { return nil }
+        if interval.label == "Open / Extra" {
+            return "Open"
+        }
+        return interval.label
+    }
 
-        return "RunSignal found \(activities.count + 1) resolved boundary rows, but the Open / Extra tail rule is still under review. Whole-run stats are ready."
+    private var intervalItems: [MetricItem] {
+        var items = IntervalGoalMeasuredText.metricItems(for: interval)
+        if let heartRate = interval.averageHeartRateBpm {
+            items.append(MetricItem(title: "Avg HR", value: RunFormatters.number(heartRate, suffix: " bpm"), detail: "HealthKit activity"))
+        }
+        return items
     }
 }
 
@@ -2721,7 +2981,7 @@ struct MetricGrid: View {
 }
 
 struct MetricItem: Identifiable {
-    let id = UUID()
+    var id: String { "\(title)|\(detail)" }
     let title: String
     let value: String
     let detail: String

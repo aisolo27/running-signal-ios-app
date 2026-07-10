@@ -278,6 +278,7 @@ public final class RunningAnalysisStore {
     public private(set) var derivedAnalysisRefreshSummary = DerivedAnalysisRefreshSummary.empty
     public private(set) var trainingPeriodSummaries: [CachedTrainingPeriodSummary] = []
     public private(set) var analyzingWorkoutIDs: Set<String> = []
+    public private(set) var analysisProgressByWorkoutID: [String: WorkoutAnalysisProgress] = [:]
     public private(set) var pendingManualWorkoutIDs: Set<String> = []
     private var manualWorkoutUpdateVersions: [String: Int] = [:]
 
@@ -294,6 +295,9 @@ public final class RunningAnalysisStore {
     private var lastForegroundSyncAt: Date?
     private var isForegroundSyncInFlight = false
     private var healthKitSyncTask: Task<Void, Never>?
+    private var automaticEvidenceTask: Task<Void, Never>?
+    private var prioritizedEvidenceWorkoutIDs: Set<String> = []
+    private var automaticEvidenceAttemptedWorkoutIDs: Set<String> = []
     private weak var modelContext: ModelContext?
 
     public init(
@@ -321,6 +325,45 @@ public final class RunningAnalysisStore {
     public var shouldSyncHealthKitOnForeground: Bool {
         guard HealthKitSyncStateStore.hasAnchor(defaults: syncDefaults) else { return false }
         return !usesSampleData || healthKitStatus.authorizationState == .authorized || healthKitStatus.authorizationState == .partial || syncState.lastSyncAt != nil
+    }
+
+    nonisolated public static func automaticEvidenceCandidateIDs(
+        workouts: [CanonicalWorkout],
+        cachedEvidenceIDs: Set<String>,
+        now: Date = Date(),
+        dayWindow: Int = 30,
+        limit: Int = 20
+    ) -> [String] {
+        automaticEvidenceWindow(
+            workouts: workouts,
+            now: now,
+            dayWindow: dayWindow,
+            limit: limit
+        )
+        .filter { workout in
+            workout.evidence == nil && !cachedEvidenceIDs.contains(workout.id)
+        }
+        .map(\.id)
+    }
+
+    nonisolated private static func automaticEvidenceWindow(
+        workouts: [CanonicalWorkout],
+        now: Date,
+        dayWindow: Int = 30,
+        limit: Int = 20
+    ) -> [CanonicalWorkout] {
+        let calendar = Calendar(identifier: .gregorian)
+        let cutoff = calendar.date(byAdding: .day, value: -dayWindow, to: now) ?? now.addingTimeInterval(-Double(dayWindow) * 86_400)
+        return workouts
+            .filter { workout in
+                workout.startDate >= cutoff
+                    && workout.startDate <= now.addingTimeInterval(300)
+                    && !workout.isDuplicate
+                    && workout.dataSourceLabel.contains("HealthKit")
+            }
+            .sorted { $0.startDate > $1.startDate }
+            .prefix(limit)
+            .map { $0 }
     }
 
     public func availableTrainingPeriodStarts(for period: TrainingAnalyticsPeriod) -> [Date] {
@@ -351,6 +394,15 @@ public final class RunningAnalysisStore {
             return cached.periodStart
         }
         return TrainingPeriodAnalyticsSummary.make(workouts: workouts, period: period).periodStart
+    }
+
+    public func runTypeSuggestion(for workoutID: String) -> RunTypeSuggestion? {
+        guard let workout = workouts.first(where: { $0.id == workoutID }) else { return nil }
+        return RunClassifier.suggestion(
+            for: workout,
+            history: workouts,
+            maxHeartRate: healthContext.maxHeartRate
+        )
     }
 
     public func bootstrap(modelContext: ModelContext) async {
@@ -408,7 +460,10 @@ public final class RunningAnalysisStore {
 
     public func refreshFromHealthKit() async {
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            startAutomaticEvidenceEnrichment()
+        }
 
         guard let modelContext else {
             await loadHealthKitRunsWithoutImportJob()
@@ -583,7 +638,10 @@ public final class RunningAnalysisStore {
 
     private func performHealthKitChangesSync(includePostSyncMaintenance: Bool) async {
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            startAutomaticEvidenceEnrichment()
+        }
 
         let batches = await syncService.syncRunningWorkoutBatches(from: HealthKitSyncStateStore.loadAnchor(defaults: syncDefaults))
         guard !batches.isEmpty else {
@@ -780,18 +838,151 @@ public final class RunningAnalysisStore {
             )
             return
         }
-        guard !isEnrichingAudit else {
-            message = "HealthKit evidence refresh is already running."
-            return
+        guard !usesSampleData else { return }
+        automaticEvidenceAttemptedWorkoutIDs.remove(workoutID)
+        prioritizedEvidenceWorkoutIDs.insert(workoutID)
+        analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
+            stage: .queued,
+            message: "Preparing this run for full analysis."
+        )
+        startAutomaticEvidenceEnrichment()
+        await automaticEvidenceTask?.value
+    }
+
+    public func startAutomaticEvidenceEnrichment(now: Date = Date()) {
+        guard automaticEvidenceTask == nil, !usesSampleData else { return }
+        let cachedEvidenceIDs = modelContext.map(PersistenceService.fetchEvidenceIDs(context:)) ?? []
+        for workoutID in Self.automaticEvidenceCandidateIDs(
+            workouts: workouts,
+            cachedEvidenceIDs: cachedEvidenceIDs,
+            now: now
+        ) where !automaticEvidenceAttemptedWorkoutIDs.contains(workoutID) {
+            analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
+                stage: .queued,
+                message: "Queued for automatic analysis."
+            )
         }
+
+        automaticEvidenceTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            while self.isEnrichingAudit, !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            guard !Task.isCancelled else {
+                self.automaticEvidenceTask = nil
+                return
+            }
+            await self.runAutomaticEvidenceQueue(now: now)
+        }
+    }
+
+    public func prioritizeFullAnalysisForWorkout(workoutID: String) {
+        guard !usesSampleData,
+              let workout = workouts.first(where: { $0.id == workoutID }),
+              workout.evidence == nil else { return }
+        prioritizedEvidenceWorkoutIDs.insert(workoutID)
+        analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
+            stage: .queued,
+            message: "Preparing this run for full analysis."
+        )
+        startAutomaticEvidenceEnrichment()
+    }
+
+    private func runAutomaticEvidenceQueue(now: Date) async {
         let budget = makeImportBudgetPolicy()
+        defer {
+            automaticEvidenceTask = nil
+            isEnrichingAudit = false
+        }
+
+        while !Task.isCancelled {
+            if let workoutID = nextAutomaticPreparedWorkoutID(now: now) {
+                if pauseAutomaticEvidenceQueueIfNeeded(workoutID: workoutID, budget: budget) {
+                    break
+                }
+                automaticEvidenceAttemptedWorkoutIDs.insert(workoutID)
+                await prepareExistingDetailedWorkout(workoutID: workoutID)
+                await Task.yield()
+                continue
+            }
+
+            guard let workoutID = nextAutomaticEvidenceWorkoutID(now: now) else { break }
+            if let reason = budget.pauseReason(allowsDetailedEvidence: true) {
+                message = reason.message
+                analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
+                    stage: .paused,
+                    message: reason.message
+                )
+                break
+            }
+            automaticEvidenceAttemptedWorkoutIDs.insert(workoutID)
+            prioritizedEvidenceWorkoutIDs.remove(workoutID)
+            await enrichSingleWorkout(workoutID: workoutID, budget: budget)
+            await Task.yield()
+        }
+    }
+
+    private func pauseAutomaticEvidenceQueueIfNeeded(
+        workoutID: String,
+        budget: IngestionBudgetPolicy
+    ) -> Bool {
+        guard let reason = budget.pauseReason(allowsDetailedEvidence: true) else { return false }
+        message = reason.message
+        analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
+            stage: .paused,
+            message: reason.message
+        )
+        return true
+    }
+
+    private func nextAutomaticPreparedWorkoutID(now: Date) -> String? {
+        Self.automaticEvidenceWindow(workouts: workouts, now: now)
+            .first { workout in
+                workout.evidence != nil
+                    && derivedAnalysesByWorkoutID[workout.id] == nil
+                    && !automaticEvidenceAttemptedWorkoutIDs.contains(workout.id)
+            }?
+            .id
+    }
+
+    private func nextAutomaticEvidenceWorkoutID(now: Date) -> String? {
+        let existingEvidenceIDs = Set(workouts.compactMap { $0.evidence == nil ? nil : $0.id })
+        let cachedEvidenceIDs = modelContext.map(PersistenceService.fetchEvidenceIDs(context:)) ?? []
+        let unavailableIDs = existingEvidenceIDs.union(cachedEvidenceIDs).union(automaticEvidenceAttemptedWorkoutIDs)
+
+        let prioritized = workouts
+            .filter { prioritizedEvidenceWorkoutIDs.contains($0.id) && !unavailableIDs.contains($0.id) }
+            .sorted(by: { $0.startDate > $1.startDate })
+            .first
+
+        if let prioritized {
+            return prioritized.id
+        }
+
+        return Self.automaticEvidenceCandidateIDs(
+            workouts: workouts,
+            cachedEvidenceIDs: cachedEvidenceIDs,
+            now: now
+        )
+        .first { !automaticEvidenceAttemptedWorkoutIDs.contains($0) }
+    }
+
+    private func enrichSingleWorkout(workoutID: String, budget: IngestionBudgetPolicy) async {
         if let reason = budget.pauseReason(allowsDetailedEvidence: true) {
             message = reason.message
+            analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
+                stage: .paused,
+                message: reason.message
+            )
             return
         }
 
         isEnrichingAudit = true
         analyzingWorkoutIDs.insert(workoutID)
+        analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
+            stage: .readingHealthKit,
+            message: "Reading workout samples, route, and plan. You can keep using RunSignal."
+        )
         defer {
             analyzingWorkoutIDs.remove(workoutID)
             isEnrichingAudit = false
@@ -803,23 +994,141 @@ public final class RunningAnalysisStore {
             message: result.message ?? "Full analysis refresh finished."
         )
 
-        let returnedWorkout = result.workouts.first { $0.id == workoutID }
         let canUseResult = result.authorizationState == .authorized || result.authorizationState == .partial
-        if canUseResult, let returnedWorkout, returnedWorkout.evidence != nil {
-            workouts = removeSampleWorkoutsIfRealDataExists(mergeSyncedWorkouts(changes: [returnedWorkout], current: workouts))
-            deletePersistedSampleWorkoutsIfNeeded()
-            applyReviewedRunTypes()
-            persistCurrent()
-            markEvidenceQueueAttempt(ids: [workoutID], status: .enriched, message: result.message)
-        } else {
-            markEvidenceQueueAttempt(
-                ids: [workoutID],
-                status: .failed,
-                message: result.message ?? "HealthKit did not return detailed evidence for this workout."
+        guard canUseResult,
+              var returnedWorkout = result.workouts.first(where: { $0.id == workoutID }),
+              let evidence = returnedWorkout.evidence else {
+            let failureMessage = result.message ?? "HealthKit did not return detailed evidence for this workout."
+            markEvidenceQueueAttempt(ids: [workoutID], status: .failed, message: failureMessage)
+            analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
+                stage: .failed,
+                message: failureMessage
             )
+            return
         }
 
-        recompute()
+        returnedWorkout.inferredRunType = RunClassifier.inferRunType(for: returnedWorkout)
+        returnedWorkout.evidence = evidence
+        analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
+            stage: .processing,
+            message: "Building charts, splits, and workout intervals in the background."
+        )
+        let persistenceWorkout = returnedWorkout
+        let persistenceEvidence = evidence
+        let prepared = await Task.detached(priority: .utility) { [persistenceWorkout, persistenceEvidence] in
+            PreparedWorkoutPersistence.make(workout: persistenceWorkout, evidence: persistenceEvidence)
+        }.value
+
+        workouts = removeSampleWorkoutsIfRealDataExists(
+            mergeSyncedWorkouts(changes: [returnedWorkout], current: workouts)
+        )
+        deletePersistedSampleWorkoutsIfNeeded()
+        applyReviewedRunTypes()
+        if let modelContext {
+            PersistenceService.upsertPreparedDetailedWorkout(
+                returnedWorkout,
+                evidence: evidence,
+                prepared: prepared,
+                context: modelContext
+            )
+        }
+        derivedAnalysesByWorkoutID[workoutID] = prepared.analysis
+        markEvidenceQueueAttempt(ids: [workoutID], status: .enriched, message: result.message)
+        refreshSingleWorkoutDerivedState(workoutID: workoutID)
+        analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
+            stage: .ready,
+            message: "Full analysis is ready."
+        )
+
+        if evidence.cityName == nil, !evidence.route.isEmpty {
+            Task { @MainActor [weak self] in
+                await self?.resolveAndCacheCityName(workoutID: workoutID)
+            }
+        }
+    }
+
+    private func prepareExistingDetailedWorkout(workoutID: String) async {
+        guard let index = workouts.firstIndex(where: { $0.id == workoutID }),
+              let evidence = workouts[index].evidence else { return }
+        var workout = workouts[index]
+        let suggestion = RunClassifier.suggestion(
+            for: workout,
+            history: workouts,
+            maxHeartRate: healthContext.maxHeartRate
+        )
+        if suggestion.runType != .unknown || workout.inferredRunType == .unknown {
+            workout.inferredRunType = suggestion.runType
+        }
+        analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
+            stage: .processing,
+            message: "Building charts, splits, and workout intervals in the background."
+        )
+        let suggestedRunType = workout.inferredRunType
+        let persistenceWorkout = workout
+        let persistenceEvidence = evidence
+        let prepared = await Task.detached(priority: .utility) { [persistenceWorkout, persistenceEvidence] in
+            PreparedWorkoutPersistence.make(workout: persistenceWorkout, evidence: persistenceEvidence)
+        }.value
+        guard let currentIndex = workouts.firstIndex(where: { $0.id == workoutID }) else { return }
+        workouts[currentIndex].inferredRunType = suggestedRunType
+        if let modelContext {
+            PersistenceService.upsertPreparedDetailedWorkout(
+                workouts[currentIndex],
+                evidence: evidence,
+                prepared: prepared,
+                context: modelContext
+            )
+        }
+        derivedAnalysesByWorkoutID[workoutID] = prepared.analysis
+        refreshSingleWorkoutDerivedState(workoutID: workoutID)
+        analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
+            stage: .ready,
+            message: "Full analysis is ready."
+        )
+        if evidence.cityName == nil, !evidence.route.isEmpty {
+            Task { @MainActor [weak self] in
+                await self?.resolveAndCacheCityName(workoutID: workoutID)
+            }
+        }
+    }
+
+    private func refreshSingleWorkoutDerivedState(workoutID: String) {
+        applySuggestedRunTypes()
+        guard let workout = workouts.first(where: { $0.id == workoutID }) else { return }
+        refreshTrainingPeriodSummaryCache(affectedBy: workout, persist: true)
+        snapshot = AnalyticsEngine.snapshot(for: workouts, healthContext: healthContext)
+        let derived = PersonalBestEffortSummary(
+            allTime: derivedAnalysesByWorkoutID.values.flatMap { $0.personalBestEffortRecords ?? [] }
+        )
+        personalBestEffortSummary = mergePersonalBestEfforts(
+            cached: loadPersonalBestEffortCache(),
+            computed: derived
+        )
+        savePersonalBestEffortCache(personalBestEffortSummary)
+        refreshEvidenceQueueSummary()
+    }
+
+    private func resolveAndCacheCityName(workoutID: String) async {
+        guard let index = workouts.firstIndex(where: { $0.id == workoutID }),
+              var evidence = workouts[index].evidence,
+              evidence.cityName == nil,
+              !evidence.route.isEmpty else { return }
+        guard let cityName = await WorkoutCityResolver.cityName(for: evidence.route) else { return }
+        evidence.cityName = cityName
+        let evidenceSnapshot = evidence
+        let evidenceData = await Task.detached(priority: .utility) { [evidenceSnapshot] in
+            (try? JSONEncoder().encode(evidenceSnapshot)) ?? Data()
+        }.value
+        guard let currentIndex = workouts.firstIndex(where: { $0.id == workoutID }) else { return }
+        workouts[currentIndex].evidence = evidence
+        if let modelContext {
+            PersistenceService.updatePreparedEvidence(
+                workoutID: workoutID,
+                evidence: evidence,
+                evidenceData: evidenceData,
+                context: modelContext
+            )
+        }
     }
 
     public func forceReenrichEvidenceForParity(workoutID: String) async {
@@ -836,6 +1145,7 @@ public final class RunningAnalysisStore {
             )
             return
         }
+        await hydrateCachedEvidenceIfAvailable(for: workoutID)
         let budget = makeImportBudgetPolicy()
         if let reason = budget.pauseReason(allowsDetailedEvidence: true) {
             message = reason.message
@@ -950,6 +1260,7 @@ public final class RunningAnalysisStore {
                 }
                 break
             }
+            await hydrateCachedEvidenceIfAvailable(for: workout.id)
             let requestedAt = Date()
             let cacheWasPresent = workout.evidence != nil
                 || (modelContext.map { PersistenceService.fetchEvidence(workoutID: workout.id, context: $0) } ?? nil) != nil
@@ -1116,18 +1427,29 @@ public final class RunningAnalysisStore {
         recompute(hydrateEvidence: false, refreshDerivedAnalyses: false)
     }
 
-    public func hydrateCachedEvidenceIfAvailable(for workoutID: String) {
+    public func hydrateCachedEvidenceIfAvailable(for workoutID: String) async {
         guard let index = workouts.firstIndex(where: { $0.id == workoutID }),
               workouts[index].evidence == nil,
               let modelContext,
-              let evidence = PersistenceService.fetchEvidence(workoutID: workoutID, context: modelContext)
+              let evidenceData = PersistenceService.fetchEvidenceData(workoutID: workoutID, context: modelContext)
         else { return }
 
-        workouts[index].evidence = evidence
-        workouts[index].routePointCount = evidence.route.count
-        workouts[index].seriesSampleCount = evidence.seriesSampleCount
-        workouts[index].routeAvailable = workouts[index].routeAvailable || !evidence.route.isEmpty
-        workouts[index].seriesAvailable = workouts[index].seriesAvailable || evidence.seriesSampleCount > 0
+        let evidence = await Task.detached(priority: .userInitiated) {
+            try? JSONDecoder().decode(WorkoutEvidence.self, from: evidenceData)
+        }.value
+        guard let evidence,
+              let currentIndex = workouts.firstIndex(where: { $0.id == workoutID }),
+              workouts[currentIndex].evidence == nil else { return }
+
+        workouts[currentIndex].evidence = evidence
+        workouts[currentIndex].routePointCount = evidence.route.count
+        workouts[currentIndex].seriesSampleCount = evidence.seriesSampleCount
+        workouts[currentIndex].routeAvailable = workouts[currentIndex].routeAvailable || !evidence.route.isEmpty
+        workouts[currentIndex].seriesAvailable = workouts[currentIndex].seriesAvailable || evidence.seriesSampleCount > 0
+        analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
+            stage: .ready,
+            message: "Full analysis is ready."
+        )
 
         if let derivedAnalysis = PersistenceService.fetchDerivedAnalysis(workoutID: workoutID, context: modelContext) {
             derivedAnalysesByWorkoutID[workoutID] = derivedAnalysis
@@ -1384,14 +1706,15 @@ public final class RunningAnalysisStore {
     }
 
     private func recompute(
-        hydrateEvidence shouldHydrateEvidence: Bool = true,
-        refreshDerivedAnalyses shouldRefreshDerivedAnalyses: Bool = true,
+        hydrateEvidence shouldHydrateEvidence: Bool = false,
+        refreshDerivedAnalyses shouldRefreshDerivedAnalyses: Bool = false,
         refreshTrainingPeriodSummaries shouldRefreshTrainingPeriodSummaries: Bool = true
     ) {
         if shouldHydrateEvidence {
             hydrateCachedEvidence()
         }
         workouts = DuplicateDetector.markDuplicates(workouts)
+        applySuggestedRunTypes()
         if shouldRefreshTrainingPeriodSummaries {
             refreshTrainingPeriodSummaryCache()
         } else if trainingPeriodSummaries.isEmpty {
@@ -1544,6 +1867,22 @@ public final class RunningAnalysisStore {
         workouts = RunTypeReviewBridge.applyConfidentMatches(reviews: reviewedRunTypes, to: workouts)
     }
 
+    private func applySuggestedRunTypes() {
+        let history = workouts
+        workouts = workouts.map { workout in
+            var classified = workout
+            let suggestion = RunClassifier.suggestion(
+                for: workout,
+                history: history,
+                maxHeartRate: healthContext.maxHeartRate
+            )
+            if suggestion.runType != .unknown || classified.inferredRunType == .unknown {
+                classified.inferredRunType = suggestion.runType
+            }
+            return classified
+        }
+    }
+
     private func nextEvidenceQueueCandidateIDs(limit: Int) -> [String] {
         guard let modelContext else {
             return EvidenceEnrichmentQueue.nextPendingIDs(
@@ -1554,8 +1893,8 @@ public final class RunningAnalysisStore {
         }
         return EvidenceEnrichmentQueue.nextPendingIDs(
             workouts: workouts,
-            cachedEvidenceIDs: PersistenceService.fetchEvidenceIDs(workoutIDs: workouts.map(\.id), context: modelContext),
-            failedStates: PersistenceService.fetchEnrichmentStateByID(workoutIDs: workouts.map(\.id), context: modelContext),
+            cachedEvidenceIDs: PersistenceService.fetchEvidenceIDs(context: modelContext),
+            failedStates: PersistenceService.fetchEnrichmentStateByID(context: modelContext),
             limit: limit
         )
     }
@@ -1573,8 +1912,8 @@ public final class RunningAnalysisStore {
         }
         let items = EvidenceEnrichmentQueue.items(
             workouts: workouts,
-            cachedEvidenceIDs: PersistenceService.fetchEvidenceIDs(workoutIDs: workouts.map(\.id), context: modelContext),
-            failedStates: PersistenceService.fetchEnrichmentStateByID(workoutIDs: workouts.map(\.id), context: modelContext)
+            cachedEvidenceIDs: PersistenceService.fetchEvidenceIDs(context: modelContext),
+            failedStates: PersistenceService.fetchEnrichmentStateByID(context: modelContext)
         )
         evidenceQueueSummary = EvidenceEnrichmentQueue.summary(for: items)
     }

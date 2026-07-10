@@ -77,12 +77,18 @@ These conditions produce whole-run detail plus a clear unavailable/review reason
 - Work rows support hit/too-fast/too-slow pace-target evaluation, visibly distinct shortened-work status, and pause-aware measured math. A shortened target row can say `On Target · Shortened` so pace result never hides completion state.
 - Completed fixed-distance rows show prescribed distance with HealthKit activity-row time, heart rate, cadence, and power. Their displayed pace and target evaluation use that same activity-row timer plus prescribed-distance basis; shortened rows continue to use measured distance and active time.
 - HealthKit history import, anchored foreground sync, deletion handling, background observer registration, resumable summary backfill, compact derived caches, and Low Power/thermal budgets are implemented.
+- New HealthKit runs automatically enter a sequential analysis queue. Automatic scope is the newest 20 non-duplicate workouts within the previous 30 days; older runs remain available on demand. The queue uses one shared elapsed/Low Power/thermal budget and prepares derived analytics off the main actor.
+- Workout detail now leads with the full date, WorkoutKit title when available, time range, city-level cached location, concise metrics, conditions, map, charts, splits, and runner-facing `Work`/`Recovery`/`Open` cards. Raw HealthKit audit terminology and parity tools are behind Developer Mode.
+- HealthKit workout weather metadata is stored per run and displayed as temperature and humidity. Temperature follows the system by default with explicit Fahrenheit and Celsius settings. City resolution uses a representative route point and stores only the resulting city context locally.
+- Run-type suggestions are deterministic and explainable: explicit plan titles and Work/Recovery structure lead, then a 42-day personal duration/distance baseline and heart-rate context. Weak evidence falls back to Other without erasing an existing stronger stored category.
+- Normalized terminal zero-duration pause events now receive the same end-marker handling as legacy raw HealthKit pause strings, so a valid one-Work-plus-Open run is not blocked by representation format.
 - Background-delivery registration failures report their own message without downgrading valid cached/query-based HealthKit readiness.
 - Normal bootstrap avoids hydrating the full detailed-evidence table.
 
 ## Current Next Work
 
 - Observe limited-history authorization, observer delivery, anchored deletions, backlog continuation, interruption/resume, Low Power Mode, thermal behavior, and battery impact on a physical iPhone.
+- Use the next fresh HealthKit workout on the physical iPhone to verify automatic completion, responsive tab/scroll interaction during active analysis, temperature/humidity availability, city caching, thermal behavior, and battery impact.
 - Profile the local training-period summary cache with a large real HealthKit history.
 - Re-export the June 30 clean repeat/fixed-cooldown/`Open / Extra` case from a fresh current build and confirm visible/export status agreement.
 - Re-verify the July 9 recording cases on a physical iPhone: loaded HealthKit readiness at launch, repeated run-detail-to-Analytics navigation, category-edit responsiveness with the real history, Priority 5 shortened-row copy, and activity-row pace/heart-rate/power/cadence parity against Apple Fitness.
@@ -94,7 +100,8 @@ These conditions produce whole-run detail plus a clear unavailable/review reason
 - WorkoutKit plan data is optional and can be unavailable or fail to load.
 - Simulator sample data cannot prove HealthKit permissions, real workout availability, background delivery, thermal behavior, battery impact, or physical launch performance.
 - Apple Fitness can use private smoothing, rounding, and presentation rules not exposed by public APIs.
+- Weather appears only when the completed HealthKit workout includes weather metadata. City display requires a usable route and successful Apple reverse geocoding before the city is cached.
 
 ## Latest Verification
 
-On 2026-07-10, all 286 package tests passed. Simulator build/install/launch passed on iPhone 17. In sample-data mode, launch, run detail, an immediate category edit plus follow-on swipe, repeated run-detail-to-Analytics navigation, and Settings-to-Analytics navigation all completed without an app assertion or crash. The captured runtime logs contained no RunSignal fatal/assertion/crash signature; the Simulator runtime emitted one system Accessibility duplicate-class warning. Physical-iPhone build/install/launch also passed on `AIS17PM` running iOS 26.5.2. Real HealthKit readiness, real-history edit latency, shortened-row presentation, and Apple Fitness metric parity still require interaction re-verification on that device.
+On 2026-07-10, all 293 package tests passed for the current implementation. Simulator build/install/launch passed without build warnings on iPhone 17. In sample-data mode, the revised workout header rendered, the detail screen accepted repeated scrolling, no permanent automatic-analysis state appeared for sample workouts, the temperature setting was visibly labeled, and Developer Mode hid then revealed raw audit tools. The same current build then built, installed, and launched on `AIS17PM` running iOS 26.5.2. iPhone Mirroring visibly confirmed the July 10 Easy 6 km workout now renders runner-facing `Work` and `Open` cards with HealthKit activity values, and a direct switch to Analytics responded immediately. A previously analyzed workout does not prove fresh automatic-queue duration, weather/location availability, thermal behavior, or battery impact; those require the next new physical workout.

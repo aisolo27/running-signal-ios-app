@@ -70,8 +70,27 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
             events: evidenceEvents(for: workout),
             activities: activityResult.activities,
             workoutPlanAudit: planAuditResult.audit,
+            weather: weatherMetadata(for: workout),
             diagnostics: diagnostics
         )
+    }
+
+    private func weatherMetadata(for workout: HKWorkout) -> WorkoutWeather? {
+        let metadata = workout.metadata ?? [:]
+        let temperature = (metadata[HKMetadataKeyWeatherTemperature] as? HKQuantity)?
+            .doubleValue(for: .degreeCelsius())
+        let rawHumidity = (metadata[HKMetadataKeyWeatherHumidity] as? HKQuantity)?
+            .doubleValue(for: .percent())
+        let humidity = rawHumidity.map { value in
+            value <= 1 ? value * 100 : value
+        }
+        let conditionCode = (metadata[HKMetadataKeyWeatherCondition] as? NSNumber)?.intValue
+        let weather = WorkoutWeather(
+            temperatureCelsius: temperature,
+            humidityPercent: humidity,
+            conditionCode: conditionCode
+        )
+        return weather.hasValues ? weather : nil
     }
 
     private func quantitySeries(

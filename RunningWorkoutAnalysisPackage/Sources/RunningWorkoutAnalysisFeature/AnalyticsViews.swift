@@ -889,27 +889,8 @@ struct WorkoutChartDeck: View {
     var interval: ReconstructedWorkoutInterval?
 
     @State private var selectedMinute: Double?
-
-    private var series: [WorkoutChartSeries] {
-        let core = WorkoutChartSeriesBuilder.coreSeries(for: workout)
-        guard let interval else { return core }
-        return core.map {
-            WorkoutChartSeriesBuilder.clippedSeries(
-                $0,
-                start: interval.actualStartDate,
-                end: interval.actualEndDate
-            )
-        }
-    }
-
-    private var officialIntervals: [ReconstructedWorkoutInterval] {
-        guard interval == nil,
-              let evidence = workout.evidence,
-              let result = CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) else {
-            return []
-        }
-        return result.intervals
-    }
+    @State private var series: [WorkoutChartSeries] = []
+    @State private var officialIntervals: [ReconstructedWorkoutInterval] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -922,6 +903,41 @@ struct WorkoutChartDeck: View {
                 )
             }
         }
+        .task(id: presentationID) {
+            let workout = workout
+            let interval = interval
+            let presentation = await Task.detached(priority: .userInitiated) {
+                let core = WorkoutChartSeriesBuilder.coreSeries(for: workout)
+                let series: [WorkoutChartSeries]
+                if let interval {
+                    series = core.map {
+                        WorkoutChartSeriesBuilder.clippedSeries(
+                            $0,
+                            start: interval.actualStartDate,
+                            end: interval.actualEndDate
+                        )
+                    }
+                } else {
+                    series = core
+                }
+                let officialIntervals: [ReconstructedWorkoutInterval]
+                if interval == nil,
+                   let evidence = workout.evidence,
+                   let result = CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) {
+                    officialIntervals = result.intervals
+                } else {
+                    officialIntervals = []
+                }
+                return (series, officialIntervals)
+            }.value
+            series = presentation.0
+            officialIntervals = presentation.1
+        }
+    }
+
+    private var presentationID: String {
+        let loadedAt = workout.evidence?.loadedAt.timeIntervalSince1970 ?? 0
+        return "\(loadedAt)|\(interval?.index ?? -1)"
     }
 }
 

@@ -1,5 +1,21 @@
 import Foundation
 
+enum TemperatureUnitPreference: String, CaseIterable, Identifiable {
+    case system
+    case fahrenheit
+    case celsius
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .system: "System Default"
+        case .fahrenheit: "Fahrenheit"
+        case .celsius: "Celsius"
+        }
+    }
+}
+
 enum RunFormatters {
     static let date: DateFormatter = {
         let formatter = DateFormatter()
@@ -17,6 +33,25 @@ enum RunFormatters {
     static let mediumDateWithYear: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM d, yyyy"
+        return formatter
+    }()
+
+    static let workoutNavigationDate: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEE, MMM d"
+        return formatter
+    }()
+
+    static let workoutFullDate: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMMM d"
+        return formatter
+    }()
+
+    static let workoutTime: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        formatter.dateStyle = .none
         return formatter
     }()
 
@@ -63,6 +98,28 @@ enum RunFormatters {
 
     static func percent(_ value: Double) -> String {
         String(format: "%.0f%%", value * 100)
+    }
+
+    static func humidity(_ percent: Double?) -> String {
+        guard let percent else { return "Unavailable" }
+        return String(format: "%.0f%%", percent)
+    }
+
+    static func temperature(_ celsius: Double?, preference: TemperatureUnitPreference) -> String {
+        guard let celsius else { return "Unavailable" }
+        let usesFahrenheit: Bool
+        switch preference {
+        case .fahrenheit:
+            usesFahrenheit = true
+        case .celsius:
+            usesFahrenheit = false
+        case .system:
+            usesFahrenheit = Locale.current.measurementSystem == .us
+        }
+        if usesFahrenheit {
+            return String(format: "%.0f°F", celsius * 9 / 5 + 32)
+        }
+        return String(format: "%.0f°C", celsius)
     }
 
     private static func integer(_ value: Double) -> String {

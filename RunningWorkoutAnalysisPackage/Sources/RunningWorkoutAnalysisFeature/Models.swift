@@ -854,6 +854,25 @@ public final class PersistedWorkoutEvidence {
         self.updatedAt = Date()
     }
 
+    public init(
+        workoutID: String,
+        loadedAt: Date,
+        sourceSummary: String,
+        seriesSampleCount: Int,
+        routePointCount: Int,
+        eventCount: Int,
+        evidenceData: Data
+    ) {
+        self.workoutID = workoutID
+        self.loadedAt = loadedAt
+        self.sourceSummary = sourceSummary
+        self.seriesSampleCount = seriesSampleCount
+        self.routePointCount = routePointCount
+        self.eventCount = eventCount
+        self.evidenceData = evidenceData
+        self.updatedAt = Date()
+    }
+
     public func update(evidence: WorkoutEvidence, sourceSummary: String = "") {
         loadedAt = evidence.loadedAt
         self.sourceSummary = sourceSummary
@@ -861,6 +880,23 @@ public final class PersistedWorkoutEvidence {
         routePointCount = evidence.route.count
         eventCount = evidence.events.count
         evidenceData = (try? JSONEncoder().encode(evidence)) ?? Data()
+        updatedAt = Date()
+    }
+
+    public func update(
+        loadedAt: Date,
+        sourceSummary: String,
+        seriesSampleCount: Int,
+        routePointCount: Int,
+        eventCount: Int,
+        evidenceData: Data
+    ) {
+        self.loadedAt = loadedAt
+        self.sourceSummary = sourceSummary
+        self.seriesSampleCount = seriesSampleCount
+        self.routePointCount = routePointCount
+        self.eventCount = eventCount
+        self.evidenceData = evidenceData
         updatedAt = Date()
     }
 
@@ -1215,10 +1251,25 @@ public final class PersistedDerivedWorkoutAnalysis {
         updatedAt = Date()
     }
 
+    public init(analysis: DerivedWorkoutAnalysis, analysisData: Data) {
+        workoutID = analysis.workoutID
+        calculationVersion = analysis.calculationVersion
+        inputSignature = Self.signature(for: analysis.inputSummary)
+        self.analysisData = analysisData
+        updatedAt = Date()
+    }
+
     public func update(analysis: DerivedWorkoutAnalysis) {
         calculationVersion = analysis.calculationVersion
         inputSignature = Self.signature(for: analysis.inputSummary)
         analysisData = (try? JSONEncoder().encode(analysis)) ?? Data()
+        updatedAt = Date()
+    }
+
+    public func update(analysis: DerivedWorkoutAnalysis, analysisData: Data) {
+        calculationVersion = analysis.calculationVersion
+        inputSignature = Self.signature(for: analysis.inputSummary)
+        self.analysisData = analysisData
         updatedAt = Date()
     }
 

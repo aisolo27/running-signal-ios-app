@@ -42,6 +42,8 @@ Read only the section relevant to the task. Add entries only for recurring proje
 - A single manual category edit must refresh only the Week, Month, Year, and All-Time caches containing that workout. Preserve unrelated historical period caches instead of rebuilding every period.
 - Do not decode the complete detailed-evidence table during normal launch. Use compact derived projections and targeted predicates.
 - Do not clear working cached evidence until replacement HealthKit queries succeed.
+- Apply the automatic-history cap before filtering out already analyzed workouts. Otherwise “newest 20” silently becomes 20 missing rows and drifts into older history.
+- Automatic detailed analysis stays sequential and shares one elapsed/Low Power/thermal budget across the queue. Existing detailed evidence that lacks derived analytics must be prepared off the main actor rather than skipped or broadly recomputed.
 - SwiftData schema changes require an explicit migration plan.
 
 ## Interval Rows And Analytics
@@ -67,5 +69,6 @@ Read only the section relevant to the task. Add entries only for recurring proje
 - Keep launch work cheap: explicit branded launch screen plus a lightweight startup view until bootstrap completes.
 - Scroll-heavy screens need a bottom safe-area inset so the floating tab bar does not cover content.
 - Avoid expensive analytics in SwiftUI body paths; compute/cache through the store.
+- Keep normal workout review runner-facing. Raw HealthKit events, evidence gates, parity packets, and audit wording belong behind Developer Mode.
 - Dark-mode secondary metadata needs explicit readable contrast.
 - When interval UI changes, compare prescribed, measured, elapsed, pause, active/timer, distance, pace basis, Raw Debug, and product rows for the same case.

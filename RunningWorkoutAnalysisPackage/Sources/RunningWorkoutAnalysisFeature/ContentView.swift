@@ -53,6 +53,7 @@ public struct ContentView: View {
             withAnimation(.easeOut(duration: 0.18)) {
                 didFinishBootstrap = true
             }
+            store.startAutomaticEvidenceEnrichment()
             scheduleStartupMaintenance()
         }
         .onChange(of: scenePhase) { _, newPhase in

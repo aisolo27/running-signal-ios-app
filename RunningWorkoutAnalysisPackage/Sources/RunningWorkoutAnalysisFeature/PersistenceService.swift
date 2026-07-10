@@ -101,6 +101,73 @@ public enum PersistenceService {
         try context.save()
     }
 
+    public static func upsertPreparedDetailedWorkout(
+        _ workout: CanonicalWorkout,
+        evidence: WorkoutEvidence,
+        prepared: PreparedWorkoutPersistence,
+        context: ModelContext
+    ) {
+        if let record = fetchPersistedWorkout(id: workout.id, context: context) {
+            record.update(from: workout, preservingManualFields: true)
+        } else {
+            context.insert(PersistedWorkout(workout: workout))
+        }
+
+        let sourceSummary = "\(workout.sourceName) · \(workout.startDate.ISO8601Format())"
+        if let evidenceRecord = fetchPersistedEvidence(workoutID: workout.id, context: context) {
+            evidenceRecord.update(
+                loadedAt: evidence.loadedAt,
+                sourceSummary: sourceSummary,
+                seriesSampleCount: evidence.seriesSampleCount,
+                routePointCount: evidence.route.count,
+                eventCount: evidence.events.count,
+                evidenceData: prepared.evidenceData
+            )
+        } else {
+            context.insert(
+                PersistedWorkoutEvidence(
+                    workoutID: workout.id,
+                    loadedAt: evidence.loadedAt,
+                    sourceSummary: sourceSummary,
+                    seriesSampleCount: evidence.seriesSampleCount,
+                    routePointCount: evidence.route.count,
+                    eventCount: evidence.events.count,
+                    evidenceData: prepared.evidenceData
+                )
+            )
+        }
+
+        if let analysisRecord = fetchPersistedDerivedAnalysis(workoutID: workout.id, context: context) {
+            analysisRecord.update(analysis: prepared.analysis, analysisData: prepared.analysisData)
+        } else {
+            context.insert(
+                PersistedDerivedWorkoutAnalysis(
+                    analysis: prepared.analysis,
+                    analysisData: prepared.analysisData
+                )
+            )
+        }
+        try? context.save()
+    }
+
+    public static func updatePreparedEvidence(
+        workoutID: String,
+        evidence: WorkoutEvidence,
+        evidenceData: Data,
+        context: ModelContext
+    ) {
+        guard let record = fetchPersistedEvidence(workoutID: workoutID, context: context) else { return }
+        record.update(
+            loadedAt: evidence.loadedAt,
+            sourceSummary: record.sourceSummary,
+            seriesSampleCount: evidence.seriesSampleCount,
+            routePointCount: evidence.route.count,
+            eventCount: evidence.events.count,
+            evidenceData: evidenceData
+        )
+        try? context.save()
+    }
+
     private static func applyUpserts(_ workouts: [CanonicalWorkout], context: ModelContext) {
         for workout in workouts {
             let record: PersistedWorkout
@@ -170,6 +237,10 @@ public enum PersistenceService {
 
     public static func fetchEvidence(workoutID: String, context: ModelContext) -> WorkoutEvidence? {
         fetchPersistedEvidence(workoutID: workoutID, context: context)?.evidence
+    }
+
+    public static func fetchEvidenceData(workoutID: String, context: ModelContext) -> Data? {
+        fetchPersistedEvidence(workoutID: workoutID, context: context)?.evidenceData
     }
 
     /// Fetches one evidence cache row without decoding its evidence blob.

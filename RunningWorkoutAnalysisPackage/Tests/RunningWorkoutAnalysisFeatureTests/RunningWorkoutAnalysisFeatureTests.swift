@@ -4025,6 +4025,49 @@ private func intervalForGoalMeasuredText(
     #expect(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence)?.intervals.map(\.label) == result.intervals.map(\.label))
 }
 
+@Test func normalDetailGateIgnoresNormalizedTerminalPauseForSimpleEasyPlan() throws {
+    let start = Date(timeIntervalSince1970: 1_783_685_666)
+    let workout = testWorkout(
+        id: "july-10-easy-6k-terminal-pause",
+        start: start,
+        distanceMeters: 6_038.5,
+        durationSeconds: 2_353.0
+    )
+    let evidence = normalDetailGateEvidence(
+        workout: workout,
+        plannedSteps: [
+            PlannedWorkoutStep(
+                index: 1,
+                label: "Work 1",
+                stepType: .work,
+                repeatBlockIndex: 1,
+                repeatIndex: 1,
+                plannedGoalType: .distance,
+                plannedGoalValue: 6_000,
+                plannedGoalDisplayText: "6 km",
+                plannedTargetDisplayText: "heart rate zone 2"
+            )
+        ],
+        activityWindows: [(start: 0, end: 2_337.5, distance: 6_007.8)],
+        distancePoints: [(2_337.5, 6_007.8), (2_353.0, 30.7)],
+        events: [
+            WorkoutEvidenceEvent(
+                startDate: start.addingTimeInterval(2_353.0),
+                endDate: start.addingTimeInterval(2_353.0),
+                type: "pause",
+                kind: .pause
+            )
+        ]
+    )
+
+    let result = try #require(CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence))
+
+    #expect(result.intervals.map(\.label) == ["Work 1", "Open / Extra"])
+    #expect(result.intervals.first?.actualDistanceMeters == 6_007.8)
+    #expect(abs((result.intervals.last?.actualDurationSeconds ?? 0) - 15.5) < 0.01)
+    #expect(abs((result.intervals.last?.actualDistanceMeters ?? 0) - 30.7) < 0.01)
+}
+
 @Test func normalDetailGateBlocksSimpleFixedDistanceWorkOpenTailWithDanglingPause() {
     let start = Date(timeIntervalSince1970: 10_654)
     let workout = testWorkout(id: "normal-detail-simple-work-open-dangling-pause", start: start, distanceMeters: 5_050, durationSeconds: 1_930)
@@ -6630,6 +6673,180 @@ private struct IsolatedDefaults {
     #expect(markdown.contains("| 3 | Cooldown | mappedByPlannedStepOrder |"))
     #expect(markdown.contains("| 4 | Open / Extra | inferredOpenTailFromWorkoutEnd |"))
     #expect(!markdown.contains("| 2 | Work 1 | 2 km | Target unavailable | 2.00 km | 14:40"))
+}
+
+@Test func automaticEvidenceCandidatesUseNewestTwentyHealthKitRunsFromThirtyDays() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    var workouts = (0..<23).map { index in
+        testWorkout(
+            id: "recent-\(index)",
+            start: now.addingTimeInterval(-Double(index) * 86_400),
+            distanceMeters: 5_000,
+            durationSeconds: 30 * 60
+        )
+    }
+    workouts[2].isDuplicate = true
+    workouts[3].evidence = WorkoutEvidence(workoutID: workouts[3].id, loadedAt: now)
+    workouts.append(testWorkout(
+        id: "older-than-window",
+        start: now.addingTimeInterval(-31 * 86_400),
+        distanceMeters: 5_000,
+        durationSeconds: 30 * 60
+    ))
+    workouts.append(testWorkout(
+        id: "future-workout",
+        start: now.addingTimeInterval(10 * 60),
+        distanceMeters: 5_000,
+        durationSeconds: 30 * 60
+    ))
+
+    let candidates = RunningAnalysisStore.automaticEvidenceCandidateIDs(
+        workouts: workouts,
+        cachedEvidenceIDs: ["recent-1"],
+        now: now
+    )
+
+    #expect(candidates.count == 18)
+    #expect(candidates.first == "recent-0")
+    #expect(!candidates.contains("recent-1"))
+    #expect(!candidates.contains("recent-2"))
+    #expect(!candidates.contains("recent-3"))
+    #expect(!candidates.contains("older-than-window"))
+    #expect(!candidates.contains("future-workout"))
+    #expect(!candidates.contains("recent-21"))
+    #expect(!candidates.contains("recent-22"))
+}
+
+@MainActor
+@Test func automaticEvidenceQueuePausesBeforeHealthKitWorkInLowPowerMode() async throws {
+    let context = try inMemoryModelContext()
+    let workout = testWorkout(
+        id: "low-power-auto-analysis",
+        start: Date().addingTimeInterval(-60),
+        distanceMeters: 5_000,
+        durationSeconds: 30 * 60
+    )
+    PersistenceService.upsert([workout], context: context)
+    let service = StubHealthKitService()
+    let store = RunningAnalysisStore(
+        healthKitService: service,
+        makeImportBudgetPolicy: {
+            IngestionBudgetPolicy(
+                maxElapsedSeconds: 45,
+                isCancelled: { false },
+                isLowPowerModeEnabled: { true },
+                thermalState: { .nominal }
+            )
+        }
+    )
+    await store.bootstrap(modelContext: context)
+
+    await store.loadFullAnalysisForWorkout(workoutID: workout.id)
+
+    #expect(service.enrichedIDs.isEmpty)
+    #expect(store.analysisProgressByWorkoutID[workout.id]?.stage == .paused)
+}
+
+@Test func runTypeSuggestionUsesExplicitEasyPlanBeforeFallbackSignals() {
+    let start = Date(timeIntervalSince1970: 1_800_000_000)
+    var workout = testWorkout(
+        id: "friday-easy-6k",
+        start: start,
+        distanceMeters: 11_000,
+        durationSeconds: 65 * 60
+    )
+    workout.evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        workoutPlanAudit: WorkoutPlanAudit(
+            status: .available,
+            displayName: "Friday Easy 6km",
+            plannedSteps: [
+                PlannedWorkoutStep(
+                    index: 1,
+                    label: "Work",
+                    stepType: .work,
+                    plannedGoalType: .distance,
+                    plannedGoalValue: 6_000,
+                    plannedGoalDisplayText: "6 km",
+                    plannedTargetDisplayText: "Heart Rate Zone 2"
+                )
+            ]
+        )
+    )
+
+    let suggestion = RunClassifier.suggestion(for: workout, history: [], maxHeartRate: nil)
+
+    #expect(suggestion.runType == .easy)
+    #expect(suggestion.confidence == .strong)
+    #expect(suggestion.reasons.contains("Workout plan identifies an easy run"))
+    #expect(suggestion.reasons.contains("Planned target is Heart Rate Zone 1–2"))
+}
+
+@Test func runTypeSuggestionRecognizesStructuredIntervalsAndLongPersonalOutlier() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    var interval = testWorkout(
+        id: "structured",
+        start: now,
+        distanceMeters: 7_000,
+        durationSeconds: 42 * 60
+    )
+    interval.evidence = WorkoutEvidence(
+        workoutID: interval.id,
+        workoutPlanAudit: WorkoutPlanAudit(
+            status: .available,
+            plannedSteps: [
+                PlannedWorkoutStep(index: 1, label: "Work 1", stepType: .work, plannedGoalType: .time, plannedGoalValue: 180, plannedGoalDisplayText: "3:00"),
+                PlannedWorkoutStep(index: 2, label: "Recovery", stepType: .recovery, plannedGoalType: .time, plannedGoalValue: 120, plannedGoalDisplayText: "2:00")
+            ]
+        )
+    )
+    let history = (1...5).map { index in
+        testWorkout(
+            id: "baseline-\(index)",
+            start: now.addingTimeInterval(-Double(index) * 3 * 86_400),
+            distanceMeters: 5_000,
+            durationSeconds: 30 * 60
+        )
+    }
+    let long = testWorkout(
+        id: "long-outlier",
+        start: now,
+        distanceMeters: 11_000,
+        durationSeconds: 65 * 60
+    )
+
+    #expect(RunClassifier.suggestion(for: interval, history: history, maxHeartRate: nil).runType == .interval)
+    let longSuggestion = RunClassifier.suggestion(for: long, history: history, maxHeartRate: nil)
+    #expect(longSuggestion.runType == .longRun)
+    #expect(longSuggestion.confidence == .moderate)
+}
+
+@Test func runTypeSuggestionFallsBackToOtherWhenEvidenceIsWeak() {
+    let workout = testWorkout(
+        id: "weak-evidence",
+        start: Date(timeIntervalSince1970: 1_800_000_000),
+        distanceMeters: 4_000,
+        durationSeconds: 24 * 60
+    )
+
+    let suggestion = RunClassifier.suggestion(for: workout, history: [], maxHeartRate: nil)
+
+    #expect(suggestion.runType == .unknown)
+    #expect(suggestion.runType.label == "Other")
+    #expect(suggestion.confidence == .limited)
+}
+
+@Test func workoutEvidenceDecodesLegacyCacheWithoutWeatherOrCity() throws {
+    let legacyJSON = try JSONEncoder().encode(WorkoutEvidence(workoutID: "legacy", loadedAt: .distantPast))
+    let encodedText = String(decoding: legacyJSON, as: UTF8.self)
+
+    let evidence = try JSONDecoder().decode(WorkoutEvidence.self, from: legacyJSON)
+
+    #expect(!encodedText.contains("weather"))
+    #expect(!encodedText.contains("cityName"))
+    #expect(evidence.workoutID == "legacy")
+    #expect(evidence.weather == nil)
+    #expect(evidence.cityName == nil)
 }
 
 private func isolatedDefaults() -> IsolatedDefaults {
