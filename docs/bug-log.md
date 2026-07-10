@@ -1,131 +1,67 @@
-# Bug Log And Gotchas
+# RunSignal Bug Log
 
-Use this as a selective lookup, not required full-context reading. Read the index, then only the section relevant to the current task.
+Read only the section relevant to the task. Add entries only for recurring project-specific failures.
 
 ## Index
 
-- XcodeBuildMCP and simulator workflow: build/run/test tool mistakes, scheme/defaults issues.
-- Package and platform configuration: `Package.swift`, Swift tools, iOS/macOS availability.
-- HealthKit: read-only permission/data issues, Simulator limitations, route/sample APIs.
-- SwiftData and persistence: local model storage, manual-field preservation, migration risk.
-- SwiftUI and layout: blank screens, tab/detail layout, keyboard/editing issues.
-- Analytics and data quality: pace math, duplicates, confidence gates, missing data.
-- Milestones and docs: completion rules and tracking.
+- Build and device proof
+- HealthKit and WorkoutKit
+- Persistence and performance
+- Interval rows and analytics
+- SwiftUI
 
-## XcodeBuildMCP And Simulator Workflow
+## Build And Device Proof
 
-- Symptom: build/run failed with signing/team errors. Cause: used a macOS run tool on an iOS app. Fix: use iOS simulator tools (`test_sim`, `build_run_sim`) with the `RunningWorkoutAnalysis` scheme.
-- Symptom: tests failed before compiling because Xcode could not read the test plan. Cause: generated scheme contained a stale duplicate test-plan reference. Fix: keep only `RunningWorkoutAnalysis/RunningWorkoutAnalysis.xctestplan` in the shared scheme.
-- Rule: before any Xcode build/run/test, call XcodeBuildMCP `session_show_defaults` and verify workspace, scheme, and simulator.
-- Symptom: `build_run_device` fails with `Missing required session defaults: Provide scheme and deviceId` even after Simulator defaults are valid. Cause: the active XcodeBuildMCP profile has workspace/scheme/simulator but no physical `deviceId`. Fix: run `list_devices`, then `session_set_defaults` with the existing workspace/scheme plus the connected iPhone `deviceId` before retrying `build_run_device`.
-- Rule: after a physical `build_run_device`, XcodeBuildMCP UI snapshot/screenshot tools can still target the active Simulator. Do not treat Simulator snapshots as physical-iPhone proof; physical HealthKit verification still needs on-device export or a device-specific capture path.
+- Before Xcode build/run/test, call XcodeBuildMCP `session_show_defaults`; use the iOS workspace/scheme and an iPhone destination, not macOS run tools.
+- Keep one test-plan reference: `RunningWorkoutAnalysis/RunningWorkoutAnalysis.xctestplan`.
+- `Package.swift` requires Swift tools 6.2 for iOS 26 and macOS 14 for local package tests.
+- Simulator screenshots are not physical-iPhone proof. Real HealthKit and launch-performance claims need device evidence.
+- A device build needs a current `deviceId` in session defaults; Simulator defaults alone are insufficient.
 
-## Package And Platform Configuration
+## HealthKit And WorkoutKit
 
-- Symptom: package resolution failed with `.iOS(.v26)` unavailable. Cause: `Package.swift` used `swift-tools-version: 6.1`. Fix: keep Swift tools at `6.2` for iOS 26 package declarations.
-- Symptom: `swift test --package-path RunningWorkoutAnalysisPackage` produced SwiftUI/SwiftData/HealthKit availability noise for macOS. Cause: package tests compile on macOS unless a compatible macOS platform is declared. Fix: keep `.macOS(.v14)` in `Package.swift` for local package tests while keeping the app iPhone/iOS-focused.
+- HealthKit authorization completion does not prove every read type was granted. Use successful queries and data availability for user-facing state.
+- Full summary import must not cap history at 250 workouts. Keep expensive detailed evidence bounded separately.
+- Associated-workout samples are stronger than source/date fallback; persist provenance.
+- `HKWorkoutRouteQuery` callbacks may be concurrent. Collect route points through thread-safe state.
+- HealthKit distance samples are interval contributions with start/end windows, not cumulative odometer values.
+- Normalize workout-event types with an enum switch. Raw description strings are backward-compatible debug labels only.
+- A terminal zero-duration pause marker at workout end is not paused elapsed time; earlier dangling or cross-row pauses remain blocked.
+- Plain open Watch runs can contain activity rows or split laps without a WorkoutKit plan. They remain whole-run-only, not custom interval workouts.
+- WorkoutKit one-step blocks may appear as `Block 1: 1x`; `repeatIndex > 1` indicates a real repeated iteration.
 
-## HealthKit
+## Persistence And Performance
 
-- Symptom: Analytics year navigation stopped at recent history even though older HealthKit runs existed. Cause: the full `Load HealthKit Runs` query was capped to the newest 250 workouts. Fix: use `HKObjectQueryNoLimit` for the summary workout load while keeping detailed evidence enrichment capped/batched.
+- HealthKit refresh must preserve manual fields such as category and notes.
+- Save an anchored-sync cursor only after the corresponding local additions/deletions persist successfully.
+- Merge every history window by workout ID; replacing the array can leave only the oldest window visible.
+- App activation must stay lightweight and single-flight. Never start unbounded history, detailed hydration, or broad derived recomputation from the foreground hook.
+- First render must not wait for background-delivery registration or HealthKit sync.
+- Manual category writes and bulk actions must batch persistence and avoid full evidence hydration.
+- Do not decode the complete detailed-evidence table during normal launch. Use compact derived projections and targeted predicates.
+- Do not clear working cached evidence until replacement HealthKit queries succeed.
+- SwiftData schema changes require an explicit migration plan.
 
-- Symptom: a paused/manual-skip custom workout shows a plausible but wrong plan-derived Work row, such as a full planned distance with elapsed pace, while Apple Fitness shows a shorter skipped row with active/timer pace. Cause: distance-goal reconstruction can keep chasing the original planned goal after a manual skip, folding later cooldown/tail evidence into the Work row. Fix: for paused/skipped custom workouts, compare Apple Fitness against complete contiguous `HKWorkoutActivity` boundary rows and the normal-detail resolved-row path; treat raw segment markers and plan-derived reconstruction as debug evidence only.
-- Symptom: fixed-distance custom workout Work rows look faster in RunSignal than Apple Fitness even when row boundaries match. Cause: Apple Fitness may display the planned goal distance/goal-normalized pace, while RunSignal's resolved rows use measured `HKWorkoutActivity` distance and measured pace. Fix: keep planned goal distance and measured HealthKit distance separate in UI/export copy, and label any Apple-comparable goal pace as goal-normalized instead of replacing measured HealthKit stats.
-- Symptom: goal-distance-clipped interval windows produced impossible short durations while official activity-row totals remained correct. Cause: interpolation treated a distance sample ending at an interval boundary as already included at that boundary. Fix: use each `WorkoutEvidencePoint` sample start/end window when interpolating cumulative distance, so the row start reads the distance before that row and the planned-distance crossing lands inside the row.
-- Rule: monthly evidence refresh jobs should dedupe only active attempts. Completed attempts are refresh history and must not block a later manual refresh for the same month.
+## Interval Rows And Analytics
 
-- Symptom: route API compile errors around `HKDataTypeIdentifier`. Cause: wrong route type API for this toolchain. Fix: use `HKSeriesType.workoutRoute()`.
-- Rule: HealthKit v1 is read-only. Do not write workouts or mutate HealthKit data.
-- Rule: Simulator cannot prove real HealthKit permissions or real workout availability. Use sample fallback in Simulator and record physical-iPhone verification separately.
-- Rule: Fitness-style run analysis needs per-workout HealthKit sample/series queries, not only workout summary statistics; gate threshold, interval, drift, and target-vs-actual claims on detailed series coverage.
-- Rule: `HKWorkoutRouteQuery` callbacks may arrive on concurrent queues; collect route points behind a thread-safe helper instead of mutating a captured array directly.
-- Rule: Fitness-style detail comes from a mix of `HKWorkout.statistics(for:)`, associated quantity samples, workout routes, and workout events. Total calories and custom workout labels may not be exposed as clean public HealthKit fields; extract them only when HealthKit returns evidence and keep UI wording cautious.
-- Symptom: broad context values such as VO2 Max or resting heart rate stay nil even though the Data UI references broad HealthKit context. Cause: the permission catalog intentionally skipped those read types while `HealthKitService.queryHealthContext()` still queried them. Fix: keep the permission catalog, query, readiness evidence, and neutral unavailable UI copy aligned before treating those context metrics as supported; physical-iPhone data availability still needs device verification.
-- Rule: HealthKit authorization completion is not proof every read type was granted. Report request completion or data availability from successful queries instead of treating `requestAuthorization` completion as full read authorization.
-- Rule: source/date fallback queries for per-workout samples can be useful diagnostics, but they are weaker than associated-workout samples. Persist and surface provenance such as `associatedWorkout` vs `sourceDateFallback` before using fallback evidence for parity or confidence claims.
+- Product rows come only from the generalized WorkoutKit-plan plus complete contiguous HealthKit-activity resolver. Raw segment markers and legacy plan/sample reconstruction are debug-only.
+- Missing plans/activities, non-contiguous or excess rows, incomplete repeat context, ambiguous tails, and malformed pauses must fall back to whole-run detail.
+- Stopped-early workouts show the completed planned prefix only and never infer unfinished rows or `Open / Extra`.
+- Planned open cooldown remains `Cooldown`; extra activity is allowed only after a completed fixed final row.
+- Paused rows retain elapsed duration, pause overlap, active/timer duration, and the matching pace basis.
+- A manual skip can leave measured Work shorter than its distance goal. Use measured distance and active time; never chase the planned distance into later rows.
+- Prescribed distance and measured distance are distinct. Runner-facing planned values must not replace measured validation totals.
+- Completion and pace-target status are independent. One-sided pace thresholds are not exact ranges.
+- Pace is seconds per kilometer; aggregates use total duration over total distance.
+- Best Efforts reject impossible pace windows and summary-only estimates as official records.
+- Cadence is full steps per minute. Elevation gain filters poor-accuracy points and spikes.
+- Apple Fitness may differ slightly because of private smoothing and rounding; do not hard-fit isolated screenshots.
+- Priority 5 manual skip and all retained behavior cases live in `docs/project-state/regression-cases.md`.
 
-## SwiftData And Persistence
+## SwiftUI
 
-- Rule: preserve manual fields (`manualRunType`, `notes`) when refreshing workouts from HealthKit.
-- Risk: SwiftData schema is v1-only. If fields are renamed or removed later, add an explicit migration plan instead of casual model churn.
-
-## SwiftUI And Layout
-
-- Symptom: accessibility snapshot failed immediately after launch or keyboard focus. Cause: Simulator UI/keyboard had not settled. Fix: retry `snapshot_ui` after a short settle or use screenshot for visual verification.
-- Symptom: physical iPhone relaunch after force-quit can sit on a black screen long enough to feel broken even when the app eventually opens. Cause: the app relied on Xcode's generated launch screen and had no branded pre-SwiftUI or bootstrap loading surface. Fix: use an explicit `LaunchScreen.storyboard`, turn off generated empty launch-screen output, and keep a cheap SwiftUI startup shell visible until store bootstrap finishes; still verify perceived timing on the physical iPhone because Simulator launch uses sample data.
-- Symptom: long ScrollView content can still slide under the floating tab bar even with ordinary bottom padding. Cause: tab bar material overlays scroll content while mid-page content is visible near the bottom edge. Fix: pair bottom padding with an explicit `.safeAreaInset(edge: .bottom)` spacer on scroll-heavy screens such as workout detail, Raw Debug, HealthKit Audit, Analytics, and interval detail.
-- Symptom: physical iPhone shows the black launch screen and returns to Home after a UI analytics change. Cause: simulator sample data can miss launch-time pressure from cached real HealthKit workouts. Fix: avoid heavy analytics computation directly in SwiftUI body paths; cache app-wide summaries in `RunningAnalysisStore.recompute()` and verify the current build on the physical iPhone after reinstall when the app was crashing.
-- Symptom: tapping a manual category in Analytics can freeze or crash on a physical iPhone with a large cached HealthKit history. Cause: a single manual-field update triggered full evidence hydration and derived-analysis refresh work from an interactive list row. Fix: keep manual category writes on the lightweight recompute path (`hydrateEvidence: false`, `refreshDerivedAnalyses: false`) and reserve evidence hydration for selected workout detail or explicit refresh actions.
-- Symptom: dark-mode section headers and secondary metrics look faded on the physical iPhone even when the layout is correct. Cause: default `List` section headers plus `.secondary`/`.tertiary` text lose too much contrast on dark card materials. Fix: use explicit readable text tokens for small metadata and custom section header views for important list headings.
-- Symptom: Settings HealthKit import status showed same-day 2006 cursor ranges and "current work budget" wording after import pause. Cause: the UI exposed the persisted resume cursor and internal pause reason directly. Fix: keep cursor dates internal, show active window only while running, and map pause reasons to user-facing copy.
-- Symptom: All-Time Best Efforts showed faster “Estimated” rows that did not match exact segment bests from validation sources. Cause: summary-only whole-run estimates were eligible for the visible official best-effort list when detailed HealthKit distance samples were missing. Fix: require exact evidence-backed records for visible segment bests and keep whole-run estimates out of the all-time summary.
-- Symptom: All-Time Best Efforts showed impossible exact records such as a 3-second 1K or 5-second mile. Cause: a bursty/corrupted cumulative distance-series window could pass density and sample-gap checks while implying an unrealistic segment pace. Fix: treat impossible segment pace as unusable distance evidence so the row cannot become an official exact best.
-- Symptom: paused custom workout rows looked wrong even when lower debug rows had the right pause/active timing. Cause: one interval UI card showed a headline duration and pace without exposing whether it was using elapsed row-window time or active timer time. Fix: when touching interval UI, compare the same row across normal detail, Raw Debug reconstructed intervals, Parity Lab candidate rows, and Apple Fitness screenshots; show elapsed, pause, active, display basis, and matching pace basis on paused rows.
-- Symptom: row math matches Apple Fitness in candidate rows, but Raw Debug or another visible surface still shows a wrong pace/duration. Cause: the UI/export path can keep reading legacy plan-derived reconstruction or raw segment-marker fields after the resolver was fixed. Fix: make the row source visible, route official UI/export rows through the same supported-row resolver as the app view, and show unavailable/whole-run-only reasons instead of substituting reconstructed custom rows when the resolved gate is blocked.
-- Symptom: custom workout support kept looping through exact-shape whitelist decisions even when Parity Lab candidate rows matched Apple Fitness. Cause: the candidate boundary source was treated as debug-only instead of a reusable evidence-gated row resolver. Fix: use complete contiguous HealthKit activity rows mapped to expanded WorkoutKit planned rows as the normal-detail boundary source when pause/tail/evidence gates pass, then aggregate HR/power/cadence over those row windows.
-- Symptom: exports say a structured comparison is supported but still report no production behavior change. Cause: comparison status and `promotesProductionBehavior` can drift if the builder does not derive the flag from supported resolver status. Fix: keep supported comparisons, review-packet scope, and normal-detail metadata aligned in export tests.
-- Symptom: a physical Raw Debug screen recording shows complete candidate rows that match Apple Fitness, but the structured gate still says `open-tail-needs-rule`. Cause: the exported status may come from a stale installed build or a status path that lags the approved resolver. Fix: add a real-shape regression test, then reinstall/export from the current build before treating the blocked JSON as current proof; do not hand-edit exported JSON.
-- Symptom: a clean no-pause repeat fixed-cooldown workout with resolved boundary rows still shows intervals under review when the event list includes a final `HKWorkoutEventType(rawValue: 1)` at workout end. Cause: the resolved-row pause parser treated a terminal zero-duration pause marker as a dangling pause. Fix: ignore only zero-duration rawValue 1 markers at the exact workout end, keep earlier dangling/cross-row pause evidence blocked, and cover the six-repeat fixed-cooldown `Open / Extra` shape with regression tests.
-- Rule: verify all five tabs after meaningful UI changes: Today, Latest Run, Race Goal, History, Data.
-- Rule: after editing notes or labels, verify the detail view still opens and save does not crash.
-
-## Analytics And Data Quality
-
-- Rule: pace is canonical as seconds per kilometer; display as `m:ss /km`.
-- Rule: aggregate pace from total duration over total distance, not unweighted averages.
-- Rule: duplicate candidates are excluded from weekly volume, readiness, intensity distribution, trends, and best efforts.
-- Rule: missing HealthKit fields must lower confidence or show caveats; do not promote mechanics/form insights until coverage supports them.
-- Rule: calories stay supplemental and must not drive primary coaching decisions.
-- Rule: total calories may be shown only when HealthKit returns both active energy and basal energy evidence for the workout. Do not estimate basal calories from body metrics or elapsed time to force Apple Fitness parity.
-- Rule: cadence must display as full steps per minute for Apple Fitness parity. If a persisted or imported summary cadence is clearly half-cadence, normalize display/parity outputs to full-step cadence and keep raw sample counts visible in debug.
-- Rule: 1 km split parity depends on interpolating the boundary time between distance samples. Snapping a split to the next sample timestamp can drift by several seconds or more when HealthKit distance samples are sparse or uneven.
-- Rule: raw `HKWorkoutEvent` segment durations are not the same as Apple Fitness Intervals. Keep raw markers in debug/audit surfaces and do not present them as comparable Warmup/Work/Recovery/Cooldown rows until a derived interval model can calculate distance, time, pace, and heart-rate fields.
-- Rule: WorkoutKit custom-workout distance-goal rows are not generic 1 km splits. Prefer the crossing HealthKit distance sample end only when its overshoot is inside the documented small tolerance; otherwise fall back to interpolated crossing.
-- Rule: distinguish planned open cooldowns from post-cooldown extra activity. A final WorkoutKit `Cooldown` step with an open goal should keep the `Cooldown` label through workout end; a fixed distance/time cooldown that completes and is followed by continued running should leave the remaining activity as `Open / Extra`.
-- Rule: Apple Fitness split times can still differ by a few seconds from RunSignal's HealthKit distance-series interpolation because Apple may use private smoothing, route/distance presentation, and rounding. Treat 3 seconds on a 1 km split as an acceptable parity tolerance unless repeated evidence shows a wider drift.
-- Rule: older workouts with zero detailed evidence should not be used for boundary tuning until Raw HealthKit Debug proves fresh evidence loading. Check for stale summary-only cached evidence or an empty-detail workout that was marked enriched; a future debug-only reload action should invalidate the selected workout's evidence cache before re-querying HealthKit.
-- Rule: all-time best efforts are only as complete as detailed distance-series enrichment. A historical workout can appear in Completed Runs from summary HealthKit data but still be absent or wrong in official PR buckets until associated distance samples are loaded and cached; do not change the PR math before checking evidence coverage.
-- Rule: refresh actions should not permanently clear cached debug evidence before a replacement HealthKit query succeeds. Fetch into a temporary result or restore the prior cache on failure; if clear-first behavior is intentional, label it clearly.
-- Rule: automatic app foreground/open sync must stay lightweight. Do not let the app-active hook initialize from a nil HealthKit anchor because that can become a no-limit history query plus detailed evidence normalization. Do not make first render wait on HealthKit background-delivery registration or foreground sync, and avoid duplicate launch-time sync from both the initial view task and the first `.active` scene phase. Also do not run full recompute, evidence-queue refresh, or derived-analysis cache maintenance from the app-active hook; keep that work behind explicit sync/refresh actions so scrolling and thermal behavior do not degrade after activation. Keep foreground sync single-flight and keep HealthKit workout queries bounded unless a user-visible, resumable backfill path is explicitly added.
-- Rule: all-time Analytics bulk actions must batch store/persistence writes and trigger one recompute, not one save/recompute per selected workout. Per-row loops can freeze the UI on multi-year Apple Watch histories.
-- Rule: sample fallback workouts can include rich sample series for simulator usability, but those samples are not HealthKit proof. User-facing trust/readiness copy must classify non-HealthKit sources as sample-only even when `seriesAvailable` and `seriesSampleCount` are populated.
-- Rule: derived-refresh summaries should capture stale or outdated workout IDs before recompute. Reporting all derived rows after a broad version refresh overclaims what actually changed.
-- Rule: derived raw-evidence input signatures should ignore `loadedAt`; a reload timestamp alone is not semantic evidence drift and should not trigger stale-derived recompute.
-- Rule: unavailable HealthKit during monthly refresh is a blocked/unsupported job state, not a retryable per-workout evidence failure.
-- Rule: total calories can differ from Apple Fitness by about 1 kcal after refresh because active and basal energy may be summed from unrounded HealthKit evidence while Apple Fitness rounds display values. Treat 1 kcal as acceptable rounding tolerance.
-- Rule: docs-only FIT decoders should map `workout_step` to FIT global message `27`; global message `26` is `workout`. A wrong mapping can parse placeholder step rows and falsely classify repeat-block evidence.
-- Rule: Gate B row-level FIT timing must keep elapsed time and timer time visible. Large custom-workout errors can be pause/timer artifacts even when labels and distances look good, so do not approve repeat-block or warmup/work/cooldown subclasses from a single derived duration.
-- Rule: WorkoutKit can represent a one-step Work section as `Block 1: 1x, 1 step(s)`. Treat that as a single Work step, not a repeat-block blocker; only expanded repeat iterations such as `repeatIndex > 1` should trigger `repeat-block-needs-rule`.
-- Rule: generalized activity-boundary promotion is allowed only through the official resolver gate: ordered WorkoutKit planned rows, complete contiguous `HKWorkoutActivity` rows with distance statistics, complete prefix/repeat context, paired in-row pauses, and deterministic tail status. Do not fall back to exact shape whitelists when those gates pass.
-- Rule: count/shape alignment is not enough for normal-detail interval promotion. For approved normal-detail gates, require complete contiguous `HKWorkoutActivity` rows with distance statistics, then use those activity windows as the displayed interval boundaries. Still block non-prefix repeat context, duplicate Work rows standing in for Recovery rows, recovery-ended tails, Warmup-only tails, open-cooldown tails, and stopped-early prefixes that would otherwise infer `Open / Extra`.
-- Rule: time-goal custom-workout rows use elapsed planned seconds unless they are in an approved pause-aware normal-detail gate. Block promoted time-goal rows when paired pause/resume evidence is present outside those exact gates.
-- Rule: paused repeat-block rows must preserve both elapsed row windows and active/timer duration. For approved narrow paused-repeat gates, compute active/timer duration by subtracting paired HealthKit pause overlap from the elapsed HealthKit activity window; FIT can validate this offline but must not be the runtime source. Keep rows blocked when pause events are unpaired, overlap is ambiguous, cross-row, duplicate/dangling, or outside the exact open-cooldown / fixed-cooldown-plus-tail guards.
-- Rule: prefer native `HKWorkoutActivity.duration` for resolved-row active/timer duration only when it is positive, inside the elapsed row window, and reconciles with pause evidence. Older fixtures or debug exports may store activity duration as elapsed time; in paused rows, do not let an elapsed duplicate override paired HealthKit pause/resume active-time math.
-- Rule: resolve HealthKit pause windows with an explicit running/paused state machine. Treat `.pauseOrResumeRequest` as a toggle, clip reliable pause windows per interval for active/timer math, and keep duplicate, dangling, or otherwise caveated pause streams out of normal-detail promotion.
-- Rule: comparison/gating can recognize raw HealthKit pause event strings such as `HKWorkoutEventType(rawValue: 1)`/`rawValue: 2`, but visible status summaries must not turn numeric raw event inventory into an `unpaired pause` reason when paired-pause count is zero. Keep the user-facing pause status aligned with the structured resolver summary.
-- Rule: `DerivedAnalyticsEngine.intervalCandidates` is a raw HealthKit event-marker candidate path, not the pause-adjusted custom-workout reconstruction path. It currently uses elapsed event-window duration and does not subtract pause overlap. Do not use it for Tier 3 interval analytics or trusted active-duration row metrics unless it is explicitly rewired through approved reconstruction and covered by tests.
-- Rule: when adding interval timing fields to `ReconstructedWorkoutInterval`, update Raw HealthKit Debug/parity export payloads too. `reconstructedIntervals` JSON and markdown should expose elapsed, pause-overlap, active/timer, display duration, and duration display rule so diagnostics do not lag behind the model.
-- Rule: parity proof folders can contain `.txt` exports as either fenced Raw HealthKit Debug text or whole-file parity packet JSON. Validation scripts must scan `.txt` as well as `.json`/`.md` or they can silently skip current proof evidence.
-- Rule: recovery-containing Open/Extra tails must keep planned Recovery rows distinct from post-plan residual movement. Infer Open/Extra only after every fixed planned row maps to a complete contiguous HealthKit activity row and the final fixed row is exhausted; block when the tail overlaps Recovery, the final step is an open cooldown, or the residual is below threshold/ambiguous.
-- Rule: ambiguous repeat-tail cases must expand repeat blocks and map every Work/Recovery/Cooldown row before inferring Open/Extra. A final open cooldown remains Cooldown through workout end; Open/Extra after repeats requires a resolved fixed final row plus residual movement above threshold. Count alignment or FIT session-minus-lap residuals alone are not enough.
-- Rule: the old Gate A simple Work/Open prototype is now a regression fixture, not the full support boundary. Official Work/Open-style rows can promote through the generalized resolver when WorkoutKit planned rows and complete contiguous HealthKit activity boundaries prove the mapped rows and deterministic tail; missing plans, Warmup-only tails, Recovery/Cooldown confusion, repeats with incomplete context, or ambiguous tails must still fall back.
-- Rule: real WorkoutKit one-step blocks can export a single Work row with `repeatBlockIndex: 1` and `repeatIndex: 1` (`Block 1: 1x, 1 step(s)`). Treat that as simple Work/Open eligible when all other Gate A rules pass; only `repeatIndex > 1` is a real repeat-block blocker for this gate.
-- Rule: a stopped-early single fixed-distance Work custom workout can still be a valid partial Work row when one planned Work step maps to one complete HealthKit activity row and FIT offline evidence shows the same one-step/one-lap shape. Keep this separate from the normal completed Work/Open gate and from broad Work/Open promotion.
-- Rule: stopped-early multi-step custom workouts must not be blocked solely because HealthKit activity row count is less than WorkoutKit planned row count. If the activity rows are complete, contiguous, and map to the completed planned prefix, show only that completed prefix and do not infer uncompleted planned rows or an Open / Extra tail.
-- Rule: plain open Watch runs can have FIT split laps and HealthKit activity rows but zero WorkoutKit planned steps. Treat them as readable workouts with splits/whole-run analysis, not custom interval workouts.
-- Symptom: a first all-history import shows only the oldest nonempty yearly window until relaunch. Cause: each window replaced the in-memory array instead of unioning by workout ID. Fix: merge every window into the accumulated cache while preserving manual fields and removing sample rows only after real data exists.
-- Rule: HealthKit distance quantity samples are incremental contributions, not cumulative odometer readings. Pace charts and boundary math must use each sample value over its own start/end window; subtracting consecutive values can create negative or impossible pace.
-- Rule: normalize `HKWorkoutEventType` with an explicit enum switch at ingestion. Keep the old raw description only for backward-compatible archived evidence; pause logic should prefer the typed kind so SDK description formatting cannot change semantics.
-- Rule: pace-target status and interval completion are independent. Completed fixed-distance Work can use a proven goal-distance window; shortened/skipped Work must use pause-adjusted active time over measured distance, and one-sided threshold alerts must not be presented as exact target ranges.
-- Rule: GPS elevation gain must retain CLLocation horizontal/vertical accuracy and filter inaccurate points plus isolated altitude spikes. Summing every positive raw altitude delta overstates gain on noisy routes.
-- Rule: normal launch and small manual edits must not decode the complete detailed-evidence table. Persist compact Best Effort and official interval-prescription projections, use targeted SwiftData predicates, and reserve broad evidence hydration for explicit analysis/backfill work.
-- Rule: HealthFit FIT session elapsed duration may decode as `0.0 s` through the lightweight docs parser even when lap rows and session timer duration are valid. For offline validation, keep lap rows and timer duration visible and do not score these files from session elapsed alone.
-- Rule: fresh physical proof exports must come from the current installed build. If `validate_parity_export_consistency.py --require-readable-fallback-labels <proof-folder>` fails because `fallbackReasons` is non-empty and `fallbackReasonLabels` is absent, reinstall or run the latest app build on the iPhone and re-export before treating the folder as current-build proof.
-- Rule: `summarize_parity_proof_folder.py` is strict about readable fallback labels for fresh proof by default; use `--allow-missing-readable-fallback-labels` only when intentionally scanning older archives that predate those fields.
-- Rule: proof summarizers must require the selected payload to include both candidate and comparison summaries, supported status, and no disqualifying fallback/tail ambiguity before reporting target evidence present. Candidate-only rows or blocked comparison status must not pass.
-- Rule: proof validation scripts should keep exit-code contracts distinct: malformed or unreadable folders fail validation, while valid folders that lack target evidence are a separate missing-evidence result. Parse `.md` whole-file parity JSON as well as fenced JSON so current exports are not silently skipped.
-
-## Milestones And Docs
-
-- Rule: keep `docs/milestones/` current. Do not mark a milestone complete until tests pass, the app launches in Simulator, and completion notes include limitations.
-- Rule: add only durable recurring issues to this bug log. Ignore one-off temp paths, process IDs, and incidental log locations.
+- Keep launch work cheap: explicit branded launch screen plus a lightweight startup view until bootstrap completes.
+- Scroll-heavy screens need a bottom safe-area inset so the floating tab bar does not cover content.
+- Avoid expensive analytics in SwiftUI body paths; compute/cache through the store.
+- Dark-mode secondary metadata needs explicit readable contrast.
+- When interval UI changes, compare prescribed, measured, elapsed, pause, active/timer, distance, pace basis, Raw Debug, and product rows for the same case.
