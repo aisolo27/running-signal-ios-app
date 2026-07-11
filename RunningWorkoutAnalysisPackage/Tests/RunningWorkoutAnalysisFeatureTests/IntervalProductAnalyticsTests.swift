@@ -55,6 +55,32 @@ import Testing
     let evaluation = try #require(WorkTargetEvaluator.evaluate(interval: row, plannedTargets: [threshold]))
     #expect(evaluation.result == .noTarget)
     #expect(evaluation.targetRange == nil)
+    #expect(evaluation.exactTargetSecondsPerKilometer == 250)
+    #expect(WorkTargetPresentation.exactTargetDeltaText(evaluation) == "Matches exact target")
+}
+
+@Test func exactPaceThresholdReportsDifferenceWithoutInventingTargetRange() throws {
+    let threshold = PlannedWorkoutTarget(
+        kind: .pace,
+        lowerBound: 230,
+        upperBound: 230,
+        unit: "s/km",
+        displayText: "pace 3:50 /km",
+        semantics: .threshold
+    )
+    let row = productInterval(
+        goalType: .distance,
+        goalValue: 400,
+        measuredDistance: 400,
+        activeDuration: 97.2
+    )
+
+    let evaluation = try #require(WorkTargetEvaluator.evaluate(interval: row, plannedTargets: [threshold]))
+
+    #expect(evaluation.targetRange == nil)
+    #expect(evaluation.result == .noTarget)
+    #expect(evaluation.exactTargetSecondsPerKilometer == 230)
+    #expect(WorkTargetPresentation.exactTargetDeltaText(evaluation) == "13s/km slower")
 }
 
 @Test func targetEvaluationIsPauseAwareAndSeparatesShortenedRows() throws {

@@ -28,6 +28,8 @@
 
 ## Scope And Hygiene
 
+- Start implementation work on a `codex/` feature branch instead of changing `main` directly.
+- When the user says `push live`, verify the in-scope work, merge the feature branch into `main`, delete the local feature branch, and then push `main` to GitHub unless told otherwise.
 - Inspect the smallest relevant file set; prefer `rg` and focused diffs.
 - Preserve unrelated user changes.
 - Do not commit, push, release, or mutate live/provider data without explicit authorization.

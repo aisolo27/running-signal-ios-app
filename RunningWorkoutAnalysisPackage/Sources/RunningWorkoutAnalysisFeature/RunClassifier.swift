@@ -45,7 +45,7 @@ public enum RunClassifier {
     ) -> RunTypeSuggestion {
         let rows = officialIntervalRows(for: workout)
         let plan = workout.evidence?.workoutPlanAudit
-        let title = plan?.displayName?.lowercased() ?? ""
+        let title = (plan?.displayName ?? workout.workoutPlanName)?.lowercased() ?? ""
         let steps = plan?.plannedSteps ?? []
         let targetText = steps.compactMap(\.plannedTargetDisplayText).joined(separator: " ").lowercased()
 

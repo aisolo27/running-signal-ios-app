@@ -298,6 +298,7 @@ public final class RunningAnalysisStore {
     private var automaticEvidenceTask: Task<Void, Never>?
     private var prioritizedEvidenceWorkoutIDs: Set<String> = []
     private var automaticEvidenceAttemptedWorkoutIDs: Set<String> = []
+    private var workoutPlanMetadataHydrationIDs: Set<String> = []
     private weak var modelContext: ModelContext?
 
     public init(
@@ -1009,6 +1010,7 @@ public final class RunningAnalysisStore {
 
         returnedWorkout.inferredRunType = RunClassifier.inferRunType(for: returnedWorkout)
         returnedWorkout.evidence = evidence
+        returnedWorkout.workoutPlanName = evidence.workoutPlanAudit?.displayName
         analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
             stage: .processing,
             message: "Building charts, splits, and workout intervals in the background."
@@ -1051,6 +1053,7 @@ public final class RunningAnalysisStore {
         guard let index = workouts.firstIndex(where: { $0.id == workoutID }),
               let evidence = workouts[index].evidence else { return }
         var workout = workouts[index]
+        workout.workoutPlanName = evidence.workoutPlanAudit?.displayName ?? workout.workoutPlanName
         let suggestion = RunClassifier.suggestion(
             for: workout,
             history: workouts,
@@ -1071,6 +1074,7 @@ public final class RunningAnalysisStore {
         }.value
         guard let currentIndex = workouts.firstIndex(where: { $0.id == workoutID }) else { return }
         workouts[currentIndex].inferredRunType = suggestedRunType
+        workouts[currentIndex].workoutPlanName = workout.workoutPlanName
         if let modelContext {
             PersistenceService.upsertPreparedDetailedWorkout(
                 workouts[currentIndex],
@@ -1121,6 +1125,7 @@ public final class RunningAnalysisStore {
         }.value
         guard let currentIndex = workouts.firstIndex(where: { $0.id == workoutID }) else { return }
         workouts[currentIndex].evidence = evidence
+        workouts[currentIndex].workoutPlanName = evidence.workoutPlanAudit?.displayName ?? workouts[currentIndex].workoutPlanName
         if let modelContext {
             PersistenceService.updatePreparedEvidence(
                 workoutID: workoutID,
@@ -1441,11 +1446,27 @@ public final class RunningAnalysisStore {
               let currentIndex = workouts.firstIndex(where: { $0.id == workoutID }),
               workouts[currentIndex].evidence == nil else { return }
 
+        let previousInferredRunType = workouts[currentIndex].inferredRunType
         workouts[currentIndex].evidence = evidence
+        workouts[currentIndex].workoutPlanName = evidence.workoutPlanAudit?.displayName ?? workouts[currentIndex].workoutPlanName
         workouts[currentIndex].routePointCount = evidence.route.count
         workouts[currentIndex].seriesSampleCount = evidence.seriesSampleCount
         workouts[currentIndex].routeAvailable = workouts[currentIndex].routeAvailable || !evidence.route.isEmpty
         workouts[currentIndex].seriesAvailable = workouts[currentIndex].seriesAvailable || evidence.seriesSampleCount > 0
+        let suggestion = RunClassifier.suggestion(
+            for: workouts[currentIndex],
+            history: workouts,
+            maxHeartRate: healthContext.maxHeartRate
+        )
+        if suggestion.runType != .unknown || workouts[currentIndex].inferredRunType == .unknown {
+            workouts[currentIndex].inferredRunType = suggestion.runType
+        }
+        PersistenceService.updateWorkoutPlanClassification(
+            workoutID: workoutID,
+            name: workouts[currentIndex].workoutPlanName,
+            inferredRunType: workouts[currentIndex].inferredRunType,
+            context: modelContext
+        )
         analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
             stage: .ready,
             message: "Full analysis is ready."
@@ -1454,7 +1475,56 @@ public final class RunningAnalysisStore {
         if let derivedAnalysis = PersistenceService.fetchDerivedAnalysis(workoutID: workoutID, context: modelContext) {
             derivedAnalysesByWorkoutID[workoutID] = derivedAnalysis
         }
-        refreshEvidenceQueueSummary()
+        if workouts[currentIndex].inferredRunType != previousInferredRunType {
+            refreshSingleWorkoutDerivedState(workoutID: workoutID)
+        } else {
+            refreshEvidenceQueueSummary()
+        }
+    }
+
+    public func hydrateCachedWorkoutPlanNameIfAvailable(for workoutID: String) async {
+        guard let index = workouts.firstIndex(where: { $0.id == workoutID }),
+              !workoutPlanMetadataHydrationIDs.contains(workoutID),
+              let modelContext,
+              let evidenceData = PersistenceService.fetchEvidenceData(workoutID: workoutID, context: modelContext)
+        else { return }
+
+        workoutPlanMetadataHydrationIDs.insert(workoutID)
+
+        let sourceWorkout = workouts[index]
+        let history = workouts
+        let maxHeartRate = healthContext.maxHeartRate
+        let hydrated = await Task.detached(priority: .utility) {
+            guard let evidence = try? JSONDecoder().decode(WorkoutEvidence.self, from: evidenceData) else {
+                return (name: Optional<String>.none, suggestion: Optional<RunTypeSuggestion>.none)
+            }
+            var workout = sourceWorkout
+            workout.evidence = evidence
+            workout.workoutPlanName = evidence.workoutPlanAudit?.displayName ?? workout.workoutPlanName
+            return (
+                name: workout.workoutPlanName?.trimmingCharacters(in: .whitespacesAndNewlines),
+                suggestion: RunClassifier.suggestion(for: workout, history: history, maxHeartRate: maxHeartRate)
+            )
+        }.value
+        guard let currentIndex = workouts.firstIndex(where: { $0.id == workoutID }) else { return }
+
+        let previousInferredRunType = workouts[currentIndex].inferredRunType
+        if let planName = hydrated.name, !planName.isEmpty {
+            workouts[currentIndex].workoutPlanName = planName
+        }
+        if let suggestion = hydrated.suggestion,
+           suggestion.runType != .unknown || workouts[currentIndex].inferredRunType == .unknown {
+            workouts[currentIndex].inferredRunType = suggestion.runType
+        }
+        PersistenceService.updateWorkoutPlanClassification(
+            workoutID: workoutID,
+            name: workouts[currentIndex].workoutPlanName,
+            inferredRunType: workouts[currentIndex].inferredRunType,
+            context: modelContext
+        )
+        if workouts[currentIndex].inferredRunType != previousInferredRunType {
+            refreshSingleWorkoutDerivedState(workoutID: workoutID)
+        }
     }
 
     public func evidenceQueueItem(for workoutID: String) -> EvidenceEnrichmentQueueItem? {
@@ -1595,6 +1665,12 @@ public final class RunningAnalysisStore {
                 merged.importedRunType = existing.importedRunType
                 merged.importedReviewID = existing.importedReviewID
                 merged.notes = existing.notes
+                merged.workoutPlanName = workout.evidence?.workoutPlanAudit?.displayName
+                    ?? workout.workoutPlanName
+                    ?? existing.workoutPlanName
+            } else {
+                merged.workoutPlanName = workout.evidence?.workoutPlanAudit?.displayName
+                    ?? workout.workoutPlanName
             }
             byID[workout.id] = merged
         }
@@ -1615,6 +1691,12 @@ public final class RunningAnalysisStore {
                 merged.importedRunType = existing.importedRunType
                 merged.importedReviewID = existing.importedReviewID
                 merged.notes = existing.notes
+                merged.workoutPlanName = change.evidence?.workoutPlanAudit?.displayName
+                    ?? change.workoutPlanName
+                    ?? existing.workoutPlanName
+            } else {
+                merged.workoutPlanName = change.evidence?.workoutPlanAudit?.displayName
+                    ?? change.workoutPlanName
             }
             byID[change.id] = merged
         }
@@ -1745,6 +1827,7 @@ public final class RunningAnalysisStore {
             }
             var hydrated = workout
             hydrated.evidence = evidence
+            hydrated.workoutPlanName = evidence.workoutPlanAudit?.displayName ?? hydrated.workoutPlanName
             hydrated.routePointCount = evidence.route.count
             hydrated.seriesSampleCount = evidence.seriesSampleCount
             hydrated.routeAvailable = hydrated.routeAvailable || !evidence.route.isEmpty

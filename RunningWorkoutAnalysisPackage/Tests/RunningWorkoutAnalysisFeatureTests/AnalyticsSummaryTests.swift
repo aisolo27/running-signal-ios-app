@@ -159,6 +159,81 @@ import Testing
     #expect(series.allSatisfy { !$0.isRenderable })
 }
 
+@Test func workoutChartPresentationBinsCadenceUsingTenSecondMedians() {
+    let start = Date(timeIntervalSinceReferenceDate: 100)
+    let series = WorkoutChartSeries(
+        metric: .cadence,
+        points: [
+            WorkoutChartPoint(date: start.addingTimeInterval(1), offsetSeconds: 1, value: 170),
+            WorkoutChartPoint(date: start.addingTimeInterval(4), offsetSeconds: 4, value: 176),
+            WorkoutChartPoint(date: start.addingTimeInterval(8), offsetSeconds: 8, value: 174),
+            WorkoutChartPoint(date: start.addingTimeInterval(12), offsetSeconds: 12, value: 180)
+        ]
+    )
+
+    let binned = WorkoutChartSeriesBuilder.binnedSeries(series, seconds: 10)
+
+    #expect(binned.points.map(\.offsetSeconds) == [5, 15])
+    #expect(binned.points.map(\.value) == [174, 180])
+}
+
+@Test func powerAndCadenceChartsUseAdaptiveBinsToKeepBarsReadable() {
+    let start = Date(timeIntervalSinceReferenceDate: 100)
+    let short = WorkoutChartSeries(
+        metric: .power,
+        points: [
+            WorkoutChartPoint(date: start, offsetSeconds: 0, value: 250),
+            WorkoutChartPoint(date: start.addingTimeInterval(300), offsetSeconds: 300, value: 270)
+        ]
+    )
+    let long = WorkoutChartSeries(
+        metric: .cadence,
+        points: [
+            WorkoutChartPoint(date: start, offsetSeconds: 0, value: 180),
+            WorkoutChartPoint(date: start.addingTimeInterval(2_400), offsetSeconds: 2_400, value: 188)
+        ]
+    )
+
+    #expect(WorkoutChartSeriesBuilder.adaptiveBarBinSeconds(for: short) == 10)
+    #expect(WorkoutChartSeriesBuilder.adaptiveBarBinSeconds(for: long) == 35)
+}
+
+@Test func intervalWorkSummarySeparatesPrescribedAndMeasuredDistance() throws {
+    let start = try makeDate(year: 2026, month: 7, day: 9)
+    let run = workout(id: "distance-bases", start: start, distance: 410, duration: 96, type: .interval)
+    let result = WorkoutIntervalReconstructionResult(
+        planSource: .workoutKit,
+        windowSource: .healthKitActivityBoundaries,
+        intervals: [
+            reconstructedInterval(
+                index: 1,
+                label: "Work 1",
+                stepType: .work,
+                start: start,
+                duration: 96,
+                elapsedDuration: 96,
+                activeDuration: 96,
+                pauseOverlap: 0,
+                displayRule: .activeTimer,
+                distance: 410,
+                plannedDistance: 400,
+                pace: 96 / 0.410,
+                heartRate: 160,
+                maxHeartRate: 170,
+                power: 300,
+                cadence: 184
+            )
+        ]
+    )
+
+    let work = try #require(IntervalAnalysisSummary(workout: run, result: result).workRepeatSummary)
+
+    #expect(work.totalDistanceMeters == 410)
+    #expect(work.primaryDistanceMeters == 400)
+    #expect(work.primaryDurationSeconds == 96)
+    #expect(work.primaryPaceSecondsPerKm == 240)
+}
+
 @Test func intervalDrilldownExcludesRawDebugCandidatesWhenOfficialRowsAreBlocked() throws {
     let start = try makeDate(year: 2026, month: 6, day: 30)
     let run = workout(id: "raw-segment", start: start, distance: 1_000, duration: 300, type: .interval)
@@ -461,6 +536,7 @@ private func reconstructedInterval(
     pauseOverlap: Double,
     displayRule: ReconstructedIntervalDurationDisplayRule,
     distance: Double,
+    plannedDistance: Double? = nil,
     pace: Double,
     heartRate: Double,
     maxHeartRate: Double,
@@ -472,8 +548,8 @@ private func reconstructedInterval(
         label: label,
         stepType: stepType,
         plannedGoalType: .distance,
-        plannedGoalValue: distance,
-        plannedGoalDisplayText: RunFormatters.compactDistance(distance),
+        plannedGoalValue: plannedDistance ?? distance,
+        plannedGoalDisplayText: RunFormatters.compactDistance(plannedDistance ?? distance),
         plannedTargetDisplayText: "Target",
         actualStartDate: start,
         actualEndDate: start.addingTimeInterval(duration),

@@ -241,7 +241,7 @@ public enum RunTypeTrustKind: String, Codable, CaseIterable, Sendable {
 
     public var label: String {
         switch self {
-        case .suggested: "Suggested"
+        case .suggested: "Auto-classified"
         case .importedReview: "Imported review"
         case .userReviewed: "User reviewed"
         case .needsReview: "Needs review"
@@ -453,6 +453,7 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
     public var groundContactTimeSampleCount: Int = 0
     public var intervalCount: Int = 0
     public var intervalLabelsSummary: String?
+    public var workoutPlanName: String?
     public var inferredRunType: RunType
     public var manualRunType: RunType?
     public var importedRunType: RunType?
@@ -499,6 +500,7 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
         groundContactTimeSampleCount: Int = 0,
         intervalCount: Int = 0,
         intervalLabelsSummary: String? = nil,
+        workoutPlanName: String? = nil,
         inferredRunType: RunType = .unknown,
         manualRunType: RunType? = nil,
         importedRunType: RunType? = nil,
@@ -544,6 +546,7 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
         self.groundContactTimeSampleCount = groundContactTimeSampleCount
         self.intervalCount = intervalCount
         self.intervalLabelsSummary = intervalLabelsSummary
+        self.workoutPlanName = workoutPlanName
         self.inferredRunType = inferredRunType
         self.manualRunType = manualRunType
         self.importedRunType = importedRunType
@@ -676,6 +679,7 @@ public final class PersistedWorkout {
     public var groundContactTimeSampleCount: Int = 0
     public var intervalCount: Int = 0
     public var intervalLabelsSummary: String?
+    public var workoutPlanName: String?
     public var inferredRunTypeRaw: String
     public var manualRunTypeRaw: String?
     public var importedRunTypeRaw: String?
@@ -722,6 +726,7 @@ public final class PersistedWorkout {
         groundContactTimeSampleCount = workout.groundContactTimeSampleCount
         intervalCount = workout.intervalCount
         intervalLabelsSummary = workout.intervalLabelsSummary
+        workoutPlanName = workout.workoutPlanName
         inferredRunTypeRaw = workout.inferredRunType.rawValue
         manualRunTypeRaw = workout.manualRunType?.rawValue
         importedRunTypeRaw = workout.importedRunType?.rawValue
@@ -768,6 +773,10 @@ public final class PersistedWorkout {
         groundContactTimeSampleCount = workout.groundContactTimeSampleCount
         intervalCount = workout.intervalCount
         intervalLabelsSummary = workout.intervalLabelsSummary
+        if let workoutPlanName = workout.workoutPlanName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !workoutPlanName.isEmpty {
+            self.workoutPlanName = workoutPlanName
+        }
         inferredRunTypeRaw = workout.inferredRunType.rawValue
         if !preservingManualFields {
             manualRunTypeRaw = workout.manualRunType?.rawValue
@@ -821,6 +830,7 @@ public final class PersistedWorkout {
             groundContactTimeSampleCount: groundContactTimeSampleCount,
             intervalCount: intervalCount,
             intervalLabelsSummary: intervalLabelsSummary,
+            workoutPlanName: workoutPlanName,
             inferredRunType: RunType(rawValue: inferredRunTypeRaw) ?? .unknown,
             manualRunType: manualRunTypeRaw.flatMap(RunType.init(rawValue:)),
             importedRunType: importedRunTypeRaw.flatMap(RunType.init(rawValue:)),

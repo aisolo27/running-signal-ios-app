@@ -698,6 +698,19 @@ public enum WorkoutChartMetric: String, CaseIterable, Identifiable, Sendable {
         case .cadence: "spm"
         }
     }
+
+    var pickerTitle: String {
+        switch self {
+        case .pace: "Pace"
+        case .heartRate: "HR"
+        case .power: "Power"
+        case .cadence: "Cadence"
+        }
+    }
+
+    var usesBars: Bool {
+        self == .power || self == .cadence
+    }
 }
 
 public struct WorkoutChartPoint: Identifiable, Equatable, Sendable {
@@ -722,6 +735,31 @@ public enum WorkoutChartSeriesBuilder {
         WorkoutChartMetric.allCases.map { series(metric: $0, workout: workout) }
     }
 
+    public static func presentationSeries(for workout: CanonicalWorkout) -> [WorkoutChartSeries] {
+        coreSeries(for: workout).map { series in
+            switch series.metric {
+            case .heartRate:
+                series
+            case .pace:
+                binnedSeries(series, seconds: 10)
+            case .power, .cadence:
+                binnedSeries(series, seconds: adaptiveBarBinSeconds(for: series))
+            }
+        }
+    }
+
+    public static func adaptiveBarBinSeconds(
+        for series: WorkoutChartSeries,
+        maximumBarCount: Double = 72
+    ) -> Double {
+        guard maximumBarCount > 0,
+              let first = series.points.first?.offsetSeconds,
+              let last = series.points.last?.offsetSeconds,
+              last > first else { return 10 }
+        let raw = (last - first) / maximumBarCount
+        return max(10, ceil(raw / 5) * 5)
+    }
+
     public static func series(metric: WorkoutChartMetric, workout: CanonicalWorkout) -> WorkoutChartSeries {
         let points: [WorkoutChartPoint]
         switch metric {
@@ -741,6 +779,30 @@ public enum WorkoutChartSeriesBuilder {
     public static func clippedSeries(_ series: WorkoutChartSeries, start: Date, end: Date) -> WorkoutChartSeries {
         let clipped = series.points.filter { $0.date >= start && $0.date <= end }
         return WorkoutChartSeries(metric: series.metric, points: clipped)
+    }
+
+    public static func binnedSeries(_ series: WorkoutChartSeries, seconds: Double) -> WorkoutChartSeries {
+        guard seconds > 0, !series.points.isEmpty else { return series }
+        let validPoints = series.points.filter { point in
+            point.value.isFinite && (series.metric == .heartRate || point.value > 0)
+        }
+        guard !validPoints.isEmpty else { return WorkoutChartSeries(metric: series.metric, points: []) }
+        let workoutStart = validPoints[0].date.addingTimeInterval(-validPoints[0].offsetSeconds)
+        let buckets = Dictionary(grouping: validPoints) { point in
+            Int(floor(point.offsetSeconds / seconds))
+        }
+        let points = buckets.keys.sorted().compactMap { bucket -> WorkoutChartPoint? in
+            guard let bucketPoints = buckets[bucket], !bucketPoints.isEmpty else { return nil }
+            let values = bucketPoints.map(\.value).sorted()
+            let median = values[values.count / 2]
+            let offset = (Double(bucket) * seconds) + (seconds / 2)
+            return WorkoutChartPoint(
+                date: workoutStart.addingTimeInterval(offset),
+                offsetSeconds: offset,
+                value: median
+            )
+        }
+        return WorkoutChartSeries(metric: series.metric, points: points)
     }
 
     private static func metricPoints(_ metric: WorkoutEvidenceMetric, workout: CanonicalWorkout) -> [WorkoutChartPoint] {
@@ -811,6 +873,17 @@ public enum IntervalAnalysisMetric: String, CaseIterable, Identifiable, Sendable
         }
     }
 
+    var pickerTitle: String {
+        switch self {
+        case .pace: "Pace"
+        case .heartRate: "HR"
+        case .power: "Power"
+        case .cadence: "Cadence"
+        case .duration: "Time"
+        case .distance: "Distance"
+        }
+    }
+
     var unit: String {
         switch self {
         case .pace: "/km"
@@ -845,13 +918,27 @@ public struct IntervalWorkRepeatSummary: Equatable, Sendable {
     public var totalDistanceMeters: Double
     public var totalActiveDurationSeconds: Double
     public var aggregatePaceSecondsPerKm: Double?
+    public var primaryDistanceMeters: Double
+    public var primaryDurationSeconds: Double
+    public var primaryPaceSecondsPerKm: Double?
 
-    public init(repeatCount: Int, totalDistanceMeters: Double, totalActiveDurationSeconds: Double) {
+    public init(
+        repeatCount: Int,
+        totalDistanceMeters: Double,
+        totalActiveDurationSeconds: Double,
+        primaryDistanceMeters: Double? = nil,
+        primaryDurationSeconds: Double? = nil
+    ) {
         self.repeatCount = repeatCount
         self.totalDistanceMeters = totalDistanceMeters
         self.totalActiveDurationSeconds = totalActiveDurationSeconds
         aggregatePaceSecondsPerKm = totalDistanceMeters > 0
             ? totalActiveDurationSeconds / (totalDistanceMeters / 1_000)
+            : nil
+        self.primaryDistanceMeters = primaryDistanceMeters ?? totalDistanceMeters
+        self.primaryDurationSeconds = primaryDurationSeconds ?? totalActiveDurationSeconds
+        primaryPaceSecondsPerKm = self.primaryDistanceMeters > 0
+            ? self.primaryDurationSeconds / (self.primaryDistanceMeters / 1_000)
             : nil
     }
 }
@@ -1018,11 +1105,19 @@ public struct IntervalAnalysisSummary: Equatable, Sendable {
         let totalDuration = workRows
             .map(\.activeDurationSeconds)
             .reduce(0, +)
+        let primaryDistance = workRows
+            .compactMap(\.distanceMeters)
+            .reduce(0, +)
+        let primaryDuration = workRows
+            .map(\.displayDurationSeconds)
+            .reduce(0, +)
 
         return IntervalWorkRepeatSummary(
             repeatCount: workRows.count,
             totalDistanceMeters: totalDistance,
-            totalActiveDurationSeconds: totalDuration
+            totalActiveDurationSeconds: totalDuration,
+            primaryDistanceMeters: primaryDistance,
+            primaryDurationSeconds: primaryDuration
         )
     }
 

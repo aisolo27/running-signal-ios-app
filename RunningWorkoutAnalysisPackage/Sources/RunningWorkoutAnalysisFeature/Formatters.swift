@@ -36,6 +36,12 @@ enum RunFormatters {
         return formatter
     }()
 
+    static let weekdayDateWithYear: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEE, MMM d, yyyy"
+        return formatter
+    }()
+
     static let workoutNavigationDate: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE, MMM d"
@@ -44,7 +50,7 @@ enum RunFormatters {
 
     static let workoutFullDate: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE, MMMM d"
+        formatter.dateFormat = "EEEE, MMMM d, yyyy"
         return formatter
     }()
 

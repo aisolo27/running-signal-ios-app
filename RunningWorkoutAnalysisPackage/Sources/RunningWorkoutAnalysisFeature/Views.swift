@@ -61,6 +61,9 @@ struct RunsView: View {
                     } label: {
                         FeaturedRunRow(workout: latestRun)
                     }
+                    .task {
+                        await store.hydrateCachedWorkoutPlanNameIfAvailable(for: latestRun.id)
+                    }
                 }
             }
 
@@ -93,6 +96,9 @@ struct RunsView: View {
                             WorkoutDetailView(store: store, workoutID: workout.id)
                         } label: {
                             V1WorkoutRow(workout: workout)
+                        }
+                        .task {
+                            await store.hydrateCachedWorkoutPlanNameIfAvailable(for: workout.id)
                         }
                     }
                 }
@@ -236,13 +242,22 @@ struct SettingsView: View {
 struct FeaturedRunRow: View {
     let workout: CanonicalWorkout
 
+    private var run: RunWorkout {
+        RunWorkout(workout: workout)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(RunWorkout(workout: workout).displayName)
+            Text(run.runnerFacingTitle)
                 .font(.headline)
-            Text(RunFormatters.date.string(from: workout.startDate))
-                .font(.caption)
-                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Text(RunFormatters.weekdayDateWithYear.string(from: workout.startDate))
+                    .font(.caption)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
+                Spacer()
+                RunTypeTag(runType: workout.effectiveRunType)
+            }
             MetricGrid(items: [
                 MetricItem(title: "Distance", value: RunFormatters.distance(workout.distanceMeters), detail: workout.sourceName),
                 MetricItem(title: "Time", value: RunFormatters.duration(workout.durationSeconds), detail: "Workout"),
@@ -257,18 +272,22 @@ struct FeaturedRunRow: View {
 struct V1WorkoutRow: View {
     let workout: CanonicalWorkout
 
+    private var run: RunWorkout {
+        RunWorkout(workout: workout)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(RunWorkout(workout: workout).displayName)
-                    .font(.headline)
-                    .lineLimit(1)
-                Spacer()
-                Text(RunFormatters.mediumDateWithYear.string(from: workout.startDate))
+            Text(run.runnerFacingTitle)
+                .font(.headline)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .center) {
+                Text(RunFormatters.weekdayDateWithYear.string(from: workout.startDate))
                     .font(.caption)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
+                Spacer()
+                RunTypeTag(runType: workout.effectiveRunType)
             }
             Text("\(RunFormatters.distance(workout.distanceMeters)) · \(RunFormatters.duration(workout.durationSeconds)) · \(RunFormatters.pace(workout.paceSecondsPerKm))")
                 .font(.caption)
@@ -278,6 +297,21 @@ struct V1WorkoutRow: View {
                 .foregroundStyle(.primary)
         }
         .padding(.vertical, 4)
+    }
+}
+
+private struct RunTypeTag: View {
+    let runType: RunType
+
+    var body: some View {
+        Text(runType.visibleCategory.label)
+            .font(.caption2.bold())
+            .foregroundStyle(.blue)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.blue.opacity(0.14))
+            .clipShape(Capsule())
+            .accessibilityLabel("Run type \(runType.visibleCategory.label)")
     }
 }
 
@@ -881,7 +915,7 @@ private struct WorkoutDetailHero: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(RunSignalTextStyle.secondary)
 
-            Text(title)
+            Text(RunWorkout(workout: workout).runnerFacingTitle)
                 .font(.title2.bold())
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -890,7 +924,7 @@ private struct WorkoutDetailHero: View {
                 if let cityName = workout.evidence?.cityName {
                     Label(cityName, systemImage: "location")
                 } else {
-                    Label("\(workout.environment.label) Run", systemImage: "figure.run")
+                    Label(workout.sourceName, systemImage: "applewatch")
                 }
             }
             .font(.caption)
@@ -901,15 +935,6 @@ private struct WorkoutDetailHero: View {
         .background(.background)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .accessibilityIdentifier("workout-detail-hero")
-    }
-
-    private var title: String {
-        let planName = workout.evidence?.workoutPlanAudit?.displayName?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if let planName, !planName.isEmpty {
-            return planName
-        }
-        return "\(workout.environment.label) Run"
     }
 
     private var timeRange: String {
@@ -1066,11 +1091,24 @@ private struct WorkoutCategoryCard: View {
     let workout: CanonicalWorkout
 
     private var currentRunType: RunType {
-        (workout.manualRunType ?? workout.effectiveRunType).visibleCategory
+        if workout.manualRunType == nil,
+           workout.importedRunType == nil,
+           let suggestion,
+           suggestion.confidence == .strong,
+           suggestion.runType != .unknown {
+            return suggestion.runType.visibleCategory
+        }
+        return (workout.manualRunType ?? workout.effectiveRunType).visibleCategory
     }
 
     private var sourceLabel: String {
-        workout.runTypeTrust.kind.label
+        if workout.manualRunType == nil,
+           workout.importedRunType == nil,
+           suggestion?.confidence == .strong,
+           suggestion?.runType != .unknown {
+            return "Auto-classified"
+        }
+        return workout.runTypeTrust.kind.label
     }
 
     private var suggestion: RunTypeSuggestion? {
@@ -1129,7 +1167,7 @@ private struct WorkoutCategoryCard: View {
                 HStack(alignment: .top, spacing: 6) {
                     Image(systemName: "sparkles")
                         .foregroundStyle(.blue)
-                    Text("Suggested \(suggestion.runType.label): \(suggestion.detail)")
+                    Text(suggestionText(suggestion))
                         .font(.caption)
                         .foregroundStyle(RunSignalTextStyle.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1140,6 +1178,13 @@ private struct WorkoutCategoryCard: View {
         .padding()
         .background(.background)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func suggestionText(_ suggestion: RunTypeSuggestion) -> String {
+        if suggestion.confidence == .strong, suggestion.runType != .unknown {
+            return "Auto-classified as \(suggestion.runType.label): \(suggestion.detail). Change it above if this run had a different purpose."
+        }
+        return "Suggested \(suggestion.runType.label): \(suggestion.detail)"
     }
 }
 
@@ -1366,11 +1411,7 @@ struct WorkoutPlanOverviewCard: View {
     }
 
     private func targetSummary(_ step: PlannedWorkoutStep) -> String? {
-        guard let target = step.plannedTargetDisplayText, !target.isEmpty else { return nil }
-        return target
-            .components(separatedBy: ", speed")
-            .first?
-            .replacingOccurrences(of: "pace range ", with: "")
+        PlannedWorkoutTargetPresentation.runnerText(step.plannedTargetDisplayText)
     }
 
     private func stepPrescription(_ step: PlannedWorkoutStep) -> String {
@@ -1452,7 +1493,7 @@ private struct WorkoutPlanStepRow: View {
         } else {
             parts.append(step.stepType.displayName)
         }
-        if let plannedTargetDisplayText = step.plannedTargetDisplayText, !plannedTargetDisplayText.isEmpty {
+        if let plannedTargetDisplayText = PlannedWorkoutTargetPresentation.runnerText(step.plannedTargetDisplayText) {
             parts.append(plannedTargetDisplayText)
         }
         return parts.joined(separator: " · ")
@@ -1544,21 +1585,15 @@ private struct WorkoutIntervalsCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(result.intervals, id: \.index) { interval in
-                WorkoutIntervalSummaryRow(
-                    interval: interval,
-                    simplifiesSingleWorkLabel: workCount == 1
-                )
-            }
-
             if RunClassifier.isStructuredIntervalWorkout(result.intervals) {
-                NavigationLink {
-                    IntervalAnalysisScreen(workout: workout, result: result)
-                } label: {
-                    Label("Open Interval Analysis", systemImage: "chart.bar.xaxis")
-                        .frame(maxWidth: .infinity)
+                IntervalAnalysisEntryCard(workout: workout, result: result)
+            } else {
+                ForEach(result.intervals, id: \.index) { interval in
+                    WorkoutIntervalSummaryRow(
+                        interval: interval,
+                        simplifiesSingleWorkLabel: workCount == 1
+                    )
                 }
-                .buttonStyle(.borderedProminent)
             }
         }
         .accessibilityIdentifier("workout-intervals-card")
@@ -1580,7 +1615,7 @@ private struct WorkoutIntervalSummaryRow: View {
                     .font(.headline)
                 Spacer()
                 if let target = interval.plannedTargetDisplayText, !target.isEmpty {
-                    Text(target.replacingOccurrences(of: "heart rate ", with: "", options: .caseInsensitive))
+                    Text(PlannedWorkoutTargetPresentation.runnerText(target) ?? target)
                         .font(.caption.bold())
                         .foregroundStyle(.blue)
                 }

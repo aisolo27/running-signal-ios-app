@@ -168,6 +168,32 @@ public enum PersistenceService {
         try? context.save()
     }
 
+    public static func updateWorkoutPlanName(
+        workoutID: String,
+        name: String,
+        context: ModelContext
+    ) {
+        guard let record = fetchPersistedWorkout(id: workoutID, context: context) else { return }
+        record.workoutPlanName = name
+        record.updatedAt = Date()
+        try? context.save()
+    }
+
+    public static func updateWorkoutPlanClassification(
+        workoutID: String,
+        name: String?,
+        inferredRunType: RunType,
+        context: ModelContext
+    ) {
+        guard let record = fetchPersistedWorkout(id: workoutID, context: context) else { return }
+        if let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            record.workoutPlanName = name
+        }
+        record.inferredRunTypeRaw = inferredRunType.rawValue
+        record.updatedAt = Date()
+        try? context.save()
+    }
+
     private static func applyUpserts(_ workouts: [CanonicalWorkout], context: ModelContext) {
         for workout in workouts {
             let record: PersistedWorkout

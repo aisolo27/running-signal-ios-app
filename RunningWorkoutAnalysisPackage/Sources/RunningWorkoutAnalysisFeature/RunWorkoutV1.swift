@@ -17,6 +17,44 @@ public struct RunWorkout: Identifiable, Equatable, Sendable {
         }
         return "Running Workout"
     }
+
+    public var customWorkoutName: String? {
+        let storedName = workout.workoutPlanName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let storedName, !storedName.isEmpty {
+            return storedName
+        }
+        let evidenceName = workout.evidence?.workoutPlanAudit?.displayName?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let evidenceName, !evidenceName.isEmpty {
+            return evidenceName
+        }
+        return nil
+    }
+
+    public var runnerFacingTitle: String {
+        guard let customWorkoutName else { return displayName }
+        guard workout.environment != .unknown else { return customWorkoutName }
+        return "\(customWorkoutName) (\(workout.environment.label))"
+    }
+
+    public var categoryLabel: String {
+        workout.effectiveRunType.visibleCategory.label
+    }
+}
+
+enum PlannedWorkoutTargetPresentation {
+    static func runnerText(_ rawText: String?) -> String? {
+        guard let rawText else { return nil }
+        let text = rawText
+            .components(separatedBy: ", speed")
+            .first?
+            .components(separatedBy: ", metric")
+            .first?
+            .replacingOccurrences(of: "pace range ", with: "", options: .caseInsensitive)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let text, !text.isEmpty else { return nil }
+        return text
+    }
 }
 
 public struct RunWorkoutSegments: Equatable, Sendable {

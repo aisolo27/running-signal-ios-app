@@ -46,9 +46,26 @@ public struct WorkPaceMeasurement: Codable, Equatable, Sendable {
 public struct WorkTargetEvaluation: Codable, Equatable, Sendable {
     public var rowIndex: Int
     public var targetRange: CanonicalPaceRange?
+    public var exactTargetSecondsPerKilometer: Double?
     public var result: WorkTargetResult
     public var completionStatus: WorkCompletionStatus
     public var measurement: WorkPaceMeasurement
+
+    public init(
+        rowIndex: Int,
+        targetRange: CanonicalPaceRange?,
+        exactTargetSecondsPerKilometer: Double? = nil,
+        result: WorkTargetResult,
+        completionStatus: WorkCompletionStatus,
+        measurement: WorkPaceMeasurement
+    ) {
+        self.rowIndex = rowIndex
+        self.targetRange = targetRange
+        self.exactTargetSecondsPerKilometer = exactTargetSecondsPerKilometer
+        self.result = result
+        self.completionStatus = completionStatus
+        self.measurement = measurement
+    }
 }
 
 public enum WorkTargetEvaluator {
@@ -61,7 +78,9 @@ public enum WorkTargetEvaluator {
 
         let completion = completionStatus(interval: interval, completionRatio: completionRatio)
         let measurement = paceMeasurement(interval: interval, completionStatus: completion)
-        let range = canonicalPaceRange(from: plannedTargets ?? interval.plannedTargets)
+        let targets = plannedTargets ?? interval.plannedTargets
+        let range = canonicalPaceRange(from: targets)
+        let exactTarget = exactPaceTarget(from: targets)
         let result: WorkTargetResult
         if let range, let pace = measurement.paceSecondsPerKilometer {
             if range.contains(pace) {
@@ -78,6 +97,7 @@ public enum WorkTargetEvaluator {
         return WorkTargetEvaluation(
             rowIndex: interval.index,
             targetRange: range,
+            exactTargetSecondsPerKilometer: exactTarget,
             result: result,
             completionStatus: completion,
             measurement: measurement
@@ -101,6 +121,16 @@ public enum WorkTargetEvaluator {
             fastestSecondsPerKilometer: min(firstPace, secondPace),
             slowestSecondsPerKilometer: max(firstPace, secondPace)
         )
+    }
+
+    public static func exactPaceTarget(from targets: [PlannedWorkoutTarget]?) -> Double? {
+        guard let target = targets?.first(where: {
+                  ($0.kind == .pace || $0.kind == .speed) && $0.semantics == .threshold
+              }),
+              let value = target.lowerBound ?? target.upperBound,
+              value > 0
+        else { return nil }
+        return paceSecondsPerKilometer(value: value, unit: target.unit)
     }
 
     private static func completionStatus(
@@ -234,6 +264,9 @@ enum OfficialIntervalWorkoutMerger {
 
 enum WorkTargetPresentation {
     static func badgeLabel(for evaluation: WorkTargetEvaluation) -> String {
+        if let exactDelta = exactTargetDeltaText(evaluation) {
+            return exactDelta
+        }
         let result = resultLabel(evaluation.result)
         switch evaluation.completionStatus {
         case .shortened:
@@ -270,6 +303,14 @@ enum WorkTargetPresentation {
         case .shortened: "Shortened"
         case .openEnded: "Open"
         }
+    }
+
+    static func exactTargetDeltaText(_ evaluation: WorkTargetEvaluation) -> String? {
+        guard let target = evaluation.exactTargetSecondsPerKilometer,
+              let actual = evaluation.measurement.paceSecondsPerKilometer else { return nil }
+        let delta = Int(abs(actual - target).rounded())
+        if delta == 0 { return "Matches exact target" }
+        return "\(delta)s/km \(actual < target ? "faster" : "slower")"
     }
 }
 

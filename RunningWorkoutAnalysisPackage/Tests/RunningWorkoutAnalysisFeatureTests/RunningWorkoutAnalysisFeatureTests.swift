@@ -77,6 +77,26 @@ import Testing
 
     let date = try #require(components.date)
     #expect(RunFormatters.mediumDateWithYear.string(from: date) == "Jun 24, 2024")
+    #expect(RunFormatters.weekdayDateWithYear.string(from: date) == "Mon, Jun 24, 2024")
+    #expect(RunFormatters.workoutFullDate.string(from: date) == "Monday, June 24, 2024")
+}
+
+@Test func runWorkoutUsesStoredPlanNameEnvironmentAndCategory() {
+    var workout = SampleData.workouts[0]
+    workout.environment = .outdoor
+    workout.workoutPlanName = "Friday Easy 6K"
+    workout.manualRunType = .easy
+
+    let run = RunWorkout(workout: workout)
+
+    #expect(run.runnerFacingTitle == "Friday Easy 6K (Outdoor)")
+    #expect(run.categoryLabel == "Easy")
+}
+
+@Test func runnerTargetTextRemovesRawSpeedAndMetricDetails() {
+    let raw = "pace range 6:00-6:30 /km, speed 2.56 m/s-2.78 m/s, metric current"
+
+    #expect(PlannedWorkoutTargetPresentation.runnerText(raw) == "6:00-6:30 /km")
 }
 
 @Test func intervalGoalMeasuredItemsSeparateDistanceGoalStats() {
@@ -934,6 +954,7 @@ private func intervalForGoalMeasuredText(
     workout.heartRateSampleCount = 1
     workout.routePointCount = 1
     workout.intervalCount = 1
+    workout.workoutPlanName = "Friday Easy 5K"
     workout.evidence = WorkoutEvidence(
         workoutID: workout.id,
         loadedAt: start.addingTimeInterval(60),
@@ -963,6 +984,7 @@ private func intervalForGoalMeasuredText(
     #expect(persistedWorkouts.count == 1)
     #expect(persistedWorkouts[0].evidence == nil)
     #expect(persistedWorkouts[0].heartRateSampleCount == 1)
+    #expect(persistedWorkouts[0].workoutPlanName == "Friday Easy 5K")
     #expect(persistedEvidence?.sampleCount(.heartRate) == 1)
     #expect(persistedEvidence?.sampleCount(.runningSpeed) == 1)
     #expect(persistedEvidence?.route.count == 1)
@@ -998,6 +1020,35 @@ private func intervalForGoalMeasuredText(
     #expect(persistedEvidence?.sampleCount(.heartRate) == 0)
     #expect(persistedEvidence?.route.isEmpty == true)
     #expect(persistedEvidence?.events.isEmpty == true)
+}
+
+@MainActor
+@Test func runListHydratesOnlyTheCachedWorkoutPlanName() async throws {
+    let context = try inMemoryModelContext()
+    var workout = testWorkout(
+        id: "cached-plan-title",
+        start: Date(timeIntervalSince1970: 2_500),
+        distanceMeters: 6_000,
+        durationSeconds: 2_400
+    )
+    workout.evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        workoutPlanAudit: WorkoutPlanAudit(
+            status: .available,
+            displayName: "Friday Easy 6K"
+        )
+    )
+    PersistenceService.upsert([workout], context: context)
+
+    let store = RunningAnalysisStore(healthKitService: StubHealthKitService())
+    await store.bootstrap(modelContext: context)
+    #expect(store.workouts.first?.evidence == nil)
+
+    await store.hydrateCachedWorkoutPlanNameIfAvailable(for: workout.id)
+
+    #expect(store.workouts.first?.workoutPlanName == "Friday Easy 6K")
+    #expect(store.workouts.first?.evidence == nil)
+    #expect(PersistenceService.fetchWorkouts(context: context).first?.workoutPlanName == "Friday Easy 6K")
 }
 
 @MainActor
@@ -6780,6 +6831,22 @@ private struct IsolatedDefaults {
     #expect(suggestion.confidence == .strong)
     #expect(suggestion.reasons.contains("Workout plan identifies an easy run"))
     #expect(suggestion.reasons.contains("Planned target is Heart Rate Zone 1–2"))
+}
+
+@Test func runTypeSuggestionUsesPersistedPlanNameBeforeDetailedEvidenceHydrates() {
+    var workout = testWorkout(
+        id: "persisted-race-name",
+        start: Date(timeIntervalSince1970: 1_800_000_000),
+        distanceMeters: 5_000,
+        durationSeconds: 20 * 60
+    )
+    workout.workoutPlanName = "Test Race Day 5K"
+    workout.inferredRunType = .threshold
+
+    let suggestion = RunClassifier.suggestion(for: workout, history: [], maxHeartRate: nil)
+
+    #expect(suggestion.runType == .race)
+    #expect(suggestion.confidence == .strong)
 }
 
 @Test func runTypeSuggestionRecognizesStructuredIntervalsAndLongPersonalOutlier() {

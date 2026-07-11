@@ -80,6 +80,6 @@ This catalog preserves behaviors learned from real workouts without keeping ever
 ### `dynamic-pace-targets`
 
 - Behavior: variable distance goals, exact pace ranges, one-sided thresholds, paused rows, shortened rows, and time/open goals.
-- Expected: completion and target status remain separate; shortened rows use measured distance and active time; one-sided thresholds are not presented as exact ranges.
+- Expected: completion and target status remain separate; shortened rows use measured distance and active time; one-sided thresholds are not presented as exact ranges. When WorkoutKit supplies only an exact pace threshold, show the measured faster/slower delta without inventing an on-target tolerance band.
 - Evidence: Priority 5 plus code fixtures.
-- Tests: `targetEvaluationSupportsDynamicDistanceGoals`, `targetEvaluationIncludesRangeBoundariesAndClassifiesFastSlow`, `oneSidedPaceThresholdIsNotPresentedAsAnExactRange`, `targetEvaluationUsesMeasuredBasisForTimeAndOpenGoals`.
+- Tests: `targetEvaluationSupportsDynamicDistanceGoals`, `targetEvaluationIncludesRangeBoundariesAndClassifiesFastSlow`, `oneSidedPaceThresholdIsNotPresentedAsAnExactRange`, `exactPaceThresholdReportsDifferenceWithoutInventingTargetRange`, `targetEvaluationUsesMeasuredBasisForTimeAndOpenGoals`.
