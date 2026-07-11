@@ -4,6 +4,9 @@ import UniformTypeIdentifiers
 
 struct RunsView: View {
     var store: RunningAnalysisStore
+    @State private var searchText = ""
+    @State private var selectedYear: Int?
+    @State private var selectedCategory: WeeklyRunCategory?
 
     private var runs: [CanonicalWorkout] {
         V1WorkoutFilters.completedRuns(from: store.workouts)
@@ -13,46 +16,62 @@ struct RunsView: View {
         runs.first
     }
 
-    private var allTimeBestEfforts: [PersonalBestEffortRecord] {
-        store.personalBestEffortSummary.allTime
+    private var years: [Int] {
+        Array(Set(runs.map { Calendar.current.component(.year, from: $0.startDate) })).sorted(by: >)
     }
 
-    private var workoutsByID: [String: CanonicalWorkout] {
-        Dictionary(uniqueKeysWithValues: store.workouts.map { ($0.id, $0) })
+    private var filteredHistory: [CanonicalWorkout] {
+        Array(runs.dropFirst()).filter { workout in
+            if let selectedYear,
+               Calendar.current.component(.year, from: workout.startDate) != selectedYear {
+                return false
+            }
+            if let selectedCategory,
+               WeeklyRunCategory.make(from: workout) != selectedCategory {
+                return false
+            }
+            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !query.isEmpty else { return true }
+            let searchableText = [
+                RunWorkout(workout: workout).runnerFacingTitle,
+                RunFormatters.weekdayDateWithYear.string(from: workout.startDate),
+                workout.sourceName,
+                workout.notes,
+                RunWorkout(workout: workout).categoryLabel
+            ].joined(separator: " ").lowercased()
+            return searchableText.contains(query)
+        }
     }
 
-    private var wholeRunSummary: WholeRunHealthKitSummary {
-        WholeRunHealthKitSummary.make(
-            workouts: store.workouts,
-            authorizationState: store.authorizationState,
-            usesSampleData: store.usesSampleData
-        )
-    }
-
-    private var appReadinessSummary: AppReadinessUXSummary {
-        AppReadinessUXSummary.make(
-            workouts: store.workouts,
-            authorizationState: store.authorizationState,
-            usesSampleData: store.usesSampleData,
-            isLoading: store.isLoading,
-            evidenceQueueSummary: store.evidenceQueueSummary,
-            bestEfforts: allTimeBestEfforts,
-            refreshJobs: store.evidenceRefreshJobSummaries
-        )
+    private var historySections: [RunHistoryYearSection] {
+        Dictionary(grouping: filteredHistory) {
+            Calendar.current.component(.year, from: $0.startDate)
+        }
+        .map { RunHistoryYearSection(year: $0.key, workouts: $0.value.sorted { $0.startDate > $1.startDate }) }
+        .sorted { $0.year > $1.year }
     }
 
     var body: some View {
         List {
-            Section {
-                if store.usesSampleData {
+            if store.usesSampleData {
+                Section {
                     NoticeCard(title: "Using Sample Data", message: "These workouts are placeholders. Load HealthKit from Settings to replace them with your completed running workouts.")
                 }
-
-                WholeRunStatusCard(summary: wholeRunSummary, loadedRunCount: store.usesSampleData ? nil : runs.count)
-
-                AppReadinessCard(summary: appReadinessSummary)
+                .listRowSeparator(.hidden)
+            } else if store.isLoading {
+                Section {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Updating HealthKit runs")
+                                .font(.subheadline.weight(.semibold))
+                            Text("You can keep browsing while the update finishes.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
             }
-            .listRowSeparator(.hidden)
 
             if let latestRun {
                 Section("Most Recent") {
@@ -67,50 +86,79 @@ struct RunsView: View {
                 }
             }
 
-            Section {
-                if allTimeBestEfforts.isEmpty {
-                    EmptyStateView(title: "No exact best efforts", message: "Need detailed HealthKit distance samples before official segment bests can be calculated.")
-                } else {
-                    ForEach(allTimeBestEfforts, id: \.bucket) { effort in
-                        if let workout = workoutsByID[effort.workoutID] {
+            Section("Run History") {
+                HStack(spacing: 10) {
+                    Menu {
+                        Button("All Years") { selectedYear = nil }
+                        Divider()
+                        ForEach(years, id: \.self) { year in
+                            Button(String(year)) { selectedYear = year }
+                        }
+                    } label: {
+                        Label(selectedYear.map(String.init) ?? "All Years", systemImage: "calendar")
+                    }
+                    .buttonStyle(.bordered)
+
+                    Menu {
+                        Button("All Types") { selectedCategory = nil }
+                        Divider()
+                        ForEach(WeeklyRunCategory.allCases) { category in
+                            Button(category.label) { selectedCategory = category }
+                        }
+                    } label: {
+                        Label(selectedCategory?.label ?? "All Types", systemImage: "line.3.horizontal.decrease.circle")
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                Text("\(filteredHistory.count) past \(filteredHistory.count == 1 ? "run" : "runs")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if runs.isEmpty {
+                Section {
+                    EmptyStateView(title: "No completed runs", message: "Load HealthKit to show completed running workouts.")
+                }
+            } else if historySections.isEmpty {
+                Section {
+                    EmptyStateView(title: "No matching past runs", message: "Try another search, year, or run type.")
+                }
+            } else {
+                ForEach(historySections) { section in
+                    Section(String(section.year)) {
+                        ForEach(section.workouts) { workout in
                             NavigationLink {
                                 WorkoutDetailView(store: store, workoutID: workout.id)
                             } label: {
-                                PersonalBestEffortRow(effort: effort, titleFont: .headline)
+                                V1WorkoutRow(workout: workout)
                             }
-                        } else {
-                            PersonalBestEffortRow(effort: effort, titleFont: .headline)
+                            .task {
+                                await store.hydrateCachedWorkoutPlanNameIfAvailable(for: workout.id)
+                            }
                         }
                     }
                 }
-            } header: {
-                ListSectionTitle("All-Time Best Efforts")
-            }
-
-            Section {
-                if runs.isEmpty {
-                    EmptyStateView(title: "No completed runs", message: "Load HealthKit to show completed running workouts.")
-                } else {
-                    ForEach(runs) { workout in
-                        NavigationLink {
-                            WorkoutDetailView(store: store, workoutID: workout.id)
-                        } label: {
-                            V1WorkoutRow(workout: workout)
-                        }
-                        .task {
-                            await store.hydrateCachedWorkoutPlanNameIfAvailable(for: workout.id)
-                        }
-                    }
-                }
-            } header: {
-                ListSectionTitle("Completed Runs")
             }
         }
         .navigationTitle("Runs")
+        .searchable(
+            text: $searchText,
+            prompt: "Search runs"
+        )
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: 84)
+        }
         .refreshable {
             await store.refreshRunsListFromHealthKit()
         }
     }
+}
+
+private struct RunHistoryYearSection: Identifiable {
+    let year: Int
+    let workouts: [CanonicalWorkout]
+    var id: Int { year }
 }
 
 struct SettingsView: View {
@@ -119,11 +167,9 @@ struct SettingsView: View {
     @AppStorage("RunSignal.TemperatureUnit") private var temperatureUnitRaw = TemperatureUnitPreference.system.rawValue
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                HeaderBlock(title: "Settings", subtitle: "HealthKit, workout display, and privacy preferences.")
-
-                VStack(alignment: .leading, spacing: 12) {
+        Form {
+            Section("HealthKit") {
+                VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Label(dataModeTitle, systemImage: store.usesSampleData ? "exclamationmark.triangle" : "heart.text.square")
                             .font(.headline)
@@ -150,92 +196,63 @@ struct SettingsView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(store.isLoading)
                 }
-                .padding()
-                .background(.background)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
 
-                MetricGrid(items: [
-                    MetricItem(title: "Authorization", value: store.authorizationState.label, detail: store.healthKitStatus.updatedAt.map { RunFormatters.date.string(from: $0) } ?? "Current status"),
-                    MetricItem(title: "Data mode", value: store.usesSampleData ? "Sample" : "HealthKit", detail: store.usesSampleData ? "Clearly labeled" : "Real workouts"),
-                    MetricItem(title: "Runs", value: "\(V1WorkoutFilters.completedRuns(from: store.workouts).count)", detail: "Non-duplicate"),
-                    MetricItem(title: "Duplicates", value: "\(store.workouts.filter(\.isDuplicate).count)", detail: "Hidden from Runs"),
-                    MetricItem(title: "Route points", value: "\(store.includedWorkouts.map(\.routePointCount).reduce(0, +))", detail: "Loaded evidence"),
-                    MetricItem(title: "Samples", value: "\(store.includedWorkouts.map(\.seriesSampleCount).reduce(0, +))", detail: "Loaded evidence")
-                ])
+            Section("Display") {
+                Picker("Temperature", selection: $temperatureUnitRaw) {
+                    ForEach(TemperatureUnitPreference.allCases) { preference in
+                        Text(preference.label).tag(preference.rawValue)
+                    }
+                }
+            }
 
-                VStack(alignment: .leading, spacing: 12) {
-                    Label("Duplicate Handling", systemImage: "rectangle.2.swap")
-                        .font(.headline)
-                    Text("RunSignal keeps the preferred HealthKit/Apple Watch workout in the Runs tab and hides likely duplicate imports from the v1 viewer.")
+            Section("Data & Diagnostics") {
+                DisclosureGroup {
+                    LabeledContent("Runs", value: "\(V1WorkoutFilters.completedRuns(from: store.workouts).count)")
+                    LabeledContent("Hidden duplicates", value: "\(store.workouts.filter(\.isDuplicate).count)")
+                    LabeledContent("Route points", value: "\(store.includedWorkouts.map(\.routePointCount).reduce(0, +))")
+                    LabeledContent("Samples", value: "\(store.includedWorkouts.map(\.seriesSampleCount).reduce(0, +))")
+                    LabeledContent("Access request", value: store.authorizationState.label)
+                    Text("RunSignal keeps the preferred Apple Watch or HealthKit workout visible and hides likely duplicates.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    MetricGrid(items: [
-                        MetricItem(title: "Included", value: "\(store.includedWorkouts.count)", detail: "Visible runs"),
-                        MetricItem(title: "Hidden", value: "\(store.workouts.filter(\.isDuplicate).count)", detail: "Duplicate-like")
-                    ])
+                } label: {
+                    Label("Data Details", systemImage: "chart.bar.doc.horizontal")
                 }
-                .padding()
-                .background(.background)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
 
-                VStack(alignment: .leading, spacing: 12) {
-                    Label("Workout Display", systemImage: "thermometer.medium")
-                        .font(.headline)
-                    HStack {
-                        Text("Temperature")
-                        Spacer()
-                        Picker("Temperature", selection: $temperatureUnitRaw) {
-                            ForEach(TemperatureUnitPreference.allCases) { preference in
-                                Text(preference.label).tag(preference.rawValue)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                    }
-
-                    Toggle("Developer Mode", isOn: $developerModeEnabled)
-                    Text("Developer Mode reveals raw HealthKit evidence, audit exports, and parity tools. It stays hidden during normal run review.")
-                        .font(.caption)
-                        .foregroundStyle(RunSignalTextStyle.secondary)
-                }
-                .padding()
-                .background(.background)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            Section("Advanced") {
+                Toggle("Developer Mode", isOn: $developerModeEnabled)
+                Text("Developer Mode reveals raw HealthKit evidence, audit exports, and parity tools.")
+                    .font(.caption)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
 
                 if developerModeEnabled {
-                    SectionHeader("Developer Tools")
                     NavigationLink {
                         HealthKitAuditView(store: store)
                     } label: {
                         Label("Raw HealthKit Audit", systemImage: "list.clipboard")
-                            .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
 
                     NavigationLink {
                         GoldenValidationView(store: store)
                     } label: {
                         Label("Apple Fitness Parity Checklist", systemImage: "checkmark.seal")
-                            .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
 
                     NavigationLink {
                         HealthKitPermissionReviewView(store: store)
                     } label: {
                         Label("HealthKit Permissions", systemImage: "lock.shield")
-                            .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
                 }
             }
-            .padding()
         }
         .navigationTitle("Settings")
     }
 
     private var dataModeTitle: String {
-        store.usesSampleData ? "Using Sample Data" : "HealthKit Loaded"
+        store.usesSampleData ? "Using Sample Data" : "HealthKit Connected"
     }
 }
 
@@ -885,7 +902,8 @@ struct WorkoutDetailView: View {
             .padding()
             .padding(.bottom, 220)
         }
-        .navigationTitle(workout.map { RunFormatters.workoutNavigationDate.string(from: $0.startDate) } ?? "Workout")
+        .navigationTitle(workout.map { RunWorkout(workout: $0).runnerFacingTitle } ?? "Workout")
+        .runSignalInlineNavigationTitle()
         .safeAreaInset(edge: .bottom) {
             Color.clear.frame(height: 112)
         }
@@ -903,6 +921,17 @@ struct WorkoutDetailView: View {
                 WorkoutDetailPresentation.make(workout: workout, analysis: analysis)
             }.value
         }
+    }
+}
+
+extension View {
+    @ViewBuilder
+    func runSignalInlineNavigationTitle() -> some View {
+        #if os(iOS)
+        navigationBarTitleDisplayMode(.inline)
+        #else
+        self
+        #endif
     }
 }
 

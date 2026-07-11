@@ -77,6 +77,36 @@ struct AnalyticsView: View {
                 }
                 .buttonStyle(.plain)
 
+                NavigationLink {
+                    BestEffortsView(store: store)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "medal.fill")
+                            .font(.title2)
+                            .foregroundStyle(.green)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Best Efforts")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                            Text(bestEffortSummaryText)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if store.isLoading {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding()
+                    .background(.background)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+
                 PeriodSignalView(
                     store: store,
                     summary: store.trainingPeriodSummary(
@@ -96,6 +126,57 @@ struct AnalyticsView: View {
         }
         .onChange(of: selectedPeriod) {
             selectedPeriodStart = nil
+        }
+    }
+
+    private var bestEffortSummaryText: String {
+        let count = store.personalBestEffortSummary.allTime.count
+        guard count > 0 else {
+            return "Exact distance records appear after detailed analysis."
+        }
+        return "\(count) official all-time \(count == 1 ? "record" : "records")"
+    }
+}
+
+private struct BestEffortsView: View {
+    var store: RunningAnalysisStore
+
+    private var workoutsByID: [String: CanonicalWorkout] {
+        Dictionary(uniqueKeysWithValues: store.workouts.map { ($0.id, $0) })
+    }
+
+    var body: some View {
+        List {
+            Section {
+                Text("RunSignal uses detailed Apple Health distance samples for official segment records. Summary-only estimates are not promoted as best efforts.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("All-Time Records") {
+                if store.personalBestEffortSummary.allTime.isEmpty {
+                    EmptyStateView(
+                        title: "No exact best efforts yet",
+                        message: "Detailed distance samples are needed before official segment records can be calculated."
+                    )
+                } else {
+                    ForEach(store.personalBestEffortSummary.allTime, id: \.bucket) { effort in
+                        if let workout = workoutsByID[effort.workoutID] {
+                            NavigationLink {
+                                WorkoutDetailView(store: store, workoutID: workout.id)
+                            } label: {
+                                PersonalBestEffortRow(effort: effort, titleFont: .headline)
+                            }
+                        } else {
+                            PersonalBestEffortRow(effort: effort, titleFont: .headline)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Best Efforts")
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: 84)
         }
     }
 }
@@ -307,7 +388,34 @@ private struct PeriodSignalView: View {
             } else {
                 PeriodDistanceChart(summary: summary)
                 WeeklyCategoryTotalsView(totals: summary.categoryTotals)
-                WeeklyWorkoutList(store: store, rows: summary.workouts, title: workoutListTitle)
+                if summary.period == .week || summary.period == .month {
+                    WeeklyWorkoutList(store: store, rows: summary.workouts, title: workoutListTitle)
+                } else {
+                    NavigationLink {
+                        PeriodWorkoutCollectionView(store: store, rows: summary.workouts, title: workoutListTitle)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "list.bullet")
+                                .font(.title2)
+                                .foregroundStyle(.blue)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(workoutListTitle)
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                                Text("Browse and manage \(summary.runCount) \(summary.runCount == 1 ? "run" : "runs")")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding()
+                        .background(.background)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
     }
@@ -373,7 +481,11 @@ private struct PeriodSignalView: View {
     }
 
     private var evidenceDetail: String {
-        summary.runCount == 0 ? "No runs in this period" : "Runs include charts and splits"
+        let detailedCount = summary.workouts.filter { $0.workout.seriesAvailable || $0.workout.seriesSampleCount > 0 }.count
+        if summary.runCount == 0 { return "No runs in this period" }
+        if detailedCount == 0 { return "Summary metrics only" }
+        if detailedCount == summary.runCount { return "All runs include charts and splits" }
+        return "\(detailedCount) runs include charts and splits"
     }
 
     private func moveNewer() {
@@ -528,12 +640,28 @@ private struct PeriodComparisonPanel: View {
             SectionHeader("Compared with Previous")
 
             if let comparison = summary.comparison {
-                MetricGrid(items: [
-                    MetricItem(title: "Distance change", value: signedDistance(summary.distanceDeltaMeters), detail: summary.comparisonScopeLabel),
-                    MetricItem(title: "Run change", value: signedInt(summary.runCountDelta), detail: "Same day count"),
-                    MetricItem(title: "Previous distance", value: RunFormatters.distance(comparison.totalDistanceMeters), detail: "\(comparison.runCount) runs"),
-                    MetricItem(title: "Previous pace", value: RunFormatters.pace(comparison.averagePaceSecondsPerKm), detail: "Distance/time")
-                ])
+                VStack(spacing: 10) {
+                    comparisonRow(
+                        firstTitle: "Distance",
+                        firstValue: signedDistance(summary.distanceDeltaMeters),
+                        secondTitle: "Runs",
+                        secondValue: signedInt(summary.runCountDelta)
+                    )
+                    Divider()
+                    comparisonRow(
+                        firstTitle: "Previous",
+                        firstValue: RunFormatters.distance(comparison.totalDistanceMeters),
+                        secondTitle: "Previous pace",
+                        secondValue: RunFormatters.pace(comparison.averagePaceSecondsPerKm)
+                    )
+                    Text(summary.comparisonScopeLabel)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding()
+                .background(.background)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
             } else {
                 NoticeCard(
                     title: "No comparison period",
@@ -552,6 +680,29 @@ private struct PeriodComparisonPanel: View {
     private func signedInt(_ value: Int?) -> String {
         guard let value else { return "Unavailable" }
         return value > 0 ? "+\(value)" : "\(value)"
+    }
+
+    private func comparisonRow(
+        firstTitle: String,
+        firstValue: String,
+        secondTitle: String,
+        secondValue: String
+    ) -> some View {
+        HStack(spacing: 16) {
+            comparisonValue(title: firstTitle, value: firstValue)
+            comparisonValue(title: secondTitle, value: secondValue)
+        }
+    }
+
+    private func comparisonValue(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.headline.monospacedDigit())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -797,6 +948,25 @@ private struct WeeklyCategoryTotalsView: View {
     }
 }
 
+private struct PeriodWorkoutCollectionView: View {
+    var store: RunningAnalysisStore
+    let rows: [WeeklyWorkoutRow]
+    let title: String
+
+    var body: some View {
+        ScrollView {
+            WeeklyWorkoutList(store: store, rows: rows, title: title)
+                .padding()
+                .padding(.bottom, 120)
+        }
+        .navigationTitle(title)
+        .runSignalInlineNavigationTitle()
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: 84)
+        }
+    }
+}
+
 private struct WeeklyWorkoutList: View {
     var store: RunningAnalysisStore
     let rows: [WeeklyWorkoutRow]
@@ -923,7 +1093,7 @@ private struct WeeklyWorkoutList: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(RunWorkout(workout: row.workout).displayName)
+                Text(RunWorkout(workout: row.workout).runnerFacingTitle)
                     .font(.subheadline.bold())
                 Text("\(row.category.label) · \(RunFormatters.mediumDateWithYear.string(from: row.workout.startDate))")
                     .font(.caption2)

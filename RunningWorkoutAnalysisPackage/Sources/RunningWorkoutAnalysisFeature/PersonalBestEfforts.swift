@@ -119,9 +119,28 @@ public enum PersonalBestEffortEngine {
     public static func records(for workout: CanonicalWorkout) -> [PersonalBestEffortRecord] {
         guard let workoutDistance = workout.distanceMeters, workoutDistance > 0 else { return [] }
 
+        let sourceCaveats = distanceSourceCaveats(for: workout, evidence: workout.evidence)
+        let distanceSeries = workout.evidence?.series[.distance]
+        let timeline = distanceSeries.flatMap { DistanceTimeline(series: $0, workoutStart: workout.startDate) }
+        let pauseIntervals = pauseIntervals(
+            in: workout.evidence?.events ?? [],
+            workoutStart: workout.startDate,
+            workoutEnd: workout.endDate
+        )
+
         var records = PersonalBestEffortBucket.allCases
             .filter(\.isSegmentBucket)
-            .compactMap { record(for: $0, workout: workout, workoutDistance: workoutDistance) }
+            .compactMap {
+                record(
+                    for: $0,
+                    workout: workout,
+                    workoutDistance: workoutDistance,
+                    sourceCaveats: sourceCaveats,
+                    hasDistanceSeries: distanceSeries != nil,
+                    timeline: timeline,
+                    pauseIntervals: pauseIntervals
+                )
+            }
 
         records.append(longestRunRecord(for: workout, workoutDistance: workoutDistance))
         return records
@@ -130,18 +149,22 @@ public enum PersonalBestEffortEngine {
     private static func record(
         for bucket: PersonalBestEffortBucket,
         workout: CanonicalWorkout,
-        workoutDistance: Double
+        workoutDistance: Double,
+        sourceCaveats: [PersonalBestEffortCaveat],
+        hasDistanceSeries: Bool,
+        timeline: DistanceTimeline?,
+        pauseIntervals: [DateInterval]
     ) -> PersonalBestEffortRecord? {
         guard let target = bucket.distanceMeters, workoutDistance >= target else { return nil }
-        let sourceCaveats = distanceSourceCaveats(for: workout, evidence: workout.evidence)
 
-        if let series = workout.evidence?.series[.distance] {
+        if let timeline {
             let exact = exactSegmentRecord(
                 bucket: bucket,
                 workout: workout,
                 target: target,
-                series: series,
-                sourceCaveats: sourceCaveats
+                timeline: timeline,
+                sourceCaveats: sourceCaveats,
+                pauseIntervals: pauseIntervals
             )
             if let record = exact.record {
                 return record
@@ -152,6 +175,16 @@ public enum PersonalBestEffortEngine {
                 target: target,
                 workoutDistance: workoutDistance,
                 caveats: sourceCaveats + exact.fallbackCaveats
+            )
+        }
+
+        if hasDistanceSeries {
+            return estimatedRecord(
+                bucket: bucket,
+                workout: workout,
+                target: target,
+                workoutDistance: workoutDistance,
+                caveats: sourceCaveats + [.distanceSeriesUnusable]
             )
         }
 
@@ -168,14 +201,10 @@ public enum PersonalBestEffortEngine {
         bucket: PersonalBestEffortBucket,
         workout: CanonicalWorkout,
         target: Double,
-        series: WorkoutMetricSeries,
-        sourceCaveats: [PersonalBestEffortCaveat]
+        timeline: DistanceTimeline,
+        sourceCaveats: [PersonalBestEffortCaveat],
+        pauseIntervals: [DateInterval]
     ) -> (record: PersonalBestEffortRecord?, fallbackCaveats: [PersonalBestEffortCaveat]) {
-        guard let timeline = DistanceTimeline(series: series, workoutStart: workout.startDate) else {
-            return (nil, [.distanceSeriesUnusable])
-        }
-
-        let pauseIntervals = pauseIntervals(in: workout.evidence?.events ?? [], workoutStart: workout.startDate, workoutEnd: workout.endDate)
         var bestWindow: SegmentWindow?
         var failureCaveats: [PersonalBestEffortCaveat] = []
 
@@ -199,7 +228,8 @@ public enum PersonalBestEffortEngine {
             var caveats = sourceCaveats
             caveats.append(contentsOf: qualityCaveats(
                 bucket: bucket,
-                start: startSample.date,
+                startSampleIndex: startIndex,
+                endSampleIndex: endIndex,
                 end: endDate,
                 timeline: timeline
             ))
@@ -366,19 +396,28 @@ public enum PersonalBestEffortEngine {
 
     private static func qualityCaveats(
         bucket: PersonalBestEffortBucket,
-        start: Date,
+        startSampleIndex: Int,
+        endSampleIndex: Int,
         end: Date,
         timeline: DistanceTimeline
     ) -> [PersonalBestEffortCaveat] {
         var caveats: [PersonalBestEffortCaveat] = []
-        let rawSamples = timeline.rawSamples(in: start...end)
-        if bucket.isShortSegmentBucket, rawSamples.count < 4 {
+        if bucket.isShortSegmentBucket,
+           timeline.rawSampleCount(
+               startSampleIndex: startSampleIndex,
+               endSampleIndex: endSampleIndex,
+               end: end
+           ) < 4 {
             caveats.append(.shortBucketDensityLimited)
         }
 
         // Phase 1 uses a flat 30s standard-bucket threshold. If ultra buckets are added later, make this distance-scaled.
         let maxGapSeconds: TimeInterval = bucket.isShortSegmentBucket ? 10 : 30
-        if timeline.maximumRawSampleGapSeconds(start: start, end: end) > maxGapSeconds {
+        if timeline.maximumRawSampleGapSeconds(
+            startSampleIndex: startSampleIndex,
+            endSampleIndex: endSampleIndex,
+            end: end
+        ) > maxGapSeconds {
             caveats.append(.sampleGap)
         }
         return caveats
@@ -476,6 +515,7 @@ private struct DistanceSample {
 
 private struct DistanceTimeline {
     var samples: [DistanceSample]
+    private var gapMaximumLevels: [[TimeInterval]]
 
     init?(series: WorkoutMetricSeries, workoutStart: Date) {
         guard series.points.count > 1 else { return nil }
@@ -489,6 +529,23 @@ private struct DistanceTimeline {
         }
         guard total > 0 else { return nil }
         self.samples = samples
+        var gaps = Array(repeating: 0.0, count: samples.count)
+        for index in 1..<samples.count {
+            gaps[index] = samples[index].date.timeIntervalSince(samples[index - 1].date)
+        }
+        var levels = [gaps]
+        var width = 2
+        while width <= samples.count {
+            let half = width / 2
+            let previous = levels[levels.count - 1]
+            var next = previous
+            for index in 0...(samples.count - width) {
+                next[index] = max(previous[index], previous[index + half])
+            }
+            levels.append(next)
+            width *= 2
+        }
+        self.gapMaximumLevels = levels
     }
 
     func interpolatedDate(targetDistance: Double, lowerSampleIndex: Int, upperSampleIndex: Int) -> Date {
@@ -500,15 +557,56 @@ private struct DistanceTimeline {
         return lower.date.addingTimeInterval(upper.date.timeIntervalSince(lower.date) * ratio)
     }
 
-    func rawSamples(in range: ClosedRange<Date>) -> [DistanceSample] {
-        samples.dropFirst().filter { range.contains($0.date) }
+    func rawSampleCount(startSampleIndex: Int, endSampleIndex: Int, end: Date) -> Int {
+        let bounds = rawSampleBounds(
+            startSampleIndex: startSampleIndex,
+            endSampleIndex: endSampleIndex,
+            end: end
+        )
+        guard bounds.first <= bounds.last else { return 0 }
+        return bounds.last - bounds.first + 1
     }
 
-    func maximumRawSampleGapSeconds(start: Date, end: Date) -> TimeInterval {
-        let dates = [start] + rawSamples(in: start...end).map(\.date) + [end]
-        guard dates.count > 1 else { return end.timeIntervalSince(start) }
-        return zip(dates, dates.dropFirst())
-            .map { $1.timeIntervalSince($0) }
-            .max() ?? 0
+    func maximumRawSampleGapSeconds(
+        startSampleIndex: Int,
+        endSampleIndex: Int,
+        end: Date
+    ) -> TimeInterval {
+        let start = samples[startSampleIndex].date
+        let bounds = rawSampleBounds(
+            startSampleIndex: startSampleIndex,
+            endSampleIndex: endSampleIndex,
+            end: end
+        )
+        guard bounds.first <= bounds.last else {
+            return end.timeIntervalSince(start)
+        }
+
+        let leadingGap = samples[bounds.first].date.timeIntervalSince(start)
+        let trailingGap = end.timeIntervalSince(samples[bounds.last].date)
+        let internalGap = maximumGap(from: bounds.first + 1, through: bounds.last)
+        return max(leadingGap, trailingGap, internalGap)
+    }
+
+    private func rawSampleBounds(
+        startSampleIndex: Int,
+        endSampleIndex: Int,
+        end: Date
+    ) -> (first: Int, last: Int) {
+        let first = max(startSampleIndex, 1)
+        let includesUpperSample = samples[endSampleIndex].date <= end
+        let last = includesUpperSample ? endSampleIndex : endSampleIndex - 1
+        return (first, last)
+    }
+
+    private func maximumGap(from lowerIndex: Int, through upperIndex: Int) -> TimeInterval {
+        guard lowerIndex <= upperIndex else { return 0 }
+        let length = upperIndex - lowerIndex + 1
+        let level = Int.bitWidth - 1 - length.leadingZeroBitCount
+        let width = 1 << level
+        return max(
+            gapMaximumLevels[level][lowerIndex],
+            gapMaximumLevels[level][upperIndex - width + 1]
+        )
     }
 }

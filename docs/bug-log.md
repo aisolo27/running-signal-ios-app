@@ -44,6 +44,7 @@ Read only the section relevant to the task. Add entries only for recurring proje
 - Do not clear working cached evidence until replacement HealthKit queries succeed.
 - Apply the automatic-history cap before filtering out already analyzed workouts. Otherwise “newest 20” silently becomes 20 missing rows and drifts into older history.
 - Automatic detailed analysis stays sequential and shares one elapsed/Low Power/thermal budget across the queue. Existing detailed evidence that lacks derived analytics must be prepared off the main actor rather than skipped or broadly recomputed.
+- Best Efforts refresh must never run its full distance-series scan on the main actor. Build one distance timeline per workout, use indexed sample-gap queries, compute from a Sendable snapshot off actor, and publish only the finished summary.
 - SwiftData schema changes require an explicit migration plan.
 
 ## Interval Rows And Analytics
@@ -69,6 +70,8 @@ Read only the section relevant to the task. Add entries only for recurring proje
 - Keep launch work cheap: explicit branded launch screen plus a lightweight startup view until bootstrap completes.
 - Scroll-heavy screens need a bottom safe-area inset so the floating tab bar does not cover content.
 - Avoid expensive analytics in SwiftUI body paths; compute/cache through the store.
+- Visible history-row and detail hydration must not silently reclassify a workout. Row hydration may recover a cached plan name; classification belongs to import, analysis, or explicit review workflows.
+- Large history surfaces need search and direct year/type navigation. Do not place the complete run corpus inline in both Runs and All-Time Analytics.
 - Keep normal workout review runner-facing. Raw HealthKit events, evidence gates, parity packets, and audit wording belong behind Developer Mode.
 - Dark-mode secondary metadata needs explicit readable contrast.
 - When interval UI changes, compare prescribed, measured, elapsed, pause, active/timer, distance, pace basis, Raw Debug, and product rows for the same case.

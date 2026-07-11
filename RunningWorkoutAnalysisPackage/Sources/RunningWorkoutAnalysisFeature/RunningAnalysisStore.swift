@@ -299,6 +299,7 @@ public final class RunningAnalysisStore {
     private var prioritizedEvidenceWorkoutIDs: Set<String> = []
     private var automaticEvidenceAttemptedWorkoutIDs: Set<String> = []
     private var workoutPlanMetadataHydrationIDs: Set<String> = []
+    private var personalBestEffortRefreshGeneration = 0
     private weak var modelContext: ModelContext?
 
     public init(
@@ -455,6 +456,7 @@ public final class RunningAnalysisStore {
         loadPersistedTrainingPeriodSummaries()
         applyReviewedRunTypes()
         recompute(hydrateEvidence: false, refreshDerivedAnalyses: false, refreshTrainingPeriodSummaries: trainingPeriodSummaries.isEmpty)
+        await refreshPersonalBestEffortsFromInMemoryEvidence()
         refreshEvidenceRefreshJobs()
         refreshHealthKitImportJobSummary()
     }
@@ -507,6 +509,7 @@ public final class RunningAnalysisStore {
                 refreshHealthKitImportJobSummary()
                 updateHealthKitStatus(authorizationState: authorizationState, message: reason.message)
                 recompute()
+                await refreshPersonalBestEffortsFromInMemoryEvidence()
                 return
             }
 
@@ -537,6 +540,7 @@ public final class RunningAnalysisStore {
                     persistCurrent()
                 }
                 recompute()
+                await refreshPersonalBestEffortsFromInMemoryEvidence()
                 return
             }
 
@@ -580,6 +584,7 @@ public final class RunningAnalysisStore {
         )
         await startHealthKitBackgroundDelivery()
         recompute()
+        await refreshPersonalBestEffortsFromInMemoryEvidence()
     }
 
     private func loadHealthKitRunsWithoutImportJob() async {
@@ -604,6 +609,7 @@ public final class RunningAnalysisStore {
                 persistCurrent()
             }
             recompute()
+            await refreshPersonalBestEffortsFromInMemoryEvidence()
             return
         }
 
@@ -613,6 +619,7 @@ public final class RunningAnalysisStore {
         applyReviewedRunTypes()
         persistCurrent()
         recompute()
+        await refreshPersonalBestEffortsFromInMemoryEvidence()
     }
 
     public func refreshRunsListFromHealthKit() async {
@@ -652,6 +659,7 @@ public final class RunningAnalysisStore {
             )
             if includePostSyncMaintenance {
                 recompute()
+                await refreshPersonalBestEffortsFromInMemoryEvidence()
             }
             return
         }
@@ -676,6 +684,7 @@ public final class RunningAnalysisStore {
                 )
                 if includePostSyncMaintenance {
                     recompute()
+                    await refreshPersonalBestEffortsFromInMemoryEvidence()
                 }
                 return
             }
@@ -718,6 +727,7 @@ public final class RunningAnalysisStore {
                 )
                 if includePostSyncMaintenance {
                     recompute()
+                    await refreshPersonalBestEffortsFromInMemoryEvidence()
                 }
                 return
             }
@@ -755,6 +765,7 @@ public final class RunningAnalysisStore {
         )
         if includePostSyncMaintenance {
             recompute()
+            await refreshPersonalBestEffortsFromInMemoryEvidence()
         }
     }
 
@@ -829,6 +840,7 @@ public final class RunningAnalysisStore {
             markEvidenceQueueAttempt(ids: candidates, status: .failed, message: result.message)
         }
         recompute()
+        await refreshPersonalBestEffortsFromInMemoryEvidence()
     }
 
     public func loadFullAnalysisForWorkout(workoutID: String) async {
@@ -1203,6 +1215,7 @@ public final class RunningAnalysisStore {
             diagnosticsWarnings: returnedWorkout?.evidence?.diagnostics?.warnings ?? []
         )
         recompute()
+        await refreshPersonalBestEffortsFromInMemoryEvidence()
     }
 
     public func refreshEvidenceForMonth(containing selectedMonth: Date, calendar: Calendar = .current) async {
@@ -1363,6 +1376,7 @@ public final class RunningAnalysisStore {
 
         Self.refreshLogger.info("Monthly evidence refresh recompute started month=\(scopeKey, privacy: .public)")
         recompute()
+        await refreshPersonalBestEffortsFromInMemoryEvidence()
         Self.refreshLogger.info("Monthly evidence refresh recompute finished month=\(scopeKey, privacy: .public)")
 
         if let modelContext, let job {
@@ -1446,21 +1460,12 @@ public final class RunningAnalysisStore {
               let currentIndex = workouts.firstIndex(where: { $0.id == workoutID }),
               workouts[currentIndex].evidence == nil else { return }
 
-        let previousInferredRunType = workouts[currentIndex].inferredRunType
         workouts[currentIndex].evidence = evidence
         workouts[currentIndex].workoutPlanName = evidence.workoutPlanAudit?.displayName ?? workouts[currentIndex].workoutPlanName
         workouts[currentIndex].routePointCount = evidence.route.count
         workouts[currentIndex].seriesSampleCount = evidence.seriesSampleCount
         workouts[currentIndex].routeAvailable = workouts[currentIndex].routeAvailable || !evidence.route.isEmpty
         workouts[currentIndex].seriesAvailable = workouts[currentIndex].seriesAvailable || evidence.seriesSampleCount > 0
-        let suggestion = RunClassifier.suggestion(
-            for: workouts[currentIndex],
-            history: workouts,
-            maxHeartRate: healthContext.maxHeartRate
-        )
-        if suggestion.runType != .unknown || workouts[currentIndex].inferredRunType == .unknown {
-            workouts[currentIndex].inferredRunType = suggestion.runType
-        }
         PersistenceService.updateWorkoutPlanClassification(
             workoutID: workoutID,
             name: workouts[currentIndex].workoutPlanName,
@@ -1475,46 +1480,32 @@ public final class RunningAnalysisStore {
         if let derivedAnalysis = PersistenceService.fetchDerivedAnalysis(workoutID: workoutID, context: modelContext) {
             derivedAnalysesByWorkoutID[workoutID] = derivedAnalysis
         }
-        if workouts[currentIndex].inferredRunType != previousInferredRunType {
-            refreshSingleWorkoutDerivedState(workoutID: workoutID)
-        } else {
-            refreshEvidenceQueueSummary()
-        }
+        refreshEvidenceQueueSummary()
     }
 
     public func hydrateCachedWorkoutPlanNameIfAvailable(for workoutID: String) async {
         guard let index = workouts.firstIndex(where: { $0.id == workoutID }),
               !workoutPlanMetadataHydrationIDs.contains(workoutID),
-              let modelContext,
-              let evidenceData = PersistenceService.fetchEvidenceData(workoutID: workoutID, context: modelContext)
+              let modelContext
         else { return }
 
         workoutPlanMetadataHydrationIDs.insert(workoutID)
 
-        let sourceWorkout = workouts[index]
-        let history = workouts
-        let maxHeartRate = healthContext.maxHeartRate
-        let hydrated = await Task.detached(priority: .utility) {
+        let existingName = workouts[index].workoutPlanName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard existingName?.isEmpty != false,
+              let evidenceData = PersistenceService.fetchEvidenceData(workoutID: workoutID, context: modelContext)
+        else { return }
+
+        let planName = await Task.detached(priority: .utility) {
             guard let evidence = try? JSONDecoder().decode(WorkoutEvidence.self, from: evidenceData) else {
-                return (name: Optional<String>.none, suggestion: Optional<RunTypeSuggestion>.none)
+                return Optional<String>.none
             }
-            var workout = sourceWorkout
-            workout.evidence = evidence
-            workout.workoutPlanName = evidence.workoutPlanAudit?.displayName ?? workout.workoutPlanName
-            return (
-                name: workout.workoutPlanName?.trimmingCharacters(in: .whitespacesAndNewlines),
-                suggestion: RunClassifier.suggestion(for: workout, history: history, maxHeartRate: maxHeartRate)
-            )
+            return evidence.workoutPlanAudit?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
         }.value
         guard let currentIndex = workouts.firstIndex(where: { $0.id == workoutID }) else { return }
 
-        let previousInferredRunType = workouts[currentIndex].inferredRunType
-        if let planName = hydrated.name, !planName.isEmpty {
+        if let planName, !planName.isEmpty {
             workouts[currentIndex].workoutPlanName = planName
-        }
-        if let suggestion = hydrated.suggestion,
-           suggestion.runType != .unknown || workouts[currentIndex].inferredRunType == .unknown {
-            workouts[currentIndex].inferredRunType = suggestion.runType
         }
         PersistenceService.updateWorkoutPlanClassification(
             workoutID: workoutID,
@@ -1522,9 +1513,6 @@ public final class RunningAnalysisStore {
             inferredRunType: workouts[currentIndex].inferredRunType,
             context: modelContext
         )
-        if workouts[currentIndex].inferredRunType != previousInferredRunType {
-            refreshSingleWorkoutDerivedState(workoutID: workoutID)
-        }
     }
 
     public func evidenceQueueItem(for workoutID: String) -> EvidenceEnrichmentQueueItem? {
@@ -1807,7 +1795,6 @@ public final class RunningAnalysisStore {
         if !shouldRefreshDerivedAnalyses {
             loadPersistedDerivedAnalyses()
         }
-        refreshPersonalBestEffortsFromInMemoryEvidence()
         refreshEvidenceQueueSummary()
         if shouldRefreshDerivedAnalyses {
             derivedAnalysisRefreshSummary = refreshDerivedAnalyses()
@@ -1836,7 +1823,9 @@ public final class RunningAnalysisStore {
         }
     }
 
-    private func refreshPersonalBestEffortsFromInMemoryEvidence() {
+    private func refreshPersonalBestEffortsFromInMemoryEvidence() async {
+        personalBestEffortRefreshGeneration += 1
+        let generation = personalBestEffortRefreshGeneration
         let currentIDs = Set(workouts.map(\.id))
         let cached: PersonalBestEffortSummary? = loadPersonalBestEffortCache().flatMap { summary in
             let records = summary.allTime.filter { currentIDs.contains($0.workoutID) }
@@ -1848,7 +1837,11 @@ public final class RunningAnalysisStore {
             return
         }
 
-        let computed = PersonalBestEffortEngine.summarize(workouts: workouts)
+        let workoutSnapshot = workouts
+        let computed = await Task.detached(priority: .utility) {
+            PersonalBestEffortEngine.summarize(workouts: workoutSnapshot)
+        }.value
+        guard generation == personalBestEffortRefreshGeneration, !Task.isCancelled else { return }
         let derived = PersonalBestEffortSummary(
             allTime: derivedAnalysesByWorkoutID.values.flatMap { $0.personalBestEffortRecords ?? [] }
         )

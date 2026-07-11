@@ -93,6 +93,18 @@ import Testing
     #expect(run.categoryLabel == "Easy")
 }
 
+@Test func runWorkoutUsesCategoryAsFallbackTitleForHistoricalRuns() {
+    var workout = SampleData.workouts[0]
+    workout.environment = .outdoor
+    workout.workoutPlanName = nil
+    workout.inferredRunType = .longRun
+
+    #expect(RunWorkout(workout: workout).runnerFacingTitle == "Long Run (Outdoor)")
+
+    workout.inferredRunType = .unknown
+    #expect(RunWorkout(workout: workout).runnerFacingTitle == "Outdoor Run")
+}
+
 @Test func runnerTargetTextRemovesRawSpeedAndMetricDetails() {
     let raw = "pace range 6:00-6:30 /km, speed 2.56 m/s-2.78 m/s, metric current"
 
@@ -1035,7 +1047,7 @@ private func intervalForGoalMeasuredText(
         workoutID: workout.id,
         workoutPlanAudit: WorkoutPlanAudit(
             status: .available,
-            displayName: "Friday Easy 6K"
+            displayName: "Track Intervals"
         )
     )
     PersistenceService.upsert([workout], context: context)
@@ -1046,9 +1058,15 @@ private func intervalForGoalMeasuredText(
 
     await store.hydrateCachedWorkoutPlanNameIfAvailable(for: workout.id)
 
-    #expect(store.workouts.first?.workoutPlanName == "Friday Easy 6K")
+    #expect(store.workouts.first?.workoutPlanName == "Track Intervals")
     #expect(store.workouts.first?.evidence == nil)
-    #expect(PersistenceService.fetchWorkouts(context: context).first?.workoutPlanName == "Friday Easy 6K")
+    #expect(store.workouts.first?.inferredRunType == .easy)
+    #expect(PersistenceService.fetchWorkouts(context: context).first?.workoutPlanName == "Track Intervals")
+
+    await store.hydrateCachedEvidenceIfAvailable(for: workout.id)
+
+    #expect(store.workouts.first?.evidence != nil)
+    #expect(store.workouts.first?.inferredRunType == .easy)
 }
 
 @MainActor

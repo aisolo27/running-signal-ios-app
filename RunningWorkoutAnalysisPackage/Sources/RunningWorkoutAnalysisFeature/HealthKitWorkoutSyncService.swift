@@ -191,7 +191,7 @@ public final class HealthKitWorkoutSyncService: HealthKitWorkoutSyncServicing, @
         } catch {
             return HealthKitWorkoutSyncResult(
                 authorizationState: .error,
-                message: "Could not enable HealthKit background delivery."
+                message: "Automatic background updates are unavailable. RunSignal will refresh HealthKit when you open the app."
             )
         }
     }

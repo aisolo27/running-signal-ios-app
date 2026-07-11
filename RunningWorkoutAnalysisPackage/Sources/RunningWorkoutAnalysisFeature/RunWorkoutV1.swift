@@ -32,9 +32,22 @@ public struct RunWorkout: Identifiable, Equatable, Sendable {
     }
 
     public var runnerFacingTitle: String {
-        guard let customWorkoutName else { return displayName }
-        guard workout.environment != .unknown else { return customWorkoutName }
-        return "\(customWorkoutName) (\(workout.environment.label))"
+        if let customWorkoutName {
+            guard workout.environment != .unknown else { return customWorkoutName }
+            return "\(customWorkoutName) (\(workout.environment.label))"
+        }
+
+        let categoryTitle: String? = switch workout.effectiveRunType.visibleCategory {
+        case .easy: "Easy Run"
+        case .longRun: "Long Run"
+        case .interval: "Interval Run"
+        case .threshold: "Threshold Run"
+        case .race: "Race"
+        default: nil
+        }
+        guard let categoryTitle else { return displayName }
+        guard workout.environment != .unknown else { return categoryTitle }
+        return "\(categoryTitle) (\(workout.environment.label))"
     }
 
     public var categoryLabel: String {
