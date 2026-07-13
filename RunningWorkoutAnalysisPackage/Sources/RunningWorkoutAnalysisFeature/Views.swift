@@ -309,6 +309,40 @@ struct SettingsView: View {
     }
 }
 
+enum HeartRateZoneSettingsPresentation: Equatable {
+    case active
+    case draft
+    case unavailable
+
+    var statusTitle: String {
+        switch self {
+        case .active: "Active Profile"
+        case .draft: "Save Changes"
+        case .unavailable: "Profile Unavailable"
+        }
+    }
+
+    var supportingText: String {
+        switch self {
+        case .active:
+            "These zones are active now. Each workout uses the profile that was active when the workout began."
+        case .draft:
+            "These are proposed zones. Save Changes to make them active for workouts starting from now on; nothing changes until you save."
+        case .unavailable:
+            "RunSignal needs valid heart-rate inputs before this profile can be saved."
+        }
+    }
+
+    static func make(hasPreview: Bool, previewMatchesCurrentProfile: Bool) -> Self {
+        guard hasPreview else { return .unavailable }
+        return previewMatchesCurrentProfile ? .active : .draft
+    }
+
+    static func shouldOfferApplyToAllWorkouts(profileCount: Int) -> Bool {
+        profileCount > 1
+    }
+}
+
 private struct HeartRateZoneSettingsView: View {
     var store: RunningAnalysisStore
 
@@ -404,6 +438,13 @@ private struct HeartRateZoneSettingsView: View {
             && current.zoneLowerBounds == previewProfile.zoneLowerBounds
     }
 
+    private var presentation: HeartRateZoneSettingsPresentation {
+        .make(
+            hasPreview: previewProfile != nil,
+            previewMatchesCurrentProfile: previewMatchesCurrentProfile
+        )
+    }
+
     var body: some View {
         Form {
             Section("Method") {
@@ -475,26 +516,30 @@ private struct HeartRateZoneSettingsView: View {
             }
 
             Section {
-                Button {
-                    let saved = store.saveHeartRateZoneProfile(
-                        method: selectedMethod,
-                        manualLowerBounds: parsedManualBounds ?? [],
-                        maximumHeartRateOverride: Int(maximumHeartRateOverride)
-                    )
-                    saveMessage = saved
-                        ? "Saved for workouts from today forward. Past runs keep the profile active on their workout date."
-                        : "The profile could not be saved because required values are unavailable or invalid."
-                } label: {
-                    Label(
-                        previewMatchesCurrentProfile ? "Current Profile" : "Save Changes",
-                        systemImage: previewMatchesCurrentProfile ? "checkmark.circle.fill" : "checkmark.circle"
-                    )
+                if presentation == .active {
+                    Label(presentation.statusTitle, systemImage: "checkmark.circle.fill")
+                        .font(.headline)
+                        .foregroundStyle(.green)
                         .frame(maxWidth: .infinity)
+                } else {
+                    Button {
+                        let saved = store.saveHeartRateZoneProfile(
+                            method: selectedMethod,
+                            manualLowerBounds: parsedManualBounds ?? [],
+                            maximumHeartRateOverride: Int(maximumHeartRateOverride)
+                        )
+                        saveMessage = saved
+                            ? "\(selectedMethod.label) is now active."
+                            : "The profile could not be saved because required values are unavailable or invalid."
+                    } label: {
+                        Label(presentation.statusTitle, systemImage: "checkmark.circle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(presentation == .unavailable)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(previewProfile == nil || previewMatchesCurrentProfile)
 
-                Text("The values above are a preview. Tap Save Changes to use them for workouts from today forward; unsaved changes do not affect any run.")
+                Text(presentation.supportingText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -504,13 +549,21 @@ private struct HeartRateZoneSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Text("Changes create a new effective-dated profile. Older runs keep the profile that was active on their workout date, so a later lab test does not silently reclassify your history.")
+                Text("Saving creates a new effective-dated profile. Earlier workouts keep the profile that was active when they began, so a later lab test does not silently reclassify your history.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             if !store.heartRateZoneProfiles.isEmpty {
                 Section("Profile History") {
+                    if HeartRateZoneSettingsPresentation.shouldOfferApplyToAllWorkouts(
+                        profileCount: store.heartRateZoneProfiles.count
+                    ) {
+                        Button("Apply Current Profile to All Workouts", role: .destructive) {
+                            showingResetHistoryConfirmation = true
+                        }
+                    }
+
                     ForEach(store.heartRateZoneProfiles.sorted { $0.effectiveDate > $1.effectiveDate }) { profile in
                         VStack(alignment: .leading, spacing: 3) {
                             HStack {
@@ -525,10 +578,6 @@ private struct HeartRateZoneSettingsView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
-                    }
-
-                    Button("Reset History to Current Profile", role: .destructive) {
-                        showingResetHistoryConfirmation = true
                     }
                 }
             }
@@ -558,24 +607,32 @@ private struct HeartRateZoneSettingsView: View {
             saveMessage = nil
         }
         .confirmationDialog(
-            "Reset heart-rate-zone history?",
+            "Apply current profile to all workouts?",
             isPresented: $showingResetHistoryConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Reset to Current Profile", role: .destructive) {
+            Button("Apply to All Workouts", role: .destructive) {
                 if store.resetHeartRateZoneProfileHistoryToCurrent() {
-                    saveMessage = "Profile history reset. The current limits now apply to older workouts too."
+                    let method = store.currentHeartRateZoneProfile?.method.label ?? "Current profile"
+                    saveMessage = "\(method) now applies to all workouts. Earlier profile history was removed."
                 }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This removes earlier effective-dated profiles and applies the current profile to past workouts. This is the one action that can change historical time-in-zone results.")
+            Text("This removes earlier profiles and recalculates past workout time in zones using the current profile. This action changes historical results and cannot be undone.")
         }
     }
 
     private func effectiveDateText(_ profile: HeartRateZoneProfile) -> String {
-        profile.isHistoricalBackfill
-            ? "Existing history"
+        let isCurrent = profile.id == store.currentHeartRateZoneProfile?.id
+        if isCurrent, profile.isHistoricalBackfill {
+            return "Active · All workouts"
+        }
+        if isCurrent {
+            return "Active since \(RunFormatters.shortDate.string(from: profile.effectiveDate))"
+        }
+        return profile.isHistoricalBackfill
+            ? "Earlier workouts"
             : RunFormatters.shortDate.string(from: profile.effectiveDate)
     }
 }

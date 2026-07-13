@@ -3072,6 +3072,37 @@ private func intervalForGoalMeasuredText(
     #expect(store.heartRateZoneProfile(for: Date(timeIntervalSince1970: 1_000))?.id == remaining.id)
 }
 
+@Test func heartRateZoneSettingsCopyDistinguishesActiveDraftAndUnavailableProfiles() {
+    let active = HeartRateZoneSettingsPresentation.make(
+        hasPreview: true,
+        previewMatchesCurrentProfile: true
+    )
+    #expect(active.statusTitle == "Active Profile")
+    #expect(active.supportingText.contains("active now"))
+    #expect(!active.supportingText.contains("preview"))
+
+    let draft = HeartRateZoneSettingsPresentation.make(
+        hasPreview: true,
+        previewMatchesCurrentProfile: false
+    )
+    #expect(draft.statusTitle == "Save Changes")
+    #expect(draft.supportingText.contains("proposed zones"))
+    #expect(draft.supportingText.contains("starting from now on"))
+
+    let unavailable = HeartRateZoneSettingsPresentation.make(
+        hasPreview: false,
+        previewMatchesCurrentProfile: false
+    )
+    #expect(unavailable.statusTitle == "Profile Unavailable")
+    #expect(unavailable.supportingText.contains("valid heart-rate inputs"))
+}
+
+@Test func heartRateZoneHistoryReplacementIsOfferedOnlyWhenHistoryCanChange() {
+    #expect(!HeartRateZoneSettingsPresentation.shouldOfferApplyToAllWorkouts(profileCount: 0))
+    #expect(!HeartRateZoneSettingsPresentation.shouldOfferApplyToAllWorkouts(profileCount: 1))
+    #expect(HeartRateZoneSettingsPresentation.shouldOfferApplyToAllWorkouts(profileCount: 2))
+}
+
 @Test func heartRateZoneAnalysisWeightsSampleTimeAcrossZones() {
     let start = Date(timeIntervalSince1970: 30_000)
     var workout = testWorkout(id: "zone-time", start: start, distanceMeters: 1_000, durationSeconds: 60)
