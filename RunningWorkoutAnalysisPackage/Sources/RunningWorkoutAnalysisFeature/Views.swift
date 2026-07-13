@@ -54,12 +54,7 @@ struct RunsView: View {
 
     var body: some View {
         List {
-            if store.usesSampleData {
-                Section {
-                    NoticeCard(title: "Using Sample Data", message: "These workouts are placeholders. Load HealthKit from Settings to replace them with your completed running workouts.")
-                }
-                .listRowSeparator(.hidden)
-            } else if store.isLoading {
+            if store.isLoading {
                 Section {
                     HStack(spacing: 10) {
                         ProgressView()
@@ -129,7 +124,18 @@ struct RunsView: View {
 
             if runs.isEmpty {
                 Section {
-                    EmptyStateView(title: "No completed runs", message: "Load HealthKit to show completed running workouts.")
+                    EmptyStateView(
+                        title: "No completed runs yet",
+                        message: "Connect Apple Health to load your completed running workouts. RunSignal does not place demo workouts in your history."
+                    )
+                    Button {
+                        Task { await store.connectAndImportFromHealthKit() }
+                    } label: {
+                        Label("Connect Apple Health", systemImage: "heart.text.square")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(store.isLoading)
                 }
             } else if historySections.isEmpty {
                 Section {
@@ -204,14 +210,16 @@ struct SettingsView: View {
     @AppStorage("RunSignal.TemperatureUnit") private var temperatureUnitRaw = TemperatureUnitPreference.system.rawValue
 
     var body: some View {
+        let healthPresentation = store.healthKitConnectionPresentation
+
         Form {
-            Section("HealthKit") {
+            Section("Apple Health") {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
-                        Label(dataModeTitle, systemImage: store.usesSampleData ? "exclamationmark.triangle" : "heart.text.square")
+                        Label(healthPresentation.title, systemImage: "heart.text.square")
                             .font(.headline)
                         Spacer()
-                        if store.isLoading {
+                        if healthPresentation.showsProgress {
                             ProgressView()
                         }
                     }
@@ -225,9 +233,9 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                     Button {
-                        Task { await store.refreshFromHealthKit() }
+                        Task { await store.connectAndImportFromHealthKit() }
                     } label: {
-                        Label("Load HealthKit Runs", systemImage: "arrow.clockwise")
+                        Label(healthPresentation.action.title, systemImage: healthPresentation.action.systemImage)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
@@ -302,10 +310,6 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
-    }
-
-    private var dataModeTitle: String {
-        store.usesSampleData ? "Using Sample Data" : "HealthKit Connected"
     }
 }
 
@@ -841,6 +845,9 @@ struct HealthKitPermissionReviewView: View {
                         Text(item.reason)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        Label(item.visibleFeature, systemImage: "eye")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.blue)
                     }
                     .padding()
                     .background(.background)
@@ -985,7 +992,7 @@ struct HealthKitAuditView: View {
                 HeaderBlock(title: "HealthKit Audit", subtitle: "Per-run evidence found on device.")
 
                 if rows.isEmpty {
-                    EmptyStateView(title: "No workouts to audit", message: "Load HealthKit runs or keep sample data available before reviewing field coverage.")
+                    EmptyStateView(title: "No workouts to audit", message: "Connect Apple Health before reviewing field coverage.")
                 } else {
                     MetricGrid(items: [
                         MetricItem(title: "Runs", value: "\(rows.count)", detail: "Non-duplicate"),

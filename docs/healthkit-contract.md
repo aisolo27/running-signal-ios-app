@@ -1,6 +1,6 @@
 # HealthKit And WorkoutKit Contract
 
-Last updated: 2026-07-09
+Last updated: 2026-07-13
 
 This is the compact implementation reference for RunSignal's Apple Health integration. Current product status remains in `docs/project-state/project-status.md`.
 
@@ -24,8 +24,10 @@ This is the compact implementation reference for RunSignal's Apple Health integr
 ## Authorization And Queries
 
 - Request read access only. HealthKit does not reveal whether every individual read type was granted; report request completion and observed data availability separately.
+- Production first launch starts empty and explains the read-only, on-device use before presenting Apple's authorization sheet. Sample workouts remain test/debug fixtures and are never inserted into a user's run history.
 - Full user-requested history uses an unbounded workout summary query, processed in resumable windows.
 - Detailed evidence remains bounded and explicit because per-workout quantity/route/activity queries are expensive.
+- Best Efforts history verification has its own resumable distance-sample path. It checks every eligible run without turning the broader full-evidence queue into an unbounded import.
 - Prefer samples associated with the workout. Source/date fallback is weaker evidence and must retain provenance.
 - Route query callbacks can be concurrent; collection must be thread-safe.
 - Simulator data is sample-only and cannot prove real permissions or workout availability.
@@ -38,7 +40,8 @@ Requested data includes workouts, routes, walking/running distance, heart rate, 
 - `HKObserverQuery` wakes a lightweight summary-only sync path.
 - Foreground and observer sync share a single in-flight task.
 - First render must not wait on observer registration, background delivery, broad history, or detailed evidence hydration.
-- Explicit `Load HealthKit Runs` owns resumable full-history summary import.
+- `Connect Apple Health`, `Continue History Import`, and `Refresh Apple Health` expose the current action instead of one ambiguous load command.
+- Authorization time does not consume the history-import work budget. An ordinary elapsed slice yields and continues with a fresh budget; cancellation, Low Power Mode, and serious thermal state remain explicit pause reasons.
 - Detailed evidence/backfill obeys cancellation, elapsed-time, Low Power Mode, and thermal budgets.
 - Derived caches are disposable projections; HealthKit-backed workout records remain truth.
 
@@ -65,7 +68,8 @@ Missing or conflicting evidence yields whole-run-only behavior. Plan/sample reco
 - Shortened/skipped rows use measured distance and pause-adjusted active time.
 - Cadence is displayed as full steps per minute.
 - Elevation gain filters inaccurate route points and isolated altitude spikes.
-- Best Efforts require credible exact distance-series evidence; summary-only estimates are not official records.
+- Best Efforts require credible exact distance-series evidence. Summary-only estimates are never displayed in Best Efforts, restored from its cache, or merged back into its records.
+- While distance-only history verification is incomplete, the UI says `Verified Best Efforts` and reports checked/pending coverage. `All-Time Records` is reserved for complete imported and checked history.
 - Missing data lowers confidence or produces unavailable states; it must not be synthesized into certainty.
 
 ## Source Map

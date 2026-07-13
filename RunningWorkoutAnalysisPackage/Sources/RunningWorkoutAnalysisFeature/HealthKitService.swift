@@ -28,6 +28,7 @@ public protocol HealthKitServicing: AnyObject, Sendable {
         loadsHealthContext: Bool
     ) async -> HealthKitLoadResult
     func enrichRunningWorkouts(ids: [String]) async -> HealthKitLoadResult
+    func loadBestEffortEvidence(ids: [String]) async -> HealthKitLoadResult
     func loadHealthContext() async -> HealthContext
     func earliestPermittedSampleDate() async -> Date?
 }
@@ -50,6 +51,10 @@ public extension HealthKitServicing {
     }
 
     func earliestPermittedSampleDate() async -> Date? { nil }
+
+    func loadBestEffortEvidence(ids: [String]) async -> HealthKitLoadResult {
+        await enrichRunningWorkouts(ids: ids)
+    }
 }
 
 public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
@@ -163,6 +168,42 @@ public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
             )
         } catch {
             return HealthKitLoadResult(authorizationState: .error, workouts: [], healthContext: HealthContext(), message: "Could not enrich HealthKit running workouts.")
+        }
+    }
+
+    public func loadBestEffortEvidence(ids: [String]) async -> HealthKitLoadResult {
+        guard isAvailable else {
+            return HealthKitLoadResult(authorizationState: .unavailable, workouts: [], healthContext: HealthContext(), message: "Apple Health is not available on this device.")
+        }
+
+        do {
+            let workouts = try await queryRunningWorkouts(ids: ids)
+            var canonical = await HealthKitWorkoutMapper.normalize(
+                workouts,
+                store: store,
+                detailedEvidenceLimit: 0,
+                probeRoutesWhenEvidenceMissing: false
+            )
+            let evidenceService = WorkoutEvidenceService(store: store)
+            for index in canonical.indices {
+                guard let healthKitWorkout = workouts.first(where: {
+                    $0.uuid.uuidString == canonical[index].id
+                }) else { continue }
+                canonical[index].evidence = await evidenceService.loadBestEffortEvidence(for: healthKitWorkout)
+            }
+            return HealthKitLoadResult(
+                authorizationState: .partial,
+                workouts: canonical,
+                healthContext: HealthContext(),
+                message: nil
+            )
+        } catch {
+            return HealthKitLoadResult(
+                authorizationState: .error,
+                workouts: [],
+                healthContext: HealthContext(),
+                message: "Could not check Apple Health distance samples for Best Efforts."
+            )
         }
     }
 

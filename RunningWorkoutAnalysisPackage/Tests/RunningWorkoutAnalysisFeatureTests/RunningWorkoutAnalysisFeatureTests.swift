@@ -1333,7 +1333,7 @@ private func intervalForGoalMeasuredText(
 }
 
 @MainActor
-@Test func foregroundHealthKitSyncSkipsSampleOnlyFirstLaunch() async throws {
+@Test func foregroundHealthKitSyncSkipsEmptyFirstLaunchWithoutCreatingSamples() async throws {
     let syncDefaults = isolatedDefaults()
     defer { syncDefaults.reset() }
     let context = try inMemoryModelContext()
@@ -1344,7 +1344,9 @@ private func intervalForGoalMeasuredText(
 
     await store.bootstrap(modelContext: context)
 
-    #expect(store.usesSampleData)
+    #expect(!store.usesSampleData)
+    #expect(store.workouts.isEmpty)
+    #expect(PersistenceService.fetchWorkouts(context: context).isEmpty)
     #expect(!store.shouldSyncHealthKitOnForeground)
 }
 
@@ -1701,7 +1703,7 @@ private func intervalForGoalMeasuredText(
     #expect(job.status == .completed)
     #expect(job.importedCount == 1)
     #expect(store.healthKitImportJobSummary?.status == .completed)
-    #expect(store.healthKitImportJobSummary?.detailText == "1 imported · Up to date")
+    #expect(store.healthKitImportJobSummary?.detailText == "1 run loaded · History is up to date")
     #expect(store.workouts.contains { $0.id == imported.id })
     #expect(healthKit.windowedLoadRequests.first?.detailedEvidenceLimit == HealthKitService.defaultDetailedEvidenceLimit)
     #expect(healthKit.windowedLoadRequests.dropFirst().allSatisfy { $0.detailedEvidenceLimit == 0 })
@@ -1820,14 +1822,18 @@ private func intervalForGoalMeasuredText(
 }
 
 @MainActor
-@Test func healthKitInitialImportPausesWhenBudgetExpires() async throws {
+@Test func healthKitInitialImportPausesOnlyWhenFreshContinuationBudgetIsAlsoExpired() async throws {
     let context = try inMemoryModelContext()
     let healthKit = StubHealthKitService()
     let start = Date(timeIntervalSince1970: 0)
+    let budgetCreatedAfterAuthorization = BudgetCallCounter()
     let store = RunningAnalysisStore(
         healthKitService: healthKit,
         makeImportBudgetPolicy: {
-            IngestionBudgetPolicy(
+            if healthKit.authorizationRequestCount > 0 {
+                budgetCreatedAfterAuthorization.increment()
+            }
+            return IngestionBudgetPolicy(
                 startedAt: start,
                 maxElapsedSeconds: 1,
                 now: { Date(timeIntervalSince1970: 2) },
@@ -1845,8 +1851,43 @@ private func intervalForGoalMeasuredText(
     #expect(job.status == .paused)
     #expect(job.pauseReason == .elapsedBudgetExceeded)
     #expect(healthKit.windowedLoadRequests.isEmpty)
+    #expect(budgetCreatedAfterAuthorization.value == 2)
+    #expect(healthKit.authorizationRequestCount == 1)
     #expect(store.healthKitImportJobSummary?.status == .paused)
-    #expect(store.healthKitImportJobSummary?.detailText == "0 imported · Paused to keep the app responsive. Tap Load HealthKit Runs to continue.")
+    #expect(store.healthKitImportJobSummary?.detailText == "0 runs loaded · Paused briefly to keep RunSignal responsive.")
+}
+
+@MainActor
+@Test func healthKitInitialImportAutomaticallyContinuesAfterElapsedSlice() async throws {
+    let context = try inMemoryModelContext()
+    let healthKit = StubHealthKitService()
+    let start = Date(timeIntervalSince1970: 0)
+    let factoryCalls = BudgetCallCounter()
+    let store = RunningAnalysisStore(
+        healthKitService: healthKit,
+        makeImportBudgetPolicy: {
+            factoryCalls.increment()
+            let isFirstSlice = factoryCalls.value == 1
+            return IngestionBudgetPolicy(
+                startedAt: start,
+                maxElapsedSeconds: 1,
+                now: { Date(timeIntervalSince1970: isFirstSlice ? 2 : 0) },
+                isCancelled: { false },
+                isLowPowerModeEnabled: { false },
+                thermalState: { .nominal }
+            )
+        }
+    )
+
+    await store.bootstrap(modelContext: context)
+    await store.refreshFromHealthKit()
+
+    let job = try #require(PersistenceService.fetchHealthKitImportJob(context: context))
+    #expect(factoryCalls.value == 2)
+    #expect(healthKit.authorizationRequestCount == 1)
+    #expect(!healthKit.windowedLoadRequests.isEmpty)
+    #expect(job.status == .completed)
+    #expect(store.healthKitImportJobSummary?.detailText == "0 runs loaded · History is up to date")
 }
 
 @MainActor
@@ -1925,7 +1966,7 @@ private func intervalForGoalMeasuredText(
 }
 
 @MainActor
-@Test func healthKitBackgroundDeliverySkipsSampleOnlyFirstLaunch() async throws {
+@Test func healthKitBackgroundDeliverySkipsUnconnectedEmptyFirstLaunch() async throws {
     let context = try inMemoryModelContext()
     let syncService = StubHealthKitWorkoutSyncService()
     let store = RunningAnalysisStore(
@@ -1967,7 +2008,7 @@ private func intervalForGoalMeasuredText(
     #expect(syncService.observerStartCount == 1)
     #expect(store.authorizationState == .partial)
     #expect(store.workouts.count == 1)
-    #expect(store.message == "Could not enable HealthKit background delivery.")
+    #expect(store.message == "Apple Health is connected. RunSignal will check for new runs when you open the app.")
 }
 
 @MainActor
@@ -2468,6 +2509,226 @@ private func intervalForGoalMeasuredText(
             && $0.method == .exactSegment
             && $0.confidence == .exact
     })
+}
+
+@MainActor
+@Test func storeDropsEstimatedBestEffortsFromPersistedCache() async throws {
+    let context = try inMemoryModelContext()
+    let syncDefaults = isolatedDefaults()
+    defer { syncDefaults.reset() }
+    let start = Date(timeIntervalSince1970: 9_500)
+    let workout = testWorkout(
+        id: "cached-best-effort-filter",
+        start: start,
+        distanceMeters: 21_097.5,
+        durationSeconds: 7_200
+    )
+    PersistenceService.upsert([workout], context: context)
+
+    let estimatedHalfMarathon = PersonalBestEffortRecord(
+        bucket: .halfMarathon,
+        workoutID: workout.id,
+        date: start,
+        distanceMeters: 21_097.5,
+        durationSeconds: 7_200,
+        paceSecondsPerKm: 341.27,
+        method: .wholeRunEstimate,
+        confidence: .estimated,
+        caveats: [.summaryOnlyEstimate],
+        segmentStartDate: nil,
+        segmentEndDate: nil,
+        sourceWorkoutDistanceMeters: 21_097.5
+    )
+    let exactLongestRun = PersonalBestEffortRecord(
+        bucket: .longestRun,
+        workoutID: workout.id,
+        date: start,
+        distanceMeters: 21_097.5,
+        durationSeconds: 7_200,
+        paceSecondsPerKm: 341.27,
+        method: .totalDistance,
+        confidence: .exactTotal,
+        caveats: [],
+        segmentStartDate: nil,
+        segmentEndDate: nil,
+        sourceWorkoutDistanceMeters: 21_097.5
+    )
+    let cached = PersonalBestEffortSummary(allTime: [estimatedHalfMarathon, exactLongestRun])
+    syncDefaults.defaults.set(
+        try JSONEncoder().encode(cached),
+        forKey: "RunSignal.PersonalBestEffortSummary.v2"
+    )
+
+    let store = RunningAnalysisStore(syncDefaults: syncDefaults.defaults)
+    await store.bootstrap(modelContext: context)
+
+    #expect(store.personalBestEffortSummary.allTime == [exactLongestRun])
+    #expect(!store.personalBestEffortSummary.allTime.contains { $0.confidence == .estimated })
+}
+
+@MainActor
+@Test func bestEffortHistoryAnalysisChecksAllRunsAndPersistsExactRecords() async throws {
+    let context = try inMemoryModelContext()
+    let syncDefaults = isolatedDefaults()
+    defer { syncDefaults.reset() }
+    let start = Date(timeIntervalSince1970: 20_000)
+    let fiveKSummary = testWorkout(
+        id: "best-effort-history-5k",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    let halfSummary = testWorkout(
+        id: "best-effort-history-half",
+        start: start.addingTimeInterval(10_000),
+        distanceMeters: 22_000,
+        durationSeconds: 6_600
+    )
+    PersistenceService.upsert([fiveKSummary, halfSummary], context: context)
+
+    var detailedFiveK = fiveKSummary
+    detailedFiveK.evidence = WorkoutEvidence(
+        workoutID: fiveKSummary.id,
+        series: [
+            .distance: testSeries(
+                .distance,
+                values: Array(repeating: 100, count: 50),
+                start: fiveKSummary.startDate,
+                interval: 30
+            )
+        ]
+    )
+    var detailedHalf = halfSummary
+    detailedHalf.evidence = WorkoutEvidence(
+        workoutID: halfSummary.id,
+        series: [
+            .distance: testSeries(
+                .distance,
+                values: Array(repeating: 100, count: 220),
+                start: halfSummary.startDate,
+                interval: 30
+            )
+        ]
+    )
+    let service = StubHealthKitService()
+    service.bestEffortResults = [
+        HealthKitLoadResult(
+            authorizationState: .partial,
+            workouts: [detailedHalf, detailedFiveK],
+            healthContext: HealthContext(),
+            message: nil
+        )
+    ]
+    let store = RunningAnalysisStore(
+        healthKitService: service,
+        syncDefaults: syncDefaults.defaults
+    )
+
+    await store.bootstrap(modelContext: context)
+    await store.analyzeBestEffortHistory()
+
+    #expect(service.bestEffortIDs == [[halfSummary.id, fiveKSummary.id]])
+    #expect(store.bestEffortCoverageSummary.isComplete)
+    #expect(store.bestEffortCoverageSummary.checkedRunCount == 2)
+    #expect(store.personalBestEffortSummary.allTime.contains {
+        $0.bucket == .halfMarathon && $0.workoutID == halfSummary.id && $0.confidence == .exact
+    })
+    #expect(!store.personalBestEffortSummary.allTime.contains { $0.confidence == .estimated })
+
+    let reopenedStore = RunningAnalysisStore(syncDefaults: syncDefaults.defaults)
+    await reopenedStore.bootstrap(modelContext: context)
+    #expect(reopenedStore.bestEffortCoverageSummary.isComplete)
+    #expect(reopenedStore.personalBestEffortSummary == store.personalBestEffortSummary)
+}
+
+@MainActor
+@Test func bestEffortHistoryAnalysisRetriesRunsHealthKitDidNotReturn() async throws {
+    let context = try inMemoryModelContext()
+    let syncDefaults = isolatedDefaults()
+    defer { syncDefaults.reset() }
+    let summary = testWorkout(
+        id: "best-effort-history-retry",
+        start: Date(timeIntervalSince1970: 30_000),
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    PersistenceService.upsert([summary], context: context)
+    var detailed = summary
+    detailed.evidence = WorkoutEvidence(
+        workoutID: summary.id,
+        series: [
+            .distance: testSeries(
+                .distance,
+                values: Array(repeating: 100, count: 50),
+                start: summary.startDate,
+                interval: 30
+            )
+        ]
+    )
+    let service = StubHealthKitService()
+    service.bestEffortResults = [
+        HealthKitLoadResult(
+            authorizationState: .partial,
+            workouts: [],
+            healthContext: HealthContext(),
+            message: nil
+        ),
+        HealthKitLoadResult(
+            authorizationState: .partial,
+            workouts: [detailed],
+            healthContext: HealthContext(),
+            message: nil
+        )
+    ]
+    let store = RunningAnalysisStore(
+        healthKitService: service,
+        syncDefaults: syncDefaults.defaults
+    )
+
+    await store.bootstrap(modelContext: context)
+    await store.analyzeBestEffortHistory()
+    #expect(store.bestEffortCoverageSummary.failedRunCount == 1)
+    #expect(!store.bestEffortCoverageSummary.isComplete)
+
+    await store.analyzeBestEffortHistory(retryFailures: true)
+    #expect(store.bestEffortCoverageSummary.failedRunCount == 0)
+    #expect(store.bestEffortCoverageSummary.isComplete)
+    #expect(service.bestEffortIDs == [[summary.id], [summary.id]])
+}
+
+@MainActor
+@Test func bestEffortHistoryAnalysisPausesBeforeHealthKitInLowPowerMode() async throws {
+    let context = try inMemoryModelContext()
+    let syncDefaults = isolatedDefaults()
+    defer { syncDefaults.reset() }
+    let summary = testWorkout(
+        id: "best-effort-history-low-power",
+        start: Date(timeIntervalSince1970: 40_000),
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    PersistenceService.upsert([summary], context: context)
+    let service = StubHealthKitService()
+    let store = RunningAnalysisStore(
+        healthKitService: service,
+        syncDefaults: syncDefaults.defaults,
+        makeImportBudgetPolicy: {
+            IngestionBudgetPolicy(
+                maxElapsedSeconds: 45,
+                isCancelled: { false },
+                isLowPowerModeEnabled: { true },
+                thermalState: { .nominal }
+            )
+        }
+    )
+
+    await store.bootstrap(modelContext: context)
+    await store.analyzeBestEffortHistory()
+
+    #expect(service.bestEffortIDs.isEmpty)
+    #expect(store.bestEffortCoverageSummary.pendingRunCount == 1)
+    #expect(store.bestEffortCoverageSummary.statusTitle == "Best Effort analysis paused")
+    #expect(store.bestEffortCoverageSummary.detailText.contains("Low Power Mode"))
 }
 
 @MainActor
@@ -6148,10 +6409,93 @@ private func intervalForGoalMeasuredText(
 
 @Test func healthKitPermissionCatalogIsReadOnlyAndDocumentsReasons() {
     #expect(!HealthKitPermissionCatalog.readItems.isEmpty)
-    #expect(HealthKitPermissionCatalog.permissionExplanation.contains("not used for advertising or sold"))
+    #expect(HealthKitPermissionCatalog.permissionExplanation.contains("does not use health data for advertising or sell it"))
     #expect(HealthKitPermissionCatalog.readItems.allSatisfy { !$0.reason.isEmpty })
+    #expect(HealthKitPermissionCatalog.readItems.allSatisfy { !$0.visibleFeature.isEmpty })
     #expect(HealthKitPermissionCatalog.intentionallySkipped.contains("Cycling metrics"))
     #expect(HealthKitPermissionCatalog.markdown().contains("requests no write permissions"))
+    #expect(HealthKitPermissionCatalog.markdown().contains("verified best efforts"))
+}
+
+@Test func firstRunOnboardingAppearsOnlyForUnconnectedEmptyState() {
+    #expect(FirstRunOnboardingPolicy.shouldPresent(
+        onboardingCompleted: false,
+        hasWorkouts: false,
+        authorizationState: .notDetermined
+    ))
+    #expect(!FirstRunOnboardingPolicy.shouldPresent(
+        onboardingCompleted: true,
+        hasWorkouts: false,
+        authorizationState: .notDetermined
+    ))
+    #expect(!FirstRunOnboardingPolicy.shouldPresent(
+        onboardingCompleted: false,
+        hasWorkouts: true,
+        authorizationState: .partial
+    ))
+}
+
+@Test func healthKitConnectionPresentationUsesStateSpecificActions() {
+    let disconnected = HealthKitConnectionPresentation.make(
+        authorizationState: .notDetermined,
+        importStatus: nil,
+        hasWorkouts: false,
+        isLoading: false
+    )
+    let paused = HealthKitConnectionPresentation.make(
+        authorizationState: .partial,
+        importStatus: .paused,
+        hasWorkouts: true,
+        isLoading: false
+    )
+    let connected = HealthKitConnectionPresentation.make(
+        authorizationState: .partial,
+        importStatus: .completed,
+        hasWorkouts: true,
+        isLoading: false
+    )
+
+    #expect(disconnected.action == .connect)
+    #expect(disconnected.title == "Connect Apple Health")
+    #expect(paused.action == .continueImport)
+    #expect(paused.title == "History Import Paused")
+    #expect(connected.action == .refresh)
+    #expect(connected.title == "Apple Health Connected")
+}
+
+@Test func bestEffortCoverageWithholdsAllTimeClaimUntilEveryRunIsChecked() {
+    let active = BestEffortCoverageSummary(
+        checkedRunCount: 20,
+        pendingRunCount: 628,
+        failedRunCount: 0,
+        historyImportStatus: .completed,
+        isCheckingDetailedData: true
+    )
+    let complete = BestEffortCoverageSummary(
+        checkedRunCount: 648,
+        pendingRunCount: 0,
+        failedRunCount: 0,
+        historyImportStatus: .completed,
+        isCheckingDetailedData: false
+    )
+    let paused = BestEffortCoverageSummary(
+        checkedRunCount: 449,
+        pendingRunCount: 0,
+        failedRunCount: 0,
+        historyImportStatus: .paused,
+        isCheckingDetailedData: false
+    )
+
+    #expect(!active.isComplete)
+    #expect(active.sectionTitle == "Verified Best Efforts")
+    #expect(active.statusTitle == "Checking runs for best efforts")
+    #expect(active.analyticsSummary(recordCount: 4).contains("history analysis pending"))
+    #expect(complete.isComplete)
+    #expect(complete.sectionTitle == "All-Time Records")
+    #expect(complete.analyticsSummary(recordCount: 9) == "9 official all-time records")
+    #expect(!paused.showsProgress)
+    #expect(paused.statusTitle == "Run history paused")
+    #expect(paused.detailText.contains("Continue the Apple Health history import"))
 }
 
 @Test func goldenAppleFitnessValidationAppliesTolerances() {
@@ -7342,6 +7686,9 @@ private final class StubHealthKitService: HealthKitServicing, @unchecked Sendabl
     private(set) var windowedLoadRequests: [(startDate: Date?, endDate: Date?, detailedEvidenceLimit: Int, probeRoutesWhenEvidenceMissing: Bool)] = []
     var enrichResults: [HealthKitLoadResult]
     private(set) var enrichedIDs: [[String]] = []
+    var bestEffortResults: [HealthKitLoadResult] = []
+    private(set) var bestEffortIDs: [[String]] = []
+    private(set) var authorizationRequestCount = 0
 
     init(enrichResults: [HealthKitLoadResult] = []) {
         self.enrichResults = enrichResults
@@ -7350,7 +7697,8 @@ private final class StubHealthKitService: HealthKitServicing, @unchecked Sendabl
     var isAvailable: Bool { true }
 
     func requestAuthorization() async -> AuthorizationState {
-        .authorized
+        authorizationRequestCount += 1
+        return .authorized
     }
 
     func loadRunningWorkouts() async -> HealthKitLoadResult {
@@ -7379,6 +7727,19 @@ private final class StubHealthKitService: HealthKitServicing, @unchecked Sendabl
             )
         }
         return enrichResults.removeFirst()
+    }
+
+    func loadBestEffortEvidence(ids: [String]) async -> HealthKitLoadResult {
+        bestEffortIDs.append(ids)
+        guard !bestEffortResults.isEmpty else {
+            return HealthKitLoadResult(
+                authorizationState: .partial,
+                workouts: [],
+                healthContext: HealthContext(),
+                message: nil
+            )
+        }
+        return bestEffortResults.removeFirst()
     }
 
     func loadHealthContext() async -> HealthContext {

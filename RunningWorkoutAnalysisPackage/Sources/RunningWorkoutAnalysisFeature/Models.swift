@@ -293,7 +293,7 @@ public struct HealthKitActionStatus: Equatable, Sendable {
 
     public init(
         authorizationState: AuthorizationState = .notDetermined,
-        message: String = "Sample data is loaded until HealthKit returns workouts.",
+        message: String = "Connect Apple Health to load your completed running workouts.",
         updatedAt: Date? = nil
     ) {
         self.authorizationState = authorizationState

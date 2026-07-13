@@ -20,9 +20,11 @@ Read only the section relevant to the task. Add entries only for recurring proje
 
 ## HealthKit And WorkoutKit
 
+- Production bootstrap must never create or persist sample workouts. First launch stays empty until the user connects Apple Health; legacy sample rows are removed from the production cache.
 - HealthKit authorization completion does not prove every read type was granted. Use successful queries and data availability for user-facing state.
-- Background observer/delivery registration is not the HealthKit readiness authority. A registration failure may update its message, but it must not downgrade valid readiness already established by cached workouts or successful read queries.
+- Background observer/delivery registration is not the HealthKit readiness authority. A registration failure must not downgrade valid readiness established by cached workouts or successful queries, and user copy should state that foreground refresh remains available.
 - Full summary import must not cap history at 250 workouts. Keep expensive detailed evidence bounded separately.
+- Start the history-import elapsed budget only after authorization and window setup. An elapsed slice should yield and continue with a fresh budget; Low Power Mode, thermal state, and cancellation remain genuine pause conditions.
 - Associated-workout samples are stronger than source/date fallback; persist provenance.
 - `HKWorkoutRouteQuery` callbacks may be concurrent. Collect route points through thread-safe state.
 - HealthKit distance samples are interval contributions with start/end windows, not cumulative odometer values.
@@ -45,6 +47,7 @@ Read only the section relevant to the task. Add entries only for recurring proje
 - Apply the automatic-history cap before filtering out already analyzed workouts. Otherwise “newest 20” silently becomes 20 missing rows and drifts into older history.
 - Automatic detailed analysis stays sequential and shares one elapsed/Low Power/thermal budget across the queue. Existing detailed evidence that lacks derived analytics must be prepared off the main actor rather than skipped or broadly recomputed.
 - Best Efforts refresh must never run its full distance-series scan on the main actor. Build one distance timeline per workout, use indexed sample-gap queries, compute from a Sendable snapshot off actor, and publish only the finished summary.
+- Keep full workout analysis bounded to its recent/on-demand queue. Historical Best Efforts uses a separate resumable distance-only checkpoint so exact records can cover every run without loading routes, charts, mechanics, and plans for the entire history.
 - A derived-analytics behavior change must bump `DerivedWorkoutAnalysis.currentVersion`. When workout detail hydrates cached evidence, rebuild an outdated analysis row before presenting it; otherwise an old persisted result can survive a correct source-code fix.
 - SwiftData schema changes require an explicit migration plan.
 
@@ -61,7 +64,7 @@ Read only the section relevant to the task. Add entries only for recurring proje
 - Completion and pace-target status are independent. Shortened rows must keep `Shortened` visible even when their measured pace is on target; aggregate copy must also retain the shortened count. One-sided pace thresholds are not exact ranges.
 - Completed fixed-distance primary rows use prescribed distance plus the mapped HealthKit activity-row timer and activity-row heart-rate/cadence/power metrics. Displayed pace and target evaluation must use that same basis. Planned-distance goal windows remain internal evidence and must not silently override the primary row; shortened rows use measured distance and active time.
 - Pace is seconds per kilometer; aggregates use total duration over total distance.
-- Best Efforts reject impossible pace windows and summary-only estimates as official records.
+- Best Efforts reject impossible pace windows and summary-only estimates at compute, merge, cache-restore, and display boundaries. Do not label the section `All-Time Records` until summary import and distance-sample verification are complete for every eligible run.
 - Cadence is full steps per minute. Elevation gain filters poor-accuracy points and spikes.
 - Apple Fitness may differ slightly because of private smoothing and rounding; do not hard-fit isolated screenshots.
 - Priority 5 manual skip and all retained behavior cases live in `docs/project-state/regression-cases.md`.

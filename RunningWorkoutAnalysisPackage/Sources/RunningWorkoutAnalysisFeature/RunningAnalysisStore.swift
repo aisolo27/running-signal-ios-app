@@ -174,29 +174,29 @@ public struct HealthKitImportJobSummary: Equatable {
     public var statusTitle: String {
         switch status {
         case .queued:
-            "Queued"
+            "History Queued"
         case .running:
-            "Importing"
+            "Loading History"
         case .paused:
-            "Paused"
+            "History Paused"
         case .completed:
-            "Completed"
+            "History Current"
         case .failed:
-            "Failed"
+            "History Load Failed"
         case .blocked:
-            "Blocked"
+            "History Load Blocked"
         }
     }
 
     public var detailText: String {
-        var parts = ["\(importedCount) imported"]
-        if status == .running, let currentWindowStart, let currentWindowEnd, currentWindowStart != currentWindowEnd {
-            parts.append("Checking \(RunFormatters.date.string(from: currentWindowStart)) - \(RunFormatters.date.string(from: currentWindowEnd))")
+        var parts = ["\(importedCount) \(importedCount == 1 ? "run" : "runs") loaded"]
+        if status == .running, let currentWindowStart {
+            parts.append("Checking history before \(RunFormatters.date.string(from: currentWindowStart))")
         }
         if let lastError, !lastError.isEmpty {
             parts.append(lastError)
         } else if status == .completed {
-            parts.append("Up to date")
+            parts.append("History is up to date")
         }
         return parts.joined(separator: " · ")
     }
@@ -251,7 +251,7 @@ public struct DerivedAnalysisRefreshSummary: Equatable, Sendable {
 @MainActor
 @Observable
 public final class RunningAnalysisStore {
-    private static let personalBestCacheKey = "RunSignal.PersonalBestEffortSummary.v1"
+    private static let personalBestCacheKey = "RunSignal.PersonalBestEffortSummary.v2"
     private static let foregroundSyncMinimumInterval: TimeInterval = 15 * 60
     private static let refreshLogger = Logger(
         subsystem: "com.adrielsolorzano.runninganalysis",
@@ -264,8 +264,8 @@ public final class RunningAnalysisStore {
     public private(set) var isLoading = false
     public private(set) var isEnrichingAudit = false
     public private(set) var message = HealthKitActionStatus().message
-    public private(set) var usesSampleData = true
-    public private(set) var healthContext = SampleData.healthContext
+    public private(set) var usesSampleData = false
+    public private(set) var healthContext = HealthContext()
     public private(set) var heartRateZoneProfiles: [HeartRateZoneProfile] = []
     public private(set) var reviewedRunTypes: [ReviewedRunTypeRecord] = []
     public private(set) var runTypeReconciliation = RunTypeReconciliationSummary.empty
@@ -282,6 +282,8 @@ public final class RunningAnalysisStore {
     public private(set) var analyzingWorkoutIDs: Set<String> = []
     public private(set) var analysisProgressByWorkoutID: [String: WorkoutAnalysisProgress] = [:]
     public private(set) var pendingManualWorkoutIDs: Set<String> = []
+    public private(set) var isCheckingBestEffortHistory = false
+    public private(set) var bestEffortAnalysisPauseMessage: String?
     private var manualWorkoutUpdateVersions: [String: Int] = [:]
 
     public var evidenceRefreshJobSummaries: [EvidenceRefreshJobSummary] {
@@ -302,6 +304,8 @@ public final class RunningAnalysisStore {
     private var automaticEvidenceAttemptedWorkoutIDs: Set<String> = []
     private var workoutPlanMetadataHydrationIDs: Set<String> = []
     private var personalBestEffortRefreshGeneration = 0
+    private var bestEffortHistoryCheckpoint = BestEffortHistoryCheckpoint()
+    private var cachedEvidenceWorkoutIDs: Set<String> = []
     private weak var modelContext: ModelContext?
 
     public init(
@@ -321,15 +325,52 @@ public final class RunningAnalysisStore {
         self.syncPersistenceSave = syncPersistenceSave
         self.makeImportBudgetPolicy = makeImportBudgetPolicy
         heartRateZoneProfiles = HeartRateZoneProfilePersistence.load(defaults: syncDefaults)
+        bestEffortHistoryCheckpoint = BestEffortHistoryCheckpointStore.load(defaults: syncDefaults)
     }
 
     public var authorizationState: AuthorizationState {
         healthKitStatus.authorizationState
     }
 
+    public var healthKitConnectionPresentation: HealthKitConnectionPresentation {
+        HealthKitConnectionPresentation.make(
+            authorizationState: authorizationState,
+            importStatus: healthKitImportJobSummary?.status,
+            hasWorkouts: !V1WorkoutFilters.completedRuns(from: workouts).isEmpty,
+            isLoading: isLoading
+        )
+    }
+
+    public var bestEffortCoverageSummary: BestEffortCoverageSummary {
+        let eligibleIDs = bestEffortEligibleWorkoutIDs
+        let checkedIDs = bestEffortHistoryCheckpoint.checkedWorkoutIDs
+            .union(cachedEvidenceWorkoutIDs)
+            .intersection(eligibleIDs)
+        let failedIDs = bestEffortHistoryCheckpoint.failedWorkoutIDs
+            .subtracting(checkedIDs)
+            .intersection(eligibleIDs)
+        let importStatus: HealthKitImportJobStatus?
+        if let status = healthKitImportJobSummary?.status {
+            importStatus = status
+        } else {
+            importStatus = workouts.isEmpty ? nil : .completed
+        }
+        return BestEffortCoverageSummary(
+            checkedRunCount: checkedIDs.count,
+            pendingRunCount: eligibleIDs.subtracting(checkedIDs).subtracting(failedIDs).count,
+            failedRunCount: failedIDs.count,
+            historyImportStatus: importStatus,
+            isCheckingDetailedData: isCheckingBestEffortHistory,
+            pauseMessage: bestEffortAnalysisPauseMessage
+        )
+    }
+
     public var shouldSyncHealthKitOnForeground: Bool {
         guard HealthKitSyncStateStore.hasAnchor(defaults: syncDefaults) else { return false }
-        return !usesSampleData || healthKitStatus.authorizationState == .authorized || healthKitStatus.authorizationState == .partial || syncState.lastSyncAt != nil
+        return !workouts.isEmpty
+            || healthKitStatus.authorizationState == .authorized
+            || healthKitStatus.authorizationState == .partial
+            || syncState.lastSyncAt != nil
     }
 
     public func automaticHeartRateZoneInputs(now: Date = Date()) -> AutomaticHeartRateZoneInputs? {
@@ -609,42 +650,30 @@ public final class RunningAnalysisStore {
         PersistenceService.pauseRunningEvidenceRefreshJobs(context: modelContext)
 
         let persisted = PersistenceService.fetchWorkouts(context: modelContext)
-        if persisted.isEmpty {
-            workouts = SampleData.workouts
-            healthContext = SampleData.healthContext
-            usesSampleData = true
+        let persistedRealWorkouts = persisted.filter { !isSampleWorkout($0) }
+        if persistedRealWorkouts.isEmpty {
+            workouts = []
+            healthContext = HealthContext()
+            usesSampleData = false
             updateHealthKitStatus(
                 authorizationState: .notDetermined,
-                message: "Using Sample Data. Load HealthKit to replace these sample workouts."
+                message: "Connect Apple Health to load your completed running workouts."
             )
-            PersistenceService.upsert(workouts, context: modelContext)
-        } else if needsSampleEvidenceBackfill(persisted) {
-            workouts = SampleData.workouts
-            healthContext = SampleData.healthContext
-            usesSampleData = true
-            updateHealthKitStatus(
-                authorizationState: .notDetermined,
-                message: "Using Sample Data. Load HealthKit to replace these sample workouts."
-            )
-            PersistenceService.upsert(workouts, context: modelContext)
+            let legacySampleIDs = sampleWorkoutIDs(in: persisted)
+            if !legacySampleIDs.isEmpty {
+                PersistenceService.deleteWorkouts(ids: legacySampleIDs, context: modelContext)
+            }
         } else {
-            workouts = removeSampleWorkoutsIfRealDataExists(persisted)
-            usesSampleData = workouts.allSatisfy(isSampleWorkout)
+            workouts = persistedRealWorkouts
+            usesSampleData = false
             if workouts.count != persisted.count {
                 PersistenceService.deleteWorkouts(ids: sampleWorkoutIDs(in: persisted), context: modelContext)
             }
             workouts = DuplicateDetector.markDuplicates(workouts)
-            if usesSampleData {
-                updateHealthKitStatus(
-                    authorizationState: .notDetermined,
-                    message: "Using Sample Data. Load HealthKit to replace these sample workouts."
-                )
-            } else {
-                updateHealthKitStatus(
-                    authorizationState: .partial,
-                    message: "Loaded \(workouts.count) completed running workouts from the local HealthKit cache. Current read access is confirmed only by new HealthKit query results."
-                )
-            }
+            updateHealthKitStatus(
+                authorizationState: .partial,
+                message: "Loaded \(workouts.count) completed running workouts from the local Apple Health cache. Current read access is confirmed only by new Apple Health query results."
+            )
         }
         reviewedRunTypes = RunTypeReviewImportService.loadSavedReviews()
         syncState = HealthKitSyncState(lastSyncAt: HealthKitSyncStateStore.loadLastSyncAt(defaults: syncDefaults))
@@ -654,9 +683,150 @@ public final class RunningAnalysisStore {
         await refreshPersonalBestEffortsFromInMemoryEvidence()
         refreshEvidenceRefreshJobs()
         refreshHealthKitImportJobSummary()
+        bestEffortHistoryCheckpoint.retainWorkouts(ids: bestEffortEligibleWorkoutIDs)
+    }
+
+    @discardableResult
+    public func requestHealthKitAccess() async -> Bool {
+        if authorizationState == .authorized || authorizationState == .partial {
+            return true
+        }
+
+        isLoading = true
+        updateHealthKitStatus(
+            authorizationState: .requesting,
+            message: "Waiting for your Apple Health choices."
+        )
+        let state = await healthKitService.requestAuthorization()
+        isLoading = false
+
+        guard state == .authorized || state == .partial else {
+            updateHealthKitStatus(
+                authorizationState: state,
+                message: state == .unavailable
+                    ? "Apple Health is unavailable on this device."
+                    : "Apple Health access was not completed. You can try again when you are ready."
+            )
+            return false
+        }
+
+        updateHealthKitStatus(
+            authorizationState: state,
+            message: "Apple Health is connected. Finding your completed runs."
+        )
+        return true
+    }
+
+    public func connectAndImportFromHealthKit() async {
+        guard await requestHealthKitAccess() else { return }
+        await refreshFromHealthKit()
+        await analyzeBestEffortHistory()
+    }
+
+    public func analyzeBestEffortHistory(retryFailures: Bool = false) async {
+        if let automaticEvidenceTask {
+            await automaticEvidenceTask.value
+        }
+        guard !isCheckingBestEffortHistory else { return }
+        guard authorizationState == .authorized || authorizationState == .partial else { return }
+        guard !bestEffortEligibleWorkoutIDs.isEmpty else { return }
+
+        if retryFailures {
+            bestEffortHistoryCheckpoint.failedWorkoutIDs.removeAll()
+            BestEffortHistoryCheckpointStore.save(bestEffortHistoryCheckpoint, defaults: syncDefaults)
+        }
+        guard !bestEffortPendingWorkoutIDs.isEmpty else { return }
+
+        isCheckingBestEffortHistory = true
+        bestEffortAnalysisPauseMessage = nil
+        defer { isCheckingBestEffortHistory = false }
+        await runBestEffortHistoryAnalysis()
+    }
+
+    private func runBestEffortHistoryAnalysis() async {
+        var budget = makeImportBudgetPolicy()
+
+        while !Task.isCancelled {
+            if let reason = budget.pauseReason(allowsDetailedEvidence: true) {
+                if reason == .elapsedBudgetExceeded {
+                    await Task.yield()
+                    let continuedBudget = makeImportBudgetPolicy()
+                    if continuedBudget.pauseReason(allowsDetailedEvidence: true) == nil {
+                        budget = continuedBudget
+                        continue
+                    }
+                    bestEffortAnalysisPauseMessage = "Paused briefly to keep RunSignal responsive."
+                } else {
+                    bestEffortAnalysisPauseMessage = reason.message
+                }
+                return
+            }
+
+            let requestedIDs = Array(bestEffortPendingWorkoutIDs.prefix(4))
+            guard !requestedIDs.isEmpty else {
+                bestEffortAnalysisPauseMessage = nil
+                return
+            }
+
+            let result = await healthKitService.loadBestEffortEvidence(ids: requestedIDs)
+            guard result.authorizationState == .authorized || result.authorizationState == .partial else {
+                bestEffortHistoryCheckpoint.failedWorkoutIDs.formUnion(requestedIDs)
+                BestEffortHistoryCheckpointStore.save(bestEffortHistoryCheckpoint, defaults: syncDefaults)
+                bestEffortAnalysisPauseMessage = result.message ?? "Apple Health could not check these runs."
+                return
+            }
+
+            let returnedIDs = Set(result.workouts.map(\.id))
+            let workoutSnapshot = result.workouts
+            let exactRecords = await Task.detached(priority: .utility) {
+                workoutSnapshot
+                    .flatMap(PersonalBestEffortEngine.records(for:))
+                    .filter { $0.confidence == .exact || $0.confidence == .exactTotal }
+            }.value
+            personalBestEffortSummary = mergePersonalBestEfforts(
+                cached: personalBestEffortSummary,
+                computed: PersonalBestEffortSummary(allTime: exactRecords)
+            )
+            savePersonalBestEffortCache(personalBestEffortSummary)
+
+            bestEffortHistoryCheckpoint.checkedWorkoutIDs.formUnion(returnedIDs)
+            bestEffortHistoryCheckpoint.failedWorkoutIDs.subtract(returnedIDs)
+            bestEffortHistoryCheckpoint.failedWorkoutIDs.formUnion(Set(requestedIDs).subtracting(returnedIDs))
+            BestEffortHistoryCheckpointStore.save(bestEffortHistoryCheckpoint, defaults: syncDefaults)
+            await Task.yield()
+        }
+    }
+
+    private var bestEffortEligibleWorkoutIDs: Set<String> {
+        Set(V1WorkoutFilters.completedRuns(from: workouts)
+            .filter { !isSampleWorkout($0) }
+            .map(\.id))
+    }
+
+    private var bestEffortPendingWorkoutIDs: [String] {
+        let resolvedIDs = bestEffortHistoryCheckpoint.checkedWorkoutIDs
+            .union(bestEffortHistoryCheckpoint.failedWorkoutIDs)
+            .union(cachedEvidenceWorkoutIDs)
+        return V1WorkoutFilters.completedRuns(from: workouts)
+            .filter { !isSampleWorkout($0) && !resolvedIDs.contains($0.id) }
+            .sorted { lhs, rhs in
+                let lhsDistance = lhs.distanceMeters ?? 0
+                let rhsDistance = rhs.distanceMeters ?? 0
+                if lhsDistance != rhsDistance { return lhsDistance > rhsDistance }
+                return lhs.startDate > rhs.startDate
+            }
+            .map(\.id)
     }
 
     public func refreshFromHealthKit() async {
+        let accessIsReady = authorizationState == .authorized || authorizationState == .partial
+        if !accessIsReady {
+            guard await requestHealthKitAccess() else { return }
+        }
+        await importHealthKitHistory(authorizationState: authorizationState)
+    }
+
+    private func importHealthKitHistory(authorizationState: AuthorizationState) async {
         isLoading = true
         defer {
             isLoading = false
@@ -668,14 +838,6 @@ public final class RunningAnalysisStore {
             return
         }
 
-        let budget = makeImportBudgetPolicy()
-        let authorizationState = await healthKitService.requestAuthorization()
-        guard authorizationState == .authorized || authorizationState == .partial else {
-            PersistenceService.finishHealthKitImportJob(status: .blocked, message: "The HealthKit authorization request could not be completed.", context: modelContext)
-            refreshHealthKitImportJobSummary()
-            updateHealthKitStatus(authorizationState: authorizationState, message: "The HealthKit authorization request could not be completed.")
-            return
-        }
         healthContext = await healthKitService.loadHealthContext()
         let earliestPermittedDate = await healthKitService.earliestPermittedSampleDate()
         let windows = healthKitImportWindows(
@@ -695,17 +857,40 @@ public final class RunningAnalysisStore {
         )
         refreshHealthKitImportJobSummary()
 
+        var budget = makeImportBudgetPolicy()
         var importedTotal = 0
         var sawAuthorizedEmptyWindow = false
         for (index, window) in windows.enumerated() {
             let loadsDetailedEvidence = index == 0
             if let reason = budget.pauseReason(allowsDetailedEvidence: loadsDetailedEvidence) {
-                PersistenceService.pauseHealthKitImportJob(reason: reason, context: modelContext)
-                refreshHealthKitImportJobSummary()
-                updateHealthKitStatus(authorizationState: authorizationState, message: reason.message)
-                recompute()
-                await refreshPersonalBestEffortsFromInMemoryEvidence()
-                return
+                if reason == .elapsedBudgetExceeded {
+                    updateHealthKitStatus(
+                        authorizationState: authorizationState,
+                        message: "Continuing your run-history import while keeping RunSignal responsive."
+                    )
+                    await Task.yield()
+                    let continuedBudget = makeImportBudgetPolicy()
+                    if continuedBudget.pauseReason(allowsDetailedEvidence: loadsDetailedEvidence) == nil {
+                        budget = continuedBudget
+                    } else {
+                        PersistenceService.pauseHealthKitImportJob(reason: reason, context: modelContext)
+                        refreshHealthKitImportJobSummary()
+                        updateHealthKitStatus(
+                            authorizationState: authorizationState,
+                            message: "History import paused. Tap Continue History Import when you are ready."
+                        )
+                        recompute()
+                        await refreshPersonalBestEffortsFromInMemoryEvidence()
+                        return
+                    }
+                } else {
+                    PersistenceService.pauseHealthKitImportJob(reason: reason, context: modelContext)
+                    refreshHealthKitImportJobSummary()
+                    updateHealthKitStatus(authorizationState: authorizationState, message: reason.message)
+                    recompute()
+                    await refreshPersonalBestEffortsFromInMemoryEvidence()
+                    return
+                }
             }
 
             let result = await healthKitService.loadRunningWorkouts(
@@ -728,12 +913,6 @@ public final class RunningAnalysisStore {
                 let status: HealthKitImportJobStatus = result.authorizationState == .unavailable ? .blocked : .failed
                 PersistenceService.finishHealthKitImportJob(status: status, message: result.message, context: modelContext)
                 refreshHealthKitImportJobSummary()
-                if workouts.isEmpty {
-                    usesSampleData = true
-                    workouts = SampleData.workouts
-                    healthContext = SampleData.healthContext
-                    persistCurrent()
-                }
                 recompute()
                 await refreshPersonalBestEffortsFromInMemoryEvidence()
                 return
@@ -767,10 +946,6 @@ public final class RunningAnalysisStore {
             }
             persistCurrent()
         }
-        if workouts.isEmpty && usesSampleData {
-            workouts = SampleData.workouts
-            persistCurrent()
-        }
         PersistenceService.finishHealthKitImportJob(status: .completed, message: nil, context: modelContext)
         refreshHealthKitImportJobSummary()
         updateHealthKitStatus(
@@ -788,20 +963,13 @@ public final class RunningAnalysisStore {
         healthContext = result.healthContext
         updateHealthKitStatus(
             authorizationState: result.authorizationState,
-            message: result.message ?? "Loaded \(result.workouts.count) HealthKit running workouts."
+            message: result.message ?? "Loaded \(result.workouts.count) Apple Health running workouts."
         )
 
         guard !result.workouts.isEmpty else {
             if result.authorizationState == .authorized || result.authorizationState == .partial {
                 usesSampleData = false
                 workouts = []
-                persistCurrent()
-            } else {
-                usesSampleData = true
-                healthContext = SampleData.healthContext
-            }
-            if workouts.isEmpty && usesSampleData {
-                workouts = SampleData.workouts
                 persistCurrent()
             }
             recompute()
@@ -991,14 +1159,16 @@ public final class RunningAnalysisStore {
     }
 
     public func startHealthKitBackgroundDelivery() async {
-        guard didBootstrap, !usesSampleData || authorizationState == .authorized || authorizationState == .partial else { return }
+        guard didBootstrap,
+              authorizationState == .authorized || authorizationState == .partial else { return }
         let result = await syncService.startObservingRunningWorkoutChanges { [weak self] in
             guard let self else { return }
             await self.syncHealthKitChanges(includePostSyncMaintenance: false)
         }
         guard result.authorizationState == .authorized || result.authorizationState == .partial else {
             if result.authorizationState == .error {
-                message = result.message ?? "Could not register HealthKit background delivery."
+                Self.refreshLogger.notice("Apple Health background delivery unavailable; foreground refresh remains active")
+                message = "Apple Health is connected. RunSignal will check for new runs when you open the app."
             }
             return
         }
@@ -1957,9 +2127,9 @@ public final class RunningAnalysisStore {
         let calendar = Calendar(identifier: .gregorian)
         let productLowerBound = calendar.date(from: DateComponents(year: 2000, month: 1, day: 1)) ?? Date(timeIntervalSince1970: 0)
         guard let earliestPermittedDate, earliestPermittedDate > productLowerBound else {
-            return "HealthKit import finished. Read access is reflected by the workouts HealthKit returned."
+            return "Apple Health history is up to date. Access is reflected by the workouts Apple Health returned."
         }
-        return "HealthKit import finished for the history HealthKit permits from \(earliestPermittedDate.formatted(date: .abbreviated, time: .omitted))."
+        return "Apple Health history is up to date for the history available from \(earliestPermittedDate.formatted(date: .abbreviated, time: .omitted))."
     }
 
     private func invalidateLoadedEvidence(workoutID: String) {
@@ -1996,11 +2166,6 @@ public final class RunningAnalysisStore {
 
     private func evidencePendingCount(in workouts: [CanonicalWorkout]) -> Int {
         evidenceQueueSummary.pendingCount
-    }
-
-    private func needsSampleEvidenceBackfill(_ workouts: [CanonicalWorkout]) -> Bool {
-        workouts.allSatisfy { $0.sourceName == "Sample Apple Watch" }
-            && workouts.contains { $0.seriesAvailable && $0.seriesSampleCount == 0 }
     }
 
     private func persistCurrent() {
@@ -2089,7 +2254,8 @@ public final class RunningAnalysisStore {
         cached: PersonalBestEffortSummary?,
         computed: PersonalBestEffortSummary
     ) -> PersonalBestEffortSummary {
-        let candidates = (cached?.allTime ?? []) + computed.allTime
+        let candidates = ((cached?.allTime ?? []) + computed.allTime)
+            .filter { $0.confidence == .exact || $0.confidence == .exactTotal }
         let grouped = Dictionary(grouping: candidates, by: \.bucket)
         let selected = PersonalBestEffortBucket.allCases.compactMap { bucket -> PersonalBestEffortRecord? in
             guard let records = grouped[bucket], !records.isEmpty else { return nil }
@@ -2114,7 +2280,12 @@ public final class RunningAnalysisStore {
 
     private func loadPersonalBestEffortCache() -> PersonalBestEffortSummary? {
         guard let data = syncDefaults.data(forKey: Self.personalBestCacheKey) else { return nil }
-        return try? JSONDecoder().decode(PersonalBestEffortSummary.self, from: data)
+        guard let decoded = try? JSONDecoder().decode(PersonalBestEffortSummary.self, from: data) else {
+            return nil
+        }
+        return PersonalBestEffortSummary(
+            allTime: decoded.allTime.filter { $0.confidence == .exact || $0.confidence == .exactTotal }
+        )
     }
 
     private func savePersonalBestEffortCache(_ summary: PersonalBestEffortSummary) {
@@ -2215,13 +2386,15 @@ public final class RunningAnalysisStore {
 
     private func refreshEvidenceQueueSummary() {
         guard let modelContext else {
-            let items = EvidenceEnrichmentQueue.items(workouts: workouts, cachedEvidenceIDs: [])
+            cachedEvidenceWorkoutIDs = Set(workouts.compactMap { $0.evidence == nil ? nil : $0.id })
+            let items = EvidenceEnrichmentQueue.items(workouts: workouts, cachedEvidenceIDs: cachedEvidenceWorkoutIDs)
             evidenceQueueSummary = EvidenceEnrichmentQueue.summary(for: items)
             return
         }
+        cachedEvidenceWorkoutIDs = PersistenceService.fetchEvidenceIDs(context: modelContext)
         let items = EvidenceEnrichmentQueue.items(
             workouts: workouts,
-            cachedEvidenceIDs: PersistenceService.fetchEvidenceIDs(context: modelContext),
+            cachedEvidenceIDs: cachedEvidenceWorkoutIDs,
             failedStates: PersistenceService.fetchEnrichmentStateByID(context: modelContext)
         )
         evidenceQueueSummary = EvidenceEnrichmentQueue.summary(for: items)

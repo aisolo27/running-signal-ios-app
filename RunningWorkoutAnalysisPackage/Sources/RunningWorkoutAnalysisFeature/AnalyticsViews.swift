@@ -130,11 +130,15 @@ struct AnalyticsView: View {
     }
 
     private var bestEffortSummaryText: String {
-        let count = store.personalBestEffortSummary.allTime.count
-        guard count > 0 else {
-            return "Exact distance records appear after detailed analysis."
+        store.bestEffortCoverageSummary.analyticsSummary(
+            recordCount: verifiedBestEfforts.count
+        )
+    }
+
+    private var verifiedBestEfforts: [PersonalBestEffortRecord] {
+        store.personalBestEffortSummary.allTime.filter {
+            $0.confidence == .exact || $0.confidence == .exactTotal
         }
-        return "\(count) official all-time \(count == 1 ? "record" : "records")"
     }
 }
 
@@ -145,22 +149,52 @@ private struct BestEffortsView: View {
         Dictionary(uniqueKeysWithValues: store.workouts.map { ($0.id, $0) })
     }
 
+    private var verifiedBestEfforts: [PersonalBestEffortRecord] {
+        store.personalBestEffortSummary.allTime.filter {
+            $0.confidence == .exact || $0.confidence == .exactTotal
+        }
+    }
+
     var body: some View {
+        let coverage = store.bestEffortCoverageSummary
+
         List {
             Section {
-                Text("RunSignal uses detailed Apple Health distance samples for official segment records. Summary-only estimates are not promoted as best efforts.")
+                Text("RunSignal shows only best efforts verified from detailed Apple Health distance samples. Estimated times are never displayed as records.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
 
-            Section("All-Time Records") {
-                if store.personalBestEffortSummary.allTime.isEmpty {
+            if !coverage.isComplete {
+                Section {
+                    BestEffortCoverageCard(
+                        coverage: coverage,
+                        actionTitle: coverage.historyImportStatus == .paused
+                            ? "Continue History Import"
+                            : "Continue Analysis",
+                        action: {
+                            Task {
+                                if coverage.historyImportStatus == .paused {
+                                    await store.connectAndImportFromHealthKit()
+                                } else {
+                                    await store.analyzeBestEffortHistory(
+                                        retryFailures: coverage.failedRunCount > 0
+                                    )
+                                }
+                            }
+                        }
+                    )
+                }
+            }
+
+            Section(coverage.sectionTitle) {
+                if verifiedBestEfforts.isEmpty {
                     EmptyStateView(
-                        title: "No exact best efforts yet",
-                        message: "Detailed distance samples are needed before official segment records can be calculated."
+                        title: "No verified best efforts yet",
+                        message: coverage.detailText
                     )
                 } else {
-                    ForEach(store.personalBestEffortSummary.allTime, id: \.bucket) { effort in
+                    ForEach(verifiedBestEfforts, id: \.bucket) { effort in
                         if let workout = workoutsByID[effort.workoutID] {
                             NavigationLink {
                                 WorkoutDetailView(store: store, workoutID: workout.id)
@@ -175,9 +209,49 @@ private struct BestEffortsView: View {
             }
         }
         .navigationTitle("Best Efforts")
+        .task {
+            await store.analyzeBestEffortHistory()
+        }
         .safeAreaInset(edge: .bottom) {
             Color.clear.frame(height: 84)
         }
+    }
+}
+
+private struct BestEffortCoverageCard: View {
+    let coverage: BestEffortCoverageSummary
+    let actionTitle: String
+    let action: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            if coverage.showsProgress {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Image(systemName: "clock.arrow.circlepath")
+                    .foregroundStyle(.blue)
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(coverage.statusTitle)
+                    .font(.subheadline.bold())
+                Text(coverage.detailText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !coverage.showsProgress,
+                   coverage.historyImportStatus != .running,
+                   coverage.historyImportStatus != .queued,
+                   (coverage.pendingRunCount > 0 || coverage.failedRunCount > 0 || coverage.historyImportStatus == .paused) {
+                    Button(actionTitle, action: action)
+                        .font(.caption.bold())
+                        .buttonStyle(.borderless)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityIdentifier("best-effort-coverage")
     }
 }
 

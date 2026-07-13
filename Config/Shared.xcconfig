@@ -26,7 +26,7 @@ TARGETED_DEVICE_FAMILY = 1
 GENERATE_INFOPLIST_FILE = YES
 INFOPLIST_KEY_UISupportedInterfaceOrientations = portrait
 INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationLandscapeRight UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown
-INFOPLIST_KEY_NSHealthShareUsageDescription = RunSignal reads your running workouts, routes, heart rate, cadence, power, and mechanics to analyze training progress locally.
+INFOPLIST_KEY_NSHealthShareUsageDescription = RunSignal reads completed running workouts and related metrics to build run history, splits, trends, zones, and verified best efforts on this iPhone. RunSignal never writes Health data.
 INFOPLIST_KEY_UIBackgroundModes = healthkit
 INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen
 

@@ -14,6 +14,7 @@ public struct HealthKitPermissionItem: Identifiable, Equatable, Sendable {
     public var displayName: String
     public var healthKitIdentifier: String
     public var scope: HealthKitPermissionScope
+    public var visibleFeature: String
     public var reason: String
     public var isWorkoutScoped: Bool
     public var isBroadContext: Bool
@@ -22,6 +23,7 @@ public struct HealthKitPermissionItem: Identifiable, Equatable, Sendable {
         displayName: String,
         healthKitIdentifier: String,
         scope: HealthKitPermissionScope,
+        visibleFeature: String,
         reason: String,
         isWorkoutScoped: Bool,
         isBroadContext: Bool
@@ -29,6 +31,7 @@ public struct HealthKitPermissionItem: Identifiable, Equatable, Sendable {
         self.displayName = displayName
         self.healthKitIdentifier = healthKitIdentifier
         self.scope = scope
+        self.visibleFeature = visibleFeature
         self.reason = reason
         self.isWorkoutScoped = isWorkoutScoped
         self.isBroadContext = isBroadContext
@@ -36,23 +39,23 @@ public struct HealthKitPermissionItem: Identifiable, Equatable, Sendable {
 }
 
 public enum HealthKitPermissionCatalog {
-    public static let permissionExplanation = "RunSignal reads completed running workouts from HealthKit, including workout summaries, routes, heart rate, VO2 Max, resting heart rate, pace, power, cadence, running mechanics, and workout calories. Health data is used only for this read-only workout viewer and is not used for advertising or sold."
+    public static let permissionExplanation = "RunSignal reads completed running workouts and related metrics from Apple Health to build run history, workout detail, training analytics, heart-rate zones, and verified best efforts. Version 1 is read-only, processes this data on the iPhone, and does not use health data for advertising or sell it."
 
     public static let readItems: [HealthKitPermissionItem] = [
-        item("Workouts", "HKWorkoutTypeIdentifier", .coreRunning, "Find completed running workouts and preserve workout identity, source, duration, distance, and events.", workout: true),
-        item("Workout routes", "HKSeriesTypeIdentifierWorkoutRoute", .coreRunning, "Check route availability, GPS points, elevation, and outdoor workout evidence.", workout: true),
-        item("Walking + Running Distance", "HKQuantityTypeIdentifierDistanceWalkingRunning", .coreRunning, "Validate workout distance, derive splits, and compare summary distance to associated samples.", workout: true),
-        item("Step Count", "HKQuantityTypeIdentifierStepCount", .coreRunning, "Estimate cadence in full steps per minute when running cadence samples are unavailable.", workout: true),
-        item("Heart Rate", "HKQuantityTypeIdentifierHeartRate", .coreRunning, "Calculate workout average/max heart rate, drift, and future time-in-zone analysis.", workout: true),
-        item("VO2 Max", "HKQuantityTypeIdentifierVO2Max", .recovery, "Show optional whole-run fitness context when Apple Health has a recent value.", context: true),
-        item("Resting Heart Rate", "HKQuantityTypeIdentifierRestingHeartRate", .recovery, "Show optional whole-run recovery context when Apple Health has a recent value.", context: true),
-        item("Active Energy", "HKQuantityTypeIdentifierActiveEnergyBurned", .calories, "Show active calories separately and compare workout summary calories to associated samples.", workout: true),
-        item("Basal Energy", "HKQuantityTypeIdentifierBasalEnergyBurned", .calories, "Support total-calorie comparisons when HealthKit provides enough evidence; never invent missing total calories.", context: true),
-        item("Running Speed", "HKQuantityTypeIdentifierRunningSpeed", .coreRunning, "Support pacing-shape, split, and best-effort validation when available.", workout: true),
-        item("Running Power", "HKQuantityTypeIdentifierRunningPower", .coreRunning, "Analyze power trends and interval execution when Apple Watch records power.", workout: true),
-        item("Running Stride Length", "HKQuantityTypeIdentifierRunningStrideLength", .coreRunning, "Show running mechanics only when HealthKit records stride evidence.", workout: true),
-        item("Ground Contact Time", "HKQuantityTypeIdentifierRunningGroundContactTime", .coreRunning, "Show form/mechanics only when HealthKit records ground contact evidence.", workout: true),
-        item("Vertical Oscillation", "HKQuantityTypeIdentifierRunningVerticalOscillation", .coreRunning, "Show form/mechanics only when HealthKit records vertical oscillation evidence.", workout: true)
+        item("Workouts", "HKWorkoutTypeIdentifier", .coreRunning, "Run history and workout detail", "Find completed running workouts and preserve workout identity, source, duration, distance, and events.", workout: true),
+        item("Workout routes", "HKSeriesTypeIdentifierWorkoutRoute", .coreRunning, "Maps, elevation, and city", "Check route availability, GPS points, elevation, and outdoor workout evidence.", workout: true),
+        item("Walking + Running Distance", "HKQuantityTypeIdentifierDistanceWalkingRunning", .coreRunning, "Splits, pace, and verified best efforts", "Validate workout distance, derive splits, and compare summary distance to associated samples.", workout: true),
+        item("Step Count", "HKQuantityTypeIdentifierStepCount", .coreRunning, "Cadence fallback", "Estimate cadence in full steps per minute when running cadence samples are unavailable.", workout: true),
+        item("Heart Rate", "HKQuantityTypeIdentifierHeartRate", .coreRunning, "Heart-rate charts, zones, and drift", "Calculate workout average/max heart rate, drift, and time-in-zone analysis.", workout: true),
+        item("VO2 Max", "HKQuantityTypeIdentifierVO2Max", .recovery, "Analytics fitness context", "Show optional fitness context when Apple Health has a recent value.", context: true),
+        item("Resting Heart Rate", "HKQuantityTypeIdentifierRestingHeartRate", .recovery, "Automatic heart-rate-reserve zones", "Build optional automatic HRR zones when Apple Health has a recent value.", context: true),
+        item("Active Energy", "HKQuantityTypeIdentifierActiveEnergyBurned", .calories, "Workout calorie detail", "Show active calories separately and compare workout summary calories to associated samples.", workout: true),
+        item("Basal Energy", "HKQuantityTypeIdentifierBasalEnergyBurned", .calories, "Total calorie comparison", "Support total-calorie comparisons when Apple Health provides enough evidence; never invent missing total calories.", context: true),
+        item("Running Speed", "HKQuantityTypeIdentifierRunningSpeed", .coreRunning, "Pace charts and split validation", "Support pacing shape, splits, and verified best-effort validation when available.", workout: true),
+        item("Running Power", "HKQuantityTypeIdentifierRunningPower", .coreRunning, "Workout power detail", "Analyze power trends and interval execution when Apple Watch records power.", workout: true),
+        item("Running Stride Length", "HKQuantityTypeIdentifierRunningStrideLength", .coreRunning, "Running mechanics detail", "Show running mechanics only when Apple Health records stride evidence.", workout: true),
+        item("Ground Contact Time", "HKQuantityTypeIdentifierRunningGroundContactTime", .coreRunning, "Running mechanics detail", "Show form and mechanics only when Apple Health records ground-contact evidence.", workout: true),
+        item("Vertical Oscillation", "HKQuantityTypeIdentifierRunningVerticalOscillation", .coreRunning, "Running mechanics detail", "Show form and mechanics only when Apple Health records vertical-oscillation evidence.", workout: true)
     ]
 
     public static let intentionallySkipped: [String] = [
@@ -102,7 +105,7 @@ public enum HealthKitPermissionCatalog {
 
     public static func markdown() -> String {
         let requested = readItems.map { item in
-            "- \(item.displayName) (`\(item.healthKitIdentifier)`): \(item.reason)"
+            "- \(item.displayName) (`\(item.healthKitIdentifier)`) -> \(item.visibleFeature): \(item.reason)"
         }.joined(separator: "\n")
         let skipped = intentionallySkipped.map { "- \($0)" }.joined(separator: "\n")
 
@@ -129,6 +132,7 @@ public enum HealthKitPermissionCatalog {
         _ displayName: String,
         _ identifier: String,
         _ scope: HealthKitPermissionScope,
+        _ visibleFeature: String,
         _ reason: String,
         workout: Bool = false,
         context: Bool = false
@@ -137,6 +141,7 @@ public enum HealthKitPermissionCatalog {
             displayName: displayName,
             healthKitIdentifier: identifier,
             scope: scope,
+            visibleFeature: visibleFeature,
             reason: reason,
             isWorkoutScoped: workout,
             isBroadContext: context

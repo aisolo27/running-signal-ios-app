@@ -75,6 +75,24 @@ public final class WorkoutEvidenceService: @unchecked Sendable {
         )
     }
 
+    public func loadBestEffortEvidence(for workout: HKWorkout) async -> WorkoutEvidence {
+        let distance = await quantitySeries(
+            .distanceWalkingRunning,
+            unit: .meter(),
+            metric: .distance,
+            unitLabel: "m",
+            workout: workout
+        )
+        let series = distance.series.map { [WorkoutEvidenceMetric.distance: $0] } ?? [:]
+        return WorkoutEvidence(
+            workoutID: workout.uuid.uuidString,
+            loadedAt: Date(),
+            series: series,
+            events: evidenceEvents(for: workout),
+            diagnostics: WorkoutEvidenceDiagnostics(queryDiagnostics: [distance.diagnostic])
+        )
+    }
+
     private func weatherMetadata(for workout: HKWorkout) -> WorkoutWeather? {
         let metadata = workout.metadata ?? [:]
         let temperature = (metadata[HKMetadataKeyWeatherTemperature] as? HKQuantity)?
