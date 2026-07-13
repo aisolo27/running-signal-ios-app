@@ -7,6 +7,7 @@ struct RunsView: View {
     @State private var searchText = ""
     @State private var selectedYear: Int?
     @State private var selectedCategory: WeeklyRunCategory?
+    @State private var collapsedYears: Set<Int> = []
 
     private var runs: [CanonicalWorkout] {
         V1WorkoutFilters.completedRuns(from: store.workouts)
@@ -111,6 +112,16 @@ struct RunsView: View {
                     .buttonStyle(.bordered)
                 }
 
+                if selectedYear != nil || selectedCategory != nil {
+                    Button {
+                        selectedYear = nil
+                        selectedCategory = nil
+                    } label: {
+                        Label("Clear Filters", systemImage: "xmark.circle")
+                    }
+                    .buttonStyle(.bordered)
+                }
+
                 Text("\(filteredHistory.count) past \(filteredHistory.count == 1 ? "run" : "runs")")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -126,16 +137,42 @@ struct RunsView: View {
                 }
             } else {
                 ForEach(historySections) { section in
-                    Section(String(section.year)) {
-                        ForEach(section.workouts) { workout in
-                            NavigationLink {
-                                WorkoutDetailView(store: store, workoutID: workout.id)
+                    Section {
+                        if selectedYear != nil || !collapsedYears.contains(section.year) {
+                            ForEach(section.workouts) { workout in
+                                NavigationLink {
+                                    WorkoutDetailView(store: store, workoutID: workout.id)
+                                } label: {
+                                    V1WorkoutRow(workout: workout)
+                                }
+                                .task {
+                                    await store.hydrateCachedWorkoutPlanNameIfAvailable(for: workout.id)
+                                }
+                            }
+                        }
+                    } header: {
+                        if selectedYear == nil {
+                            Button {
+                                if collapsedYears.contains(section.year) {
+                                    collapsedYears.remove(section.year)
+                                } else {
+                                    collapsedYears.insert(section.year)
+                                }
                             } label: {
-                                V1WorkoutRow(workout: workout)
+                                HStack {
+                                    Text(String(section.year))
+                                    Spacer()
+                                    Text("\(section.workouts.count) runs")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Image(systemName: collapsedYears.contains(section.year) ? "chevron.right" : "chevron.down")
+                                }
+                                .contentShape(Rectangle())
                             }
-                            .task {
-                                await store.hydrateCachedWorkoutPlanNameIfAvailable(for: workout.id)
-                            }
+                            .buttonStyle(.plain)
+                            .textCase(nil)
+                        } else {
+                            Text(String(section.year))
                         }
                     }
                 }
@@ -206,6 +243,22 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Training") {
+                NavigationLink {
+                    HeartRateZoneSettingsView(store: store)
+                } label: {
+                    LabeledContent {
+                        Text(store.currentHeartRateZoneProfile?.method.label ?? "Set Up")
+                            .foregroundStyle(.secondary)
+                    } label: {
+                        Label("Heart Rate Zones", systemImage: "heart.text.square")
+                    }
+                }
+                Text("RunSignal keeps effective-dated zone profiles so changing zones does not rewrite older runs.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Data & Diagnostics") {
                 DisclosureGroup {
                     LabeledContent("Runs", value: "\(V1WorkoutFilters.completedRuns(from: store.workouts).count)")
@@ -253,6 +306,329 @@ struct SettingsView: View {
 
     private var dataModeTitle: String {
         store.usesSampleData ? "Using Sample Data" : "HealthKit Connected"
+    }
+}
+
+private struct HeartRateZoneSettingsView: View {
+    var store: RunningAnalysisStore
+
+    @State private var selectedMethod = HeartRateZoneMethod.automaticHeartRateReserve
+    @State private var manualBounds = ManualHeartRateZoneBoundaries.defaultLowerBounds
+    @State private var maximumHeartRateOverride = ""
+    @State private var saveMessage: String?
+    @State private var showingResetHistoryConfirmation = false
+    @State private var didLoadInitialProfile = false
+
+    private var automaticInputs: AutomaticHeartRateZoneInputs? {
+        store.automaticHeartRateZoneInputs()
+    }
+
+    private var maximumInput: MaximumHeartRateLookbackResult? {
+        store.maximumHeartRateLookback()
+    }
+
+    private var parsedManualBounds: [Int]? {
+        let boundaries = ManualHeartRateZoneBoundaries(zoneLowerBounds: manualBounds)
+        return boundaries.zoneLowerBounds == manualBounds ? manualBounds : nil
+    }
+
+    private var manualBoundaryBinding: Binding<ManualHeartRateZoneBoundaries> {
+        Binding(
+            get: { ManualHeartRateZoneBoundaries(zoneLowerBounds: manualBounds) },
+            set: {
+                manualBounds = $0.zoneLowerBounds
+                saveMessage = nil
+            }
+        )
+    }
+
+    private var selectedAutomaticInputs: AutomaticHeartRateZoneInputs? {
+        guard !maximumHeartRateOverride.isEmpty else { return automaticInputs }
+        guard let maximum = Int(maximumHeartRateOverride),
+              let restingValue = store.healthContext.restingHeartRate else { return nil }
+        let resting = Int(restingValue.rounded())
+        guard maximum >= 80, maximum <= 230, maximum >= resting + 20 else { return nil }
+        return AutomaticHeartRateZoneInputs(
+            restingHeartRate: resting,
+            maximumHeartRate: maximum,
+            maximumHeartRateDate: nil,
+            lookbackMonths: HeartRateZoneProfileFactory.automaticLookbackMonths
+        )
+    }
+
+    private var selectedMaximumInput: MaximumHeartRateLookbackResult? {
+        guard !maximumHeartRateOverride.isEmpty else { return maximumInput }
+        guard let maximum = Int(maximumHeartRateOverride), maximum >= 80, maximum <= 230 else { return nil }
+        return MaximumHeartRateLookbackResult(
+            maximumHeartRate: maximum,
+            maximumHeartRateDate: nil,
+            lookbackMonths: HeartRateZoneProfileFactory.automaticLookbackMonths
+        )
+    }
+
+    private var previewProfile: HeartRateZoneProfile? {
+        let now = Date()
+        switch selectedMethod {
+        case .automaticHeartRateReserve:
+            return selectedAutomaticInputs.map {
+                HeartRateZoneProfileFactory.automaticProfile(
+                    inputs: $0,
+                    effectiveDate: now,
+                    createdAt: now,
+                    maximumHeartRateIsUserOverride: !maximumHeartRateOverride.isEmpty
+                )
+            }
+        case .percentMaximum:
+            return selectedMaximumInput.map {
+                HeartRateZoneProfileFactory.percentMaximumProfile(
+                    maximumInput: $0,
+                    effectiveDate: now,
+                    createdAt: now,
+                    maximumHeartRateIsUserOverride: !maximumHeartRateOverride.isEmpty
+                )
+            }
+        case .manual:
+            return parsedManualBounds.flatMap {
+                HeartRateZoneProfileFactory.manualProfile(zoneLowerBounds: $0, effectiveDate: now, createdAt: now)
+            }
+        }
+    }
+
+    private var previewMatchesCurrentProfile: Bool {
+        guard let previewProfile,
+              let current = store.currentHeartRateZoneProfile else { return false }
+        return current.method == previewProfile.method
+            && current.restingHeartRate == previewProfile.restingHeartRate
+            && current.maximumHeartRate == previewProfile.maximumHeartRate
+            && current.maximumHeartRateIsUserOverride == previewProfile.maximumHeartRateIsUserOverride
+            && current.zoneLowerBounds == previewProfile.zoneLowerBounds
+    }
+
+    var body: some View {
+        Form {
+            Section("Method") {
+                Picker("Calculation", selection: $selectedMethod) {
+                    ForEach(HeartRateZoneMethod.allCases) { method in
+                        Text(method.label).tag(method)
+                    }
+                }
+                Text(selectedMethod.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if selectedMethod != .manual {
+                Section("Automatic Inputs") {
+                    LabeledContent("Maximum HR lookback", value: "6 months")
+                    if selectedMethod == .automaticHeartRateReserve {
+                        LabeledContent(
+                            "Resting heart rate",
+                            value: automaticInputs.map { "\($0.restingHeartRate) bpm" } ?? "Unavailable"
+                        )
+                    }
+                    LabeledContent(
+                        "Maximum heart rate",
+                        value: selectedMaximumInput.map { "\($0.maximumHeartRate) bpm" } ?? "Unavailable"
+                    )
+                    TextField("Confirmed maximum override (optional)", text: $maximumHeartRateOverride)
+                    if let date = maximumInput?.maximumHeartRateDate, maximumHeartRateOverride.isEmpty {
+                        LabeledContent("Maximum observed", value: RunFormatters.workoutFullDate.string(from: date))
+                    }
+                    Text("The maximum comes from credible completed running workouts in the previous six months. Automatic HRR uses the latest resting-heart-rate value available from Apple Health.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section(selectedMethod == .manual ? "Manual Zones" : "Calculated Zones") {
+                if selectedMethod == .manual {
+                    Text("Tap a zone to edit its lower or upper limit. Changing a limit automatically moves the touching limit in the adjacent zone, so there are no gaps or overlaps.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    ForEach(1...5, id: \.self) { zone in
+                        NavigationLink {
+                            ManualHeartRateZoneEditorView(
+                                zone: zone,
+                                boundaries: manualBoundaryBinding
+                            )
+                        } label: {
+                            LabeledContent(
+                                "Zone \(zone)",
+                                value: ManualHeartRateZoneBoundaries(zoneLowerBounds: manualBounds)
+                                    .ranges[zone - 1]
+                                    .displayRange
+                            )
+                        }
+                    }
+                }
+
+                if selectedMethod != .manual, let previewProfile {
+                    ForEach(previewProfile.ranges) { range in
+                        LabeledContent("Zone \(range.zone)", value: range.displayRange)
+                    }
+                } else if selectedMethod != .manual {
+                    Text("RunSignal needs a recent running maximum and a resting heart rate from Apple Health before this method can be used.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section {
+                Button {
+                    let saved = store.saveHeartRateZoneProfile(
+                        method: selectedMethod,
+                        manualLowerBounds: parsedManualBounds ?? [],
+                        maximumHeartRateOverride: Int(maximumHeartRateOverride)
+                    )
+                    saveMessage = saved
+                        ? "Saved for workouts from today forward. Past runs keep the profile active on their workout date."
+                        : "The profile could not be saved because required values are unavailable or invalid."
+                } label: {
+                    Label(
+                        previewMatchesCurrentProfile ? "Current Profile" : "Save Changes",
+                        systemImage: previewMatchesCurrentProfile ? "checkmark.circle.fill" : "checkmark.circle"
+                    )
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(previewProfile == nil || previewMatchesCurrentProfile)
+
+                Text("The values above are a preview. Tap Save Changes to use them for workouts from today forward; unsaved changes do not affect any run.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if let saveMessage {
+                    Text(saveMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Text("Changes create a new effective-dated profile. Older runs keep the profile that was active on their workout date, so a later lab test does not silently reclassify your history.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if !store.heartRateZoneProfiles.isEmpty {
+                Section("Profile History") {
+                    ForEach(store.heartRateZoneProfiles.sorted { $0.effectiveDate > $1.effectiveDate }) { profile in
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Text(profile.method.label)
+                                    .font(.subheadline.bold())
+                                Spacer()
+                                Text(effectiveDateText(profile))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text(profile.ranges.map { "Z\($0.zone) \($0.displayRange)" }.joined(separator: " · "))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Button("Reset History to Current Profile", role: .destructive) {
+                        showingResetHistoryConfirmation = true
+                    }
+                }
+            }
+        }
+        .navigationTitle("Heart Rate Zones")
+        .runSignalInlineNavigationTitle()
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: 84)
+        }
+        .onAppear {
+            guard !didLoadInitialProfile else { return }
+            didLoadInitialProfile = true
+            guard let current = store.currentHeartRateZoneProfile else { return }
+            selectedMethod = current.method
+            manualBounds = current.zoneLowerBounds
+            maximumHeartRateOverride = current.maximumHeartRateIsUserOverride
+                ? current.maximumHeartRate.map(String.init) ?? ""
+                : ""
+        }
+        .onChange(of: selectedMethod) {
+            saveMessage = nil
+        }
+        .onChange(of: maximumHeartRateOverride) {
+            saveMessage = nil
+        }
+        .onChange(of: manualBounds) {
+            saveMessage = nil
+        }
+        .confirmationDialog(
+            "Reset heart-rate-zone history?",
+            isPresented: $showingResetHistoryConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Reset to Current Profile", role: .destructive) {
+                if store.resetHeartRateZoneProfileHistoryToCurrent() {
+                    saveMessage = "Profile history reset. The current limits now apply to older workouts too."
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes earlier effective-dated profiles and applies the current profile to past workouts. This is the one action that can change historical time-in-zone results.")
+        }
+    }
+
+    private func effectiveDateText(_ profile: HeartRateZoneProfile) -> String {
+        profile.isHistoricalBackfill
+            ? "Existing history"
+            : RunFormatters.shortDate.string(from: profile.effectiveDate)
+    }
+}
+
+private struct ManualHeartRateZoneEditorView: View {
+    let zone: Int
+    @Binding var boundaries: ManualHeartRateZoneBoundaries
+
+    var body: some View {
+        Form {
+            if zone > 1 {
+                Section("Lower Limit") {
+                    TextField("Beats per Minute", value: lowerLimitBinding, format: .number)
+                        #if os(iOS)
+                        .keyboardType(.numberPad)
+                        #endif
+                }
+            }
+
+            if zone < 5 {
+                Section("Upper Limit") {
+                    TextField("Beats per Minute", value: upperLimitBinding, format: .number)
+                        #if os(iOS)
+                        .keyboardType(.numberPad)
+                        #endif
+                }
+            }
+
+            Section {
+                Text("Zone \(zone) is currently \(boundaries.ranges[zone - 1].displayRange). Adjacent zone limits update automatically.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .navigationTitle("Zone \(zone)")
+        .runSignalInlineNavigationTitle()
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: 84)
+        }
+    }
+
+    private var lowerLimitBinding: Binding<Int> {
+        Binding(
+            get: { boundaries.lowerLimit(for: zone) ?? 31 },
+            set: { boundaries.setLowerLimit($0, for: zone) }
+        )
+    }
+
+    private var upperLimitBinding: Binding<Int> {
+        Binding(
+            get: { boundaries.upperLimit(for: zone) ?? 229 },
+            set: { boundaries.setUpperLimit($0, for: zone) }
+        )
     }
 }
 
@@ -872,6 +1248,7 @@ struct WorkoutDetailView: View {
                     )
 
                     WorkoutChartsPanel(
+                        store: store,
                         workout: workout,
                         isLoading: store.analyzingWorkoutIDs.contains(workout.id)
                     )
@@ -1022,9 +1399,26 @@ private struct WorkoutEnvironmentCard: View {
     @AppStorage("RunSignal.TemperatureUnit") private var temperatureUnitRaw = TemperatureUnitPreference.system.rawValue
 
     var body: some View {
-        if !items.isEmpty {
+        if workout.evidence?.cityName != nil || !items.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader("Conditions")
+                if let cityName = workout.evidence?.cityName {
+                    HStack(spacing: 12) {
+                        Image(systemName: "location.fill")
+                            .foregroundStyle(.blue)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(cityName)
+                                .font(.headline)
+                            Text("Approximate city based on this workout's route")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .padding()
+                    .background(.background)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
                 MetricGrid(items: items)
             }
         }
@@ -1032,9 +1426,6 @@ private struct WorkoutEnvironmentCard: View {
 
     private var items: [MetricItem] {
         var values: [MetricItem] = []
-        if let cityName = workout.evidence?.cityName {
-            values.append(MetricItem(title: "Location", value: cityName, detail: "City-level · cached locally"))
-        }
         if let temperature = workout.evidence?.weather?.temperatureCelsius {
             values.append(
                 MetricItem(
@@ -1332,6 +1723,7 @@ struct WorkoutRouteMap: View {
 }
 
 struct WorkoutChartsPanel: View {
+    var store: RunningAnalysisStore
     let workout: CanonicalWorkout
     let isLoading: Bool
 
@@ -1339,7 +1731,10 @@ struct WorkoutChartsPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader("Charts")
             if workout.evidence != nil {
-                WorkoutChartDeck(workout: workout)
+                WorkoutChartDeck(
+                    workout: workout,
+                    heartRateZoneProfile: store.heartRateZoneProfile(for: workout.startDate)
+                )
             } else if isLoading {
                 VStack(spacing: 10) {
                     ForEach(0..<3, id: \.self) { _ in
@@ -1564,14 +1959,24 @@ struct SplitsAndEventsPanel: View {
                 EmptyStateView(title: "Splits unavailable", message: "RunSignal needs distance samples or enough workout distance/time to estimate 1 km splits.")
             } else {
                 VStack(spacing: 8) {
-                    ForEach(segments.kilometerSplits, id: \.label) { split in
+                    ForEach(Array(segments.kilometerSplits.enumerated()), id: \.element.label) { index, split in
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(split.label)
                                     .font(.subheadline.bold())
+                                if split.label == "Final" {
+                                    Text(RunFormatters.distance(split.distanceMeters))
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
                                 Text(split.confidence == .moderate ? "HealthKit distance series" : "Fallback estimate")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
+                                if let metrics = splitMetricsText(at: index) {
+                                    Text(metrics)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                             Spacer()
                             VStack(alignment: .trailing, spacing: 3) {
@@ -1605,6 +2010,39 @@ struct SplitsAndEventsPanel: View {
                 }
             }
         }
+    }
+
+    private func splitMetricsText(at index: Int) -> String? {
+        guard let evidence = workout.evidence,
+              segments.kilometerSplits.indices.contains(index) else { return nil }
+        let startOffset = segments.kilometerSplits[..<index]
+            .map(\.durationSecondsEstimate)
+            .reduce(0, +)
+        let endOffset = startOffset + segments.kilometerSplits[index].durationSecondsEstimate
+        let start = workout.startDate.addingTimeInterval(startOffset)
+        let end = workout.startDate.addingTimeInterval(endOffset)
+
+        func average(_ metric: WorkoutEvidenceMetric) -> Double? {
+            guard let points = evidence.series[metric]?.points else { return nil }
+            let values = points
+                .filter { $0.date >= start && $0.date < end }
+                .map(\.value)
+                .filter { $0.isFinite && $0 > 0 }
+            guard !values.isEmpty else { return nil }
+            return values.reduce(0, +) / Double(values.count)
+        }
+
+        var values: [String] = []
+        if let heartRate = average(.heartRate) {
+            values.append("HR \(Int(heartRate.rounded())) bpm")
+        }
+        if let cadence = average(.cadence) {
+            values.append("Cadence \(Int(cadence.rounded())) spm")
+        }
+        if let power = average(.runningPower) {
+            values.append("Power \(Int(power.rounded())) W")
+        }
+        return values.isEmpty ? nil : values.joined(separator: " · ")
     }
 }
 

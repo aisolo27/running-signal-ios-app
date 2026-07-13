@@ -9,6 +9,18 @@ public enum SampleData {
         activeEnergyKilocaloriesTotal: 248_500
     )
 
+    public static let heartRateZoneProfile = HeartRateZoneProfileFactory.automaticProfile(
+        inputs: AutomaticHeartRateZoneInputs(
+            restingHeartRate: 48,
+            maximumHeartRate: 194,
+            maximumHeartRateDate: nil,
+            lookbackMonths: 6
+        ),
+        effectiveDate: .distantPast,
+        createdAt: Date(timeIntervalSince1970: 0),
+        isHistoricalBackfill: true
+    )
+
     public static let workouts: [CanonicalWorkout] = {
         let calendar = Calendar(identifier: .gregorian)
         let base = calendar.date(from: DateComponents(year: 2026, month: 6, day: 1, hour: 7)) ?? Date()

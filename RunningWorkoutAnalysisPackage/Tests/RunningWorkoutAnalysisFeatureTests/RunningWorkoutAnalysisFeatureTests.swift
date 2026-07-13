@@ -1422,8 +1422,72 @@ private func intervalForGoalMeasuredText(
     await store.syncHealthKitChangesOnForeground(now: Date(timeIntervalSince1970: 10_000))
     await store.syncHealthKitChangesOnForeground(now: Date(timeIntervalSince1970: 10_120))
     await store.syncHealthKitChangesOnForeground(now: Date(timeIntervalSince1970: 10_301))
+    await store.syncHealthKitChangesOnForeground(now: Date(timeIntervalSince1970: 10_901))
 
     #expect(syncService.syncCallCount == 2)
+}
+
+@MainActor
+@Test func foregroundHealthKitSyncUsesPersistedThrottleAfterRelaunch() async throws {
+    let syncDefaults = isolatedDefaults()
+    defer { syncDefaults.reset() }
+    HealthKitSyncStateStore.saveAnchor(HKQueryAnchor(fromValue: 1), defaults: syncDefaults.defaults)
+    HealthKitSyncStateStore.saveLastSyncAt(
+        Date(timeIntervalSince1970: 10_000),
+        defaults: syncDefaults.defaults
+    )
+    let context = try inMemoryModelContext()
+    PersistenceService.upsert([
+        testWorkout(
+            id: "cached-real-workout",
+            start: Date(timeIntervalSince1970: 3_600),
+            distanceMeters: 5_000,
+            durationSeconds: 1_500
+        )
+    ], context: context)
+    let syncService = StubHealthKitWorkoutSyncService()
+    let store = RunningAnalysisStore(
+        healthKitService: StubHealthKitService(),
+        syncService: syncService,
+        syncDefaults: syncDefaults.defaults
+    )
+
+    await store.bootstrap(modelContext: context)
+    await store.syncHealthKitChangesOnForeground(now: Date(timeIntervalSince1970: 10_120))
+    await store.syncHealthKitChangesOnForeground(now: Date(timeIntervalSince1970: 10_901))
+
+    #expect(syncService.syncCallCount == 1)
+}
+
+@MainActor
+@Test func foregroundHealthKitSyncDoesNotShowBlockingLoadingState() async throws {
+    let syncDefaults = isolatedDefaults()
+    defer { syncDefaults.reset() }
+    HealthKitSyncStateStore.saveAnchor(HKQueryAnchor(fromValue: 1), defaults: syncDefaults.defaults)
+    let context = try inMemoryModelContext()
+    PersistenceService.upsert([
+        testWorkout(
+            id: "cached-real-workout",
+            start: Date(timeIntervalSince1970: 3_600),
+            distanceMeters: 5_000,
+            durationSeconds: 1_500
+        )
+    ], context: context)
+    let syncService = StubHealthKitWorkoutSyncService(delayNanoseconds: 100_000_000)
+    let store = RunningAnalysisStore(
+        healthKitService: StubHealthKitService(),
+        syncService: syncService,
+        syncDefaults: syncDefaults.defaults
+    )
+
+    await store.bootstrap(modelContext: context)
+    async let foregroundSync: Void = store.syncHealthKitChangesOnForeground(
+        now: Date(timeIntervalSince1970: 10_000)
+    )
+    try await Task.sleep(for: .milliseconds(20))
+
+    #expect(!store.isLoading)
+    await foregroundSync
 }
 
 @MainActor
@@ -2768,12 +2832,282 @@ private func intervalForGoalMeasuredText(
     let analysis = DerivedAnalyticsEngine.analyze(workout: workout, evidence: evidence)
     let splits = analysis.splitEstimates ?? []
 
-    #expect(splits.count == 2)
+    #expect(splits.count == 3)
     #expect(splits[0].label == "KM 1")
     #expect(abs(splits[0].durationSecondsEstimate - 120) < 0.001)
     #expect(splits[1].label == "KM 2")
     #expect(abs(splits[1].durationSecondsEstimate - 240) < 0.001)
+    #expect(splits[2].label == "Final")
+    #expect(abs(splits[2].distanceMeters - 100) < 0.001)
+    #expect(abs(splits[2].durationSecondsEstimate - 60) < 0.001)
     #expect(analysis.bestEffortEstimates.first { $0.label == "1K" }?.durationSecondsEstimate == 120)
+}
+
+@Test func derivedAnalyticsIncludesEveryKilometerAndTruthfulFinalPartialSplit() {
+    let start = Date(timeIntervalSince1970: 8_500)
+    let workout = testWorkout(
+        id: "long-run-splits",
+        start: start,
+        distanceMeters: 11_030,
+        durationSeconds: 3_315
+    )
+    let points = (1...11).map { index in
+        WorkoutEvidencePoint(date: start.addingTimeInterval(Double(index * 300)), value: 1_000)
+    } + [
+        WorkoutEvidencePoint(date: start.addingTimeInterval(3_315), value: 30)
+    ]
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .distance: WorkoutMetricSeries(metric: .distance, unit: "m", points: points)
+        ]
+    )
+
+    let splits = DerivedAnalyticsEngine.analyze(workout: workout, evidence: evidence).splitEstimates ?? []
+
+    #expect(splits.count == 12)
+    #expect(splits[10].label == "KM 11")
+    #expect(splits[11].label == "Final")
+    #expect(abs(splits[11].distanceMeters - 30) < 0.001)
+    #expect(abs(splits[11].durationSecondsEstimate - 15) < 0.001)
+    #expect(abs(splits[11].paceSecondsPerKmEstimate - 500) < 0.001)
+}
+
+@Test func fallbackSplitsDoNotCapLongRunsAtTenKilometers() {
+    let start = Date(timeIntervalSince1970: 8_750)
+    let workout = testWorkout(
+        id: "fallback-27k-splits",
+        start: start,
+        distanceMeters: 27_210,
+        durationSeconds: 15_000
+    )
+
+    let splits = RunWorkoutSegments(workout: workout, analysis: nil).kilometerSplits
+
+    #expect(splits.count == 28)
+    #expect(splits[26].label == "KM 27")
+    #expect(splits[27].label == "Final")
+    #expect(abs(splits[27].distanceMeters - 210) < 0.001)
+}
+
+@MainActor
+@Test func openingWorkoutRebuildsOutdatedCachedSplitsFromStoredEvidence() async throws {
+    let context = try inMemoryModelContext()
+    let start = Date(timeIntervalSince1970: 8_900)
+    var workout = testWorkout(
+        id: "cached-long-run-splits",
+        start: start,
+        distanceMeters: 11_030,
+        durationSeconds: 3_315
+    )
+    let points = (1...11).map { index in
+        WorkoutEvidencePoint(date: start.addingTimeInterval(Double(index * 300)), value: 1_000)
+    } + [
+        WorkoutEvidencePoint(date: start.addingTimeInterval(3_315), value: 30)
+    ]
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .distance: WorkoutMetricSeries(metric: .distance, unit: "m", points: points)
+        ]
+    )
+    workout.evidence = evidence
+    let currentPrepared = PreparedWorkoutPersistence.make(workout: workout, evidence: evidence)
+    var outdatedAnalysis = currentPrepared.analysis
+    outdatedAnalysis.calculationVersion = "derived-workout-v3"
+    outdatedAnalysis.splitEstimates = Array((outdatedAnalysis.splitEstimates ?? []).prefix(10))
+    let outdatedPrepared = PreparedWorkoutPersistence(
+        evidenceData: currentPrepared.evidenceData,
+        analysis: outdatedAnalysis,
+        analysisData: try JSONEncoder().encode(outdatedAnalysis)
+    )
+    PersistenceService.upsertPreparedDetailedWorkout(
+        workout,
+        evidence: evidence,
+        prepared: outdatedPrepared,
+        context: context
+    )
+    let store = RunningAnalysisStore(healthKitService: StubHealthKitService())
+
+    await store.bootstrap(modelContext: context)
+    #expect(store.derivedAnalysis(for: workout.id)?.splitEstimates?.count == 10)
+
+    await store.hydrateCachedEvidenceIfAvailable(for: workout.id)
+
+    let rebuilt = try #require(store.derivedAnalysis(for: workout.id))
+    #expect(rebuilt.calculationVersion == DerivedWorkoutAnalysis.currentVersion)
+    #expect(rebuilt.splitEstimates?.count == 12)
+    #expect(rebuilt.splitEstimates?[10].label == "KM 11")
+    #expect(rebuilt.splitEstimates?[11].label == "Final")
+}
+
+@Test func automaticHeartRateZonesUseSixMonthRunningMaximum() {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    let now = calendar.date(from: DateComponents(year: 2026, month: 7, day: 12))!
+    var recent = testWorkout(
+        id: "recent-max",
+        start: calendar.date(byAdding: .month, value: -2, to: now)!,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    recent.maxHeartRate = 189
+    var old = testWorkout(
+        id: "old-outlier",
+        start: calendar.date(byAdding: .month, value: -7, to: now)!,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    old.maxHeartRate = 194
+
+    let inputs = HeartRateZoneProfileFactory.automaticInputs(
+        workouts: [recent, old],
+        healthContext: HealthContext(restingHeartRate: 46),
+        now: now,
+        calendar: calendar
+    )
+
+    #expect(inputs?.restingHeartRate == 46)
+    #expect(inputs?.maximumHeartRate == 189)
+    #expect(inputs?.maximumHeartRateDate == recent.startDate)
+    #expect(inputs?.lookbackMonths == 6)
+}
+
+@Test func automaticHeartRateReserveBuildsAppleStyleContiguousBoundaries() {
+    let now = Date(timeIntervalSince1970: 20_000)
+    let profile = HeartRateZoneProfileFactory.automaticProfile(
+        inputs: AutomaticHeartRateZoneInputs(
+            restingHeartRate: 46,
+            maximumHeartRate: 189,
+            maximumHeartRateDate: nil,
+            lookbackMonths: 6
+        ),
+        effectiveDate: .distantPast,
+        createdAt: now
+    )
+
+    #expect(profile.zoneLowerBounds == [131, 146, 160, 174])
+    #expect(profile.ranges.map(\.displayRange) == ["≤130 bpm", "131–145 bpm", "146–159 bpm", "160–173 bpm", "174+ bpm"])
+}
+
+@Test func effectiveDatedHeartRateZoneProfilesPreserveHistoricalRuns() {
+    let originalDate = Date(timeIntervalSince1970: 10_000)
+    let labDate = Date(timeIntervalSince1970: 20_000)
+    let original = HeartRateZoneProfile(
+        effectiveDate: .distantPast,
+        createdAt: originalDate,
+        method: .automaticHeartRateReserve,
+        restingHeartRate: 46,
+        maximumHeartRate: 189,
+        zoneLowerBounds: [131, 146, 160, 174],
+        lookbackMonths: 6,
+        sourceDetail: "Automatic",
+        isHistoricalBackfill: true
+    )
+    let lab = HeartRateZoneProfile(
+        effectiveDate: labDate,
+        createdAt: labDate,
+        method: .manual,
+        restingHeartRate: nil,
+        maximumHeartRate: nil,
+        zoneLowerBounds: [136, 150, 165, 179],
+        lookbackMonths: nil,
+        sourceDetail: "Lab"
+    )
+
+    #expect(HeartRateZoneProfileTimeline.profile(for: originalDate, profiles: [original, lab])?.id == original.id)
+    #expect(HeartRateZoneProfileTimeline.profile(for: labDate.addingTimeInterval(1), profiles: [original, lab])?.id == lab.id)
+}
+
+@Test func manualHeartRateZoneLimitsKeepAdjacentZonesContiguous() {
+    var boundaries = ManualHeartRateZoneBoundaries(
+        zoneLowerBounds: [136, 150, 165, 179]
+    )
+
+    boundaries.setUpperLimit(150, for: 2)
+    #expect(boundaries.lowerLimit(for: 2) == 136)
+    #expect(boundaries.upperLimit(for: 2) == 150)
+    #expect(boundaries.lowerLimit(for: 3) == 151)
+
+    boundaries.setUpperLimit(149, for: 2)
+    #expect(boundaries.lowerLimit(for: 3) == 150)
+
+    boundaries.setUpperLimit(134, for: 1)
+    #expect(boundaries.upperLimit(for: 1) == 134)
+    #expect(boundaries.lowerLimit(for: 2) == 135)
+    #expect(boundaries.upperLimit(for: 2) == 149)
+}
+
+@MainActor
+@Test func resettingHeartRateZoneHistoryKeepsCurrentProfileAsBackfill() throws {
+    let syncDefaults = isolatedDefaults()
+    defer { syncDefaults.reset() }
+    let store = RunningAnalysisStore(
+        healthKitService: StubHealthKitService(),
+        syncDefaults: syncDefaults.defaults
+    )
+
+    #expect(store.saveHeartRateZoneProfile(
+        method: .manual,
+        manualLowerBounds: [136, 150, 165, 179],
+        now: Date(timeIntervalSince1970: 10_000)
+    ))
+    #expect(store.saveHeartRateZoneProfile(
+        method: .manual,
+        manualLowerBounds: [138, 152, 166, 180],
+        now: Date(timeIntervalSince1970: 20_000)
+    ))
+    #expect(store.heartRateZoneProfiles.count >= 2)
+
+    #expect(store.resetHeartRateZoneProfileHistoryToCurrent(
+        now: Date(timeIntervalSince1970: 30_000)
+    ))
+
+    let remaining = try #require(store.heartRateZoneProfiles.first)
+    #expect(store.heartRateZoneProfiles.count == 1)
+    #expect(remaining.zoneLowerBounds == [138, 152, 166, 180])
+    #expect(remaining.isHistoricalBackfill)
+    #expect(store.heartRateZoneProfile(for: Date(timeIntervalSince1970: 1_000))?.id == remaining.id)
+}
+
+@Test func heartRateZoneAnalysisWeightsSampleTimeAcrossZones() {
+    let start = Date(timeIntervalSince1970: 30_000)
+    var workout = testWorkout(id: "zone-time", start: start, distanceMeters: 1_000, durationSeconds: 60)
+    workout.evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .heartRate: WorkoutMetricSeries(
+                metric: .heartRate,
+                unit: "bpm",
+                points: [
+                    WorkoutEvidencePoint(date: start, value: 120),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(20), value: 140),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(40), value: 170)
+                ]
+            )
+        ]
+    )
+    let profile = HeartRateZoneProfile(
+        effectiveDate: .distantPast,
+        createdAt: start,
+        method: .manual,
+        restingHeartRate: nil,
+        maximumHeartRate: nil,
+        zoneLowerBounds: [130, 150, 165, 180],
+        lookbackMonths: nil,
+        sourceDetail: "Manual"
+    )
+
+    let analysis = HeartRateZoneAnalyzer.analyze(workout: workout, profile: profile)
+
+    #expect(analysis?.durations.first { $0.zone == 1 }?.durationSeconds == 20)
+    #expect(analysis?.durations.first { $0.zone == 2 }?.durationSeconds == 20)
+    #expect(analysis?.durations.first { $0.zone == 4 }?.durationSeconds == 20)
+    #expect(analysis?.classifiedDurationSeconds == 60)
+    #expect(analysis?.unclassifiedDurationSeconds == 0)
 }
 
 @Test func workoutEvidenceEventTranslatesRawHealthKitEventNamesForDisplay() {

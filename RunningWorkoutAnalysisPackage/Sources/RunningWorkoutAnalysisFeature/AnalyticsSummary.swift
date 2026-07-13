@@ -708,9 +708,6 @@ public enum WorkoutChartMetric: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    var usesBars: Bool {
-        self == .power || self == .cadence
-    }
 }
 
 public struct WorkoutChartPoint: Identifiable, Equatable, Sendable {
@@ -743,12 +740,12 @@ public enum WorkoutChartSeriesBuilder {
             case .pace:
                 binnedSeries(series, seconds: 10)
             case .power, .cadence:
-                binnedSeries(series, seconds: adaptiveBarBinSeconds(for: series))
+                binnedSeries(series, seconds: adaptiveMechanicsBinSeconds(for: series))
             }
         }
     }
 
-    public static func adaptiveBarBinSeconds(
+    public static func adaptiveMechanicsBinSeconds(
         for series: WorkoutChartSeries,
         maximumBarCount: Double = 72
     ) -> Double {

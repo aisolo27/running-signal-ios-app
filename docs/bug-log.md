@@ -45,6 +45,7 @@ Read only the section relevant to the task. Add entries only for recurring proje
 - Apply the automatic-history cap before filtering out already analyzed workouts. Otherwise “newest 20” silently becomes 20 missing rows and drifts into older history.
 - Automatic detailed analysis stays sequential and shares one elapsed/Low Power/thermal budget across the queue. Existing detailed evidence that lacks derived analytics must be prepared off the main actor rather than skipped or broadly recomputed.
 - Best Efforts refresh must never run its full distance-series scan on the main actor. Build one distance timeline per workout, use indexed sample-gap queries, compute from a Sendable snapshot off actor, and publish only the finished summary.
+- A derived-analytics behavior change must bump `DerivedWorkoutAnalysis.currentVersion`. When workout detail hydrates cached evidence, rebuild an outdated analysis row before presenting it; otherwise an old persisted result can survive a correct source-code fix.
 - SwiftData schema changes require an explicit migration plan.
 
 ## Interval Rows And Analytics
@@ -68,6 +69,7 @@ Read only the section relevant to the task. Add entries only for recurring proje
 ## SwiftUI
 
 - Keep launch work cheap: explicit branded launch screen plus a lightweight startup view until bootstrap completes.
+- Foreground HealthKit checks must use the persisted last-sync date as well as the in-memory throttle. Background/foreground anchored checks stay quiet; only an explicit user refresh should present the loading banner.
 - Scroll-heavy screens need a bottom safe-area inset so the floating tab bar does not cover content.
 - Avoid expensive analytics in SwiftUI body paths; compute/cache through the store.
 - Visible history-row and detail hydration must not silently reclassify a workout. Row hydration may recover a cached plan name; classification belongs to import, analysis, or explicit review workflows.

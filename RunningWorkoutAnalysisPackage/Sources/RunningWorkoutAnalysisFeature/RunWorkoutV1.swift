@@ -91,7 +91,7 @@ public struct RunWorkoutSegments: Equatable, Sendable {
             return []
         }
 
-        let fullKilometers = min(Int(distanceMeters / 1_000), 10)
+        let fullKilometers = Int(distanceMeters / 1_000)
         var splits = (1...fullKilometers).map { index in
             DerivedSplitEstimate(
                 label: "KM \(index)",
@@ -103,8 +103,8 @@ public struct RunWorkoutSegments: Equatable, Sendable {
         }
 
         let remainder = distanceMeters.truncatingRemainder(dividingBy: 1_000)
-        if remainder >= 250, splits.count < 12 {
-            let duration = PaceMath.secondsForDistance(paceSecondsPerKm: pace, distanceMeters: remainder)
+        let duration = PaceMath.secondsForDistance(paceSecondsPerKm: pace, distanceMeters: remainder)
+        if remainder >= 10, duration >= 5 {
             splits.append(
                 DerivedSplitEstimate(
                     label: "Final",

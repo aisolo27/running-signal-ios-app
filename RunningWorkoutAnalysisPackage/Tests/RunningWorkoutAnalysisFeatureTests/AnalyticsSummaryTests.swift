@@ -177,7 +177,7 @@ import Testing
     #expect(binned.points.map(\.value) == [174, 180])
 }
 
-@Test func powerAndCadenceChartsUseAdaptiveBinsToKeepBarsReadable() {
+@Test func powerAndCadenceChartsUseAdaptiveBinsToKeepLongSeriesReadable() {
     let start = Date(timeIntervalSinceReferenceDate: 100)
     let short = WorkoutChartSeries(
         metric: .power,
@@ -194,8 +194,8 @@ import Testing
         ]
     )
 
-    #expect(WorkoutChartSeriesBuilder.adaptiveBarBinSeconds(for: short) == 10)
-    #expect(WorkoutChartSeriesBuilder.adaptiveBarBinSeconds(for: long) == 35)
+    #expect(WorkoutChartSeriesBuilder.adaptiveMechanicsBinSeconds(for: short) == 10)
+    #expect(WorkoutChartSeriesBuilder.adaptiveMechanicsBinSeconds(for: long) == 35)
 }
 
 @Test func intervalWorkSummarySeparatesPrescribedAndMeasuredDistance() throws {

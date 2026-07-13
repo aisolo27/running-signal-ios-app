@@ -1197,25 +1197,42 @@ private struct FutureAnalyticsPeriodView: View {
 struct WorkoutChartDeck: View {
     let workout: CanonicalWorkout
     var interval: ReconstructedWorkoutInterval?
+    var heartRateZoneProfile: HeartRateZoneProfile?
 
     @State private var selectedMinute: Double?
     @State private var selectedMetric = WorkoutChartMetric.pace
     @State private var series: [WorkoutChartSeries] = []
     @State private var officialIntervals: [ReconstructedWorkoutInterval] = []
+    @State private var heartRateZoneAnalysis: HeartRateZoneAnalysis?
+    @State private var presentedHeartRateZoneAnalysis: HeartRateZoneAnalysis?
+
+    init(
+        workout: CanonicalWorkout,
+        interval: ReconstructedWorkoutInterval? = nil,
+        heartRateZoneProfile: HeartRateZoneProfile? = nil
+    ) {
+        self.workout = workout
+        self.interval = interval
+        self.heartRateZoneProfile = heartRateZoneProfile
+    }
 
     private var availableSeries: [WorkoutChartSeries] {
         series.filter(\.isRenderable)
     }
 
+    private var visibleSeries: [WorkoutChartSeries] {
+        availableSeries.filter { $0.metric != .power }
+    }
+
     private var selectedSeries: WorkoutChartSeries? {
-        availableSeries.first { $0.metric == selectedMetric } ?? availableSeries.first
+        visibleSeries.first { $0.metric == selectedMetric } ?? visibleSeries.first
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if availableSeries.count > 1 {
+            if visibleSeries.count > 1 {
                 Picker("Chart metric", selection: $selectedMetric) {
-                    ForEach(availableSeries) { item in
+                    ForEach(visibleSeries) { item in
                         Text(item.metric.pickerTitle).tag(item.metric)
                     }
                 }
@@ -1227,7 +1244,11 @@ struct WorkoutChartDeck: View {
                     series: selectedSeries,
                     intervalMarkers: officialIntervals.chartMarkers(workoutStart: workout.startDate),
                     intervalSpans: officialIntervals.chartSpans(workoutStart: workout.startDate),
-                    selectedMinute: $selectedMinute
+                    selectedMinute: $selectedMinute,
+                    heartRateZoneAnalysis: selectedSeries.metric == .heartRate ? heartRateZoneAnalysis : nil,
+                    showHeartRateZoneDetails: {
+                        presentedHeartRateZoneAnalysis = heartRateZoneAnalysis
+                    }
                 )
             } else if !series.isEmpty {
                 EmptyStateView(
@@ -1265,10 +1286,20 @@ struct WorkoutChartDeck: View {
             }.value
             series = presentation.0
             officialIntervals = presentation.1
-            if !series.contains(where: { $0.metric == selectedMetric && $0.isRenderable }),
-               let first = series.first(where: \.isRenderable) {
+            if !visibleSeries.contains(where: { $0.metric == selectedMetric }),
+               let first = visibleSeries.first {
                 selectedMetric = first.metric
             }
+            if interval == nil, let heartRateZoneProfile {
+                heartRateZoneAnalysis = await Task.detached(priority: .userInitiated) {
+                    HeartRateZoneAnalyzer.analyze(workout: workout, profile: heartRateZoneProfile)
+                }.value
+            } else {
+                heartRateZoneAnalysis = nil
+            }
+        }
+        .sheet(item: $presentedHeartRateZoneAnalysis) { analysis in
+            HeartRateZoneDetailView(workout: workout, analysis: analysis)
         }
     }
 
@@ -1283,6 +1314,8 @@ private struct WorkoutChartCard: View {
     let intervalMarkers: [WorkoutChartIntervalMarker]
     let intervalSpans: [WorkoutChartIntervalSpan]
     @Binding var selectedMinute: Double?
+    let heartRateZoneAnalysis: HeartRateZoneAnalysis?
+    let showHeartRateZoneDetails: () -> Void
 
     private var selectedPoint: WorkoutChartPoint? {
         guard let selectedMinute, !series.points.isEmpty else { return nil }
@@ -1360,11 +1393,16 @@ private struct WorkoutChartCard: View {
                 }
                 Spacer()
                 if selectedMinute != nil {
-                    Button("Median") {
+                    Button("Clear") {
                         selectedMinute = nil
                     }
                     .font(.caption.bold())
                     .buttonStyle(.bordered)
+                }
+                if heartRateZoneAnalysis != nil {
+                    Button("Zones", action: showHeartRateZoneDetails)
+                        .font(.caption.bold())
+                        .buttonStyle(.bordered)
                 }
                 Text(series.metric.unit)
                     .font(.caption)
@@ -1389,49 +1427,25 @@ private struct WorkoutChartCard: View {
                             .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 4]))
                     }
 
-                    if series.metric.usesBars {
-                        ForEach(series.points) { point in
-                            BarMark(
-                                x: .value("Time", point.offsetSeconds / 60),
-                                yStart: .value("Chart minimum", yDomain.lowerBound),
-                                yEnd: .value(series.metric.title, point.value),
-                                width: .ratio(0.78)
-                            )
-                            .foregroundStyle(.blue)
-                            .cornerRadius(2)
-                        }
-                    } else {
-                        ForEach(series.points) { point in
-                            LineMark(
-                                x: .value("Time", point.offsetSeconds / 60),
-                                y: .value(series.metric.title, point.value)
-                            )
-                            .interpolationMethod(.linear)
-                            .foregroundStyle(.blue)
-                        }
+                    ForEach(series.points) { point in
+                        LineMark(
+                            x: .value("Time", point.offsetSeconds / 60),
+                            y: .value(series.metric.title, point.value)
+                        )
+                        .interpolationMethod(.linear)
+                        .foregroundStyle(.blue)
                     }
 
                     if let selectedPoint {
                         RuleMark(x: .value("Selected", selectedPoint.offsetSeconds / 60))
                             .foregroundStyle(.primary.opacity(0.45))
                             .lineStyle(StrokeStyle(lineWidth: 1.5))
-                        if series.metric.usesBars {
-                            BarMark(
-                                x: .value("Selected time", selectedPoint.offsetSeconds / 60),
-                                yStart: .value("Chart minimum", yDomain.lowerBound),
-                                yEnd: .value(series.metric.title, selectedPoint.value),
-                                width: .ratio(0.9)
-                            )
-                            .foregroundStyle(.cyan)
-                            .cornerRadius(2)
-                        } else {
-                            PointMark(
-                                x: .value("Selected time", selectedPoint.offsetSeconds / 60),
-                                y: .value(series.metric.title, selectedPoint.value)
-                            )
-                            .foregroundStyle(.blue)
-                            .symbolSize(34)
-                        }
+                        PointMark(
+                            x: .value("Selected time", selectedPoint.offsetSeconds / 60),
+                            y: .value(series.metric.title, selectedPoint.value)
+                        )
+                        .foregroundStyle(.blue)
+                        .symbolSize(34)
                     }
                 }
                 .frame(height: 165)
@@ -1504,6 +1518,166 @@ private struct WorkoutChartCard: View {
             max(40, value)
         case .power, .cadence:
             max(0, value)
+        }
+    }
+}
+
+private struct HeartRateZoneDetailView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let workout: CanonicalWorkout
+    let analysis: HeartRateZoneAnalysis
+
+    private var workoutDuration: Double {
+        max(workout.durationSeconds, 1)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Average Heart Rate")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Text(RunFormatters.number(workout.averageHeartRate, suffix: " bpm"))
+                            .font(.title.bold().monospacedDigit())
+                    }
+
+                    Chart {
+                        ForEach(analysis.samples) { sample in
+                            LineMark(
+                                x: .value("Time", sample.offsetSeconds / 60),
+                                y: .value("Heart rate", sample.beatsPerMinute)
+                            )
+                            .interpolationMethod(.linear)
+                            .foregroundStyle(.secondary.opacity(0.35))
+
+                            PointMark(
+                                x: .value("Time", sample.offsetSeconds / 60),
+                                y: .value("Heart rate", sample.beatsPerMinute)
+                            )
+                            .foregroundStyle(HeartRateZonePalette.color(for: sample.zone))
+                            .symbolSize(12)
+                        }
+                    }
+                    .frame(height: 210)
+                    .chartXAxisLabel("Workout time")
+                    .chartYAxisLabel("bpm")
+                    .accessibilityLabel("Heart rate colored by zone")
+
+                    VStack(spacing: 12) {
+                        ForEach(analysis.durations) { duration in
+                            HeartRateZoneDurationRow(
+                                duration: duration,
+                                range: analysis.profile.ranges.first { $0.zone == duration.zone },
+                                workoutDuration: workoutDuration
+                            )
+                        }
+                    }
+
+                    Text("Estimated time in each heart rate zone")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if analysis.unclassifiedDurationSeconds >= 1 {
+                        LabeledContent(
+                            "Unclassified",
+                            value: RunFormatters.duration(analysis.unclassifiedDurationSeconds)
+                        )
+                        .font(.subheadline)
+                    }
+
+                    if let caveat = analysis.caveat {
+                        NoticeCard(
+                            title: "Pause timing note",
+                            message: caveat,
+                            systemImage: "pause.circle",
+                            tint: .orange
+                        )
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Zone Profile")
+                            .font(.headline)
+                        LabeledContent("Method", value: analysis.profile.method.label)
+                        LabeledContent("Effective", value: effectiveDateText)
+                        if let resting = analysis.profile.restingHeartRate {
+                            LabeledContent("Resting HR", value: "\(resting) bpm")
+                        }
+                        if let maximum = analysis.profile.maximumHeartRate {
+                            LabeledContent(
+                                analysis.profile.maximumHeartRateIsUserOverride ? "Confirmed maximum HR" : "Maximum HR",
+                                value: "\(maximum) bpm"
+                            )
+                        }
+                        Text(analysis.profile.sourceDetail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .background(.background)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .padding()
+                .padding(.bottom, 24)
+            }
+            .navigationTitle("Heart Rate Zones")
+            .runSignalInlineNavigationTitle()
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private var effectiveDateText: String {
+        analysis.profile.isHistoricalBackfill
+            ? "Existing history"
+            : RunFormatters.shortDate.string(from: analysis.profile.effectiveDate)
+    }
+}
+
+private struct HeartRateZoneDurationRow: View {
+    let duration: HeartRateZoneDuration
+    let range: HeartRateZoneRange?
+    let workoutDuration: Double
+
+    private var fraction: Double {
+        min(max(duration.durationSeconds / workoutDuration, 0), 1)
+    }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            HStack {
+                Circle()
+                    .fill(HeartRateZonePalette.color(for: duration.zone))
+                    .frame(width: 10, height: 10)
+                Text("Zone \(duration.zone)")
+                    .font(.subheadline.bold())
+                Spacer()
+                Text(RunFormatters.duration(duration.durationSeconds))
+                    .font(.subheadline.monospacedDigit().bold())
+                Text(range?.displayRange ?? "")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            ProgressView(value: fraction)
+                .tint(HeartRateZonePalette.color(for: duration.zone))
+        }
+    }
+}
+
+private enum HeartRateZonePalette {
+    static func color(for zone: Int) -> Color {
+        switch zone {
+        case 1: .blue
+        case 2: .mint
+        case 3: .green
+        case 4: .orange
+        case 5: .pink
+        default: .secondary
         }
     }
 }
@@ -1663,23 +1837,17 @@ struct IntervalAnalysisScreen: View {
 
     @State private var selectedMetric = IntervalAnalysisMetric.pace
     @State private var selectedIntervalIndex: Int?
-    @State private var chartScope = IntervalChartScope.work
 
     private var summary: IntervalAnalysisSummary {
         IntervalAnalysisSummary(workout: workout, result: result)
     }
 
     private var availableMetrics: [IntervalAnalysisMetric] {
-        [.pace, .heartRate, .power, .cadence].filter { summary.availableMetrics.contains($0) }
+        [.pace, .heartRate, .cadence].filter { summary.availableMetrics.contains($0) }
     }
 
     private var chartRows: [IntervalAnalysisRow] {
-        switch chartScope {
-        case .work:
-            summary.rows.filter { $0.stepType == .work }
-        case .workAndRecovery:
-            summary.rows.filter { $0.stepType == .work || $0.stepType == .recovery }
-        }
+        summary.rows.filter { $0.stepType == .work }
     }
 
     private var selectedRow: IntervalAnalysisRow? {
@@ -1701,14 +1869,19 @@ struct IntervalAnalysisScreen: View {
             VStack(alignment: .leading, spacing: 14) {
                 HeaderBlock(
                     title: "Interval Analysis",
-                    subtitle: "Compare your work intervals, pace targets, and recoveries."
+                    subtitle: "Review work-rep consistency, pace targets, and every completed interval."
                 )
 
                 IntervalResultsPanel(summary: summary, evaluations: targetEvaluations)
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Compare Reps")
+                    Text("Work Rep Comparison")
                         .font(.headline)
+
+                    Text("This chart compares the same metric across your Work reps. Tap a rep to inspect it; Repeat Details below shows every Work and Recovery row.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     if availableMetrics.count > 1 {
                         IntervalMetricPicker(metrics: availableMetrics, selectedMetric: $selectedMetric)
@@ -1716,18 +1889,6 @@ struct IntervalAnalysisScreen: View {
                         Text(metric.title)
                             .font(.subheadline.bold())
                     }
-
-                    Picker("Rows", selection: $chartScope) {
-                        ForEach(IntervalChartScope.allCases) { scope in
-                            Text(scope.label).tag(scope)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    Text(chartScope.explanation)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
 
                     IntervalPrimaryScrubChart(
                         summary: summary,
@@ -1765,12 +1926,6 @@ struct IntervalAnalysisScreen: View {
         .onChange(of: selectedMetric) {
             normalizeSelection()
         }
-        .onChange(of: chartScope) {
-            if let selected = selectedIntervalIndex,
-               !chartRows.contains(where: { $0.index == selected }) {
-                self.selectedIntervalIndex = nil
-            }
-        }
     }
 
     private func normalizeSelection() {
@@ -1780,27 +1935,6 @@ struct IntervalAnalysisScreen: View {
         if let selectedIntervalIndex,
            !chartRows.contains(where: { $0.index == selectedIntervalIndex }) {
             self.selectedIntervalIndex = nil
-        }
-    }
-}
-
-private enum IntervalChartScope: String, CaseIterable, Identifiable {
-    case work
-    case workAndRecovery
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .work: "Work Reps"
-        case .workAndRecovery: "Full Repeats"
-        }
-    }
-
-    var explanation: String {
-        switch self {
-        case .work: "Compares only the faster work efforts."
-        case .workAndRecovery: "Shows each work effort together with its recovery row."
         }
     }
 }

@@ -165,7 +165,7 @@ public struct DerivedWorkoutInterval: Codable, Equatable, Sendable {
 }
 
 public struct DerivedWorkoutAnalysis: Codable, Equatable, Sendable {
-    public static let currentVersion = "derived-workout-v3"
+    public static let currentVersion = "derived-workout-v4"
 
     public var workoutID: String
     public var calculationVersion: String
@@ -369,7 +369,6 @@ public enum DerivedAnalyticsEngine {
         guard let distanceSeries = evidence.series[.distance], distanceSeries.points.count > 1 else { return [] }
 
         let targetMeters = 1_000.0
-        let maxSplits = 10
         var cumulativeDistance = 0.0
         var nextTarget = targetMeters
         var previousCrossingDate = workout.startDate
@@ -382,7 +381,7 @@ public enum DerivedAnalyticsEngine {
             let previousDate = previousSampleDate
             cumulativeDistance += point.value
 
-            while cumulativeDistance >= nextTarget && estimates.count < maxSplits {
+            while cumulativeDistance >= nextTarget {
                 let crossingDate = interpolatedDate(
                     targetDistance: nextTarget,
                     previousDistance: previousDistance,
@@ -407,6 +406,22 @@ public enum DerivedAnalyticsEngine {
                 nextTarget += targetMeters
             }
             previousSampleDate = point.date
+        }
+
+        let completedKilometers = floor(cumulativeDistance / targetMeters) * targetMeters
+        let remainderDistance = cumulativeDistance - completedKilometers
+        let finalEvidenceDate = min(distanceSeries.points.last?.date ?? workout.endDate, workout.endDate)
+        let remainderDuration = finalEvidenceDate.timeIntervalSince(previousCrossingDate)
+        if remainderDistance >= 10, remainderDuration >= 5 {
+            estimates.append(
+                DerivedSplitEstimate(
+                    label: "Final",
+                    distanceMeters: remainderDistance,
+                    durationSecondsEstimate: remainderDuration,
+                    paceSecondsPerKmEstimate: remainderDuration / (remainderDistance / targetMeters),
+                    confidence: .moderate
+                )
+            )
         }
 
         return estimates

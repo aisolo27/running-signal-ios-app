@@ -252,6 +252,7 @@ public struct DerivedAnalysisRefreshSummary: Equatable, Sendable {
 @Observable
 public final class RunningAnalysisStore {
     private static let personalBestCacheKey = "RunSignal.PersonalBestEffortSummary.v1"
+    private static let foregroundSyncMinimumInterval: TimeInterval = 15 * 60
     private static let refreshLogger = Logger(
         subsystem: "com.adrielsolorzano.runninganalysis",
         category: "EvidenceRefresh"
@@ -265,6 +266,7 @@ public final class RunningAnalysisStore {
     public private(set) var message = HealthKitActionStatus().message
     public private(set) var usesSampleData = true
     public private(set) var healthContext = SampleData.healthContext
+    public private(set) var heartRateZoneProfiles: [HeartRateZoneProfile] = []
     public private(set) var reviewedRunTypes: [ReviewedRunTypeRecord] = []
     public private(set) var runTypeReconciliation = RunTypeReconciliationSummary.empty
     public private(set) var syncState = HealthKitSyncState.empty
@@ -318,6 +320,7 @@ public final class RunningAnalysisStore {
         self.syncDefaults = syncDefaults
         self.syncPersistenceSave = syncPersistenceSave
         self.makeImportBudgetPolicy = makeImportBudgetPolicy
+        heartRateZoneProfiles = HeartRateZoneProfilePersistence.load(defaults: syncDefaults)
     }
 
     public var authorizationState: AuthorizationState {
@@ -327,6 +330,198 @@ public final class RunningAnalysisStore {
     public var shouldSyncHealthKitOnForeground: Bool {
         guard HealthKitSyncStateStore.hasAnchor(defaults: syncDefaults) else { return false }
         return !usesSampleData || healthKitStatus.authorizationState == .authorized || healthKitStatus.authorizationState == .partial || syncState.lastSyncAt != nil
+    }
+
+    public func automaticHeartRateZoneInputs(now: Date = Date()) -> AutomaticHeartRateZoneInputs? {
+        if usesSampleData {
+            return AutomaticHeartRateZoneInputs(
+                restingHeartRate: 48,
+                maximumHeartRate: 194,
+                maximumHeartRateDate: SampleData.workouts.max { ($0.maxHeartRate ?? 0) < ($1.maxHeartRate ?? 0) }?.startDate,
+                lookbackMonths: HeartRateZoneProfileFactory.automaticLookbackMonths
+            )
+        }
+        return HeartRateZoneProfileFactory.automaticInputs(
+            workouts: workouts,
+            healthContext: healthContext,
+            now: now
+        )
+    }
+
+    public func maximumHeartRateLookback(now: Date = Date()) -> MaximumHeartRateLookbackResult? {
+        if usesSampleData {
+            return MaximumHeartRateLookbackResult(
+                maximumHeartRate: 194,
+                maximumHeartRateDate: SampleData.workouts.max { ($0.maxHeartRate ?? 0) < ($1.maxHeartRate ?? 0) }?.startDate,
+                lookbackMonths: HeartRateZoneProfileFactory.automaticLookbackMonths
+            )
+        }
+        return HeartRateZoneProfileFactory.maximumHeartRateInput(workouts: workouts, now: now)
+    }
+
+    public func heartRateZoneProfile(for workoutDate: Date) -> HeartRateZoneProfile? {
+        HeartRateZoneProfileTimeline.profile(for: workoutDate, profiles: heartRateZoneProfiles)
+            ?? (usesSampleData ? SampleData.heartRateZoneProfile : nil)
+    }
+
+    public var currentHeartRateZoneProfile: HeartRateZoneProfile? {
+        heartRateZoneProfiles.max { $0.effectiveDate < $1.effectiveDate }
+            ?? (usesSampleData ? SampleData.heartRateZoneProfile : nil)
+    }
+
+    @discardableResult
+    public func saveHeartRateZoneProfile(
+        method: HeartRateZoneMethod,
+        manualLowerBounds: [Int] = [],
+        maximumHeartRateOverride: Int? = nil,
+        now: Date = Date()
+    ) -> Bool {
+        if heartRateZoneProfiles.isEmpty {
+            refreshAutomaticHeartRateZoneProfileIfNeeded(now: now)
+        }
+
+        let effectiveDate = heartRateZoneProfiles.isEmpty ? Date.distantPast : now
+        let baseInputs = automaticHeartRateZoneInputs(now: now)
+        let selectedInputs: AutomaticHeartRateZoneInputs?
+        if let maximumHeartRateOverride {
+            if let restingValue = healthContext.restingHeartRate {
+                let resting = Int(restingValue.rounded())
+                if maximumHeartRateOverride >= 80,
+                   maximumHeartRateOverride <= 230,
+                   maximumHeartRateOverride >= resting + 20 {
+                    selectedInputs = AutomaticHeartRateZoneInputs(
+                        restingHeartRate: resting,
+                        maximumHeartRate: maximumHeartRateOverride,
+                        maximumHeartRateDate: nil,
+                        lookbackMonths: HeartRateZoneProfileFactory.automaticLookbackMonths
+                    )
+                } else {
+                    selectedInputs = nil
+                }
+            } else {
+                selectedInputs = nil
+            }
+        } else {
+            selectedInputs = baseInputs
+        }
+        let selectedMaximumInput: MaximumHeartRateLookbackResult?
+        if let maximumHeartRateOverride {
+            selectedMaximumInput = maximumHeartRateOverride >= 80 && maximumHeartRateOverride <= 230
+                ? MaximumHeartRateLookbackResult(
+                    maximumHeartRate: maximumHeartRateOverride,
+                    maximumHeartRateDate: nil,
+                    lookbackMonths: HeartRateZoneProfileFactory.automaticLookbackMonths
+                )
+                : nil
+        } else {
+            selectedMaximumInput = maximumHeartRateLookback(now: now)
+        }
+        let profile: HeartRateZoneProfile?
+        switch method {
+        case .automaticHeartRateReserve:
+            profile = selectedInputs.map {
+                HeartRateZoneProfileFactory.automaticProfile(
+                    inputs: $0,
+                    effectiveDate: effectiveDate,
+                    createdAt: now,
+                    isHistoricalBackfill: heartRateZoneProfiles.isEmpty,
+                    maximumHeartRateIsUserOverride: maximumHeartRateOverride != nil
+                )
+            }
+        case .percentMaximum:
+            profile = selectedMaximumInput.map {
+                HeartRateZoneProfileFactory.percentMaximumProfile(
+                    maximumInput: $0,
+                    effectiveDate: effectiveDate,
+                    createdAt: now,
+                    maximumHeartRateIsUserOverride: maximumHeartRateOverride != nil
+                )
+            }
+        case .manual:
+            profile = HeartRateZoneProfileFactory.manualProfile(
+                zoneLowerBounds: manualLowerBounds,
+                effectiveDate: effectiveDate,
+                createdAt: now
+            )
+        }
+        guard let profile else { return false }
+
+        if let currentHeartRateZoneProfile,
+           currentHeartRateZoneProfile.method == profile.method,
+           currentHeartRateZoneProfile.restingHeartRate == profile.restingHeartRate,
+           currentHeartRateZoneProfile.maximumHeartRate == profile.maximumHeartRate,
+           currentHeartRateZoneProfile.maximumHeartRateIsUserOverride == profile.maximumHeartRateIsUserOverride,
+           currentHeartRateZoneProfile.zoneLowerBounds == profile.zoneLowerBounds {
+            return true
+        }
+        heartRateZoneProfiles.append(profile)
+        heartRateZoneProfiles.sort { $0.effectiveDate < $1.effectiveDate }
+        HeartRateZoneProfilePersistence.save(heartRateZoneProfiles, defaults: syncDefaults)
+        return true
+    }
+
+    @discardableResult
+    public func resetHeartRateZoneProfileHistoryToCurrent(now: Date = Date()) -> Bool {
+        guard let currentHeartRateZoneProfile else { return false }
+        let replacement = HeartRateZoneProfile(
+            effectiveDate: .distantPast,
+            createdAt: now,
+            method: currentHeartRateZoneProfile.method,
+            restingHeartRate: currentHeartRateZoneProfile.restingHeartRate,
+            maximumHeartRate: currentHeartRateZoneProfile.maximumHeartRate,
+            maximumHeartRateIsUserOverride: currentHeartRateZoneProfile.maximumHeartRateIsUserOverride,
+            zoneLowerBounds: currentHeartRateZoneProfile.zoneLowerBounds,
+            lookbackMonths: currentHeartRateZoneProfile.lookbackMonths,
+            sourceDetail: "History reset from \(currentHeartRateZoneProfile.sourceDetail)",
+            isHistoricalBackfill: true
+        )
+        heartRateZoneProfiles = [replacement]
+        HeartRateZoneProfilePersistence.save(heartRateZoneProfiles, defaults: syncDefaults)
+        return true
+    }
+
+    public func refreshAutomaticHeartRateZoneProfileIfNeeded(now: Date = Date()) {
+        guard let inputs = automaticHeartRateZoneInputs(now: now) else { return }
+        if heartRateZoneProfiles.isEmpty {
+            heartRateZoneProfiles = [
+                HeartRateZoneProfileFactory.automaticProfile(
+                    inputs: inputs,
+                    effectiveDate: Date.distantPast,
+                    createdAt: now,
+                    isHistoricalBackfill: true
+                )
+            ]
+            HeartRateZoneProfilePersistence.save(heartRateZoneProfiles, defaults: syncDefaults)
+            return
+        }
+        guard let current = currentHeartRateZoneProfile,
+              current.method == .automaticHeartRateReserve else { return }
+        let calendar = Calendar.current
+        guard !calendar.isDate(current.createdAt, equalTo: now, toGranularity: .month) else { return }
+        let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now
+        let refreshedInputs = current.maximumHeartRateIsUserOverride
+            ? AutomaticHeartRateZoneInputs(
+                restingHeartRate: inputs.restingHeartRate,
+                maximumHeartRate: current.maximumHeartRate ?? inputs.maximumHeartRate,
+                maximumHeartRateDate: nil,
+                lookbackMonths: inputs.lookbackMonths
+            )
+            : inputs
+        let profile = HeartRateZoneProfileFactory.automaticProfile(
+            inputs: refreshedInputs,
+            effectiveDate: monthStart,
+            createdAt: now,
+            maximumHeartRateIsUserOverride: current.maximumHeartRateIsUserOverride
+        )
+        heartRateZoneProfiles.append(profile)
+        heartRateZoneProfiles.sort { $0.effectiveDate < $1.effectiveDate }
+        HeartRateZoneProfilePersistence.save(heartRateZoneProfiles, defaults: syncDefaults)
+    }
+
+    private func automaticHeartRateZoneRefreshIsDue(now: Date = Date()) -> Bool {
+        guard let current = currentHeartRateZoneProfile else { return true }
+        guard current.method == .automaticHeartRateReserve else { return false }
+        return !Calendar.current.isDate(current.createdAt, equalTo: now, toGranularity: .month)
     }
 
     nonisolated public static func automaticEvidenceCandidateIDs(
@@ -583,6 +778,7 @@ public final class RunningAnalysisStore {
             message: healthKitImportFinishedMessage(earliestPermittedDate: earliestPermittedDate)
         )
         await startHealthKitBackgroundDelivery()
+        refreshAutomaticHeartRateZoneProfileIfNeeded()
         recompute()
         await refreshPersonalBestEffortsFromInMemoryEvidence()
     }
@@ -618,6 +814,7 @@ public final class RunningAnalysisStore {
         deletePersistedSampleWorkoutsIfNeeded()
         applyReviewedRunTypes()
         persistCurrent()
+        refreshAutomaticHeartRateZoneProfileIfNeeded()
         recompute()
         await refreshPersonalBestEffortsFromInMemoryEvidence()
     }
@@ -645,14 +842,22 @@ public final class RunningAnalysisStore {
     }
 
     private func performHealthKitChangesSync(includePostSyncMaintenance: Bool) async {
-        isLoading = true
+        if includePostSyncMaintenance {
+            isLoading = true
+        }
         defer {
-            isLoading = false
+            if includePostSyncMaintenance {
+                isLoading = false
+            }
             startAutomaticEvidenceEnrichment()
         }
 
         let batches = await syncService.syncRunningWorkoutBatches(from: HealthKitSyncStateStore.loadAnchor(defaults: syncDefaults))
         guard !batches.isEmpty else {
+            if !usesSampleData && automaticHeartRateZoneRefreshIsDue() {
+                healthContext = await healthKitService.loadHealthContext()
+                refreshAutomaticHeartRateZoneProfileIfNeeded()
+            }
             updateHealthKitStatus(
                 authorizationState: .partial,
                 message: "HealthKit sync found no new running workout changes."
@@ -744,6 +949,7 @@ public final class RunningAnalysisStore {
             knownIDs.formUnion(fetchedIDs)
         }
 
+        refreshAutomaticHeartRateZoneProfileIfNeeded()
         let syncedAt = Date()
         HealthKitSyncStateStore.saveLastSyncAt(syncedAt, defaults: syncDefaults)
         refreshTrainingPeriodSummaryCache()
@@ -773,7 +979,9 @@ public final class RunningAnalysisStore {
         guard !isForegroundSyncInFlight else { return }
         guard didBootstrap, !isLoading, !isEnrichingAudit else { return }
         guard shouldSyncHealthKitOnForeground else { return }
-        if let lastForegroundSyncAt, now.timeIntervalSince(lastForegroundSyncAt) < 300 {
+        let throttleReference = lastForegroundSyncAt ?? syncState.lastSyncAt
+        if let throttleReference,
+           now.timeIntervalSince(throttleReference) < Self.foregroundSyncMinimumInterval {
             return
         }
         lastForegroundSyncAt = now
@@ -1460,16 +1668,33 @@ public final class RunningAnalysisStore {
               let currentIndex = workouts.firstIndex(where: { $0.id == workoutID }),
               workouts[currentIndex].evidence == nil else { return }
 
-        workouts[currentIndex].evidence = evidence
-        workouts[currentIndex].workoutPlanName = evidence.workoutPlanAudit?.displayName ?? workouts[currentIndex].workoutPlanName
-        workouts[currentIndex].routePointCount = evidence.route.count
-        workouts[currentIndex].seriesSampleCount = evidence.seriesSampleCount
-        workouts[currentIndex].routeAvailable = workouts[currentIndex].routeAvailable || !evidence.route.isEmpty
-        workouts[currentIndex].seriesAvailable = workouts[currentIndex].seriesAvailable || evidence.seriesSampleCount > 0
+        var hydratedWorkout = workouts[currentIndex]
+        hydratedWorkout.evidence = evidence
+        hydratedWorkout.workoutPlanName = evidence.workoutPlanAudit?.displayName ?? hydratedWorkout.workoutPlanName
+        hydratedWorkout.routePointCount = evidence.route.count
+        hydratedWorkout.seriesSampleCount = evidence.seriesSampleCount
+        hydratedWorkout.routeAvailable = hydratedWorkout.routeAvailable || !evidence.route.isEmpty
+        hydratedWorkout.seriesAvailable = hydratedWorkout.seriesAvailable || evidence.seriesSampleCount > 0
+
+        let cachedAnalysis = PersistenceService.fetchDerivedAnalysis(workoutID: workoutID, context: modelContext)
+        let prepared: PreparedWorkoutPersistence?
+        if cachedAnalysis?.calculationVersion == DerivedWorkoutAnalysis.currentVersion {
+            prepared = nil
+        } else {
+            let workoutSnapshot = hydratedWorkout
+            let evidenceSnapshot = evidence
+            prepared = await Task.detached(priority: .userInitiated) {
+                PreparedWorkoutPersistence.make(workout: workoutSnapshot, evidence: evidenceSnapshot)
+            }.value
+        }
+
+        guard let refreshedIndex = workouts.firstIndex(where: { $0.id == workoutID }),
+              workouts[refreshedIndex].evidence == nil else { return }
+        workouts[refreshedIndex] = hydratedWorkout
         PersistenceService.updateWorkoutPlanClassification(
             workoutID: workoutID,
-            name: workouts[currentIndex].workoutPlanName,
-            inferredRunType: workouts[currentIndex].inferredRunType,
+            name: workouts[refreshedIndex].workoutPlanName,
+            inferredRunType: workouts[refreshedIndex].inferredRunType,
             context: modelContext
         )
         analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
@@ -1477,8 +1702,16 @@ public final class RunningAnalysisStore {
             message: "Full analysis is ready."
         )
 
-        if let derivedAnalysis = PersistenceService.fetchDerivedAnalysis(workoutID: workoutID, context: modelContext) {
-            derivedAnalysesByWorkoutID[workoutID] = derivedAnalysis
+        if let prepared {
+            PersistenceService.upsertPreparedDetailedWorkout(
+                hydratedWorkout,
+                evidence: evidence,
+                prepared: prepared,
+                context: modelContext
+            )
+            derivedAnalysesByWorkoutID[workoutID] = prepared.analysis
+        } else if let cachedAnalysis {
+            derivedAnalysesByWorkoutID[workoutID] = cachedAnalysis
         }
         refreshEvidenceQueueSummary()
     }
