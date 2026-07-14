@@ -131,14 +131,8 @@ private struct HealthKitOnboardingView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     VStack(alignment: .leading, spacing: 14) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(Color(red: 0.10, green: 0.22, blue: 0.38))
-                            Image(systemName: "figure.run")
-                                .font(.system(size: 36, weight: .semibold))
-                                .foregroundStyle(.white)
-                        }
-                        .frame(width: 82, height: 82)
+                        RunSignalMarkView()
+                            .frame(width: 104, height: 82)
 
                         Text("Your Apple Health runs, analyzed")
                             .font(.largeTitle.bold())
@@ -160,7 +154,7 @@ private struct HealthKitOnboardingView: View {
                         OnboardingBenefitRow(
                             systemImage: "iphone",
                             title: "Processed on this iPhone",
-                            detail: "Version 1 has no backend sync or AI calls."
+                            detail: "Your run history is analyzed privately on this iPhone."
                         )
                         OnboardingBenefitRow(
                             systemImage: "hand.raised",
@@ -260,15 +254,8 @@ private struct RunSignalStartupView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 20) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color(red: 0.10, green: 0.22, blue: 0.38))
-
-                    Image(systemName: "figure.run")
-                        .font(.system(size: 36, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
-                .frame(width: 82, height: 82)
+                RunSignalMarkView()
+                    .frame(width: 112, height: 82)
 
                 VStack(spacing: 6) {
                     Text("RunSignal")
@@ -288,6 +275,15 @@ private struct RunSignalStartupView: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("RunSignal loading runs")
         }
+    }
+}
+
+private struct RunSignalMarkView: View {
+    var body: some View {
+        Image("RunSignalMark")
+            .resizable()
+            .scaledToFit()
+            .accessibilityHidden(true)
     }
 }
 

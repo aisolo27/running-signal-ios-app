@@ -172,19 +172,33 @@ public enum RunClassifier {
 public enum DuplicateDetector {
     public static func markDuplicates(_ workouts: [CanonicalWorkout]) -> [CanonicalWorkout] {
         let sorted = workouts.sorted { $0.startDate < $1.startDate }
-        var groups: [[CanonicalWorkout]] = []
+        var activeGroups: [[CanonicalWorkout]] = []
+        var completedGroups: [[CanonicalWorkout]] = []
 
         for candidate in sorted {
-            if let index = groups.firstIndex(where: { group in
+            var stillActive: [[CanonicalWorkout]] = []
+            stillActive.reserveCapacity(activeGroups.count)
+            for group in activeGroups {
+                guard let latestStart = group.last?.startDate,
+                      candidate.startDate.timeIntervalSince(latestStart) <= 90 else {
+                    completedGroups.append(group)
+                    continue
+                }
+                stillActive.append(group)
+            }
+            activeGroups = stillActive
+
+            if let index = activeGroups.firstIndex(where: { group in
                 group.contains { isLikelyDuplicate($0, candidate) }
             }) {
-                groups[index].append(candidate)
+                activeGroups[index].append(candidate)
             } else {
-                groups.append([candidate])
+                activeGroups.append([candidate])
             }
         }
 
-        return groups
+        completedGroups.append(contentsOf: activeGroups)
+        return completedGroups
             .flatMap(markDuplicateGroup)
             .sorted { $0.startDate > $1.startDate }
     }

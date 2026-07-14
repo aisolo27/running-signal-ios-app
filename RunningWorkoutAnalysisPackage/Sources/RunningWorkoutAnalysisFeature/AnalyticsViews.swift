@@ -35,6 +35,8 @@ struct AnalyticsView: View {
     }
 
     var body: some View {
+        let healthPresentation = store.healthKitConnectionPresentation
+
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Training trends from your completed Apple Health runs.")
@@ -42,80 +44,94 @@ struct AnalyticsView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Picker("Period", selection: $selectedPeriod) {
-                    ForEach(TrainingAnalyticsPeriod.allCases) { period in
-                        Text(period.label).tag(period)
-                    }
-                }
-                .pickerStyle(.segmented)
+                if healthPresentation.showsProgress {
+                    HealthKitImportProgressView(presentation: healthPresentation)
+                        .padding()
+                        .background(.background)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
 
-                NavigationLink {
-                    IntervalLibraryView(groups: intervalLibraryGroups)
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "repeat.circle.fill")
-                            .font(.title2)
-                            .foregroundStyle(.cyan)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Interval Library")
-                                .font(.headline)
-                                .foregroundStyle(.primary)
-                            Text(intervalLibraryGroups.isEmpty
-                                 ? "Structured interval workouts appear after analysis finishes."
-                                 : "\(intervalLibraryGroups.count) matching workout plans · targets and trends")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.leading)
+                    Text(healthPresentation.loadedRunCount == 0
+                         ? "Analytics will appear after RunSignal finds your first completed run."
+                         : "Your loaded runs are available in Runs. Training totals and trends will appear when the history check finishes.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Picker("Period", selection: $selectedPeriod) {
+                        ForEach(TrainingAnalyticsPeriod.allCases) { period in
+                            Text(period.label).tag(period)
                         }
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundStyle(.secondary)
                     }
-                    .padding()
-                    .background(.background)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                .buttonStyle(.plain)
+                    .pickerStyle(.segmented)
 
-                NavigationLink {
-                    BestEffortsView(store: store)
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "medal.fill")
-                            .font(.title2)
-                            .foregroundStyle(.green)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Best Efforts")
-                                .font(.headline)
-                                .foregroundStyle(.primary)
-                            Text(bestEffortSummaryText)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if store.isLoading {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
+                    NavigationLink {
+                        IntervalLibraryView(groups: intervalLibraryGroups)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "repeat.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(.cyan)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Interval Library")
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                                Text(intervalLibraryGroups.isEmpty
+                                     ? "Structured interval workouts appear after analysis finishes."
+                                     : "\(intervalLibraryGroups.count) matching workout plans · targets and trends")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.leading)
+                            }
+                            Spacer()
                             Image(systemName: "chevron.right")
                                 .foregroundStyle(.secondary)
                         }
+                        .padding()
+                        .background(.background)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
-                    .padding()
-                    .background(.background)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                .buttonStyle(.plain)
+                    .buttonStyle(.plain)
 
-                PeriodSignalView(
-                    store: store,
-                    summary: store.trainingPeriodSummary(
-                        period: selectedPeriod,
-                        periodStart: activePeriodStart
-                    ),
-                    periodStarts: periodStarts,
-                    selectedPeriodStart: $selectedPeriodStart
-                )
+                    NavigationLink {
+                        BestEffortsView(store: store)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "medal.fill")
+                                .font(.title2)
+                                .foregroundStyle(.green)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Best Efforts")
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                                Text(bestEffortSummaryText)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if store.isLoading {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Image(systemName: "chevron.right")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding()
+                        .background(.background)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+
+                    PeriodSignalView(
+                        store: store,
+                        summary: store.trainingPeriodSummary(
+                            period: selectedPeriod,
+                            periodStart: activePeriodStart
+                        ),
+                        periodStarts: periodStarts,
+                        selectedPeriodStart: $selectedPeriodStart
+                    )
+                }
             }
             .padding()
             .padding(.bottom, 180)
@@ -169,9 +185,7 @@ private struct BestEffortsView: View {
                 Section {
                     BestEffortCoverageCard(
                         coverage: coverage,
-                        actionTitle: coverage.historyImportStatus == .paused
-                            ? "Continue History Import"
-                            : "Continue Analysis",
+                        actionTitle: coverage.actionTitle,
                         action: {
                             Task {
                                 if coverage.historyImportStatus == .paused {

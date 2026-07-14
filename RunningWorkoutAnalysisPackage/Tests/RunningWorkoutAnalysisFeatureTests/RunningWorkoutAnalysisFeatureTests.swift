@@ -1703,7 +1703,7 @@ private func intervalForGoalMeasuredText(
     #expect(job.status == .completed)
     #expect(job.importedCount == 1)
     #expect(store.healthKitImportJobSummary?.status == .completed)
-    #expect(store.healthKitImportJobSummary?.detailText == "1 run loaded · History is up to date")
+    #expect(store.healthKitImportJobSummary?.detailText == "1 HealthKit workout found · History is up to date")
     #expect(store.workouts.contains { $0.id == imported.id })
     #expect(healthKit.windowedLoadRequests.first?.detailedEvidenceLimit == HealthKitService.defaultDetailedEvidenceLimit)
     #expect(healthKit.windowedLoadRequests.dropFirst().allSatisfy { $0.detailedEvidenceLimit == 0 })
@@ -1854,7 +1854,7 @@ private func intervalForGoalMeasuredText(
     #expect(budgetCreatedAfterAuthorization.value == 2)
     #expect(healthKit.authorizationRequestCount == 1)
     #expect(store.healthKitImportJobSummary?.status == .paused)
-    #expect(store.healthKitImportJobSummary?.detailText == "0 runs loaded · Paused briefly to keep RunSignal responsive.")
+    #expect(store.healthKitImportJobSummary?.detailText == "Paused briefly to keep RunSignal responsive.")
 }
 
 @MainActor
@@ -1887,7 +1887,7 @@ private func intervalForGoalMeasuredText(
     #expect(healthKit.authorizationRequestCount == 1)
     #expect(!healthKit.windowedLoadRequests.isEmpty)
     #expect(job.status == .completed)
-    #expect(store.healthKitImportJobSummary?.detailText == "0 runs loaded · History is up to date")
+    #expect(store.healthKitImportJobSummary?.detailText == "History is up to date")
 }
 
 @MainActor
@@ -3349,6 +3349,14 @@ private func intervalForGoalMeasuredText(
     #expect(draft.statusTitle == "Save Changes")
     #expect(draft.supportingText.contains("proposed zones"))
     #expect(draft.supportingText.contains("starting from now on"))
+
+    let waiting = HeartRateZoneSettingsPresentation.make(
+        hasPreview: false,
+        previewMatchesCurrentProfile: false,
+        isLoadingRunData: true
+    )
+    #expect(waiting.statusTitle == "Waiting for Run Data")
+    #expect(waiting.supportingText.contains("still loading"))
 
     let unavailable = HeartRateZoneSettingsPresentation.make(
         hasPreview: false,
@@ -6439,28 +6447,40 @@ private func intervalForGoalMeasuredText(
     let disconnected = HealthKitConnectionPresentation.make(
         authorizationState: .notDetermined,
         importStatus: nil,
-        hasWorkouts: false,
+        loadedRunCount: 0,
         isLoading: false
+    )
+    let loading = HealthKitConnectionPresentation.make(
+        authorizationState: .partial,
+        importStatus: .running,
+        loadedRunCount: 185,
+        isLoading: true
     )
     let paused = HealthKitConnectionPresentation.make(
         authorizationState: .partial,
         importStatus: .paused,
-        hasWorkouts: true,
+        loadedRunCount: 449,
         isLoading: false
     )
     let connected = HealthKitConnectionPresentation.make(
         authorizationState: .partial,
         importStatus: .completed,
-        hasWorkouts: true,
+        loadedRunCount: 644,
         isLoading: false
     )
 
     #expect(disconnected.action == .connect)
     #expect(disconnected.title == "Connect Apple Health")
+    #expect(loading.phase == .loadingHistory)
+    #expect(loading.detailText.contains("185 completed runs available"))
+    #expect(loading.showsProgress)
+    #expect(!loading.showsPrimaryAction)
     #expect(paused.action == .continueImport)
     #expect(paused.title == "History Import Paused")
+    #expect(paused.detailText.contains("449 completed runs available"))
     #expect(connected.action == .refresh)
     #expect(connected.title == "Apple Health Connected")
+    #expect(connected.detailText == "644 completed runs available in RunSignal.")
 }
 
 @Test func bestEffortCoverageWithholdsAllTimeClaimUntilEveryRunIsChecked() {
@@ -6496,6 +6516,17 @@ private func intervalForGoalMeasuredText(
     #expect(!paused.showsProgress)
     #expect(paused.statusTitle == "Run history paused")
     #expect(paused.detailText.contains("Continue the Apple Health history import"))
+
+    let retry = BestEffortCoverageSummary(
+        checkedRunCount: 642,
+        pendingRunCount: 0,
+        failedRunCount: 4,
+        historyImportStatus: .completed,
+        isCheckingDetailedData: false
+    )
+    #expect(retry.statusTitle == "Some runs could not be checked")
+    #expect(retry.actionTitle == "Retry 4 Runs")
+    #expect(retry.detailText.contains("retrying will only revisit those runs"))
 }
 
 @Test func goldenAppleFitnessValidationAppliesTolerances() {

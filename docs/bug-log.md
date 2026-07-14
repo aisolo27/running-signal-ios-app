@@ -17,6 +17,7 @@ Read only the section relevant to the task. Add entries only for recurring proje
 - `Package.swift` requires Swift tools 6.2 for iOS 26 and macOS 14 for local package tests.
 - Simulator screenshots are not physical-iPhone proof. Real HealthKit and launch-performance claims need device evidence.
 - A device build needs a current `deviceId` in session defaults; Simulator defaults alone are insufficient.
+- After deleting and reinstalling a development build, iOS may require `Apple Development: aisolorzano98@hotmail.com` to be trusted again under Settings > General > VPN & Device Management before launch succeeds. Treat the trust gate separately from build/install proof.
 
 ## HealthKit And WorkoutKit
 

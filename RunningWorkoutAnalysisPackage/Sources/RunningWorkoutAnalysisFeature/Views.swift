@@ -53,19 +53,12 @@ struct RunsView: View {
     }
 
     var body: some View {
+        let healthPresentation = store.healthKitConnectionPresentation
+
         List {
-            if store.isLoading {
+            if healthPresentation.showsProgress, !runs.isEmpty {
                 Section {
-                    HStack(spacing: 10) {
-                        ProgressView()
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Updating HealthKit runs")
-                                .font(.subheadline.weight(.semibold))
-                            Text("You can keep browsing while the update finishes.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                    HealthKitImportProgressView(presentation: healthPresentation)
                 }
             }
 
@@ -125,17 +118,20 @@ struct RunsView: View {
             if runs.isEmpty {
                 Section {
                     EmptyStateView(
-                        title: "No completed runs yet",
-                        message: "Connect Apple Health to load your completed running workouts. RunSignal does not place demo workouts in your history."
+                        title: healthPresentation.showsProgress ? healthPresentation.title : "No completed runs yet",
+                        message: healthPresentation.showsProgress
+                            ? healthPresentation.detailText
+                            : "Connect Apple Health to load your completed running workouts. RunSignal does not place demo workouts in your history."
                     )
-                    Button {
-                        Task { await store.connectAndImportFromHealthKit() }
-                    } label: {
-                        Label("Connect Apple Health", systemImage: "heart.text.square")
-                            .frame(maxWidth: .infinity)
+                    if healthPresentation.showsPrimaryAction {
+                        Button {
+                            Task { await store.connectAndImportFromHealthKit() }
+                        } label: {
+                            Label(healthPresentation.action.title, systemImage: healthPresentation.action.systemImage)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(store.isLoading)
                 }
             } else if historySections.isEmpty {
                 Section {
@@ -198,6 +194,28 @@ struct RunsView: View {
     }
 }
 
+struct HealthKitImportProgressView: View {
+    let presentation: HealthKitConnectionPresentation
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            ProgressView()
+                .controlSize(.small)
+                .padding(.top, 2)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(presentation.title)
+                    .font(.subheadline.weight(.semibold))
+                Text(presentation.detailText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("healthkit-import-progress")
+    }
+}
+
 private struct RunHistoryYearSection: Identifiable {
     let year: Int
     let workouts: [CanonicalWorkout]
@@ -223,7 +241,7 @@ struct SettingsView: View {
                             ProgressView()
                         }
                     }
-                    Text(store.message)
+                    Text(healthPresentation.detailText)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -232,14 +250,15 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    Button {
-                        Task { await store.connectAndImportFromHealthKit() }
-                    } label: {
-                        Label(healthPresentation.action.title, systemImage: healthPresentation.action.systemImage)
-                            .frame(maxWidth: .infinity)
+                    if healthPresentation.showsPrimaryAction {
+                        Button {
+                            Task { await store.connectAndImportFromHealthKit() }
+                        } label: {
+                            Label(healthPresentation.action.title, systemImage: healthPresentation.action.systemImage)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(store.isLoading)
                 }
             }
 
@@ -256,7 +275,8 @@ struct SettingsView: View {
                     HeartRateZoneSettingsView(store: store)
                 } label: {
                     LabeledContent {
-                        Text(store.currentHeartRateZoneProfile?.method.label ?? "Set Up")
+                        Text(store.currentHeartRateZoneProfile?.method.label
+                             ?? (healthPresentation.showsProgress ? "Waiting for runs" : "Set Up"))
                             .foregroundStyle(.secondary)
                     } label: {
                         Label("Heart Rate Zones", systemImage: "heart.text.square")
@@ -316,12 +336,14 @@ struct SettingsView: View {
 enum HeartRateZoneSettingsPresentation: Equatable {
     case active
     case draft
+    case waitingForRunData
     case unavailable
 
     var statusTitle: String {
         switch self {
         case .active: "Active Profile"
         case .draft: "Save Changes"
+        case .waitingForRunData: "Waiting for Run Data"
         case .unavailable: "Profile Unavailable"
         }
     }
@@ -332,13 +354,19 @@ enum HeartRateZoneSettingsPresentation: Equatable {
             "These zones are active now. Each workout uses the profile that was active when the workout began."
         case .draft:
             "These are proposed zones. Save Changes to make them active for workouts starting from now on; nothing changes until you save."
+        case .waitingForRunData:
+            "RunSignal is still loading the heart-rate inputs needed for automatic zones. You can return here when run-history loading finishes."
         case .unavailable:
             "RunSignal needs valid heart-rate inputs before this profile can be saved."
         }
     }
 
-    static func make(hasPreview: Bool, previewMatchesCurrentProfile: Bool) -> Self {
-        guard hasPreview else { return .unavailable }
+    static func make(
+        hasPreview: Bool,
+        previewMatchesCurrentProfile: Bool,
+        isLoadingRunData: Bool = false
+    ) -> Self {
+        guard hasPreview else { return isLoadingRunData ? .waitingForRunData : .unavailable }
         return previewMatchesCurrentProfile ? .active : .draft
     }
 
@@ -445,12 +473,19 @@ private struct HeartRateZoneSettingsView: View {
     private var presentation: HeartRateZoneSettingsPresentation {
         .make(
             hasPreview: previewProfile != nil,
-            previewMatchesCurrentProfile: previewMatchesCurrentProfile
+            previewMatchesCurrentProfile: previewMatchesCurrentProfile,
+            isLoadingRunData: store.healthKitConnectionPresentation.showsProgress
         )
     }
 
     var body: some View {
         Form {
+            if presentation == .waitingForRunData {
+                Section {
+                    HealthKitImportProgressView(presentation: store.healthKitConnectionPresentation)
+                }
+            }
+
             Section("Method") {
                 Picker("Calculation", selection: $selectedMethod) {
                     ForEach(HeartRateZoneMethod.allCases) { method in
@@ -524,6 +559,11 @@ private struct HeartRateZoneSettingsView: View {
                     Label(presentation.statusTitle, systemImage: "checkmark.circle.fill")
                         .font(.headline)
                         .foregroundStyle(.green)
+                        .frame(maxWidth: .infinity)
+                } else if presentation == .waitingForRunData {
+                    Label(presentation.statusTitle, systemImage: "hourglass")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
                 } else {
                     Button {

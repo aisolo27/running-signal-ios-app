@@ -189,7 +189,12 @@ public struct HealthKitImportJobSummary: Equatable {
     }
 
     public var detailText: String {
-        var parts = ["\(importedCount) \(importedCount == 1 ? "run" : "runs") loaded"]
+        var parts: [String] = []
+        if importedCount > 0 {
+            parts.append("\(importedCount) HealthKit \(importedCount == 1 ? "workout" : "workouts") found")
+        } else if status == .running || status == .queued {
+            parts.append("Searching Apple Health")
+        }
         if status == .running, let currentWindowStart {
             parts.append("Checking history before \(RunFormatters.date.string(from: currentWindowStart))")
         }
@@ -336,7 +341,7 @@ public final class RunningAnalysisStore {
         HealthKitConnectionPresentation.make(
             authorizationState: authorizationState,
             importStatus: healthKitImportJobSummary?.status,
-            hasWorkouts: !V1WorkoutFilters.completedRuns(from: workouts).isEmpty,
+            loadedRunCount: V1WorkoutFilters.completedRuns(from: workouts).count,
             isLoading: isLoading
         )
     }
@@ -921,11 +926,21 @@ public final class RunningAnalysisStore {
             sawAuthorizedEmptyWindow = sawAuthorizedEmptyWindow || result.workouts.isEmpty
             importedTotal += result.workouts.count
             if !result.workouts.isEmpty {
+                let previousWorkouts = workouts
                 usesSampleData = false
                 workouts = Self.mergeImportedWorkouts(incoming: result.workouts, current: workouts)
                 deletePersistedSampleWorkoutsIfNeeded()
                 applyReviewedRunTypes()
-                persistCurrent()
+                let incomingIDs = Set(result.workouts.map(\.id))
+                let previousByID = Dictionary(uniqueKeysWithValues: previousWorkouts.map { ($0.id, $0) })
+                let workoutsToPersist = workouts.filter { workout in
+                    guard !incomingIDs.contains(workout.id), let previous = previousByID[workout.id] else {
+                        return true
+                    }
+                    return previous.isDuplicate != workout.isDuplicate
+                        || previous.duplicateOfID != workout.duplicateOfID
+                }
+                persist(workoutsToPersist)
             }
             PersistenceService.updateHealthKitImportProgress(
                 imported: result.workouts.count,
@@ -2169,8 +2184,12 @@ public final class RunningAnalysisStore {
     }
 
     private func persistCurrent() {
+        persist(workouts)
+    }
+
+    private func persist(_ workoutsToPersist: [CanonicalWorkout]) {
         guard let modelContext else { return }
-        PersistenceService.upsert(workouts, context: modelContext)
+        PersistenceService.upsert(workoutsToPersist, context: modelContext)
     }
 
     private func recompute(

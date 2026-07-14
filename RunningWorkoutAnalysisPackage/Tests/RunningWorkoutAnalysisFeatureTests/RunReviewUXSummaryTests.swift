@@ -32,9 +32,9 @@ import Testing
     let exactSummary = BestEffortUXSummary.make(effort: exact)
     let estimatedSummary = BestEffortUXSummary.make(effort: estimated)
 
-    #expect(exactSummary.title == "Official exact")
+    #expect(exactSummary.title == "Verified")
     #expect(exactSummary.confidence == .strong)
-    #expect(exactSummary.detail.contains("distance samples"))
+    #expect(exactSummary.detail.contains("Apple Health distance data"))
     #expect(estimatedSummary.title == "Estimate")
     #expect(estimatedSummary.confidence == .limited)
     #expect(estimatedSummary.detail.contains("whole-run pace"))

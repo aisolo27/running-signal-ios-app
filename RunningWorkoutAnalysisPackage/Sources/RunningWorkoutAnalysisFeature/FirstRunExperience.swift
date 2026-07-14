@@ -22,53 +22,121 @@ public enum HealthKitPrimaryAction: Equatable, Sendable {
     }
 }
 
+public enum HealthKitConnectionPhase: Equatable, Sendable {
+    case disconnected
+    case requestingAuthorization
+    case loadingHistory
+    case paused
+    case ready
+    case failed
+    case unavailable
+}
+
 public struct HealthKitConnectionPresentation: Equatable, Sendable {
+    public var phase: HealthKitConnectionPhase
     public var title: String
+    public var detailText: String
     public var action: HealthKitPrimaryAction
     public var showsProgress: Bool
+    public var showsPrimaryAction: Bool
+    public var loadedRunCount: Int
 
     public static func make(
         authorizationState: AuthorizationState,
         importStatus: HealthKitImportJobStatus?,
-        hasWorkouts: Bool,
+        loadedRunCount: Int,
         isLoading: Bool
     ) -> HealthKitConnectionPresentation {
+        let runLabel = loadedRunCount == 1 ? "run" : "runs"
+
+        if authorizationState == .requesting {
+            return HealthKitConnectionPresentation(
+                phase: .requestingAuthorization,
+                title: "Waiting for Apple Health",
+                detailText: "Choose the Health data you want RunSignal to read.",
+                action: .connect,
+                showsProgress: true,
+                showsPrimaryAction: false,
+                loadedRunCount: loadedRunCount
+            )
+        }
+
         if isLoading || importStatus == .running || importStatus == .queued {
             return HealthKitConnectionPresentation(
-                title: "Loading Apple Health",
-                action: hasWorkouts ? .refresh : .connect,
-                showsProgress: true
+                phase: .loadingHistory,
+                title: loadedRunCount == 0 ? "Finding Your Runs" : "Loading Run History",
+                detailText: loadedRunCount == 0
+                    ? "RunSignal is checking Apple Health for completed running workouts."
+                    : "\(loadedRunCount) completed \(runLabel) available. RunSignal is still checking older history.",
+                action: loadedRunCount > 0 ? .refresh : .connect,
+                showsProgress: true,
+                showsPrimaryAction: false,
+                loadedRunCount: loadedRunCount
             )
         }
 
         if importStatus == .paused {
             return HealthKitConnectionPresentation(
+                phase: .paused,
                 title: "History Import Paused",
+                detailText: loadedRunCount == 0
+                    ? "RunSignal paused before finding a completed run. Continue when you are ready."
+                    : "\(loadedRunCount) completed \(runLabel) available. Continue to check older history.",
                 action: .continueImport,
-                showsProgress: false
+                showsProgress: false,
+                showsPrimaryAction: true,
+                loadedRunCount: loadedRunCount
             )
         }
 
-        if hasWorkouts || authorizationState == .authorized || authorizationState == .partial {
+        if importStatus == .failed || importStatus == .blocked || authorizationState == .error {
             return HealthKitConnectionPresentation(
+                phase: .failed,
+                title: importStatus == .blocked ? "History Load Blocked" : "History Load Stopped",
+                detailText: loadedRunCount == 0
+                    ? "RunSignal could not finish loading your Apple Health run history."
+                    : "\(loadedRunCount) completed \(runLabel) remain available. Try the history load again.",
+                action: loadedRunCount > 0 ? .refresh : .connect,
+                showsProgress: false,
+                showsPrimaryAction: true,
+                loadedRunCount: loadedRunCount
+            )
+        }
+
+        if loadedRunCount > 0 || authorizationState == .authorized || authorizationState == .partial {
+            return HealthKitConnectionPresentation(
+                phase: .ready,
                 title: "Apple Health Connected",
+                detailText: loadedRunCount == 0
+                    ? "Connected, but no completed running workouts were found."
+                    : "\(loadedRunCount) completed \(runLabel) available in RunSignal.",
                 action: .refresh,
-                showsProgress: false
+                showsProgress: false,
+                showsPrimaryAction: true,
+                loadedRunCount: loadedRunCount
             )
         }
 
         if authorizationState == .unavailable {
             return HealthKitConnectionPresentation(
+                phase: .unavailable,
                 title: "Apple Health Unavailable",
+                detailText: "Apple Health is not available on this device.",
                 action: .connect,
-                showsProgress: false
+                showsProgress: false,
+                showsPrimaryAction: false,
+                loadedRunCount: loadedRunCount
             )
         }
 
         return HealthKitConnectionPresentation(
+            phase: .disconnected,
             title: "Connect Apple Health",
+            detailText: "Connect Apple Health to load your completed running workouts.",
             action: .connect,
-            showsProgress: false
+            showsProgress: false,
+            showsPrimaryAction: true,
+            loadedRunCount: loadedRunCount
         )
     }
 }
@@ -128,7 +196,20 @@ public struct BestEffortCoverageSummary: Equatable, Sendable {
         if isCheckingDetailedData {
             return "Checking runs for best efforts"
         }
+        if failedRunCount > 0 {
+            return failedRunCount == 1 ? "1 run could not be checked" : "Some runs could not be checked"
+        }
         return "Best Effort analysis pending"
+    }
+
+    public var actionTitle: String {
+        if historyImportStatus == .paused {
+            return "Continue History Import"
+        }
+        if failedRunCount > 0 {
+            return "Retry \(failedRunCount) \(failedRunCount == 1 ? "Run" : "Runs")"
+        }
+        return "Continue Analysis"
     }
 
     public var detailText: String {
@@ -148,9 +229,9 @@ public struct BestEffortCoverageSummary: Equatable, Sendable {
             return "RunSignal checked detailed Apple Health data for all \(totalRunCount) loaded runs."
         }
 
-        var detail = "\(checkedRunCount) of \(totalRunCount) loaded runs checked for detailed Apple Health data."
+        var detail = "\(checkedRunCount) of \(totalRunCount) loaded runs analyzed for verified best efforts."
         if failedRunCount > 0 {
-            detail += " \(failedRunCount) need another check."
+            detail += " \(failedRunCount) could not be checked yet; retrying will only revisit those runs."
         } else if isCheckingDetailedData {
             detail += " Verified records update as analysis finishes."
         } else {

@@ -312,20 +312,23 @@ public struct BestEffortUXSummary: Equatable, Sendable {
     public var confidence: ConfidenceLevel
 
     public static func make(effort: PersonalBestEffortRecord) -> BestEffortUXSummary {
-        let caveatText = effort.caveats.map(caveatLabel).joined(separator: ", ")
-        let suffix = caveatText.isEmpty ? "" : " Caveats: \(caveatText)."
+        let caveatText = effort.caveats
+            .filter { $0 != .routeMissing }
+            .map(caveatLabel)
+            .joined(separator: ", ")
+        let suffix = caveatText.isEmpty ? "" : " Note: \(caveatText)."
 
         switch effort.confidence {
         case .exact:
             return BestEffortUXSummary(
-                title: "Official exact",
-                detail: "HealthKit distance samples identify this segment window.\(suffix)",
+                title: "Verified",
+                detail: "Verified from detailed Apple Health distance data.\(suffix)",
                 confidence: .strong
             )
         case .exactTotal:
             return BestEffortUXSummary(
-                title: "Official total",
-                detail: "This is the full source workout distance, not a rolling segment.\(suffix)",
+                title: "Verified total",
+                detail: "Verified from the full Apple Health workout.\(suffix)",
                 confidence: .strong
             )
         case .estimated:
