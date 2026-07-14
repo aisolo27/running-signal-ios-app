@@ -1,6 +1,6 @@
 # RunSignal Project Status
 
-Last updated: 2026-07-13
+Last updated: 2026-07-14
 
 This is the only current project-status and next-work authority. Historical plans, proof notes, and old test counts do not override it.
 
@@ -148,3 +148,5 @@ On 2026-07-13, all 323 package tests passed after the first-run Apple Health and
 On 2026-07-13, all 325 package tests passed after the recording-driven branding, import-state, retry-copy, and large-history follow-up. Synthetic 1,000- and 5,000-run list/filter/analytics fixtures completed together in about 0.12 seconds, while the isolated 5,000-run window merge completed in about 0.11 seconds on this Mac. The iPhone 17 Simulator built, installed, and launched successfully. Visible smoke on a reset Simulator install confirmed the transparent RunSignal mark, revised onboarding copy, `Not Now` to the honest zero-run state, the retained Settings Connect action, and presentation of Apple's Health Access sheet. Unit coverage separately verifies loading/partial/paused/failed connection copy, hidden primary actions during active loading, heart-rate zones waiting for run data, explicit failed-run Best Effort retry wording, and raw-versus-visible count semantics. Simulator cannot prove physical HealthKit import duration, real permission choices, background delivery, thermal behavior, battery impact, or physical launch performance.
 
 The same working tree then passed all 325 package tests again, built for the connected `AIS17PM` running iOS 26.5.2, installed without resetting existing app data, and launched successfully as process 7133. This proves the physical-device build/install/run channel only. The true first-install onboarding sequence, real HealthKit permission choices, import progress and duration, large-history responsiveness, thermal behavior, and battery impact still require user-visible testing on the phone.
+
+On 2026-07-14, the release gate passed again before promotion to `main`: all 325 package tests passed, the iPhone 17 Simulator built/installed/launched, and a visible smoke check rendered the Runs screen without launch failure or overlap. After Adriel deleted the existing app, the same working tree installed as a fresh development build on `AIS17PM` running iOS 26.5.2. iOS initially required the Apple Development profile to be trusted again; after trust was restored, RunSignal launched successfully and a second launch confirmation opened it again as process 7993. This proves fresh physical install and launch separately from Simulator UI proof. The true onboarding interaction, Apple Health permission choices, real import progress/duration, thermal behavior, and battery impact remain user-visible physical-phone checks.
