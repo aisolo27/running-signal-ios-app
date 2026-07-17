@@ -1,6 +1,7 @@
 # RunSignal Agent Router
 
 - Start every task with `docs/project-state/project-status.md`; it is the only current project-status and next-work authority.
+- Read `docs/project-state/change-and-decision-log.md` before changing an established architecture, performance boundary, data contract, or runner-facing behavior, or when the request asks why a prior decision exists.
 - Read `docs/project-state/regression-cases.md` only for interval behavior, edge cases, or evidence retention.
 - Read `docs/healthkit-contract.md` only for HealthKit, WorkoutKit, ingestion, or persistence decisions.
 - Skim the index in `docs/bug-log.md` before coding and load only the relevant section.
@@ -35,4 +36,5 @@
 - Do not commit, push, release, or mutate live/provider data without explicit authorization.
 - Cleanup work must retain the canonical cases in `docs/validation/regression-evidence/` unless the matching registry entry and tests are deliberately replaced.
 - Add only recurring project-specific gotchas to `docs/bug-log.md`.
+- Add durable decisions and supersessions to `docs/project-state/change-and-decision-log.md`; keep Git history as the exhaustive file-level record and do not turn the decision log into a backlog.
 - After meaningful changes, update `project-status.md` only when current direction, limitations, verification, or next work actually changed.
