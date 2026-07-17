@@ -28,9 +28,9 @@ Do not use this file as a backlog. Put current next work in `project-status.md`.
 
 ### D-001 — Summary history and detailed evidence have different scopes
 
-Status: Active  
-Established: 2026-07-03 through 2026-07-14  
-Primary commits: `55f9d94`, `7dffa66`, `1d51353`, `ea0dcbc`, `112b81f`, `129c6dc`
+- Status: Active
+- Established: 2026-07-03 through 2026-07-14
+- Primary commits: `55f9d94`, `7dffa66`, `1d51353`, `ea0dcbc`, `112b81f`, `129c6dc`
 
 RunSignal loads lightweight summary records for the full permitted Apple Health running history. It does not automatically hydrate full samples, routes, charts, mechanics, WorkoutKit plans, and interval rows for every historical run.
 
@@ -45,8 +45,8 @@ Future performance work must preserve this bounded scope unless new physical-dev
 
 ### D-002 — An analytics snapshot is not full workout analysis
 
-Status: Active  
-Clarified: 2026-07-16
+- Status: Active
+- Clarified: 2026-07-16
 
 `AnalyticsEngine.snapshot(for:)` is a lightweight aggregate over already-loaded `CanonicalWorkout` summary fields. It calculates values such as recent distance, category balance, summary Best Efforts, readiness, and data coverage. It does not fetch or hydrate every workout's detailed HealthKit evidence.
 
@@ -60,9 +60,9 @@ Preserve:
 
 ### D-003 — Heavy computation stays off the main actor; publication stays bounded
 
-Status: Active  
-Established: 2026-07-10 through 2026-07-11  
-Primary commits: `1d51353`, `ea0dcbc`
+- Status: Active
+- Established: 2026-07-10 through 2026-07-11
+- Primary commits: `1d51353`, `ea0dcbc`
 
 - Detailed derived preparation and Best Effort distance scanning use immutable snapshots and detached utility-priority work.
 - Automatic detailed analysis remains sequential.
@@ -73,15 +73,15 @@ Physical interaction proof has been positive in prior stress passes, but a relia
 
 ### D-004 — HealthKit v1 is read-only and HealthKit-only
 
-Status: Active  
-Established: 2026-06-05 onward
+- Status: Active
+- Established: 2026-06-05 onward
 
 RunSignal reads completed Apple Health workouts and supporting evidence. It does not write HealthKit data. FIT, HealthFit, screenshots, and manual exports are validation evidence only, not runtime inputs. Backend sync, AI coaching, and file ingestion remain out of scope unless the product direction explicitly changes.
 
 ### D-005 — Completed custom-workout rows require the generalized evidence gate
 
-Status: Active  
-Established: 2026-06-13 through 2026-07-09
+- Status: Active
+- Established: 2026-06-13 through 2026-07-09
 
 Runner-facing Work, Recovery, Cooldown, and Open / Extra rows publish only when ordered WorkoutKit planned rows map to complete contiguous HealthKit activity evidence, or to a provable completed prefix for a stopped-early workout.
 
@@ -89,8 +89,8 @@ Raw markers, segment events, and older plan/sample reconstruction remain debug-o
 
 ### D-006 — Prescribed, measured, elapsed, paused, and active values stay distinct
 
-Status: Active  
-Established: 2026-06-22 through 2026-07-10
+- Status: Active
+- Established: 2026-06-22 through 2026-07-10
 
 - Planned distance and target pace describe the prescription.
 - HealthKit samples and activity rows describe completed evidence.
@@ -103,34 +103,34 @@ Future UI or analytics changes must not collapse these bases into one unlabeled 
 
 ### D-007 — Persisted derived behavior is versioned
 
-Status: Active  
-Established: 2026-07-12  
-Primary commit: `80e9643`
+- Status: Active
+- Established: 2026-07-12
+- Primary commit: `80e9643`
 
 When a derived algorithm changes, bump the calculation version and rebuild outdated cached analysis from stored raw evidence during targeted hydration. A source-code fix is incomplete if an older on-device cache can continue displaying the superseded result.
 
 ### D-008 — Heart-rate-zone profiles are effective-dated
 
-Status: Active  
-Established: 2026-07-12 through 2026-07-13  
-Primary commits: `80e9643`, `1ed653c`
+- Status: Active
+- Established: 2026-07-12 through 2026-07-13
+- Primary commits: `80e9643`, `1ed653c`
 
 Changing the current zone profile does not silently rewrite older workouts. The runner may explicitly apply the current profile to all workouts only through a warned destructive action. Active, proposed, and historical profile states must remain visibly distinct.
 
 ### D-009 — Foreground Apple Health sync stays quiet and throttled
 
-Status: Active  
-Established: 2026-07-11 through 2026-07-12  
-Primary commits: `ea0dcbc`, `80e9643`
+- Status: Active
+- Established: 2026-07-11 through 2026-07-12
+- Primary commits: `ea0dcbc`, `80e9643`
 
 App activation uses a persisted 15-minute throttle and a single-flight anchored check. Background or foreground maintenance must not present the blocking explicit-refresh banner. Pull-to-refresh and Settings refresh remain explicit visible actions.
 
 ### D-010 — Best Efforts are exact-only
 
-Status: Active  
-Established: 2026-07-13 through 2026-07-14  
-Revised: 2026-07-16  
-Primary commits: `112b81f`, `129c6dc`
+- Status: Active
+- Established: 2026-07-13 through 2026-07-14
+- Revised: 2026-07-16
+- Primary commits: `112b81f`, `129c6dc`
 
 RunSignal displays exact segment records and exact-total records only. Summary estimates and provisional record sections are intentionally absent. `All-Time Records` appears only after eligible history and detailed distance verification are complete; incomplete coverage remains `Verified Best Efforts` with checked, pending, and failed counts.
 
@@ -138,10 +138,10 @@ The verified bucket set includes 3K. Adding that bucket required new persisted s
 
 ### D-011 — Production first launch is honest and explain-before-ask
 
-Status: Active  
-Established: 2026-07-13 through 2026-07-14  
-Revised: 2026-07-16  
-Primary commits: `112b81f`, `129c6dc`, `5b71c34`
+- Status: Active
+- Established: 2026-07-13 through 2026-07-14
+- Revised: 2026-07-16
+- Primary commits: `112b81f`, `129c6dc`, `5b71c34`
 
 - Production first launch contains no demo workouts.
 - RunSignal explains read-only, private on-device processing before Apple's Health sheet.
@@ -156,8 +156,8 @@ Background observer registration reuses the store's completed authorization/impo
 
 ### D-012 — Interval Library is a repeated-prescription comparison tool
 
-Status: Active  
-Accepted and implemented: 2026-07-16
+- Status: Active
+- Accepted and implemented: 2026-07-16
 
 The primary Interval Library experience should emphasize repeated comparable prescriptions across separate workouts.
 
@@ -171,8 +171,8 @@ Do not implement this direction by weakening the official interval evidence gate
 
 ### D-013 — Run-type color remains supplementary
 
-Status: Active  
-Recorded and implemented: 2026-07-16
+- Status: Active
+- Recorded and implemented: 2026-07-16
 
 Run types may receive distinct accessible colors across Runs and Analytics, but the written Easy, Long, Interval, Threshold, Race, or Other label must remain. Color must not become the only category signal.
 
@@ -180,8 +180,8 @@ The shared mapping is Easy green, Long orange, Interval cyan, Threshold purple, 
 
 ### D-014 — Profile averages follow a trailing four-week convention
 
-Status: Active  
-Recorded and implemented: 2026-07-16
+- Status: Active
+- Recorded and implemented: 2026-07-16
 
 Strava documents its profile averages as averages from the last four weeks, alongside year-to-date and all-time totals. Source: `https://support.strava.com/en-us/articles/15402175-your-strava-profile-page`.
 
