@@ -188,3 +188,69 @@ Docs not updated:
 - `docs/bug-log.md` was not changed by this review; the recurring lessons were already represented by existing bug-log categories or by source implementation fixes, and no new durable bug-log entry was strong enough to add on top of the dirty worktree.
 - `AGENTS.md` was not changed; existing router rules already cover exact-cwd routing, branch-first implementation, install/run proof separation, and physical-vs-Simulator boundaries.
 - `docs/project-state/current-state.md`, `docs/project-state/next-work.md`, and `docs/project-state/documentation-index.md` still do not exist in this checkout. The active authority remains `docs/project-state/project-status.md`.
+
+## 2026-07-14
+
+Scope: reviewed Codex session logs from July 14, 2026 whose `session_meta.payload.cwd` or `turn_context.cwd` exactly matched `/Users/adrielsolorzano/Documents/Codex Projects/ios app Running Workout Analysis with Xcode & Codex`. Found one exact-cwd session, but it was the active daily-learning automation session and was excluded as non-source evidence. Other July 14 logs that mentioned the repo path were excluded because their metadata/context cwd did not exactly match this checkout.
+
+Completed work:
+
+- No source RunSignal implementation, review, install, build, or documentation session was found for the exact cwd on July 14 after excluding the active automation log.
+
+Pending work:
+
+- No new repo-local pending work was discovered from July 14 exact-cwd session logs.
+- Existing pending work remains governed by `docs/project-state/project-status.md`, especially the physical-iPhone first-install and real HealthKit validation items already listed there.
+
+Mistakes and fixes:
+
+- No new project bug, implementation mistake, toolchain failure, or fix was found in eligible July 14 exact-cwd logs.
+
+Workflow improvements:
+
+- Keep exact-cwd filtering strict. Text mentions of the repo path are not enough for this automation; `session_meta.payload.cwd` or `turn_context.cwd` must match the RunSignal checkout.
+- Continue excluding the active daily-learning automation session from source evidence so the review does not summarize itself.
+
+Docs updated:
+
+- `docs/project-state/daily-learning-review.md`: updated by this review with the July 14 no-source-session result and the strict filtering note.
+
+Docs not updated:
+
+- `docs/project-state/project-status.md` was not changed because no new stable product state, validation status, limitation, priority, or blocker was found.
+- `docs/bug-log.md` was not changed because no recurring bug, mistake, toolchain gotcha, or verification lesson was found.
+- `AGENTS.md` was not changed because the current router already covers exact-cwd routing and proof-channel separation.
+- `docs/project-state/current-state.md`, `docs/project-state/next-work.md`, and `docs/project-state/documentation-index.md` still do not exist in this checkout. The active authority remains `docs/project-state/project-status.md`.
+
+## 2026-07-15
+
+Scope: reviewed Codex session logs from July 15, 2026 whose `session_meta.payload.cwd` or `turn_context.cwd` exactly matched `/Users/adrielsolorzano/Documents/Codex Projects/ios app Running Workout Analysis with Xcode & Codex`. Found one exact-cwd session, `019f68fa-7e22-7512-8108-2c9ad11c13e4`, but it was the active daily-learning automation session and was excluded as non-source evidence.
+
+Completed work:
+
+- No independent RunSignal implementation, review, install, build, verification, or documentation session was found for the exact cwd on July 15 after excluding the active automation log.
+
+Pending work:
+
+- No new repo-local pending work was discovered from July 15 exact-cwd session logs.
+- Existing pending work remains governed by `docs/project-state/project-status.md`, especially the physical-iPhone first-install path and real HealthKit validation items already listed there.
+
+Mistakes and fixes:
+
+- No new project bug, implementation mistake, toolchain failure, or fix was found in eligible July 15 exact-cwd logs.
+
+Workflow improvements:
+
+- Keep excluding the daily-learning automation session itself from source evidence; a self-summary-only day should record no new durable lessons instead of reusing the automation's own output as project evidence.
+- Keep presence-checking `docs/project-state/current-state.md` and `docs/project-state/next-work.md`; both remain absent in this checkout, so `docs/project-state/project-status.md` is still the active status and next-work authority.
+
+Docs updated:
+
+- `docs/project-state/daily-learning-review.md`: updated by this review with the July 15 no-source-session result and the self-exclusion note.
+
+Docs not updated:
+
+- `docs/project-state/project-status.md` was not changed because no new stable product state, validation status, limitation, priority, or blocker was found.
+- `docs/bug-log.md` was not changed because no recurring bug, mistake, toolchain gotcha, or verification lesson was found.
+- `AGENTS.md` was not changed because no new durable routing or tooling rule was found.
+- `docs/project-state/current-state.md`, `docs/project-state/next-work.md`, and `docs/project-state/documentation-index.md` still do not exist in this checkout. The active authority remains `docs/project-state/project-status.md`.
