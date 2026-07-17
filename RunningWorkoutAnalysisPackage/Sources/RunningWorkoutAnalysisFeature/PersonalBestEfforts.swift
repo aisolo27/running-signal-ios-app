@@ -5,6 +5,7 @@ public enum PersonalBestEffortBucket: String, Codable, CaseIterable, Sendable {
     case halfMile
     case oneKilometer
     case oneMile
+    case threeKilometer
     case twoMile
     case fiveKilometer
     case tenKilometer
@@ -21,6 +22,7 @@ public enum PersonalBestEffortBucket: String, Codable, CaseIterable, Sendable {
         case .halfMile: "1/2 mile"
         case .oneKilometer: "1K"
         case .oneMile: "1 mile"
+        case .threeKilometer: "3K"
         case .twoMile: "2 mile"
         case .fiveKilometer: "5K"
         case .tenKilometer: "10K"
@@ -39,6 +41,7 @@ public enum PersonalBestEffortBucket: String, Codable, CaseIterable, Sendable {
         case .halfMile: 804.672
         case .oneKilometer: 1_000
         case .oneMile: 1_609.34
+        case .threeKilometer: 3_000
         case .twoMile: 3_218.68
         case .fiveKilometer: 5_000
         case .tenKilometer: 10_000

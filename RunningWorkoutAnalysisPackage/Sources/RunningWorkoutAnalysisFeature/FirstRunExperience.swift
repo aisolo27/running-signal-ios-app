@@ -27,6 +27,7 @@ public enum HealthKitConnectionPhase: Equatable, Sendable {
     case requestingAuthorization
     case loadingHistory
     case paused
+    case healthAccessReview
     case ready
     case failed
     case unavailable
@@ -40,6 +41,10 @@ public struct HealthKitConnectionPresentation: Equatable, Sendable {
     public var showsProgress: Bool
     public var showsPrimaryAction: Bool
     public var loadedRunCount: Int
+
+    public var showsHealthAccessRecoveryGuidance: Bool {
+        phase == .healthAccessReview
+    }
 
     public static func make(
         authorizationState: AuthorizationState,
@@ -97,6 +102,20 @@ public struct HealthKitConnectionPresentation: Equatable, Sendable {
                     ? "RunSignal could not finish loading your Apple Health run history."
                     : "\(loadedRunCount) completed \(runLabel) remain available. Try the history load again.",
                 action: loadedRunCount > 0 ? .refresh : .connect,
+                showsProgress: false,
+                showsPrimaryAction: true,
+                loadedRunCount: loadedRunCount
+            )
+        }
+
+        if authorizationState == .partial,
+           importStatus == .completed,
+           loadedRunCount == 0 {
+            return HealthKitConnectionPresentation(
+                phase: .healthAccessReview,
+                title: "Review Apple Health Access",
+                detailText: "RunSignal finished checking Apple Health, but no completed running workouts were returned. If you already have runs, review RunSignal's Health access, then refresh.",
+                action: .refresh,
                 showsProgress: false,
                 showsPrimaryAction: true,
                 loadedRunCount: loadedRunCount

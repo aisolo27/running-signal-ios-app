@@ -1707,6 +1707,7 @@ private func intervalForGoalMeasuredText(
     #expect(store.workouts.contains { $0.id == imported.id })
     #expect(healthKit.windowedLoadRequests.first?.detailedEvidenceLimit == HealthKitService.defaultDetailedEvidenceLimit)
     #expect(healthKit.windowedLoadRequests.dropFirst().allSatisfy { $0.detailedEvidenceLimit == 0 })
+    #expect(store.healthKitHistoryImportProgress == nil)
 }
 
 @MainActor
@@ -1931,6 +1932,9 @@ private func intervalForGoalMeasuredText(
     #expect(job.currentWindowEnd == firstRequest.startDate)
     #expect(healthKit.windowedLoadRequests.count == 1)
     #expect(store.healthKitImportJobSummary?.detailText.contains(" - ") == false)
+    #expect(store.healthKitHistoryImportProgress?.completedDateWindowCount == 1)
+    #expect((store.healthKitHistoryImportProgress?.totalDateWindowCount ?? 0) > 1)
+    #expect((store.healthKitHistoryImportProgress?.fractionComplete ?? 0) > 0)
 }
 
 @MainActor
@@ -2556,7 +2560,7 @@ private func intervalForGoalMeasuredText(
     let cached = PersonalBestEffortSummary(allTime: [estimatedHalfMarathon, exactLongestRun])
     syncDefaults.defaults.set(
         try JSONEncoder().encode(cached),
-        forKey: "RunSignal.PersonalBestEffortSummary.v2"
+        forKey: "RunSignal.PersonalBestEffortSummary.v3"
     )
 
     let store = RunningAnalysisStore(syncDefaults: syncDefaults.defaults)

@@ -158,11 +158,9 @@ public final class HealthKitWorkoutSyncService: HealthKitWorkoutSyncServicing, @
         guard HKHealthStore.isHealthDataAvailable() else {
             return HealthKitWorkoutSyncResult(authorizationState: .unavailable, message: "HealthKit is not available on this device.")
         }
-
-        let state = await healthKitService.requestAuthorization()
-        guard state == .authorized || state == .partial else {
-            return HealthKitWorkoutSyncResult(authorizationState: state, message: "The HealthKit authorization request could not be completed.")
-        }
+        // RunningAnalysisStore registers observation only after its explicit
+        // authorization/import path is ready. Re-requesting here can cause a
+        // redundant authorization cycle immediately after first import.
 
         let workoutType = HKObjectType.workoutType()
         if observerQuery == nil {

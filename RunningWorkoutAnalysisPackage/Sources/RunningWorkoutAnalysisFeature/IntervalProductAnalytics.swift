@@ -336,6 +336,74 @@ public struct IntervalLibraryGroup: Identifiable, Equatable, Sendable {
     public var signature: IntervalPrescriptionSignature
     public var workouts: [OfficialIntervalWorkout]
     public var trendPoints: [IntervalTrendPoint]
+
+    public var classification: IntervalLibraryGroupClassification {
+        totalWorkoutCount >= 2 && hasIntervalLikeStructure ? .primaryComparison : .secondary
+    }
+
+    public var totalWorkoutCount: Int {
+        workouts.count
+    }
+
+    public var totalWorkRepCount: Int {
+        trendPoints.reduce(0) { $0 + $1.workCount }
+    }
+
+    public var targetableWorkRepCount: Int {
+        trendPoints.reduce(0) { partial, point in
+            partial + point.onTargetCount + point.fastCount + point.slowCount
+        }
+    }
+
+    public var onTargetWorkRepCount: Int {
+        trendPoints.reduce(0) { $0 + $1.onTargetCount }
+    }
+
+    public var latestAverageWorkPaceSecondsPerKilometer: Double? {
+        chronologicalTrendPoints.last?.aggregatePaceSecondsPerKilometer
+    }
+
+    public var bestAverageWorkPaceSecondsPerKilometer: Double? {
+        trendPoints.compactMap(\.aggregatePaceSecondsPerKilometer).min()
+    }
+
+    /// Latest minus previous average Work pace. Negative values mean the latest workout was faster.
+    public var latestVersusPreviousAverageWorkPaceDeltaSecondsPerKilometer: Double? {
+        let points = chronologicalTrendPoints
+        guard points.count >= 2,
+              let latest = points.last?.aggregatePaceSecondsPerKilometer,
+              let previous = points.dropLast().last?.aggregatePaceSecondsPerKilometer
+        else { return nil }
+        return latest - previous
+    }
+
+    private var hasIntervalLikeStructure: Bool {
+        signature.workCount > 1 || signature.recoveryCount > 0
+    }
+
+    private var chronologicalTrendPoints: [IntervalTrendPoint] {
+        trendPoints.sorted {
+            if $0.startDate != $1.startDate {
+                return $0.startDate < $1.startDate
+            }
+            return $0.workoutID < $1.workoutID
+        }
+    }
+}
+
+public enum IntervalLibraryGroupClassification: String, Equatable, Hashable, Sendable {
+    case primaryComparison
+    case secondary
+}
+
+public struct IntervalLibrarySections: Equatable, Sendable {
+    public var primaryComparisons: [IntervalLibraryGroup]
+    public var secondaryGroups: [IntervalLibraryGroup]
+
+    public init(groups: [IntervalLibraryGroup]) {
+        primaryComparisons = groups.filter { $0.classification == .primaryComparison }
+        secondaryGroups = groups.filter { $0.classification == .secondary }
+    }
 }
 
 public enum IntervalLibraryBuilder {

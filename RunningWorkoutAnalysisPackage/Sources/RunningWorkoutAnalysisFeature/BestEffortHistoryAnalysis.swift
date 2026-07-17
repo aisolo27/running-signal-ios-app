@@ -20,7 +20,7 @@ public struct BestEffortHistoryCheckpoint: Codable, Equatable, Sendable {
 }
 
 enum BestEffortHistoryCheckpointStore {
-    private static let key = "RunSignal.BestEffortHistoryCheckpoint.v1"
+    private static let key = "RunSignal.BestEffortHistoryCheckpoint.v2"
 
     static func load(defaults: UserDefaults) -> BestEffortHistoryCheckpoint {
         guard let data = defaults.data(forKey: key),

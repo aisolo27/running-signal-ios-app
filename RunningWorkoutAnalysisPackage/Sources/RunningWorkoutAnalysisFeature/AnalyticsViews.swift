@@ -45,7 +45,10 @@ struct AnalyticsView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 if healthPresentation.showsProgress {
-                    HealthKitImportProgressView(presentation: healthPresentation)
+                    HealthKitImportProgressView(
+                        presentation: healthPresentation,
+                        progress: store.healthKitHistoryImportProgress
+                    )
                         .padding()
                         .background(.background)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -65,7 +68,7 @@ struct AnalyticsView: View {
                     .pickerStyle(.segmented)
 
                     NavigationLink {
-                        IntervalLibraryView(groups: intervalLibraryGroups)
+                        IntervalLibraryView(store: store, groups: intervalLibraryGroups)
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "repeat.circle.fill")
@@ -75,9 +78,7 @@ struct AnalyticsView: View {
                                 Text("Interval Library")
                                     .font(.headline)
                                     .foregroundStyle(.primary)
-                                Text(intervalLibraryGroups.isEmpty
-                                     ? "Structured interval workouts appear after analysis finishes."
-                                     : "\(intervalLibraryGroups.count) matching workout plans · targets and trends")
+                                Text(intervalLibrarySummaryText)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                     .multilineTextAlignment(.leading)
@@ -122,6 +123,10 @@ struct AnalyticsView: View {
                     }
                     .buttonStyle(.plain)
 
+                    RunningStatisticsView(
+                        statistics: store.runningProfileStatistics
+                    )
+
                     PeriodSignalView(
                         store: store,
                         summary: store.trainingPeriodSummary(
@@ -155,6 +160,17 @@ struct AnalyticsView: View {
         store.personalBestEffortSummary.allTime.filter {
             $0.confidence == .exact || $0.confidence == .exactTotal
         }
+    }
+
+    private var intervalLibrarySummaryText: String {
+        guard !intervalLibraryGroups.isEmpty else {
+            return "Structured interval workouts appear after analysis finishes."
+        }
+        let sections = IntervalLibrarySections(groups: intervalLibraryGroups)
+        if sections.primaryComparisons.isEmpty {
+            return "\(sections.secondaryGroups.count) one-off structured workout\(sections.secondaryGroups.count == 1 ? "" : "s")"
+        }
+        return "\(sections.primaryComparisons.count) repeated prescription\(sections.primaryComparisons.count == 1 ? "" : "s") · comparisons and trends"
     }
 }
 
@@ -269,11 +285,70 @@ private struct BestEffortCoverageCard: View {
     }
 }
 
-private struct IntervalLibraryView: View {
-    let groups: [IntervalLibraryGroup]
+private struct RunningStatisticsView: View {
+    let statistics: RunningProfileStatistics
 
-    private var broadGroups: [(key: [IntervalGoalSignature], groups: [IntervalLibraryGroup])] {
-        Dictionary(grouping: groups, by: { $0.signature.workGoals })
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "chart.bar.fill")
+                    .font(.title2)
+                    .foregroundStyle(.blue)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Running Statistics")
+                        .font(.headline)
+                    Text("Four-week averages with separate year-to-date and all-time totals.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            statisticsSection(
+                title: "Last 4 Weeks Average",
+                items: [
+                    MetricItem(title: "Runs / Week", value: String(format: "%.1f", statistics.averagePerWeek.runs), detail: "28 days ÷ 4"),
+                    MetricItem(title: "Time / Week", value: RunFormatters.duration(statistics.averagePerWeek.durationSeconds), detail: "Rolling average"),
+                    MetricItem(title: "Distance / Week", value: RunFormatters.distance(statistics.averagePerWeek.distanceMeters), detail: "Rolling average")
+                ]
+            )
+            statisticsSection(title: "Year to Date", items: totalItems(statistics.yearToDate))
+            statisticsSection(title: "All Time", items: totalItems(statistics.allTime))
+        }
+        .padding()
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .accessibilityIdentifier("running-statistics")
+    }
+
+    private func statisticsSection(title: String, items: [MetricItem]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline.bold())
+            MetricGrid(items: items)
+        }
+    }
+
+    private func totalItems(_ totals: RunningProfileTotals) -> [MetricItem] {
+        [
+            MetricItem(title: "Runs", value: "\(totals.runCount)", detail: "Completed"),
+            MetricItem(title: "Time", value: RunFormatters.duration(totals.durationSeconds), detail: "Total"),
+            MetricItem(title: "Distance", value: RunFormatters.distance(totals.distanceMeters), detail: "Total"),
+            MetricItem(title: "Elevation", value: String(format: "%.0f m", totals.elevationGainMeters), detail: "Gain")
+        ]
+    }
+}
+
+private struct IntervalLibraryView: View {
+    var store: RunningAnalysisStore
+    let groups: [IntervalLibraryGroup]
+    @State private var showsSecondaryGroups = false
+
+    private var sections: IntervalLibrarySections {
+        IntervalLibrarySections(groups: groups)
+    }
+
+    private var primaryBroadGroups: [(key: [IntervalGoalSignature], groups: [IntervalLibraryGroup])] {
+        Dictionary(grouping: sections.primaryComparisons, by: { $0.signature.workGoals })
             .map { (key: $0.key, groups: $0.value) }
             .sorted { intervalGoalListLabel($0.key) < intervalGoalListLabel($1.key) }
     }
@@ -281,45 +356,58 @@ private struct IntervalLibraryView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Interval workouts grouped by matching work and recovery plans.")
+                Text("Repeated prescriptions are shown first so you can compare like-for-like workouts. Single and one-off sessions remain available below.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                if broadGroups.isEmpty {
+                if groups.isEmpty {
                     EmptyStateView(
                         title: "No official interval groups yet",
                         message: "Whole-run analytics are still available. Interval groups appear after RunSignal finishes processing a compatible custom workout."
                     )
                 } else {
-                    ForEach(Array(broadGroups.enumerated()), id: \.offset) { _, broad in
+                    if primaryBroadGroups.isEmpty {
+                        EmptyStateView(
+                            title: "No repeated prescriptions yet",
+                            message: "Complete the same structured interval prescription again to unlock direct comparisons and trends."
+                        )
+                    }
+
+                    ForEach(primaryBroadGroups, id: \.key) { broad in
                         VStack(alignment: .leading, spacing: 10) {
                             Text("\(intervalGoalListLabel(broad.key)) Work")
                                 .font(.headline)
                             ForEach(broad.groups) { group in
-                                NavigationLink {
-                                    IntervalTrendView(group: group)
-                                } label: {
-                                    HStack {
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text(intervalPrescriptionLabel(group.signature))
-                                                .font(.subheadline.bold())
-                                                .foregroundStyle(.primary)
-                                            Text("\(group.workouts.count) workout\(group.workouts.count == 1 ? "" : "s")")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        Spacer()
-                                        Image(systemName: "chart.xyaxis.line")
-                                            .foregroundStyle(.cyan)
-                                    }
-                                    .padding(10)
-                                    .background(.secondary.opacity(0.08))
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                                }
-                                .buttonStyle(.plain)
+                                intervalGroupLink(group)
                             }
                         }
+                        .padding()
+                        .background(.background)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+
+                    if !sections.secondaryGroups.isEmpty {
+                        DisclosureGroup(
+                            isExpanded: $showsSecondaryGroups,
+                            content: {
+                                VStack(spacing: 8) {
+                                    ForEach(sections.secondaryGroups) { group in
+                                        intervalGroupLink(group)
+                                    }
+                                }
+                                .padding(.top, 8)
+                            },
+                            label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Single & One-Off Sessions")
+                                        .font(.headline)
+                                    Text("\(sections.secondaryGroups.count) workout plan\(sections.secondaryGroups.count == 1 ? "" : "s") · kept for reference")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        )
                         .padding()
                         .background(.background)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -331,10 +419,56 @@ private struct IntervalLibraryView: View {
         }
         .navigationTitle("Interval Library")
     }
+
+    private func intervalGroupLink(_ group: IntervalLibraryGroup) -> some View {
+        NavigationLink {
+            IntervalTrendView(store: store, group: group)
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(intervalPrescriptionLabel(group.signature))
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.primary)
+                    Text("\(group.totalWorkoutCount) workout\(group.totalWorkoutCount == 1 ? "" : "s") · \(group.totalWorkRepCount) Work reps")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: group.classification == .primaryComparison ? "chart.xyaxis.line" : "chevron.right")
+                    .foregroundStyle(group.classification == .primaryComparison ? .cyan : .secondary)
+            }
+            .padding(10)
+            .background(.secondary.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+    }
 }
 
 private struct IntervalTrendView: View {
+    var store: RunningAnalysisStore
     let group: IntervalLibraryGroup
+    @State private var selectedWorkoutID: String?
+
+    private var sortedTrendPoints: [IntervalTrendPoint] {
+        group.trendPoints.sorted {
+            if $0.startDate != $1.startDate {
+                return $0.startDate < $1.startDate
+            }
+            return $0.workoutID < $1.workoutID
+        }
+    }
+
+    private var selectedPoint: IntervalTrendPoint? {
+        if let selectedWorkoutID {
+            return sortedTrendPoints.first { $0.workoutID == selectedWorkoutID }
+        }
+        return sortedTrendPoints.last
+    }
+
+    private var workoutsByID: [String: CanonicalWorkout] {
+        Dictionary(uniqueKeysWithValues: store.workouts.map { ($0.id, $0) })
+    }
 
     var body: some View {
         ScrollView {
@@ -345,25 +479,57 @@ private struct IntervalTrendView: View {
                 )
 
                 MetricGrid(items: [
-                    MetricItem(title: "Sessions", value: "\(group.trendPoints.count)", detail: "Comparable"),
-                    MetricItem(title: "Latest Pace", value: RunFormatters.pace(group.trendPoints.last?.aggregatePaceSecondsPerKilometer), detail: "Work aggregate"),
-                    MetricItem(title: "On Target", value: "\(group.trendPoints.reduce(0) { $0 + $1.onTargetCount })", detail: "All sessions"),
-                    MetricItem(title: "Shortened", value: "\(group.trendPoints.reduce(0) { $0 + $1.shortenedCount })", detail: "Completion")
+                    MetricItem(title: "Workouts", value: "\(group.totalWorkoutCount)", detail: "Same prescription"),
+                    MetricItem(title: "Work Reps", value: "\(group.totalWorkRepCount)", detail: "Across workouts"),
+                    MetricItem(title: "Latest Avg Work Pace", value: RunFormatters.pace(group.latestAverageWorkPaceSecondsPerKilometer), detail: "Aggregate"),
+                    MetricItem(title: "Best Avg Work Pace", value: RunFormatters.pace(group.bestAverageWorkPaceSecondsPerKilometer), detail: "Fastest aggregate"),
+                    MetricItem(title: "On Target", value: onTargetText, detail: "Targetable Work reps"),
+                    MetricItem(title: "Change", value: paceChangeText, detail: "Latest vs previous")
                 ])
 
-                if !group.trendPoints.isEmpty {
-                    Chart(group.trendPoints) { point in
-                        if let pace = point.aggregatePaceSecondsPerKilometer, pace > 0 {
-                            LineMark(
-                                x: .value("Date", point.startDate),
-                                y: .value("Pace", 3_600 / pace)
-                            )
-                            .foregroundStyle(.cyan)
+                if let selectedPoint {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(RunFormatters.mediumDateWithYear.string(from: selectedPoint.startDate))
+                            .font(.subheadline.bold())
+                        Text("\(RunFormatters.pace(selectedPoint.aggregatePaceSecondsPerKilometer)) average Work pace · \(intervalResultSummary(selectedPoint))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.secondary.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+
+                if !sortedTrendPoints.isEmpty {
+                    Chart {
+                        ForEach(sortedTrendPoints) { point in
+                            if let pace = point.aggregatePaceSecondsPerKilometer, pace > 0 {
+                                LineMark(
+                                    x: .value("Date", point.startDate),
+                                    y: .value("Pace", 3_600 / pace)
+                                )
+                                .foregroundStyle(.cyan)
+                                PointMark(
+                                    x: .value("Date", point.startDate),
+                                    y: .value("Pace", 3_600 / pace)
+                                )
+                                .foregroundStyle(.cyan)
+                            }
+                        }
+
+                        if let selectedPoint,
+                           let pace = selectedPoint.aggregatePaceSecondsPerKilometer,
+                           pace > 0 {
+                            RuleMark(x: .value("Selected workout", selectedPoint.startDate))
+                                .foregroundStyle(.primary.opacity(0.45))
+                                .lineStyle(StrokeStyle(lineWidth: 1.5))
                             PointMark(
-                                x: .value("Date", point.startDate),
+                                x: .value("Selected date", selectedPoint.startDate),
                                 y: .value("Pace", 3_600 / pace)
                             )
                             .foregroundStyle(.cyan)
+                            .symbolSize(48)
                         }
                     }
                     .frame(height: 240)
@@ -377,31 +543,94 @@ private struct IntervalTrendView: View {
                             }
                         }
                     }
-                    .accessibilityLabel("Aggregate Work pace trend")
+                    .chartOverlay { proxy in
+                        GeometryReader { geometry in
+                            Rectangle()
+                                .fill(.clear)
+                                .contentShape(Rectangle())
+                                .gesture(
+                                    DragGesture(minimumDistance: 0)
+                                        .onChanged { value in
+                                            guard let plotFrame = proxy.plotFrame else { return }
+                                            let frame = geometry[plotFrame]
+                                            let x = value.location.x - frame.origin.x
+                                            guard x >= 0, x <= frame.width,
+                                                  let date: Date = proxy.value(atX: x),
+                                                  let nearest = sortedTrendPoints.min(by: {
+                                                      abs($0.startDate.timeIntervalSince(date))
+                                                          < abs($1.startDate.timeIntervalSince(date))
+                                                  })
+                                            else { return }
+                                            selectedWorkoutID = nearest.workoutID
+                                        }
+                                )
+                        }
+                    }
+                    .accessibilityLabel("Aggregate Work pace trend. Tap or drag to inspect a workout.")
                 }
 
-                ForEach(group.trendPoints.reversed()) { point in
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text(RunFormatters.mediumDateWithYear.string(from: point.startDate))
-                                .font(.subheadline.bold())
-                            Spacer()
-                            Text(RunFormatters.pace(point.aggregatePaceSecondsPerKilometer))
-                                .font(.subheadline.monospacedDigit())
+                ForEach(sortedTrendPoints.reversed()) { point in
+                    Group {
+                        if let workout = workoutsByID[point.workoutID] {
+                            NavigationLink {
+                                WorkoutDetailView(store: store, workoutID: workout.id)
+                            } label: {
+                                intervalWorkoutRow(point)
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            intervalWorkoutRow(point)
                         }
-                        Text("\(point.onTargetCount) on target · \(point.fastCount) fast · \(point.slowCount) slow · \(point.shortenedCount) shortened")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
-                    .padding()
-                    .background(.background)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
             }
             .padding()
             .padding(.bottom, 120)
         }
         .navigationTitle("Interval Trend")
+    }
+
+    private var onTargetText: String {
+        guard group.targetableWorkRepCount > 0 else { return "No target" }
+        return "\(group.onTargetWorkRepCount) of \(group.targetableWorkRepCount)"
+    }
+
+    private var paceChangeText: String {
+        guard let delta = group.latestVersusPreviousAverageWorkPaceDeltaSecondsPerKilometer else {
+            return "Unavailable"
+        }
+        let seconds = Int(abs(delta).rounded())
+        if seconds == 0 { return "No change" }
+        return "\(seconds)s/km \(delta < 0 ? "faster" : "slower")"
+    }
+
+    private func intervalResultSummary(_ point: IntervalTrendPoint) -> String {
+        "\(point.onTargetCount) on target · \(point.fastCount) fast · \(point.slowCount) slow · \(point.shortenedCount) shortened"
+    }
+
+    private func intervalWorkoutRow(_ point: IntervalTrendPoint) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(RunFormatters.mediumDateWithYear.string(from: point.startDate))
+                    .font(.subheadline.bold())
+                Text(intervalResultSummary(point))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(RunFormatters.pace(point.aggregatePaceSecondsPerKilometer))
+                    .font(.subheadline.monospacedDigit())
+                if workoutsByID[point.workoutID] != nil {
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding()
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -1017,9 +1246,15 @@ private struct WeeklyCategoryTotalsView: View {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 8)], spacing: 8) {
                 ForEach(visibleTotals) { total in
                     VStack(alignment: .leading, spacing: 5) {
-                        Text(total.category.label)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(RunSignalTextStyle.secondary)
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(total.category.runSignalAccent.color)
+                                .frame(width: 8, height: 8)
+                                .accessibilityHidden(true)
+                            Text(total.category.label)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(RunSignalTextStyle.secondary)
+                        }
                         Text("\(total.runCount)")
                             .font(.title3.monospacedDigit().bold())
                         Text(RunFormatters.distance(total.distanceMeters))
@@ -1030,6 +1265,10 @@ private struct WeeklyCategoryTotalsView: View {
                     .padding(10)
                     .background(.background)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(total.category.runSignalAccent.color.opacity(0.45), lineWidth: 1)
+                    }
                 }
             }
         }
@@ -1183,9 +1422,12 @@ private struct WeeklyWorkoutList: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(RunWorkout(workout: row.workout).runnerFacingTitle)
                     .font(.subheadline.bold())
-                Text("\(row.category.label) · \(RunFormatters.mediumDateWithYear.string(from: row.workout.startDate))")
-                    .font(.caption2)
-                    .foregroundStyle(RunSignalTextStyle.secondary)
+                HStack(spacing: 6) {
+                    RunTypeTag(runType: row.workout.effectiveRunType)
+                    Text(RunFormatters.mediumDateWithYear.string(from: row.workout.startDate))
+                        .font(.caption2)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
+                }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {

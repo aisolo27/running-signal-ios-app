@@ -14,6 +14,9 @@ final class RunningWorkoutAnalysisUITests: XCTestCase {
         XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 5))
 
         app.tabBars.buttons["Settings"].tap()
-        XCTAssertTrue(app.staticTexts["HealthKit status, data coverage, and v1 debug tools."].waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["settings-healthkit-card"]
+                .waitForExistence(timeout: 5)
+        )
     }
 }

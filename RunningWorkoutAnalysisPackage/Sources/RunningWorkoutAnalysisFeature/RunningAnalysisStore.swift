@@ -256,7 +256,7 @@ public struct DerivedAnalysisRefreshSummary: Equatable, Sendable {
 @MainActor
 @Observable
 public final class RunningAnalysisStore {
-    private static let personalBestCacheKey = "RunSignal.PersonalBestEffortSummary.v2"
+    private static let personalBestCacheKey = "RunSignal.PersonalBestEffortSummary.v3"
     private static let foregroundSyncMinimumInterval: TimeInterval = 15 * 60
     private static let refreshLogger = Logger(
         subsystem: "com.adrielsolorzano.runninganalysis",
@@ -265,6 +265,7 @@ public final class RunningAnalysisStore {
 
     public private(set) var workouts: [CanonicalWorkout] = []
     public private(set) var snapshot = AnalyticsEngine.snapshot(for: [])
+    public private(set) var runningProfileStatistics = RunningProfileStatistics.make(workouts: [])
     public private(set) var healthKitStatus = HealthKitActionStatus()
     public private(set) var isLoading = false
     public private(set) var isEnrichingAudit = false
@@ -282,6 +283,7 @@ public final class RunningAnalysisStore {
     public private(set) var monthlyEvidenceRefreshResults: [String: MonthlyEvidenceRefreshResult] = [:]
     public private(set) var evidenceRefreshJobs: [PersistedEvidenceRefreshJob] = []
     public private(set) var healthKitImportJobSummary: HealthKitImportJobSummary?
+    public private(set) var healthKitHistoryImportProgress: HealthKitHistoryImportProgress?
     public private(set) var derivedAnalysisRefreshSummary = DerivedAnalysisRefreshSummary.empty
     public private(set) var trainingPeriodSummaries: [CachedTrainingPeriodSummary] = []
     public private(set) var analyzingWorkoutIDs: Set<String> = []
@@ -311,6 +313,7 @@ public final class RunningAnalysisStore {
     private var personalBestEffortRefreshGeneration = 0
     private var bestEffortHistoryCheckpoint = BestEffortHistoryCheckpoint()
     private var cachedEvidenceWorkoutIDs: Set<String> = []
+    private(set) var automaticEvidenceAggregatePublicationCount = 0
     private weak var modelContext: ModelContext?
 
     public init(
@@ -850,11 +853,19 @@ public final class RunningAnalysisStore {
             earliestPermittedDate: earliestPermittedDate
         )
         guard let firstWindow = windows.first else {
+            healthKitHistoryImportProgress = nil
             PersistenceService.finishHealthKitImportJob(status: .completed, message: nil, context: modelContext)
             refreshHealthKitImportJobSummary()
             return
         }
 
+        healthKitHistoryImportProgress = HealthKitHistoryImportProgress(
+            completedDateWindowCount: 0,
+            totalDateWindowCount: windows.count,
+            currentWindowStartDate: firstWindow.start,
+            currentWindowEndDate: firstWindow.end,
+            importedWorkoutCount: V1WorkoutFilters.completedRuns(from: workouts).count
+        )
         PersistenceService.startHealthKitImportJob(
             context: modelContext,
             windowStart: firstWindow.start,
@@ -866,6 +877,13 @@ public final class RunningAnalysisStore {
         var importedTotal = 0
         var sawAuthorizedEmptyWindow = false
         for (index, window) in windows.enumerated() {
+            healthKitHistoryImportProgress = HealthKitHistoryImportProgress(
+                completedDateWindowCount: index,
+                totalDateWindowCount: windows.count,
+                currentWindowStartDate: window.start,
+                currentWindowEndDate: window.end,
+                importedWorkoutCount: V1WorkoutFilters.completedRuns(from: workouts).count
+            )
             let loadsDetailedEvidence = index == 0
             if let reason = budget.pauseReason(allowsDetailedEvidence: loadsDetailedEvidence) {
                 if reason == .elapsedBudgetExceeded {
@@ -949,6 +967,13 @@ public final class RunningAnalysisStore {
                 context: modelContext
             )
             refreshHealthKitImportJobSummary()
+            healthKitHistoryImportProgress = HealthKitHistoryImportProgress(
+                completedDateWindowCount: index + 1,
+                totalDateWindowCount: windows.count,
+                currentWindowStartDate: window.start,
+                currentWindowEndDate: window.end,
+                importedWorkoutCount: V1WorkoutFilters.completedRuns(from: workouts).count
+            )
             await Task.yield()
         }
 
@@ -967,6 +992,7 @@ public final class RunningAnalysisStore {
             authorizationState: authorizationState,
             message: healthKitImportFinishedMessage(earliestPermittedDate: earliestPermittedDate)
         )
+        healthKitHistoryImportProgress = nil
         await startHealthKitBackgroundDelivery()
         refreshAutomaticHeartRateZoneProfileIfNeeded()
         recompute()
@@ -1296,7 +1322,12 @@ public final class RunningAnalysisStore {
 
     private func runAutomaticEvidenceQueue(now: Date) async {
         let budget = makeImportBudgetPolicy()
+        var attemptedQueueItem = false
+        var processedWorkoutIDs: Set<String> = []
         defer {
+            if attemptedQueueItem {
+                publishAutomaticEvidenceAggregateState(processedWorkoutIDs: processedWorkoutIDs)
+            }
             automaticEvidenceTask = nil
             isEnrichingAudit = false
         }
@@ -1307,7 +1338,10 @@ public final class RunningAnalysisStore {
                     break
                 }
                 automaticEvidenceAttemptedWorkoutIDs.insert(workoutID)
-                await prepareExistingDetailedWorkout(workoutID: workoutID)
+                if await prepareExistingDetailedWorkout(workoutID: workoutID) {
+                    processedWorkoutIDs.insert(workoutID)
+                }
+                attemptedQueueItem = true
                 await Task.yield()
                 continue
             }
@@ -1323,7 +1357,10 @@ public final class RunningAnalysisStore {
             }
             automaticEvidenceAttemptedWorkoutIDs.insert(workoutID)
             prioritizedEvidenceWorkoutIDs.remove(workoutID)
-            await enrichSingleWorkout(workoutID: workoutID, budget: budget)
+            if await enrichSingleWorkout(workoutID: workoutID, budget: budget) {
+                processedWorkoutIDs.insert(workoutID)
+            }
+            attemptedQueueItem = true
             await Task.yield()
         }
     }
@@ -1373,14 +1410,14 @@ public final class RunningAnalysisStore {
         .first { !automaticEvidenceAttemptedWorkoutIDs.contains($0) }
     }
 
-    private func enrichSingleWorkout(workoutID: String, budget: IngestionBudgetPolicy) async {
+    private func enrichSingleWorkout(workoutID: String, budget: IngestionBudgetPolicy) async -> Bool {
         if let reason = budget.pauseReason(allowsDetailedEvidence: true) {
             message = reason.message
             analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
                 stage: .paused,
                 message: reason.message
             )
-            return
+            return false
         }
 
         isEnrichingAudit = true
@@ -1410,7 +1447,7 @@ public final class RunningAnalysisStore {
                 stage: .failed,
                 message: failureMessage
             )
-            return
+            return false
         }
 
         returnedWorkout.inferredRunType = RunClassifier.inferRunType(for: returnedWorkout)
@@ -1441,7 +1478,7 @@ public final class RunningAnalysisStore {
         }
         derivedAnalysesByWorkoutID[workoutID] = prepared.analysis
         markEvidenceQueueAttempt(ids: [workoutID], status: .enriched, message: result.message)
-        refreshSingleWorkoutDerivedState(workoutID: workoutID)
+        refreshSingleWorkoutPeriodState(workoutID: workoutID)
         analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
             stage: .ready,
             message: "Full analysis is ready."
@@ -1452,11 +1489,12 @@ public final class RunningAnalysisStore {
                 await self?.resolveAndCacheCityName(workoutID: workoutID)
             }
         }
+        return true
     }
 
-    private func prepareExistingDetailedWorkout(workoutID: String) async {
+    private func prepareExistingDetailedWorkout(workoutID: String) async -> Bool {
         guard let index = workouts.firstIndex(where: { $0.id == workoutID }),
-              let evidence = workouts[index].evidence else { return }
+              let evidence = workouts[index].evidence else { return false }
         var workout = workouts[index]
         workout.workoutPlanName = evidence.workoutPlanAudit?.displayName ?? workout.workoutPlanName
         let suggestion = RunClassifier.suggestion(
@@ -1477,7 +1515,7 @@ public final class RunningAnalysisStore {
         let prepared = await Task.detached(priority: .utility) { [persistenceWorkout, persistenceEvidence] in
             PreparedWorkoutPersistence.make(workout: persistenceWorkout, evidence: persistenceEvidence)
         }.value
-        guard let currentIndex = workouts.firstIndex(where: { $0.id == workoutID }) else { return }
+        guard let currentIndex = workouts.firstIndex(where: { $0.id == workoutID }) else { return false }
         workouts[currentIndex].inferredRunType = suggestedRunType
         workouts[currentIndex].workoutPlanName = workout.workoutPlanName
         if let modelContext {
@@ -1489,7 +1527,7 @@ public final class RunningAnalysisStore {
             )
         }
         derivedAnalysesByWorkoutID[workoutID] = prepared.analysis
-        refreshSingleWorkoutDerivedState(workoutID: workoutID)
+        refreshSingleWorkoutPeriodState(workoutID: workoutID)
         analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
             stage: .ready,
             message: "Full analysis is ready."
@@ -1499,12 +1537,30 @@ public final class RunningAnalysisStore {
                 await self?.resolveAndCacheCityName(workoutID: workoutID)
             }
         }
+        return true
     }
 
-    private func refreshSingleWorkoutDerivedState(workoutID: String) {
-        applySuggestedRunTypes()
+    private func refreshSingleWorkoutPeriodState(workoutID: String) {
         guard let workout = workouts.first(where: { $0.id == workoutID }) else { return }
         refreshTrainingPeriodSummaryCache(affectedBy: workout, persist: true)
+    }
+
+    private func publishAutomaticEvidenceAggregateState(processedWorkoutIDs: Set<String>) {
+        automaticEvidenceAggregatePublicationCount += 1
+        guard !processedWorkoutIDs.isEmpty else {
+            refreshEvidenceQueueSummary()
+            return
+        }
+
+        let priorRunTypes = Dictionary(uniqueKeysWithValues: processedWorkoutIDs.compactMap { workoutID in
+            workouts.first(where: { $0.id == workoutID }).map { (workoutID, $0.inferredRunType) }
+        })
+        applySuggestedRunTypes()
+        for workoutID in processedWorkoutIDs {
+            guard let workout = workouts.first(where: { $0.id == workoutID }),
+                  priorRunTypes[workoutID] != workout.inferredRunType else { continue }
+            refreshTrainingPeriodSummaryCache(affectedBy: workout, persist: true)
+        }
         snapshot = AnalyticsEngine.snapshot(for: workouts, healthContext: healthContext)
         let derived = PersonalBestEffortSummary(
             allTime: derivedAnalysesByWorkoutID.values.flatMap { $0.personalBestEffortRecords ?? [] }
@@ -2209,6 +2265,7 @@ public final class RunningAnalysisStore {
         }
         runTypeReconciliation = RunTypeReviewBridge.reconcile(reviews: reviewedRunTypes, workouts: workouts)
         snapshot = AnalyticsEngine.snapshot(for: workouts, healthContext: healthContext)
+        runningProfileStatistics = RunningProfileStatistics.make(workouts: workouts)
         if !shouldRefreshDerivedAnalyses {
             loadPersistedDerivedAnalyses()
         }

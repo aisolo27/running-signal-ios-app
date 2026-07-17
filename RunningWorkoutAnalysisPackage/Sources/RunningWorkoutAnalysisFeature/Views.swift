@@ -58,7 +58,10 @@ struct RunsView: View {
         List {
             if healthPresentation.showsProgress, !runs.isEmpty {
                 Section {
-                    HealthKitImportProgressView(presentation: healthPresentation)
+                    HealthKitImportProgressView(
+                        presentation: healthPresentation,
+                        progress: store.healthKitHistoryImportProgress
+                    )
                 }
             }
 
@@ -118,10 +121,12 @@ struct RunsView: View {
             if runs.isEmpty {
                 Section {
                     EmptyStateView(
-                        title: healthPresentation.showsProgress ? healthPresentation.title : "No completed runs yet",
-                        message: healthPresentation.showsProgress
-                            ? healthPresentation.detailText
-                            : "Connect Apple Health to load your completed running workouts. RunSignal does not place demo workouts in your history."
+                        title: healthPresentation.phase == .disconnected
+                            ? "No completed runs yet"
+                            : healthPresentation.title,
+                        message: healthPresentation.phase == .disconnected
+                            ? "Connect Apple Health to load your completed running workouts. RunSignal does not place demo workouts in your history."
+                            : healthPresentation.detailText
                     )
                     if healthPresentation.showsPrimaryAction {
                         Button {
@@ -131,6 +136,9 @@ struct RunsView: View {
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
+                    }
+                    if healthPresentation.showsHealthAccessRecoveryGuidance {
+                        HealthAccessRecoveryView()
                     }
                 }
             } else if historySections.isEmpty {
@@ -196,23 +204,62 @@ struct RunsView: View {
 
 struct HealthKitImportProgressView: View {
     let presentation: HealthKitConnectionPresentation
+    var progress: HealthKitHistoryImportProgress? = nil
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            ProgressView()
-                .controlSize(.small)
-                .padding(.top, 2)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(presentation.title)
-                    .font(.subheadline.weight(.semibold))
-                Text(presentation.detailText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
+                if progress == nil {
+                    ProgressView()
+                        .controlSize(.small)
+                        .padding(.top, 2)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(presentation.title)
+                        .font(.subheadline.weight(.semibold))
+                    Text(presentation.detailText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if let progress {
+                ProgressView(value: progress.fractionComplete)
+                    .progressViewStyle(.linear)
+                HStack {
+                    Text(progress.progressText)
+                    Spacer()
+                    Text("\(progress.importedWorkoutCount) runs available")
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
             }
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("healthkit-import-progress")
+    }
+}
+
+struct HealthAccessRecoveryView: View {
+    var body: some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("1. Open the Health app.")
+                Text("2. Tap your profile picture.")
+                Text("3. Open Privacy, then Apps, then RunSignal.")
+                Text("4. Enable the running data you want RunSignal to read.")
+                Text("5. Return to RunSignal and tap Refresh Apple Health.")
+                Text("Apple protects read-permission privacy, so RunSignal cannot identify which individual Health data types were declined.")
+                    .padding(.top, 4)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        } label: {
+            Label("How to Review Health Access", systemImage: "checklist")
+                .font(.subheadline.weight(.semibold))
+        }
+        .accessibilityIdentifier("health-access-recovery-guidance")
     }
 }
 
@@ -233,18 +280,22 @@ struct SettingsView: View {
         Form {
             Section("Apple Health") {
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack {
+                    if healthPresentation.showsProgress {
+                        HealthKitImportProgressView(
+                            presentation: healthPresentation,
+                            progress: store.healthKitHistoryImportProgress
+                        )
+                    } else {
                         Label(healthPresentation.title, systemImage: "heart.text.square")
                             .font(.headline)
-                        Spacer()
-                        if healthPresentation.showsProgress {
-                            ProgressView()
-                        }
+                        Text(healthPresentation.detailText)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    Text(healthPresentation.detailText)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if healthPresentation.showsHealthAccessRecoveryGuidance {
+                        HealthAccessRecoveryView()
+                    }
                     if let importSummary = store.healthKitImportJobSummary {
                         LabeledContent(importSummary.statusTitle, value: importSummary.detailText)
                             .font(.caption)
@@ -260,6 +311,7 @@ struct SettingsView: View {
                         .buttonStyle(.borderedProminent)
                     }
                 }
+                .accessibilityIdentifier("settings-healthkit-card")
             }
 
             Section("Display") {
@@ -791,21 +843,6 @@ struct V1WorkoutRow: View {
                 .foregroundStyle(.primary)
         }
         .padding(.vertical, 4)
-    }
-}
-
-private struct RunTypeTag: View {
-    let runType: RunType
-
-    var body: some View {
-        Text(runType.visibleCategory.label)
-            .font(.caption2.bold())
-            .foregroundStyle(.blue)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(.blue.opacity(0.14))
-            .clipShape(Capsule())
-            .accessibilityLabel("Run type \(runType.visibleCategory.label)")
     }
 }
 
