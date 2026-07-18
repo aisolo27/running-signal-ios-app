@@ -369,6 +369,7 @@ struct RunShareCardView: View {
             }
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, canvas == .story ? 24 : 18)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .frame(width: canvas.pointSize.width, height: canvas.pointSize.height)
         .environment(\.colorScheme, .dark)
