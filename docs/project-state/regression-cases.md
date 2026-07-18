@@ -1,6 +1,6 @@
 # Canonical Regression Cases
 
-Last updated: 2026-07-09
+Last updated: 2026-07-17
 
 This catalog preserves behaviors learned from real workouts without keeping every historical export. It is engineering evidence, not a user-facing per-rep tagging model.
 
@@ -69,6 +69,27 @@ This catalog preserves behaviors learned from real workouts without keeping ever
 - Expected: category defaults to Other; show whole-run analytics and splits; do not invent custom intervals.
 - Evidence: code fixture only; public contract is sufficient.
 - Tests: `openRunWithoutPlannedStepsDoesNotInventCustomIntervals`, `intervalLibraryExcludesNoPlanAndNoWorkRows`, `runClassifierRequiresOfficialStructuredRowsForInterval`.
+
+### `legacy-watch-interleaved-kilometer-mile-splits`
+
+- Behavior: older open Watch runs with sparse multi-minute distance samples and simultaneous contiguous kilometer and mile `segment` chains.
+- Expected: normal splits select only the distance-validated kilometer chain, preserve the final partial row, and match the public event boundaries shown by Apple Fitness. Mile-chain events remain ignored, and neither chain becomes custom-workout interval rows. Review/parity diagnostics name the selected source and retain chain counts, selected rows, and any rejection or fallback reason.
+- Fallback: if a complete kilometer chain does not validate, accrue distance across each sample's real start/end window. Never credit the full contribution at the sample start.
+- Evidence: January 3, 2019 5.08 km and January 5, 2019 3.85 km physical-iPhone stored evidence plus the supplied Apple Fitness recording/screenshots; encoded as code fixtures without retaining private exports in the repository.
+- Tests: `validatedLegacyKilometerSegmentChainMatchesAppleFitnessSplits`, `secondLegacyKilometerChainRejectsInterleavedMileSegments`, and `legacyDistanceSamplesAccrueAcrossTheirHealthKitWindows`.
+
+### `legacy-watch-paused-normal-split`
+
+- Behavior: January 14, 2019 outdoor open run with a valid kilometer segment chain, explicit pause/resume events, nearby motion pause events, 16:25 active time, and 18:50 elapsed time.
+- Expected: preserve the validated elapsed boundary chain, choose only the pause-event family that reconciles to workout active duration, subtract the 2:25 explicit pause from KM 3, and publish 5:04 rather than 7:29. Do not promote the run into custom-workout intervals.
+- Evidence: supplied January 14 parity/review packets and Apple Fitness screenshots; encoded as a code fixture without retaining private exports in the repository.
+- Tests: `january14LegacySplitsSubtractOnlyThePauseBasisThatMatchesWorkoutDuration` plus the existing generalized custom-workout gate tests.
+
+### `normal-split-evidence-tiers`
+
+- Behavior: modern or legacy lap events, reconciled sparse distance windows, overlapping/unreconciled samples, ambiguous segment chains, and summary-only old workouts.
+- Expected: validated lap rows first; unique validated segments second; active-clock distance interpolation third; otherwise no chronological split rows. Summary-only runs retain their whole-run summary.
+- Tests: `validatedLapEventsTakePriorityOverSegmentHeuristics`, `legacyZeroDurationLapBoundariesWorkWithoutDetailedDistanceSamples`, `overlappingDistanceWindowsCannotDoubleCountSplits`, `unreconciledDistanceSeriesCannotPublishSplits`, `materiallyDifferentValidatedSegmentChainsFallBackToDistanceWindows`, and `summaryOnlyRunsDoNotFabricateChronologicalKilometerRows`.
 
 ### `missing-or-malformed-evidence`
 

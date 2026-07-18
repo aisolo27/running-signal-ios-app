@@ -1,6 +1,6 @@
 # HealthKit And WorkoutKit Contract
 
-Last updated: 2026-07-13
+Last updated: 2026-07-17
 
 This is the compact implementation reference for RunSignal's Apple Health integration. Current product status remains in `docs/project-state/project-status.md`.
 
@@ -59,6 +59,18 @@ Native `HKWorkoutActivity.duration` and activity statistics are preferred when p
 
 Missing or conflicting evidence yields whole-run-only behavior. Plan/sample reconstruction and raw event candidates remain diagnostic and cannot replace blocked product rows.
 
+## Normal Kilometer Splits
+
+Normal splits are a separate derived product and never loosen the custom-workout row gate.
+
+- Canonicalize detailed distance samples before split use: order and deduplicate them, reject invalid or materially overlapping windows, retain provenance, and require the detailed total to reconcile to the workout summary.
+- Prefer a complete validated `lap` chain. Normalize documented legacy zero-duration lap events from the prior boundary before evaluating the chain.
+- A `segment` chain is a calibrated legacy Watch heuristic, not a generic Apple Fitness interval contract. It must span the distance evidence, have the exact kilometer-plus-partial row count, distance-validate, and be unique at displayed one-second precision.
+- Split duration uses the reliable pause-event family whose total reconciles to `elapsedSeconds - durationSeconds`. Boundary dates remain elapsed timestamps, while displayed time and pace use pause-adjusted active time.
+- When no boundary chain passes, interpolate crossings across each distance sample's real start/end window on that active-time clock.
+- Summary-only evidence never creates repeated average-based kilometer rows. Show the whole-run summary and an explicit splits-unavailable reason instead.
+- Route points remain a diagnostic cross-check until a source-stratified physical corpus proves a safe route fallback.
+
 ## Metric Rules
 
 - Canonical pace is seconds per kilometer; aggregate pace is total duration divided by total distance.
@@ -94,4 +106,5 @@ Missing or conflicting evidence yields whole-run-only behavior. Plan/sample reco
 - [HKWorkout](https://developer.apple.com/documentation/healthkit/hkworkout)
 - [HKWorkoutActivity](https://developer.apple.com/documentation/healthkit/hkworkoutactivity)
 - [HKWorkoutEvent](https://developer.apple.com/documentation/healthkit/hkworkoutevent)
+- [HKWorkoutEventType.lap](https://developer.apple.com/documentation/healthkit/hkworkouteventtype/lap)
 - [WorkoutKit](https://developer.apple.com/documentation/workoutkit)

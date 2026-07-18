@@ -7,6 +7,7 @@ struct RunsView: View {
     @State private var searchText = ""
     @State private var selectedYear: Int?
     @State private var selectedCategory: WeeklyRunCategory?
+    @State private var selectedEnvironment: RunEnvironment?
     @State private var collapsedYears: Set<Int> = []
 
     private var runs: [CanonicalWorkout] {
@@ -22,26 +23,13 @@ struct RunsView: View {
     }
 
     private var filteredHistory: [CanonicalWorkout] {
-        Array(runs.dropFirst()).filter { workout in
-            if let selectedYear,
-               Calendar.current.component(.year, from: workout.startDate) != selectedYear {
-                return false
-            }
-            if let selectedCategory,
-               WeeklyRunCategory.make(from: workout) != selectedCategory {
-                return false
-            }
-            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            guard !query.isEmpty else { return true }
-            let searchableText = [
-                RunWorkout(workout: workout).runnerFacingTitle,
-                RunFormatters.weekdayDateWithYear.string(from: workout.startDate),
-                workout.sourceName,
-                workout.notes,
-                RunWorkout(workout: workout).categoryLabel
-            ].joined(separator: " ").lowercased()
-            return searchableText.contains(query)
-        }
+        RunHistoryFiltering.filtered(
+            Array(runs.dropFirst()),
+            selectedYear: selectedYear,
+            selectedCategory: selectedCategory,
+            selectedEnvironment: selectedEnvironment,
+            searchText: searchText
+        )
     }
 
     private var historySections: [RunHistoryYearSection] {
@@ -103,10 +91,22 @@ struct RunsView: View {
                     .buttonStyle(.bordered)
                 }
 
-                if selectedYear != nil || selectedCategory != nil {
+                Menu {
+                    Button("All Environments") { selectedEnvironment = nil }
+                    Divider()
+                    Button("Outdoor") { selectedEnvironment = .outdoor }
+                    Button("Indoor") { selectedEnvironment = .indoor }
+                } label: {
+                    Label(selectedEnvironment?.label ?? "All Environments", systemImage: "figure.run")
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("runs-environment-filter")
+
+                if selectedYear != nil || selectedCategory != nil || selectedEnvironment != nil {
                     Button {
                         selectedYear = nil
                         selectedCategory = nil
+                        selectedEnvironment = nil
                     } label: {
                         Label("Clear Filters", systemImage: "xmark.circle")
                     }
@@ -143,7 +143,7 @@ struct RunsView: View {
                 }
             } else if historySections.isEmpty {
                 Section {
-                    EmptyStateView(title: "No matching past runs", message: "Try another search, year, or run type.")
+                    EmptyStateView(title: "No matching past runs", message: "Try another search, year, run type, or environment.")
                 }
             } else {
                 ForEach(historySections) { section in
@@ -267,6 +267,43 @@ private struct RunHistoryYearSection: Identifiable {
     let year: Int
     let workouts: [CanonicalWorkout]
     var id: Int { year }
+}
+
+enum RunHistoryFiltering {
+    static func filtered(
+        _ workouts: [CanonicalWorkout],
+        selectedYear: Int?,
+        selectedCategory: WeeklyRunCategory?,
+        selectedEnvironment: RunEnvironment?,
+        searchText: String,
+        calendar: Calendar = .current
+    ) -> [CanonicalWorkout] {
+        workouts.filter { workout in
+            if let selectedYear,
+               calendar.component(.year, from: workout.startDate) != selectedYear {
+                return false
+            }
+            if let selectedCategory,
+               WeeklyRunCategory.make(from: workout) != selectedCategory {
+                return false
+            }
+            if let selectedEnvironment,
+               workout.environment != selectedEnvironment {
+                return false
+            }
+            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !query.isEmpty else { return true }
+            let searchableText = [
+                RunWorkout(workout: workout).runnerFacingTitle,
+                RunFormatters.weekdayDateWithYear.string(from: workout.startDate),
+                workout.sourceName,
+                workout.notes,
+                RunWorkout(workout: workout).categoryLabel,
+                workout.environment.label
+            ].joined(separator: " ").lowercased()
+            return searchableText.contains(query)
+        }
+    }
 }
 
 struct SettingsView: View {
@@ -2097,7 +2134,11 @@ struct SplitsAndEventsPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader("1 km Splits")
             if segments.kilometerSplits.isEmpty {
-                EmptyStateView(title: "Splits unavailable", message: "RunSignal needs distance samples or enough workout distance/time to estimate 1 km splits.")
+                EmptyStateView(
+                    title: "Splits unavailable",
+                    message: segments.splitUnavailableReason
+                        ?? "Apple Health did not retain enough trustworthy distance timing to calculate kilometer splits for this run. Whole-run distance, time, and average pace remain available."
+                )
             } else {
                 VStack(spacing: 8) {
                     ForEach(Array(segments.kilometerSplits.enumerated()), id: \.element.label) { index, split in
@@ -2110,9 +2151,14 @@ struct SplitsAndEventsPanel: View {
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
                                 }
-                                Text(split.confidence == .moderate ? "HealthKit distance series" : "Fallback estimate")
+                                Text(splitSourceLabel(segments.splitSource))
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
+                                if let pauseOverlap = split.pauseOverlapSeconds, pauseOverlap >= 0.5 {
+                                    Text("Active time · \(RunFormatters.duration(pauseOverlap)) pause excluded")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
                                 if let metrics = splitMetricsText(at: index) {
                                     Text(metrics)
                                         .font(.caption2)
@@ -2156,10 +2202,12 @@ struct SplitsAndEventsPanel: View {
     private func splitMetricsText(at index: Int) -> String? {
         guard let evidence = workout.evidence,
               segments.kilometerSplits.indices.contains(index) else { return nil }
-        let startOffset = segments.kilometerSplits[..<index]
+        let split = segments.kilometerSplits[index]
+        let fallbackStartOffset = segments.kilometerSplits[..<index]
             .map(\.durationSecondsEstimate)
             .reduce(0, +)
-        let endOffset = startOffset + segments.kilometerSplits[index].durationSecondsEstimate
+        let startOffset = split.elapsedStartOffsetSeconds ?? fallbackStartOffset
+        let endOffset = split.elapsedEndOffsetSeconds ?? (startOffset + split.durationSecondsEstimate)
         let start = workout.startDate.addingTimeInterval(startOffset)
         let end = workout.startDate.addingTimeInterval(endOffset)
 
@@ -2184,6 +2232,21 @@ struct SplitsAndEventsPanel: View {
             values.append("Power \(Int(power.rounded())) W")
         }
         return values.isEmpty ? nil : values.joined(separator: " · ")
+    }
+
+    private func splitSourceLabel(_ source: DerivedSplitSource) -> String {
+        switch source {
+        case .validatedLapEvents:
+            "Apple Health lap boundaries"
+        case .validatedSegmentEvents:
+            "Apple Health split boundaries"
+        case .distanceSampleWindows:
+            "Estimated from Apple Health distance"
+        case .workoutAverageFallback:
+            "Whole-workout average"
+        case .unavailable:
+            "Unavailable"
+        }
     }
 }
 

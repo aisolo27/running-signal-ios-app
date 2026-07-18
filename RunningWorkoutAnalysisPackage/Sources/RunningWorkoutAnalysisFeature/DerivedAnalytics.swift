@@ -81,6 +81,79 @@ public struct DerivedSplitEstimate: Codable, Equatable, Sendable {
     public var durationSecondsEstimate: Double
     public var paceSecondsPerKmEstimate: Double
     public var confidence: ConfidenceLevel
+    public var elapsedStartOffsetSeconds: Double?
+    public var elapsedEndOffsetSeconds: Double?
+    public var pauseOverlapSeconds: Double?
+
+    public init(
+        label: String,
+        distanceMeters: Double,
+        durationSecondsEstimate: Double,
+        paceSecondsPerKmEstimate: Double,
+        confidence: ConfidenceLevel,
+        elapsedStartOffsetSeconds: Double? = nil,
+        elapsedEndOffsetSeconds: Double? = nil,
+        pauseOverlapSeconds: Double? = nil
+    ) {
+        self.label = label
+        self.distanceMeters = distanceMeters
+        self.durationSecondsEstimate = durationSecondsEstimate
+        self.paceSecondsPerKmEstimate = paceSecondsPerKmEstimate
+        self.confidence = confidence
+        self.elapsedStartOffsetSeconds = elapsedStartOffsetSeconds
+        self.elapsedEndOffsetSeconds = elapsedEndOffsetSeconds
+        self.pauseOverlapSeconds = pauseOverlapSeconds
+    }
+}
+
+public enum DerivedSplitSource: String, Codable, Equatable, Sendable {
+    case validatedLapEvents
+    case validatedSegmentEvents
+    case distanceSampleWindows
+    case workoutAverageFallback
+    case unavailable
+
+    public var label: String {
+        switch self {
+        case .validatedLapEvents:
+            "Recorded Apple Health lap boundaries"
+        case .validatedSegmentEvents:
+            "Validated Apple Health split boundaries"
+        case .distanceSampleWindows:
+            "Estimated across Apple Health distance windows"
+        case .workoutAverageFallback:
+            "Estimated from the whole-workout average"
+        case .unavailable:
+            "Unavailable"
+        }
+    }
+}
+
+public struct DerivedSplitDiagnostics: Codable, Equatable, Sendable {
+    public var source: DerivedSplitSource
+    public var sourceLabel: String
+    public var totalDistanceMeters: Double?
+    public var distanceSampleCount: Int
+    public var lapEventCount: Int
+    public var eligibleLapEventCount: Int
+    public var selectedLapEventCount: Int
+    public var segmentEventCount: Int
+    public var eligibleSegmentEventCount: Int
+    public var expectedFullKilometerCount: Int
+    public var expectedRowCount: Int
+    public var completeSegmentChainCount: Int
+    public var terminalSegmentChainCount: Int
+    public var distanceValidatedSegmentChainCount: Int
+    public var selectedSegmentEventCount: Int
+    public var terminalEvidenceOffsetSeconds: Double?
+    public var workoutSummaryDistanceMeters: Double?
+    public var distanceReconciliationDeltaMeters: Double?
+    public var maximumDistanceSampleWindowSeconds: Double?
+    public var uncoveredDistanceWindowSeconds: Double?
+    public var pauseAdjustmentSeconds: Double?
+    public var fallbackReason: String?
+    public var validationNotes: [String]
+    public var splitEstimates: [DerivedSplitEstimate]
 }
 
 public struct DerivedExecutionSegment: Codable, Equatable, Sendable {
@@ -165,7 +238,7 @@ public struct DerivedWorkoutInterval: Codable, Equatable, Sendable {
 }
 
 public struct DerivedWorkoutAnalysis: Codable, Equatable, Sendable {
-    public static let currentVersion = "derived-workout-v4"
+    public static let currentVersion = "derived-workout-v6"
 
     public var workoutID: String
     public var calculationVersion: String
@@ -185,6 +258,8 @@ public struct DerivedWorkoutAnalysis: Codable, Equatable, Sendable {
     public var bestEffortEstimates: [DerivedBestEffortEstimate]
     public var personalBestEffortRecords: [PersonalBestEffortRecord]? = nil
     public var splitEstimates: [DerivedSplitEstimate]?
+    public var splitSource: DerivedSplitSource? = nil
+    public var splitUnavailableReason: String? = nil
     public var executionSegments: [DerivedExecutionSegment]?
     public var intervalCandidates: [DerivedWorkoutInterval]?
     public var officialIntervalWorkout: OfficialIntervalWorkout? = nil
@@ -196,6 +271,92 @@ public struct DerivedWorkoutAnalysis: Codable, Equatable, Sendable {
 }
 
 public enum DerivedAnalyticsEngine {
+    private struct IndexedSegmentEvent {
+        var index: Int
+        var event: WorkoutEvidenceEvent
+    }
+
+    private struct SegmentSplitEvaluation {
+        var splits: [DerivedSplitEstimate]?
+        var segmentEventCount: Int
+        var eligibleSegmentEventCount: Int
+        var completeChainCount: Int
+        var terminalChainCount: Int
+        var validatedChainCount: Int
+        var terminalEvidenceDate: Date?
+        var fallbackReason: String?
+        var validationNotes: [String]
+    }
+
+    private struct LapSplitEvaluation {
+        var splits: [DerivedSplitEstimate]?
+        var lapEventCount: Int
+        var eligibleLapEventCount: Int
+        var completeChainCount: Int
+        var terminalChainCount: Int
+        var validatedChainCount: Int
+        var fallbackReason: String?
+        var validationNotes: [String]
+    }
+
+    private struct DistanceSeriesAssessment {
+        var series: WorkoutMetricSeries?
+        var totalDistanceMeters: Double?
+        var reconciliationDeltaMeters: Double?
+        var maximumWindowSeconds: Double?
+        var uncoveredWindowSeconds: Double?
+        var terminalEvidenceDate: Date?
+        var rejectionReason: String?
+        var validationNotes: [String]
+    }
+
+    private struct NormalSplitPauseTimeline {
+        var intervals: [DateInterval]
+        var expectedPausedSeconds: Double
+        var sourceLabel: String?
+
+        var totalPausedSeconds: Double {
+            intervals.map(\.duration).reduce(0, +)
+        }
+
+        func overlapSeconds(start: Date, end: Date) -> Double {
+            guard end > start else { return 0 }
+            return intervals.reduce(0) { total, interval in
+                let overlapStart = max(start, interval.start)
+                let overlapEnd = min(end, interval.end)
+                guard overlapEnd > overlapStart else { return total }
+                return total + overlapEnd.timeIntervalSince(overlapStart)
+            }
+        }
+
+        func activeDuration(start: Date, end: Date) -> Double {
+            max(0, end.timeIntervalSince(start) - overlapSeconds(start: start, end: end))
+        }
+
+        func dateAdvancingActiveTime(from start: Date, seconds: Double, noLaterThan end: Date) -> Date {
+            guard seconds > 0 else { return start }
+            var cursor = start
+            var remaining = seconds
+            for interval in intervals where interval.end > cursor && interval.start < end {
+                let activeEnd = min(interval.start, end)
+                let available = max(0, activeEnd.timeIntervalSince(cursor))
+                if remaining <= available {
+                    return cursor.addingTimeInterval(remaining)
+                }
+                remaining -= available
+                cursor = max(cursor, interval.end)
+                if cursor >= end { return end }
+            }
+            return min(cursor.addingTimeInterval(remaining), end)
+        }
+    }
+
+    private struct NormalSplitPauseAssessment {
+        var timeline: NormalSplitPauseTimeline?
+        var rejectionReason: String?
+        var validationNotes: [String]
+    }
+
     public static func analyze(workout: CanonicalWorkout, evidence: WorkoutEvidence) -> DerivedWorkoutAnalysis {
         let speedSeries = evidence.series[.runningSpeed]
         let distanceSeries = evidence.series[.distance]
@@ -248,6 +409,7 @@ public enum DerivedAnalyticsEngine {
         var evidenceWorkout = workout
         evidenceWorkout.evidence = evidence
         let personalBestEffortRecords = PersonalBestEffortEngine.records(for: evidenceWorkout)
+        let splitDerivation = splitDiagnostics(workout: workout, evidence: evidence)
 
         return DerivedWorkoutAnalysis(
             workoutID: workout.id,
@@ -272,7 +434,9 @@ public enum DerivedAnalyticsEngine {
                 paceConfidence: paceConfidence
             ),
             personalBestEffortRecords: personalBestEffortRecords,
-            splitEstimates: splitEstimates(workout: workout, evidence: evidence),
+            splitEstimates: splitDerivation.splitEstimates,
+            splitSource: splitDerivation.source,
+            splitUnavailableReason: splitDerivation.source == .unavailable ? splitDerivation.fallbackReason : nil,
             executionSegments: executionSegments(heartRateSeries: heartRateSeries, speedSeries: speedSeries),
             intervalCandidates: resolvedRows.isEmpty ? nil : resolvedRows,
             officialIntervalWorkout: officialIntervalWorkout,
@@ -365,8 +529,820 @@ public enum DerivedAnalyticsEngine {
         }
     }
 
-    private static func splitEstimates(workout: CanonicalWorkout, evidence: WorkoutEvidence) -> [DerivedSplitEstimate] {
-        guard let distanceSeries = evidence.series[.distance], distanceSeries.points.count > 1 else { return [] }
+    public static func splitDiagnostics(
+        workout: CanonicalWorkout,
+        evidence: WorkoutEvidence
+    ) -> DerivedSplitDiagnostics {
+        let lapEventCount = evidence.events.filter(isLapEvent).count
+        let segmentEventCount = evidence.events.filter(isSegmentEvent).count
+        let distanceAssessment = assessDistanceSeries(workout: workout, evidence: evidence)
+        let totalDistance = distanceAssessment.totalDistanceMeters ?? workout.distanceMeters
+        let fullKilometers = totalDistance.flatMap { $0.isFinite && $0 > 0 ? Int($0 / 1_000) : nil } ?? 0
+        let remainderDistance = (totalDistance ?? 0) - (Double(fullKilometers) * 1_000)
+        let expectedRowCount = fullKilometers + (remainderDistance >= 10 ? 1 : 0)
+        let pauseAssessment = normalSplitPauseAssessment(workout: workout, events: evidence.events)
+
+        let emptySegmentEvaluation = SegmentSplitEvaluation(
+            splits: nil,
+            segmentEventCount: segmentEventCount,
+            eligibleSegmentEventCount: 0,
+            completeChainCount: 0,
+            terminalChainCount: 0,
+            validatedChainCount: 0,
+            terminalEvidenceDate: distanceAssessment.terminalEvidenceDate,
+            fallbackReason: distanceAssessment.rejectionReason,
+            validationNotes: []
+        )
+        let emptyLapEvaluation = LapSplitEvaluation(
+            splits: nil,
+            lapEventCount: lapEventCount,
+            eligibleLapEventCount: 0,
+            completeChainCount: 0,
+            terminalChainCount: 0,
+            validatedChainCount: 0,
+            fallbackReason: lapEventCount == 0 ? "No lap events are available." : nil,
+            validationNotes: []
+        )
+
+        func diagnostics(
+            source: DerivedSplitSource,
+            splits: [DerivedSplitEstimate],
+            lapEvaluation: LapSplitEvaluation = emptyLapEvaluation,
+            segmentEvaluation: SegmentSplitEvaluation = emptySegmentEvaluation,
+            fallbackReason: String?,
+            validationNotes: [String]
+        ) -> DerivedSplitDiagnostics {
+            DerivedSplitDiagnostics(
+                source: source,
+                sourceLabel: source.label,
+                totalDistanceMeters: totalDistance,
+                distanceSampleCount: evidence.series[.distance]?.points.count ?? 0,
+                lapEventCount: lapEventCount,
+                eligibleLapEventCount: lapEvaluation.eligibleLapEventCount,
+                selectedLapEventCount: source == .validatedLapEvents ? splits.count : 0,
+                segmentEventCount: segmentEventCount,
+                eligibleSegmentEventCount: segmentEvaluation.eligibleSegmentEventCount,
+                expectedFullKilometerCount: fullKilometers,
+                expectedRowCount: expectedRowCount,
+                completeSegmentChainCount: source == .validatedLapEvents
+                    ? lapEvaluation.completeChainCount
+                    : segmentEvaluation.completeChainCount,
+                terminalSegmentChainCount: source == .validatedLapEvents
+                    ? lapEvaluation.terminalChainCount
+                    : segmentEvaluation.terminalChainCount,
+                distanceValidatedSegmentChainCount: source == .validatedLapEvents
+                    ? lapEvaluation.validatedChainCount
+                    : segmentEvaluation.validatedChainCount,
+                selectedSegmentEventCount: source == .validatedSegmentEvents ? splits.count : 0,
+                terminalEvidenceOffsetSeconds: distanceAssessment.terminalEvidenceDate?.timeIntervalSince(workout.startDate),
+                workoutSummaryDistanceMeters: workout.distanceMeters,
+                distanceReconciliationDeltaMeters: distanceAssessment.reconciliationDeltaMeters,
+                maximumDistanceSampleWindowSeconds: distanceAssessment.maximumWindowSeconds,
+                uncoveredDistanceWindowSeconds: distanceAssessment.uncoveredWindowSeconds,
+                pauseAdjustmentSeconds: splits.compactMap(\.pauseOverlapSeconds).reduce(0, +),
+                fallbackReason: fallbackReason,
+                validationNotes: validationNotes,
+                splitEstimates: splits
+            )
+        }
+
+        guard let totalDistance, totalDistance.isFinite, totalDistance >= 1_000 else {
+            return diagnostics(
+                source: .unavailable,
+                splits: [],
+                fallbackReason: distanceAssessment.rejectionReason ?? "Apple Health did not retain enough distance evidence for one-kilometer splits.",
+                validationNotes: distanceAssessment.validationNotes
+            )
+        }
+        guard let pauseTimeline = pauseAssessment.timeline else {
+            return diagnostics(
+                source: .unavailable,
+                splits: [],
+                fallbackReason: pauseAssessment.rejectionReason,
+                validationNotes: distanceAssessment.validationNotes + pauseAssessment.validationNotes
+            )
+        }
+
+        let terminalEvidenceDate = distanceAssessment.terminalEvidenceDate ?? workout.endDate
+        let lapEvaluation: LapSplitEvaluation
+        if distanceAssessment.series != nil || (evidence.series[.distance]?.points.count ?? 0) < 2 {
+            lapEvaluation = evaluateLapEventSplits(
+                workout: workout,
+                evidence: evidence,
+                totalDistance: totalDistance,
+                distanceSeries: distanceAssessment.series,
+                terminalEvidenceDate: terminalEvidenceDate,
+                pauseTimeline: pauseTimeline
+            )
+        } else {
+            lapEvaluation = LapSplitEvaluation(
+                splits: nil,
+                lapEventCount: lapEventCount,
+                eligibleLapEventCount: 0,
+                completeChainCount: 0,
+                terminalChainCount: 0,
+                validatedChainCount: 0,
+                fallbackReason: distanceAssessment.rejectionReason,
+                validationNotes: ["Conflicting detailed distance blocks boundary-event promotion even when lap events are present."]
+            )
+        }
+        if let lapSplits = lapEvaluation.splits {
+            return diagnostics(
+                source: .validatedLapEvents,
+                splits: lapSplits,
+                lapEvaluation: lapEvaluation,
+                fallbackReason: nil,
+                validationNotes: distanceAssessment.validationNotes + pauseAssessment.validationNotes + lapEvaluation.validationNotes
+            )
+        }
+
+        let segmentEvaluation: SegmentSplitEvaluation
+        if let distanceSeries = distanceAssessment.series {
+            segmentEvaluation = evaluateSegmentEventSplits(
+                workout: workout,
+                evidence: evidence,
+                distanceSeries: distanceSeries,
+                pauseTimeline: pauseTimeline
+            )
+        } else {
+            segmentEvaluation = emptySegmentEvaluation
+        }
+        if let segmentSplits = segmentEvaluation.splits {
+            return diagnostics(
+                source: .validatedSegmentEvents,
+                splits: segmentSplits,
+                lapEvaluation: lapEvaluation,
+                segmentEvaluation: segmentEvaluation,
+                fallbackReason: nil,
+                validationNotes: distanceAssessment.validationNotes + pauseAssessment.validationNotes + lapEvaluation.validationNotes + segmentEvaluation.validationNotes
+            )
+        }
+
+        guard let distanceSeries = distanceAssessment.series else {
+            return diagnostics(
+                source: .unavailable,
+                splits: [],
+                lapEvaluation: lapEvaluation,
+                segmentEvaluation: segmentEvaluation,
+                fallbackReason: distanceAssessment.rejectionReason ?? segmentEvaluation.fallbackReason ?? lapEvaluation.fallbackReason,
+                validationNotes: distanceAssessment.validationNotes + pauseAssessment.validationNotes + lapEvaluation.validationNotes + segmentEvaluation.validationNotes
+            )
+        }
+
+        let estimatedSplits = distanceSeriesSplitEstimates(
+            workout: workout,
+            distanceSeries: distanceSeries,
+            pauseTimeline: pauseTimeline
+        )
+        return diagnostics(
+            source: estimatedSplits.isEmpty ? .unavailable : .distanceSampleWindows,
+            splits: estimatedSplits,
+            lapEvaluation: lapEvaluation,
+            segmentEvaluation: segmentEvaluation,
+            fallbackReason: estimatedSplits.isEmpty
+                ? "The reconciled distance windows could not produce chronological one-kilometer crossings."
+                : segmentEvaluation.fallbackReason ?? lapEvaluation.fallbackReason,
+            validationNotes: distanceAssessment.validationNotes
+                + pauseAssessment.validationNotes
+                + lapEvaluation.validationNotes
+                + segmentEvaluation.validationNotes
+                + ["Distance contributions were accrued across each sample's actual start/end window on the active-time clock."]
+        )
+    }
+
+    private static func evaluateSegmentEventSplits(
+        workout: CanonicalWorkout,
+        evidence: WorkoutEvidence,
+        distanceSeries: WorkoutMetricSeries,
+        pauseTimeline: NormalSplitPauseTimeline
+    ) -> SegmentSplitEvaluation {
+        let segmentEventCount = evidence.events.filter(isSegmentEvent).count
+        let totalDistance = distanceSeries.points.map(\.value).reduce(0, +)
+        guard totalDistance.isFinite, totalDistance >= 1_000 else {
+            return SegmentSplitEvaluation(
+                splits: nil,
+                segmentEventCount: segmentEventCount,
+                eligibleSegmentEventCount: 0,
+                completeChainCount: 0,
+                terminalChainCount: 0,
+                validatedChainCount: 0,
+                terminalEvidenceDate: nil,
+                fallbackReason: "The detailed distance total is below one kilometer.",
+                validationNotes: []
+            )
+        }
+
+        let targetMeters = 1_000.0
+        let fullKilometers = Int(totalDistance / targetMeters)
+        let remainderDistance = totalDistance - (Double(fullKilometers) * targetMeters)
+        let includesFinalPartial = remainderDistance >= 10
+        let expectedRowCount = fullKilometers + (includesFinalPartial ? 1 : 0)
+        guard expectedRowCount > 0 else {
+            return SegmentSplitEvaluation(
+                splits: nil,
+                segmentEventCount: segmentEventCount,
+                eligibleSegmentEventCount: 0,
+                completeChainCount: 0,
+                terminalChainCount: 0,
+                validatedChainCount: 0,
+                terminalEvidenceDate: nil,
+                fallbackReason: "No kilometer or final-partial rows are expected from the detailed distance total.",
+                validationNotes: []
+            )
+        }
+
+        let terminalEvidenceDate = distanceSeries.points.reduce(workout.startDate) { latest, point in
+            max(latest, distanceSampleWindow(point, previousSampleEnd: nil, workoutStart: workout.startDate).end)
+        }
+        let indexedSegments = evidence.events.enumerated().compactMap { index, event -> IndexedSegmentEvent? in
+            guard isSegmentEvent(event),
+                  event.endDate > event.startDate,
+                  event.startDate >= workout.startDate.addingTimeInterval(-1),
+                  event.endDate <= terminalEvidenceDate.addingTimeInterval(1) else {
+                return nil
+            }
+            return IndexedSegmentEvent(index: index, event: event)
+        }
+        guard indexedSegments.count >= expectedRowCount else {
+            return SegmentSplitEvaluation(
+                splits: nil,
+                segmentEventCount: segmentEventCount,
+                eligibleSegmentEventCount: indexedSegments.count,
+                completeChainCount: 0,
+                terminalChainCount: 0,
+                validatedChainCount: 0,
+                terminalEvidenceDate: terminalEvidenceDate,
+                fallbackReason: "Too few eligible segment events exist for the expected kilometer-plus-partial row count.",
+                validationNotes: []
+            )
+        }
+
+        let startCandidates = indexedSegments.filter {
+            abs($0.event.startDate.timeIntervalSince(workout.startDate)) <= 1
+        }
+        let chains = startCandidates.flatMap {
+            contiguousSegmentChains(
+                startingWith: $0,
+                segments: indexedSegments,
+                expectedCount: expectedRowCount
+            )
+        }
+
+        guard !chains.isEmpty else {
+            return SegmentSplitEvaluation(
+                splits: nil,
+                segmentEventCount: segmentEventCount,
+                eligibleSegmentEventCount: indexedSegments.count,
+                completeChainCount: 0,
+                terminalChainCount: 0,
+                validatedChainCount: 0,
+                terminalEvidenceDate: terminalEvidenceDate,
+                fallbackReason: startCandidates.isEmpty
+                    ? "No eligible segment event starts with the workout."
+                    : "No contiguous segment chain has the expected kilometer-plus-partial row count.",
+                validationNotes: []
+            )
+        }
+
+        let terminalChains = chains.filter { chain in
+            guard let finalEvent = chain.last else { return false }
+            return abs(finalEvent.endDate.timeIntervalSince(terminalEvidenceDate)) <= 1
+        }
+
+        guard !terminalChains.isEmpty else {
+            return SegmentSplitEvaluation(
+                splits: nil,
+                segmentEventCount: segmentEventCount,
+                eligibleSegmentEventCount: indexedSegments.count,
+                completeChainCount: chains.count,
+                terminalChainCount: 0,
+                validatedChainCount: 0,
+                terminalEvidenceDate: terminalEvidenceDate,
+                fallbackReason: "No complete segment chain ends with the final distance evidence.",
+                validationNotes: []
+            )
+        }
+
+        let scoredChains = terminalChains.compactMap { chain -> (events: [WorkoutEvidenceEvent], score: Double)? in
+            var score = 0.0
+            for event in chain.prefix(fullKilometers) {
+                guard let measuredDistance = intervalDistance(
+                    start: event.startDate,
+                    end: event.endDate,
+                    series: distanceSeries,
+                    workoutStart: workout.startDate
+                ),
+                    measuredDistance >= 750,
+                    measuredDistance <= 1_250 else {
+                    return nil
+                }
+                score += abs(measuredDistance - targetMeters) / targetMeters
+            }
+
+            if includesFinalPartial,
+               let final = chain.last,
+               pauseTimeline.activeDuration(start: final.startDate, end: final.endDate) < 5 {
+                return nil
+            }
+
+            return (chain, score)
+        }
+
+        let rankedChains = scoredChains.sorted { $0.score < $1.score }
+        guard let selected = rankedChains.first?.events else {
+            return SegmentSplitEvaluation(
+                splits: nil,
+                segmentEventCount: segmentEventCount,
+                eligibleSegmentEventCount: indexedSegments.count,
+                completeChainCount: chains.count,
+                terminalChainCount: terminalChains.count,
+                validatedChainCount: 0,
+                terminalEvidenceDate: terminalEvidenceDate,
+                fallbackReason: "Complete segment chains exist, but none distance-validate every full row as approximately one kilometer.",
+                validationNotes: ["Full kilometer rows must validate between 750 and 1,250 meters."]
+            )
+        }
+
+        if rankedChains.count > 1,
+           boundaryChainsDisagree(
+                rankedChains[0].events,
+                rankedChains[1].events,
+                pauseTimeline: pauseTimeline
+           ) {
+            return SegmentSplitEvaluation(
+                splits: nil,
+                segmentEventCount: segmentEventCount,
+                eligibleSegmentEventCount: indexedSegments.count,
+                completeChainCount: chains.count,
+                terminalChainCount: terminalChains.count,
+                validatedChainCount: scoredChains.count,
+                terminalEvidenceDate: terminalEvidenceDate,
+                fallbackReason: "Multiple validated segment chains produce materially different displayed split times.",
+                validationNotes: ["Ambiguous segment chains fall back instead of selecting the smallest numerical score."]
+            )
+        }
+
+        let splits = selected.enumerated().map { index, event in
+            let isFinal = includesFinalPartial && index == selected.count - 1
+            let distance = isFinal ? remainderDistance : targetMeters
+            let elapsedDuration = event.endDate.timeIntervalSince(event.startDate)
+            let pauseOverlap = pauseTimeline.overlapSeconds(start: event.startDate, end: event.endDate)
+            let duration = max(0, elapsedDuration - pauseOverlap)
+            return DerivedSplitEstimate(
+                label: isFinal ? "Final" : "KM \(index + 1)",
+                distanceMeters: distance,
+                durationSecondsEstimate: duration,
+                paceSecondsPerKmEstimate: duration / (distance / targetMeters),
+                confidence: .strong,
+                elapsedStartOffsetSeconds: event.startDate.timeIntervalSince(workout.startDate),
+                elapsedEndOffsetSeconds: event.endDate.timeIntervalSince(workout.startDate),
+                pauseOverlapSeconds: pauseOverlap > 0 ? pauseOverlap : nil
+            )
+        }
+        return SegmentSplitEvaluation(
+            splits: splits,
+            segmentEventCount: segmentEventCount,
+            eligibleSegmentEventCount: indexedSegments.count,
+            completeChainCount: chains.count,
+            terminalChainCount: terminalChains.count,
+            validatedChainCount: scoredChains.count,
+            terminalEvidenceDate: terminalEvidenceDate,
+            fallbackReason: nil,
+            validationNotes: [
+                "Full kilometer rows validated between 750 and 1,250 meters against the reconciled distance timeline.",
+                "The selected segment chain was unique at displayed one-second precision.",
+                pauseTimeline.totalPausedSeconds > 0
+                    ? "Displayed split time subtracts the reliable pause timeline that reconciles to HealthKit workout duration."
+                    : "No pause adjustment was required for displayed split time."
+            ] + (pauseTimeline.sourceLabel.map { ["Pause basis: \($0)."] } ?? [])
+        )
+    }
+
+    private static func contiguousSegmentChains(
+        startingWith first: IndexedSegmentEvent,
+        segments: [IndexedSegmentEvent],
+        expectedCount: Int
+    ) -> [[WorkoutEvidenceEvent]] {
+        func extend(_ chain: [IndexedSegmentEvent]) -> [[IndexedSegmentEvent]] {
+            guard chain.count < expectedCount, let last = chain.last else { return [chain] }
+            let used = Set(chain.map(\.index))
+            let next = segments.filter {
+                !used.contains($0.index)
+                    && abs($0.event.startDate.timeIntervalSince(last.event.endDate)) <= 0.5
+                    && $0.event.endDate > last.event.endDate
+            }
+            guard !next.isEmpty else { return [chain] }
+            return next.flatMap { extend(chain + [$0]) }
+        }
+
+        return extend([first])
+            .filter { $0.count == expectedCount }
+            .map { $0.map(\.event) }
+    }
+
+    private static func boundaryChainsDisagree(
+        _ lhs: [WorkoutEvidenceEvent],
+        _ rhs: [WorkoutEvidenceEvent],
+        pauseTimeline: NormalSplitPauseTimeline
+    ) -> Bool {
+        guard lhs.count == rhs.count else { return true }
+        return zip(lhs, rhs).contains { left, right in
+            let leftDuration = pauseTimeline.activeDuration(start: left.startDate, end: left.endDate)
+            let rightDuration = pauseTimeline.activeDuration(start: right.startDate, end: right.endDate)
+            return abs(leftDuration - rightDuration) >= 1
+        }
+    }
+
+    private static func evaluateLapEventSplits(
+        workout: CanonicalWorkout,
+        evidence: WorkoutEvidence,
+        totalDistance: Double,
+        distanceSeries: WorkoutMetricSeries?,
+        terminalEvidenceDate: Date,
+        pauseTimeline: NormalSplitPauseTimeline
+    ) -> LapSplitEvaluation {
+        let rawLapCount = evidence.events.filter(isLapEvent).count
+        let normalizedLaps = normalizedLapEvents(
+            evidence.events,
+            workout: workout,
+            terminalEvidenceDate: terminalEvidenceDate
+        )
+        guard !normalizedLaps.isEmpty else {
+            return LapSplitEvaluation(
+                splits: nil,
+                lapEventCount: rawLapCount,
+                eligibleLapEventCount: 0,
+                completeChainCount: 0,
+                terminalChainCount: 0,
+                validatedChainCount: 0,
+                fallbackReason: rawLapCount == 0
+                    ? "No lap events are available."
+                    : "Mixed or malformed lap event timing could not be normalized safely.",
+                validationNotes: []
+            )
+        }
+
+        if let distanceSeries {
+            let syntheticEvents = normalizedLaps.map { lap in
+                WorkoutEvidenceEvent(
+                    startDate: lap.startDate,
+                    endDate: lap.endDate,
+                    type: "segment",
+                    kind: .segment,
+                    label: lap.label,
+                    metadataKeys: lap.metadataKeys
+                )
+            }
+            let syntheticEvidence = WorkoutEvidence(
+                workoutID: evidence.workoutID,
+                loadedAt: evidence.loadedAt,
+                series: [.distance: distanceSeries],
+                events: syntheticEvents
+            )
+            let evaluation = evaluateSegmentEventSplits(
+                workout: workout,
+                evidence: syntheticEvidence,
+                distanceSeries: distanceSeries,
+                pauseTimeline: pauseTimeline
+            )
+            return LapSplitEvaluation(
+                splits: evaluation.splits,
+                lapEventCount: rawLapCount,
+                eligibleLapEventCount: evaluation.eligibleSegmentEventCount,
+                completeChainCount: evaluation.completeChainCount,
+                terminalChainCount: evaluation.terminalChainCount,
+                validatedChainCount: evaluation.validatedChainCount,
+                fallbackReason: evaluation.fallbackReason,
+                validationNotes: evaluation.validationNotes.map {
+                    $0.replacingOccurrences(of: "segment", with: "lap")
+                } + (evaluation.splits == nil ? [] : [
+                    "Apple documents lap events as equal-distance workout partitions."
+                ])
+            )
+        }
+
+        let fullKilometers = Int(totalDistance / 1_000)
+        let remainder = totalDistance - (Double(fullKilometers) * 1_000)
+        let expectedCount = fullKilometers + (remainder >= 10 ? 1 : 0)
+        guard normalizedLaps.count == expectedCount,
+              let first = normalizedLaps.first,
+              let last = normalizedLaps.last,
+              abs(first.startDate.timeIntervalSince(workout.startDate)) <= 1,
+              abs(last.endDate.timeIntervalSince(terminalEvidenceDate)) <= 1,
+              zip(normalizedLaps, normalizedLaps.dropFirst()).allSatisfy({ pair in
+                  abs(pair.0.endDate.timeIntervalSince(pair.1.startDate)) <= 0.5
+              }) else {
+            return LapSplitEvaluation(
+                splits: nil,
+                lapEventCount: rawLapCount,
+                eligibleLapEventCount: normalizedLaps.count,
+                completeChainCount: 0,
+                terminalChainCount: 0,
+                validatedChainCount: 0,
+                fallbackReason: "Lap events do not form the expected complete kilometer-plus-partial workout chain.",
+                validationNotes: []
+            )
+        }
+
+        let splits = normalizedLaps.enumerated().compactMap { index, lap -> DerivedSplitEstimate? in
+            let isFinal = remainder >= 10 && index == normalizedLaps.count - 1
+            let distance = isFinal ? remainder : 1_000
+            let pauseOverlap = pauseTimeline.overlapSeconds(start: lap.startDate, end: lap.endDate)
+            let duration = pauseTimeline.activeDuration(start: lap.startDate, end: lap.endDate)
+            guard duration >= (isFinal ? 5 : 1) else { return nil }
+            return DerivedSplitEstimate(
+                label: isFinal ? "Final" : "KM \(index + 1)",
+                distanceMeters: distance,
+                durationSecondsEstimate: duration,
+                paceSecondsPerKmEstimate: duration / (distance / 1_000),
+                confidence: .strong,
+                elapsedStartOffsetSeconds: lap.startDate.timeIntervalSince(workout.startDate),
+                elapsedEndOffsetSeconds: lap.endDate.timeIntervalSince(workout.startDate),
+                pauseOverlapSeconds: pauseOverlap > 0 ? pauseOverlap : nil
+            )
+        }
+        guard splits.count == expectedCount else {
+            return LapSplitEvaluation(
+                splits: nil,
+                lapEventCount: rawLapCount,
+                eligibleLapEventCount: normalizedLaps.count,
+                completeChainCount: 1,
+                terminalChainCount: 1,
+                validatedChainCount: 0,
+                fallbackReason: "The normalized lap chain contains a non-positive active-time row.",
+                validationNotes: []
+            )
+        }
+        return LapSplitEvaluation(
+            splits: splits,
+            lapEventCount: rawLapCount,
+            eligibleLapEventCount: normalizedLaps.count,
+            completeChainCount: 1,
+            terminalChainCount: 1,
+            validatedChainCount: 1,
+            fallbackReason: nil,
+            validationNotes: [
+                "Apple Health lap semantics and full-workout topology supplied the recorded equal-distance boundaries.",
+                "Legacy zero-duration lap events are expanded from the previous boundary as documented by Apple."
+            ]
+        )
+    }
+
+    private static func normalizedLapEvents(
+        _ events: [WorkoutEvidenceEvent],
+        workout: CanonicalWorkout,
+        terminalEvidenceDate: Date
+    ) -> [WorkoutEvidenceEvent] {
+        let laps = events.filter(isLapEvent).sorted { $0.startDate < $1.startDate }
+        guard !laps.isEmpty else { return [] }
+        let zeroDurationLaps = laps.filter { $0.endDate <= $0.startDate }
+        guard !zeroDurationLaps.isEmpty else { return laps }
+        guard zeroDurationLaps.count == laps.count else { return [] }
+
+        var previousBoundary = workout.startDate
+        return zeroDurationLaps.compactMap { lap in
+            let boundary = lap.startDate
+            guard boundary > previousBoundary,
+                  boundary <= terminalEvidenceDate.addingTimeInterval(1) else {
+                return nil
+            }
+            let normalized = WorkoutEvidenceEvent(
+                startDate: previousBoundary,
+                endDate: boundary,
+                type: lap.type,
+                kind: .lap,
+                label: lap.label,
+                metadataKeys: lap.metadataKeys
+            )
+            previousBoundary = boundary
+            return normalized
+        }
+    }
+
+    private static func assessDistanceSeries(
+        workout: CanonicalWorkout,
+        evidence: WorkoutEvidence
+    ) -> DistanceSeriesAssessment {
+        guard let rawSeries = evidence.series[.distance] else {
+            return DistanceSeriesAssessment(
+                series: nil,
+                totalDistanceMeters: workout.distanceMeters,
+                reconciliationDeltaMeters: nil,
+                maximumWindowSeconds: nil,
+                uncoveredWindowSeconds: nil,
+                terminalEvidenceDate: nil,
+                rejectionReason: "Apple Health did not retain detailed distance samples for this workout.",
+                validationNotes: []
+            )
+        }
+
+        let sorted = rawSeries.points.sorted {
+            if $0.startDate == $1.startDate { return $0.endDate < $1.endDate }
+            return $0.startDate < $1.startDate
+        }
+        var points: [WorkoutEvidencePoint] = []
+        for point in sorted {
+            guard point.value.isFinite,
+                  point.value >= 0,
+                  point.endDate >= point.startDate,
+                  point.startDate >= workout.startDate.addingTimeInterval(-5),
+                  point.endDate <= workout.endDate.addingTimeInterval(5) else {
+                return DistanceSeriesAssessment(
+                    series: nil,
+                    totalDistanceMeters: sorted.filter { $0.value.isFinite && $0.value >= 0 }.map(\.value).reduce(0, +),
+                    reconciliationDeltaMeters: nil,
+                    maximumWindowSeconds: nil,
+                    uncoveredWindowSeconds: nil,
+                    terminalEvidenceDate: nil,
+                    rejectionReason: "Detailed distance contains an invalid or out-of-workout sample window.",
+                    validationNotes: []
+                )
+            }
+            if let previous = points.last,
+               previous.startDate == point.startDate,
+               previous.endDate == point.endDate,
+               abs(previous.value - point.value) < 0.000_001 {
+                continue
+            }
+            if let previous = points.last,
+               previous.endDate > previous.startDate,
+               point.endDate > point.startDate,
+               point.startDate < previous.endDate.addingTimeInterval(-0.5) {
+                return DistanceSeriesAssessment(
+                    series: nil,
+                    totalDistanceMeters: sorted.map(\.value).reduce(0, +),
+                    reconciliationDeltaMeters: nil,
+                    maximumWindowSeconds: nil,
+                    uncoveredWindowSeconds: nil,
+                    terminalEvidenceDate: nil,
+                    rejectionReason: "Detailed distance sample windows overlap and could double-count movement.",
+                    validationNotes: []
+                )
+            }
+            points.append(point)
+        }
+
+        let totalDistance = points.map(\.value).reduce(0, +)
+        let delta = workout.distanceMeters.map { abs($0 - totalDistance) }
+        let reconciliationTolerance = max(50, (workout.distanceMeters ?? totalDistance) * 0.03)
+        guard delta == nil || delta! <= reconciliationTolerance else {
+            return DistanceSeriesAssessment(
+                series: nil,
+                totalDistanceMeters: totalDistance,
+                reconciliationDeltaMeters: delta,
+                maximumWindowSeconds: nil,
+                uncoveredWindowSeconds: nil,
+                terminalEvidenceDate: nil,
+                rejectionReason: "Detailed distance does not reconcile to the HealthKit workout summary within three percent.",
+                validationNotes: ["Detailed distance differs from the workout summary by \(String(format: "%.1f", delta ?? 0)) meters."]
+            )
+        }
+
+        var previousEnd: Date?
+        var maximumWindow = 0.0
+        var uncovered = 0.0
+        var terminalDate: Date?
+        for point in points {
+            let window = distanceSampleWindow(point, previousSampleEnd: previousEnd, workoutStart: workout.startDate)
+            if let previousEnd, window.start > previousEnd {
+                uncovered += window.start.timeIntervalSince(previousEnd)
+            } else if previousEnd == nil, window.start > workout.startDate {
+                uncovered += window.start.timeIntervalSince(workout.startDate)
+            }
+            maximumWindow = max(maximumWindow, window.end.timeIntervalSince(window.start))
+            previousEnd = window.end
+            terminalDate = max(terminalDate ?? window.end, window.end)
+        }
+        if let terminalDate, workout.endDate > terminalDate {
+            uncovered += workout.endDate.timeIntervalSince(terminalDate)
+        }
+
+        let canonical = WorkoutMetricSeries(metric: .distance, unit: rawSeries.unit, points: points)
+        var notes = ["Detailed distance reconciled to the HealthKit workout summary within \(String(format: "%.1f", reconciliationTolerance)) meters."]
+        if points.contains(where: { $0.sampleSource == .sourceDateFallback }) {
+            notes.append("One or more distance samples came from the weaker source/date fallback query.")
+        }
+        if points.count < 2 {
+            return DistanceSeriesAssessment(
+                series: nil,
+                totalDistanceMeters: totalDistance,
+                reconciliationDeltaMeters: delta,
+                maximumWindowSeconds: maximumWindow,
+                uncoveredWindowSeconds: uncovered,
+                terminalEvidenceDate: terminalDate,
+                rejectionReason: "Fewer than two usable Apple Health distance samples are available.",
+                validationNotes: notes
+            )
+        }
+        return DistanceSeriesAssessment(
+            series: canonical,
+            totalDistanceMeters: totalDistance,
+            reconciliationDeltaMeters: delta,
+            maximumWindowSeconds: maximumWindow,
+            uncoveredWindowSeconds: uncovered,
+            terminalEvidenceDate: terminalDate,
+            rejectionReason: nil,
+            validationNotes: notes
+        )
+    }
+
+    private static func normalSplitPauseAssessment(
+        workout: CanonicalWorkout,
+        events: [WorkoutEvidenceEvent]
+    ) -> NormalSplitPauseAssessment {
+        let expectedPaused = max(0, workout.elapsedSeconds - workout.durationSeconds)
+        guard expectedPaused > 1 else {
+            return NormalSplitPauseAssessment(
+                timeline: NormalSplitPauseTimeline(intervals: [], expectedPausedSeconds: expectedPaused, sourceLabel: nil),
+                rejectionReason: nil,
+                validationNotes: ["Workout elapsed time and active duration do not require a pause adjustment."]
+            )
+        }
+
+        let candidates: [(String, [DateInterval]?)] = [
+            ("explicit pause/resume events", pairedPauseIntervals(events, workout: workout, includeExplicit: true, includeMotion: false)),
+            ("motion pause/resume events", pairedPauseIntervals(events, workout: workout, includeExplicit: false, includeMotion: true)),
+            ("combined pause/resume events", pairedPauseIntervals(events, workout: workout, includeExplicit: true, includeMotion: true))
+        ]
+        let tolerance = max(2, expectedPaused * 0.02)
+        let ranked = candidates.compactMap { label, intervals -> (String, [DateInterval], Double)? in
+            guard let intervals, !intervals.isEmpty else { return nil }
+            let total = intervals.map(\.duration).reduce(0, +)
+            return (label, intervals, abs(total - expectedPaused))
+        }.sorted { $0.2 < $1.2 }
+
+        guard let selected = ranked.first, selected.2 <= tolerance else {
+            return NormalSplitPauseAssessment(
+                timeline: nil,
+                rejectionReason: "Workout duration indicates paused time, but HealthKit pause events do not reconcile well enough to assign it safely to kilometer rows.",
+                validationNotes: ["Expected paused time: \(String(format: "%.1f", expectedPaused)) seconds."]
+            )
+        }
+        return NormalSplitPauseAssessment(
+            timeline: NormalSplitPauseTimeline(
+                intervals: selected.1,
+                expectedPausedSeconds: expectedPaused,
+                sourceLabel: selected.0
+            ),
+            rejectionReason: nil,
+            validationNotes: [
+                "Pause events reconcile to workout elapsed-minus-active duration within \(String(format: "%.1f", tolerance)) seconds."
+            ]
+        )
+    }
+
+    private static func pairedPauseIntervals(
+        _ events: [WorkoutEvidenceEvent],
+        workout: CanonicalWorkout,
+        includeExplicit: Bool,
+        includeMotion: Bool
+    ) -> [DateInterval]? {
+        var pendingPause: Date?
+        var intervals: [DateInterval] = []
+        let selected = events.sorted { $0.startDate < $1.startDate }.compactMap { event -> (Date, Bool)? in
+            let normalized = event.type.lowercased()
+            let isExplicitPause = event.kind == .pause || normalized == "pause" || normalized.contains("rawvalue: 1")
+            let isExplicitResume = event.kind == .resume || normalized == "resume" || normalized.contains("rawvalue: 2")
+            let isMotionPause = event.kind == .motionPaused || normalized == "motionpaused" || normalized.contains("rawvalue: 5")
+            let isMotionResume = event.kind == .motionResumed || normalized == "motionresumed" || normalized.contains("rawvalue: 6")
+            if includeExplicit, isExplicitPause { return (event.startDate, true) }
+            if includeExplicit, isExplicitResume { return (event.startDate, false) }
+            if includeMotion, isMotionPause { return (event.startDate, true) }
+            if includeMotion, isMotionResume { return (event.startDate, false) }
+            return nil
+        }
+        for (date, isPause) in selected {
+            if isPause {
+                if pendingPause != nil { return nil }
+                pendingPause = max(workout.startDate, date)
+            } else {
+                guard let start = pendingPause else { return nil }
+                let end = min(workout.endDate, date)
+                guard end > start else { return nil }
+                intervals.append(DateInterval(start: start, end: end))
+                pendingPause = nil
+            }
+        }
+        if let pendingPause,
+           pendingPause < workout.endDate.addingTimeInterval(-1) {
+            return nil
+        }
+        return intervals
+    }
+
+    private static func isLapEvent(_ event: WorkoutEvidenceEvent) -> Bool {
+        event.kind == .lap || event.displayLabel == "Lap"
+    }
+
+    private static func isSegmentEvent(_ event: WorkoutEvidenceEvent) -> Bool {
+        event.kind == .segment || event.displayLabel == "Segment"
+    }
+
+    private static func distanceSeriesSplitEstimates(
+        workout: CanonicalWorkout,
+        distanceSeries: WorkoutMetricSeries,
+        pauseTimeline: NormalSplitPauseTimeline
+    ) -> [DerivedSplitEstimate] {
 
         let targetMeters = 1_000.0
         var cumulativeDistance = 0.0
@@ -374,22 +1350,33 @@ public enum DerivedAnalyticsEngine {
         var previousCrossingDate = workout.startDate
         var estimates: [DerivedSplitEstimate] = []
 
-        var previousSampleDate = workout.startDate
+        var previousSampleEnd: Date?
 
         for point in distanceSeries.points {
+            guard point.value.isFinite, point.value >= 0 else { return [] }
             let previousDistance = cumulativeDistance
-            let previousDate = previousSampleDate
+            let sampleWindow = distanceSampleWindow(
+                point,
+                previousSampleEnd: previousSampleEnd,
+                workoutStart: workout.startDate
+            )
             cumulativeDistance += point.value
 
             while cumulativeDistance >= nextTarget {
-                let crossingDate = interpolatedDate(
-                    targetDistance: nextTarget,
-                    previousDistance: previousDistance,
-                    currentDistance: cumulativeDistance,
-                    previousDate: previousDate,
-                    currentDate: point.date
+                let distanceDelta = cumulativeDistance - previousDistance
+                guard distanceDelta > 0 else { return [] }
+                let crossingFraction = min(max((nextTarget - previousDistance) / distanceDelta, 0), 1)
+                let activeWindowDuration = pauseTimeline.activeDuration(
+                    start: sampleWindow.start,
+                    end: sampleWindow.end
                 )
-                let splitDuration = crossingDate.timeIntervalSince(previousCrossingDate)
+                let crossingDate = pauseTimeline.dateAdvancingActiveTime(
+                    from: sampleWindow.start,
+                    seconds: activeWindowDuration * crossingFraction,
+                    noLaterThan: sampleWindow.end
+                )
+                let pauseOverlap = pauseTimeline.overlapSeconds(start: previousCrossingDate, end: crossingDate)
+                let splitDuration = pauseTimeline.activeDuration(start: previousCrossingDate, end: crossingDate)
                 if splitDuration > 0 {
                     let splitNumber = estimates.count + 1
                     estimates.append(
@@ -398,20 +1385,24 @@ public enum DerivedAnalyticsEngine {
                             distanceMeters: targetMeters,
                             durationSecondsEstimate: splitDuration,
                             paceSecondsPerKmEstimate: splitDuration,
-                            confidence: .moderate
+                            confidence: .moderate,
+                            elapsedStartOffsetSeconds: previousCrossingDate.timeIntervalSince(workout.startDate),
+                            elapsedEndOffsetSeconds: crossingDate.timeIntervalSince(workout.startDate),
+                            pauseOverlapSeconds: pauseOverlap > 0 ? pauseOverlap : nil
                         )
                     )
                     previousCrossingDate = crossingDate
                 }
                 nextTarget += targetMeters
             }
-            previousSampleDate = point.date
+            previousSampleEnd = sampleWindow.end
         }
 
         let completedKilometers = floor(cumulativeDistance / targetMeters) * targetMeters
         let remainderDistance = cumulativeDistance - completedKilometers
-        let finalEvidenceDate = min(distanceSeries.points.last?.date ?? workout.endDate, workout.endDate)
-        let remainderDuration = finalEvidenceDate.timeIntervalSince(previousCrossingDate)
+        let finalEvidenceDate = min(previousSampleEnd ?? workout.endDate, workout.endDate)
+        let remainderPauseOverlap = pauseTimeline.overlapSeconds(start: previousCrossingDate, end: finalEvidenceDate)
+        let remainderDuration = pauseTimeline.activeDuration(start: previousCrossingDate, end: finalEvidenceDate)
         if remainderDistance >= 10, remainderDuration >= 5 {
             estimates.append(
                 DerivedSplitEstimate(
@@ -419,12 +1410,72 @@ public enum DerivedAnalyticsEngine {
                     distanceMeters: remainderDistance,
                     durationSecondsEstimate: remainderDuration,
                     paceSecondsPerKmEstimate: remainderDuration / (remainderDistance / targetMeters),
-                    confidence: .moderate
+                    confidence: .moderate,
+                    elapsedStartOffsetSeconds: previousCrossingDate.timeIntervalSince(workout.startDate),
+                    elapsedEndOffsetSeconds: finalEvidenceDate.timeIntervalSince(workout.startDate),
+                    pauseOverlapSeconds: remainderPauseOverlap > 0 ? remainderPauseOverlap : nil
                 )
             )
         }
 
         return estimates
+    }
+
+    private static func intervalDistance(
+        start: Date,
+        end: Date,
+        series: WorkoutMetricSeries,
+        workoutStart: Date
+    ) -> Double? {
+        guard let startDistance = cumulativeDistance(at: start, series: series, workoutStart: workoutStart),
+              let endDistance = cumulativeDistance(at: end, series: series, workoutStart: workoutStart),
+              endDistance >= startDistance else {
+            return nil
+        }
+        return endDistance - startDistance
+    }
+
+    private static func cumulativeDistance(
+        at date: Date,
+        series: WorkoutMetricSeries,
+        workoutStart: Date
+    ) -> Double? {
+        guard date >= workoutStart else { return nil }
+        var cumulative = 0.0
+        var previousSampleEnd: Date?
+
+        for point in series.points {
+            guard point.value.isFinite, point.value >= 0 else { return nil }
+            let sampleWindow = distanceSampleWindow(
+                point,
+                previousSampleEnd: previousSampleEnd,
+                workoutStart: workoutStart
+            )
+            if date <= sampleWindow.start {
+                return cumulative
+            }
+            if date < sampleWindow.end {
+                let duration = sampleWindow.end.timeIntervalSince(sampleWindow.start)
+                guard duration > 0 else { return cumulative + point.value }
+                let fraction = min(max(date.timeIntervalSince(sampleWindow.start) / duration, 0), 1)
+                return cumulative + (point.value * fraction)
+            }
+            cumulative += point.value
+            previousSampleEnd = sampleWindow.end
+        }
+
+        return cumulative
+    }
+
+    private static func distanceSampleWindow(
+        _ point: WorkoutEvidencePoint,
+        previousSampleEnd: Date?,
+        workoutStart: Date
+    ) -> (start: Date, end: Date) {
+        if point.endDate > point.startDate {
+            return (point.startDate, point.endDate)
+        }
+        return (previousSampleEnd ?? workoutStart, point.date)
     }
 
     private static func executionSegments(
@@ -605,42 +1656,7 @@ public enum DerivedAnalyticsEngine {
     }
 
     private static func cumulativeDistance(at date: Date, workoutStart: Date, series: WorkoutMetricSeries) -> Double? {
-        guard date >= workoutStart else { return nil }
-        var cumulative = 0.0
-        var previousDate = workoutStart
-        var previousDistance = 0.0
-
-        for point in series.points {
-            let currentDistance = cumulative + point.value
-            if date <= point.date {
-                let interpolated = interpolatedDistance(
-                    date: date,
-                    previousDate: previousDate,
-                    currentDate: point.date,
-                    previousDistance: previousDistance,
-                    currentDistance: currentDistance
-                )
-                return interpolated
-            }
-            cumulative = currentDistance
-            previousDistance = cumulative
-            previousDate = point.date
-        }
-
-        return cumulative
-    }
-
-    private static func interpolatedDistance(
-        date: Date,
-        previousDate: Date,
-        currentDate: Date,
-        previousDistance: Double,
-        currentDistance: Double
-    ) -> Double {
-        let timeDelta = currentDate.timeIntervalSince(previousDate)
-        guard timeDelta > 0 else { return currentDistance }
-        let ratio = min(max(date.timeIntervalSince(previousDate) / timeDelta, 0), 1)
-        return previousDistance + ((currentDistance - previousDistance) * ratio)
+        cumulativeDistance(at: date, series: series, workoutStart: workoutStart)
     }
 
     private static func averageHeartRate(start: Date, end: Date, evidence: WorkoutEvidence) -> Double? {
@@ -685,22 +1701,32 @@ public enum DerivedAnalyticsEngine {
     ) -> Double? {
         guard series.points.count > 1 else { return nil }
         var total = 0.0
-        var previousDate = workoutStart
+        var previousSampleEnd: Date?
         for point in series.points {
+            guard point.value.isFinite, point.value >= 0 else { return nil }
             let previousTotal = total
             total += point.value
             if total >= target {
+                let sampleWindow = distanceSampleWindow(
+                    point,
+                    previousSampleEnd: previousSampleEnd,
+                    workoutStart: workoutStart
+                )
                 let crossingDate = interpolatedDate(
                     targetDistance: target,
                     previousDistance: previousTotal,
                     currentDistance: total,
-                    previousDate: previousDate,
-                    currentDate: point.date
+                    previousDate: sampleWindow.start,
+                    currentDate: sampleWindow.end
                 )
                 let duration = crossingDate.timeIntervalSince(workoutStart)
                 return duration > 0 ? duration : nil
             }
-            previousDate = point.date
+            previousSampleEnd = distanceSampleWindow(
+                point,
+                previousSampleEnd: previousSampleEnd,
+                workoutStart: workoutStart
+            ).end
         }
         return nil
     }

@@ -3108,6 +3108,530 @@ private func intervalForGoalMeasuredText(
     #expect(analysis.bestEffortEstimates.first { $0.label == "1K" }?.durationSecondsEstimate == 120)
 }
 
+@Test func legacyDistanceSamplesAccrueAcrossTheirHealthKitWindows() throws {
+    let start = Date(timeIntervalSince1970: 9_000)
+    let workout = testWorkout(
+        id: "legacy-windowed-splits",
+        start: start,
+        distanceMeters: 5_081.19882260546,
+        durationSeconds: 2_283.7212660312653
+    )
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .distance: WorkoutMetricSeries(
+                metric: .distance,
+                unit: "m",
+                points: legacy2019DistancePoints(start: start)
+            )
+        ]
+    )
+
+    let analysis = DerivedAnalyticsEngine.analyze(workout: workout, evidence: evidence)
+    let splits = try #require(analysis.splitEstimates)
+    let diagnostics = DerivedAnalyticsEngine.splitDiagnostics(workout: workout, evidence: evidence)
+
+    #expect(splits.count == 6)
+    #expect(splits[0].durationSecondsEstimate > 260)
+    #expect(splits[0].durationSecondsEstimate < 275)
+    #expect(splits.allSatisfy { $0.durationSecondsEstimate >= 5 })
+    #expect(splits.allSatisfy { $0.confidence == .moderate })
+    #expect(try #require(analysis.bestEffortEstimates.first { $0.label == "1K" }).durationSecondsEstimate > 260)
+    #expect(diagnostics.source == .distanceSampleWindows)
+    #expect(diagnostics.selectedSegmentEventCount == 0)
+    #expect(diagnostics.fallbackReason != nil)
+    #expect(diagnostics.validationNotes.contains("Distance contributions were accrued across each sample's actual start/end window on the active-time clock."))
+}
+
+@Test func validatedLegacyKilometerSegmentChainMatchesAppleFitnessSplits() throws {
+    let start = Date(timeIntervalSince1970: 10_000)
+    let workout = testWorkout(
+        id: "legacy-event-splits",
+        start: start,
+        distanceMeters: 5_081.19882260546,
+        durationSeconds: 2_283.7212660312653
+    )
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .distance: WorkoutMetricSeries(
+                metric: .distance,
+                unit: "m",
+                points: legacy2019DistancePoints(start: start)
+            )
+        ],
+        events: legacy2019SegmentEvents(start: start)
+    )
+
+    let diagnostics = DerivedAnalyticsEngine.splitDiagnostics(workout: workout, evidence: evidence)
+    let splits = diagnostics.splitEstimates
+    let expectedDurations = [
+        268.0653066635132,
+        310.27014219760895,
+        404.65863859653473,
+        396.9714186191559,
+        849.042288184166,
+        51.14213013648987
+    ]
+
+    #expect(splits.count == expectedDurations.count)
+    #expect(splits.map(\.label) == ["KM 1", "KM 2", "KM 3", "KM 4", "KM 5", "Final"])
+    for (split, expected) in zip(splits, expectedDurations) {
+        #expect(abs(split.durationSecondsEstimate - expected) < 0.001)
+        #expect(split.confidence == .strong)
+    }
+    #expect(abs(splits[5].distanceMeters - 81.19882260546) < 0.001)
+    #expect(diagnostics.source == .validatedSegmentEvents)
+    #expect(diagnostics.segmentEventCount == 10)
+    #expect(diagnostics.completeSegmentChainCount == 1)
+    #expect(diagnostics.terminalSegmentChainCount == 1)
+    #expect(diagnostics.distanceValidatedSegmentChainCount == 1)
+    #expect(diagnostics.selectedSegmentEventCount == 6)
+    #expect(diagnostics.fallbackReason == nil)
+
+    var exportWorkout = workout
+    exportWorkout.evidence = evidence
+    let packet = DiagnosticsExport.parityPacketJSON(
+        workout: exportWorkout,
+        forceReenrichResult: nil,
+        generatedAt: start
+    )
+    let packetData = try #require(packet.data(using: .utf8))
+    let packetObject = try #require(try JSONSerialization.jsonObject(with: packetData) as? [String: Any])
+    let packetSplitDerivation = try #require(packetObject["splitDerivation"] as? [String: Any])
+    #expect(packetObject["packetVersion"] as? Int == 3)
+    #expect(packetSplitDerivation["source"] as? String == "validatedSegmentEvents")
+    #expect(packetSplitDerivation["completeSegmentChainCount"] as? Int == 1)
+    #expect(packetSplitDerivation["selectedSegmentEventCount"] as? Int == 6)
+    #expect((packetSplitDerivation["splitEstimates"] as? [[String: Any]])?.count == 6)
+}
+
+@Test func secondLegacyKilometerChainRejectsInterleavedMileSegments() throws {
+    let start = Date(timeIntervalSince1970: 11_000)
+    let distances = [
+        (1.8263238668441772, 307.2403556108475, 1_207.9380615501177),
+        (307.2403554916382, 612.6397225856781, 1_011.5338159596031),
+        (612.6397225856781, 920.6121164560318, 936.4137675418424),
+        (920.6121164560318, 1_228.5878500938416, 608.6544161168204),
+        (1_249.0727288722992, 1_408.0588188171387, 86.82519897444945)
+    ].map { startOffset, endOffset, distance in
+        WorkoutEvidencePoint(
+            date: start.addingTimeInterval(startOffset),
+            value: distance,
+            startDate: start.addingTimeInterval(startOffset),
+            endDate: start.addingTimeInterval(endOffset)
+        )
+    }
+    let segmentWindows = [
+        (0, 253.34389078617096),
+        (0, 417.59800481796265),
+        (253.34389078617096, 525.3847879171371),
+        (417.59800481796265, 941.1433153152466),
+        (525.3847879171371, 879.5494967699051),
+        (879.5494967699051, 1_408.058818936348),
+        (941.1433153152466, 1_408.058818936348)
+    ].map { startOffset, endOffset in
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(startOffset),
+            endDate: start.addingTimeInterval(endOffset),
+            type: "segment",
+            kind: .segment
+        )
+    }
+    let totalDistance = distances.map(\.value).reduce(0, +)
+    let workout = testWorkout(
+        id: "second-legacy-event-splits",
+        start: start,
+        distanceMeters: totalDistance,
+        durationSeconds: 1_420.2
+    )
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [.distance: WorkoutMetricSeries(metric: .distance, unit: "m", points: distances)],
+        events: segmentWindows
+    )
+
+    let diagnostics = DerivedAnalyticsEngine.splitDiagnostics(workout: workout, evidence: evidence)
+    let splits = diagnostics.splitEstimates
+
+    #expect(splits.map(\.label) == ["KM 1", "KM 2", "KM 3", "Final"])
+    #expect(abs(splits[0].durationSecondsEstimate - 253.34389078617096) < 0.001)
+    #expect(abs(splits[1].durationSecondsEstimate - 272.0408971309662) < 0.001)
+    #expect(abs(splits[2].durationSecondsEstimate - 354.16470885276794) < 0.001)
+    #expect(abs(splits[3].durationSecondsEstimate - 528.5093221664429) < 0.001)
+    #expect(splits.allSatisfy { $0.confidence == .strong })
+    #expect(diagnostics.source == .validatedSegmentEvents)
+    #expect(diagnostics.segmentEventCount == 7)
+    #expect(diagnostics.selectedSegmentEventCount == 4)
+}
+
+@Test func january14LegacySplitsSubtractOnlyThePauseBasisThatMatchesWorkoutDuration() throws {
+    let start = Date(timeIntervalSince1970: 12_000)
+    let elapsed = 1_129.8009289503098
+    var workout = testWorkout(
+        id: "jan-14-2019-paused-splits",
+        start: start,
+        distanceMeters: 3_319.868146658017,
+        durationSeconds: elapsed
+    )
+    workout.durationSeconds = 985.1829099655151
+    workout.elapsedSeconds = elapsed
+
+    let windows = [
+        (0.0, 268.6642643213272, 983.8808033688638),
+        (268.6642643213272, 568.9315029382706, 1_006.605461456433),
+        (568.9315029382706, 1_018.0316314697266, 1_044.4706347410481),
+        (1_018.0316314697266, 1_125.8161141872406, 287.6903049513331)
+    ].map { startOffset, endOffset, distance in
+        WorkoutEvidencePoint(
+            date: start.addingTimeInterval(startOffset),
+            value: distance,
+            startDate: start.addingTimeInterval(startOffset),
+            endDate: start.addingTimeInterval(endOffset)
+        )
+    }
+    let segmentWindows = [
+        (0.0, 268.6642643213272),
+        (0.0, 461.1457805633545),
+        (268.6642643213272, 568.9315029382706),
+        (461.1457805633545, 1_095.0204120874405),
+        (568.9315029382706, 1_018.0316314697266),
+        (1_018.0316314697266, 1_125.8161141872406),
+        (1_095.0204120874405, 1_125.8161141872406)
+    ].map { startOffset, endOffset in
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(startOffset),
+            endDate: start.addingTimeInterval(endOffset),
+            type: "segment",
+            kind: .segment
+        )
+    }
+    let pauseEvents = [
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(0.42255866527557373),
+            endDate: start.addingTimeInterval(0.42255866527557373),
+            type: "motionPaused",
+            kind: .motionPaused
+        ),
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(2.987327456474304),
+            endDate: start.addingTimeInterval(2.987327456474304),
+            type: "motionResumed",
+            kind: .motionResumed
+        ),
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(671.1276359558105),
+            endDate: start.addingTimeInterval(671.1276359558105),
+            type: "pause",
+            kind: .pause
+        ),
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(815.7456549406052),
+            endDate: start.addingTimeInterval(815.7456549406052),
+            type: "resume",
+            kind: .resume
+        ),
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(815.9057222604752),
+            endDate: start.addingTimeInterval(815.9057222604752),
+            type: "motionPaused",
+            kind: .motionPaused
+        ),
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(819.1214830875397),
+            endDate: start.addingTimeInterval(819.1214830875397),
+            type: "motionResumed",
+            kind: .motionResumed
+        )
+    ]
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [.distance: WorkoutMetricSeries(metric: .distance, unit: "m", points: windows)],
+        events: segmentWindows + pauseEvents
+    )
+
+    let diagnostics = DerivedAnalyticsEngine.splitDiagnostics(workout: workout, evidence: evidence)
+    let analysis = DerivedAnalyticsEngine.analyze(workout: workout, evidence: evidence)
+    let splits = try #require(analysis.splitEstimates)
+
+    #expect(diagnostics.source == .validatedSegmentEvents)
+    #expect(splits.map(\.label) == ["KM 1", "KM 2", "KM 3", "Final"])
+    #expect(abs(splits[0].durationSecondsEstimate - 268.6642643213272) < 0.001)
+    #expect(abs(splits[1].durationSecondsEstimate - 300.26723861694336) < 0.001)
+    #expect(abs(splits[2].durationSecondsEstimate - 304.4821095466614) < 0.001)
+    #expect(abs((splits[2].pauseOverlapSeconds ?? 0) - 144.61801898479462) < 0.001)
+    #expect(abs(splits[3].durationSecondsEstimate - 107.78448271751404) < 0.001)
+    #expect(splits[2].elapsedStartOffsetSeconds == 568.9315029382706)
+    #expect(splits[2].elapsedEndOffsetSeconds == 1_018.0316314697266)
+    #expect(analysis.officialIntervalWorkout == nil)
+    #expect(analysis.intervalCandidates == nil)
+}
+
+@Test func validatedLapEventsTakePriorityOverSegmentHeuristics() throws {
+    let start = Date(timeIntervalSince1970: 13_000)
+    let workout = testWorkout(id: "lap-priority", start: start, distanceMeters: 3_200, durationSeconds: 930)
+    let windows = [
+        (0.0, 280.0, 1_000.0),
+        (280.0, 570.0, 1_000.0),
+        (570.0, 870.0, 1_000.0),
+        (870.0, 930.0, 200.0)
+    ]
+    let points = windows.map { startOffset, endOffset, distance in
+        WorkoutEvidencePoint(
+            date: start.addingTimeInterval(startOffset),
+            value: distance,
+            startDate: start.addingTimeInterval(startOffset),
+            endDate: start.addingTimeInterval(endOffset)
+        )
+    }
+    let laps = windows.map { startOffset, endOffset, _ in
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(startOffset),
+            endDate: start.addingTimeInterval(endOffset),
+            type: "lap",
+            kind: .lap
+        )
+    }
+    let segments = windows.map { startOffset, endOffset, _ in
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(startOffset),
+            endDate: start.addingTimeInterval(endOffset),
+            type: "segment",
+            kind: .segment
+        )
+    }
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [.distance: WorkoutMetricSeries(metric: .distance, unit: "m", points: points)],
+        events: laps + segments
+    )
+
+    let diagnostics = DerivedAnalyticsEngine.splitDiagnostics(workout: workout, evidence: evidence)
+    #expect(diagnostics.source == .validatedLapEvents)
+    #expect(diagnostics.selectedLapEventCount == 4)
+    #expect(diagnostics.selectedSegmentEventCount == 0)
+    #expect(diagnostics.splitEstimates.map(\.durationSecondsEstimate) == [280, 290, 300, 60])
+}
+
+@Test func legacyZeroDurationLapBoundariesWorkWithoutDetailedDistanceSamples() {
+    let start = Date(timeIntervalSince1970: 14_000)
+    let workout = testWorkout(id: "legacy-zero-laps", start: start, distanceMeters: 3_200, durationSeconds: 960)
+    let laps = [300.0, 605.0, 910.0, 960.0].map { offset in
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(offset),
+            endDate: start.addingTimeInterval(offset),
+            type: "lap",
+            kind: .lap
+        )
+    }
+    let evidence = WorkoutEvidence(workoutID: workout.id, loadedAt: start, events: laps)
+
+    let diagnostics = DerivedAnalyticsEngine.splitDiagnostics(workout: workout, evidence: evidence)
+    #expect(diagnostics.source == .validatedLapEvents)
+    #expect(diagnostics.splitEstimates.map(\.durationSecondsEstimate) == [300, 305, 305, 50])
+}
+
+@Test func summaryOnlyRunsDoNotFabricateChronologicalKilometerRows() {
+    let start = Date(timeIntervalSince1970: 15_000)
+    let workout = testWorkout(id: "summary-only-splits", start: start, distanceMeters: 5_000, durationSeconds: 1_500)
+    let evidence = WorkoutEvidence(workoutID: workout.id, loadedAt: start)
+    let analysis = DerivedAnalyticsEngine.analyze(workout: workout, evidence: evidence)
+    let segments = RunWorkoutSegments(workout: workout, analysis: analysis)
+
+    #expect(analysis.splitSource == .unavailable)
+    #expect(analysis.splitEstimates?.isEmpty == true)
+    #expect(segments.kilometerSplits.isEmpty)
+    #expect(segments.splitUnavailableReason?.contains("distance") == true)
+}
+
+@Test func unreconciledDistanceSeriesCannotPublishSplits() {
+    let start = Date(timeIntervalSince1970: 16_000)
+    let workout = testWorkout(id: "unreconciled-splits", start: start, distanceMeters: 5_000, durationSeconds: 1_500)
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .distance: WorkoutMetricSeries(
+                metric: .distance,
+                unit: "m",
+                points: [
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(300), value: 1_000),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(600), value: 1_000)
+                ]
+            )
+        ]
+    )
+
+    let diagnostics = DerivedAnalyticsEngine.splitDiagnostics(workout: workout, evidence: evidence)
+    #expect(diagnostics.source == .unavailable)
+    #expect(diagnostics.splitEstimates.isEmpty)
+    #expect(diagnostics.fallbackReason?.contains("reconcile") == true)
+}
+
+@Test func overlappingDistanceWindowsCannotDoubleCountSplits() {
+    let start = Date(timeIntervalSince1970: 16_500)
+    let workout = testWorkout(id: "overlapping-distance", start: start, distanceMeters: 2_000, durationSeconds: 600)
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .distance: WorkoutMetricSeries(
+                metric: .distance,
+                unit: "m",
+                points: [
+                    WorkoutEvidencePoint(
+                        date: start,
+                        value: 1_000,
+                        startDate: start,
+                        endDate: start.addingTimeInterval(400)
+                    ),
+                    WorkoutEvidencePoint(
+                        date: start.addingTimeInterval(300),
+                        value: 1_000,
+                        startDate: start.addingTimeInterval(300),
+                        endDate: start.addingTimeInterval(600)
+                    )
+                ]
+            )
+        ]
+    )
+
+    let diagnostics = DerivedAnalyticsEngine.splitDiagnostics(workout: workout, evidence: evidence)
+    #expect(diagnostics.source == .unavailable)
+    #expect(diagnostics.fallbackReason?.contains("overlap") == true)
+}
+
+@Test func materiallyDifferentValidatedSegmentChainsFallBackToDistanceWindows() {
+    let start = Date(timeIntervalSince1970: 16_750)
+    let workout = testWorkout(id: "ambiguous-segment-chains", start: start, distanceMeters: 2_000, durationSeconds: 600)
+    let points = [
+        WorkoutEvidencePoint(
+            date: start,
+            value: 1_000,
+            startDate: start,
+            endDate: start.addingTimeInterval(300)
+        ),
+        WorkoutEvidencePoint(
+            date: start.addingTimeInterval(300),
+            value: 1_000,
+            startDate: start.addingTimeInterval(300),
+            endDate: start.addingTimeInterval(600)
+        )
+    ]
+    let events = [
+        (0.0, 300.0),
+        (300.0, 600.0),
+        (0.0, 310.0),
+        (310.0, 600.0)
+    ].map { startOffset, endOffset in
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(startOffset),
+            endDate: start.addingTimeInterval(endOffset),
+            type: "segment",
+            kind: .segment
+        )
+    }
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [.distance: WorkoutMetricSeries(metric: .distance, unit: "m", points: points)],
+        events: events
+    )
+
+    let diagnostics = DerivedAnalyticsEngine.splitDiagnostics(workout: workout, evidence: evidence)
+    #expect(diagnostics.source == .distanceSampleWindows)
+    #expect(diagnostics.distanceValidatedSegmentChainCount == 2)
+    #expect(diagnostics.fallbackReason?.contains("materially different") == true)
+    #expect(diagnostics.splitEstimates.map(\.durationSecondsEstimate) == [300, 300])
+}
+
+@Test func runHistoryEnvironmentFilterSeparatesIndoorOutdoorAndUnknownRuns() {
+    let calendar = Calendar(identifier: .gregorian)
+    let start = Date(timeIntervalSince1970: 17_000)
+    var outdoor = testWorkout(id: "outdoor", start: start, distanceMeters: 5_000, durationSeconds: 1_500)
+    outdoor.environment = .outdoor
+    var indoor = testWorkout(id: "indoor", start: start.addingTimeInterval(10), distanceMeters: 5_000, durationSeconds: 1_500)
+    indoor.environment = .indoor
+    var unknown = testWorkout(id: "unknown", start: start.addingTimeInterval(20), distanceMeters: 5_000, durationSeconds: 1_500)
+    unknown.environment = .unknown
+
+    let all = RunHistoryFiltering.filtered(
+        [outdoor, indoor, unknown],
+        selectedYear: nil,
+        selectedCategory: nil,
+        selectedEnvironment: nil,
+        searchText: "",
+        calendar: calendar
+    )
+    let outdoorOnly = RunHistoryFiltering.filtered(
+        all,
+        selectedYear: nil,
+        selectedCategory: nil,
+        selectedEnvironment: .outdoor,
+        searchText: "",
+        calendar: calendar
+    )
+    let indoorOnly = RunHistoryFiltering.filtered(
+        all,
+        selectedYear: nil,
+        selectedCategory: nil,
+        selectedEnvironment: .indoor,
+        searchText: "",
+        calendar: calendar
+    )
+
+    #expect(all.map(\.id) == ["outdoor", "indoor", "unknown"])
+    #expect(outdoorOnly.map(\.id) == ["outdoor"])
+    #expect(indoorOnly.map(\.id) == ["indoor"])
+}
+
+private func legacy2019DistancePoints(start: Date) -> [WorkoutEvidencePoint] {
+    [
+        (3.7566710710525513, 309.129137635231, 1_158.3470594193686),
+        (309.1291377544403, 614.2649573087692, 979.219716496711),
+        (614.2649573087692, 921.6212483644485, 775.0900844411208),
+        (921.6212482452393, 1_226.453986287117, 746.9961195292794),
+        (1_226.453986287117, 1_530.9333872795105, 683.016670782411),
+        (1_530.9333872795105, 1_837.783165693283, 301.6182101392833),
+        (1_837.7831655740738, 2_149.737755894661, 308.94560623193956),
+        (2_149.7377557754517, 2_280.1499242782593, 127.96535556534673)
+    ].map { startOffset, endOffset, distance in
+        WorkoutEvidencePoint(
+            date: start.addingTimeInterval(startOffset),
+            value: distance,
+            startDate: start.addingTimeInterval(startOffset),
+            endDate: start.addingTimeInterval(endOffset)
+        )
+    }
+}
+
+private func legacy2019SegmentEvents(start: Date) -> [WorkoutEvidenceEvent] {
+    [
+        (0, 268.0653066635132),
+        (0, 437.45122730731964),
+        (268.0653066635132, 578.3354488611221),
+        (437.45122730731964, 1_036.8870117664337),
+        (578.3354488611221, 982.9940874576569),
+        (982.9940874576569, 1_379.9655060768127),
+        (1_036.8870117664337, 2_029.5599403381348),
+        (1_379.9655060768127, 2_229.0077942609787),
+        (2_029.5599403381348, 2_280.1499242782593),
+        (2_229.0077942609787, 2_280.1499242782593)
+    ].map { startOffset, endOffset in
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(startOffset),
+            endDate: start.addingTimeInterval(endOffset),
+            type: "segment",
+            kind: .segment
+        )
+    }
+}
+
 @Test func derivedAnalyticsIncludesEveryKilometerAndTruthfulFinalPartialSplit() {
     let start = Date(timeIntervalSince1970: 8_500)
     let workout = testWorkout(
@@ -3139,7 +3663,7 @@ private func intervalForGoalMeasuredText(
     #expect(abs(splits[11].paceSecondsPerKmEstimate - 500) < 0.001)
 }
 
-@Test func fallbackSplitsDoNotCapLongRunsAtTenKilometers() {
+@Test func summaryOnlyLongRunsDoNotCreateAverageBasedSplitRows() {
     let start = Date(timeIntervalSince1970: 8_750)
     let workout = testWorkout(
         id: "fallback-27k-splits",
@@ -3150,10 +3674,7 @@ private func intervalForGoalMeasuredText(
 
     let splits = RunWorkoutSegments(workout: workout, analysis: nil).kilometerSplits
 
-    #expect(splits.count == 28)
-    #expect(splits[26].label == "KM 27")
-    #expect(splits[27].label == "Final")
-    #expect(abs(splits[27].distanceMeters - 210) < 0.001)
+    #expect(splits.isEmpty)
 }
 
 @MainActor
@@ -3826,6 +4347,9 @@ private func intervalForGoalMeasuredText(
     #expect(markdown.contains("Whole-run stats remain usable when custom interval rows are blocked."))
     #expect(markdown.contains("External HealthFit/FIT archives stay offline validation evidence"))
     #expect(markdown.contains("## Official Interval Rows"))
+    #expect(markdown.contains("## Normal Split Derivation"))
+    #expect(markdown.contains("This section audits normal one-kilometer splits only."))
+    #expect(markdown.contains("Estimated across Apple Health distance windows"))
     #expect(markdown.contains("Segment markers and plan-derived reconstruction are not interval analytics rows."))
     #expect(markdown.contains("| 1 | Warmup | 2 km"))
     #expect(markdown.contains("plan-derived reconstruction are not interval analytics rows"))
@@ -3864,6 +4388,7 @@ private func intervalForGoalMeasuredText(
     #expect(markdown.contains("HealthKit Segment Markers must not be promoted as Apple Fitness interval rows."))
     #expect(markdown.contains("## JSON Payload"))
     #expect(markdown.contains("\"reconstructedIntervals\""))
+    #expect(markdown.contains("\"splitDerivation\""))
     #expect(markdown.contains("\"activityBoundaryCandidateSummary\""))
     #expect(markdown.contains("\"activityBoundaryCandidateIntervals\""))
     #expect(markdown.contains("\"customWorkoutCandidateRuleSummary\""))
@@ -3910,6 +4435,7 @@ private func intervalForGoalMeasuredText(
     #expect(reviewPacket["usesFITRuntimeTruth"] as? Bool == false)
     #expect((reviewPacket["includedArtifacts"] as? [String])?.contains("resolved activity-boundary rows") == true)
     #expect((reviewPacket["includedArtifacts"] as? [String])?.contains("fallback reason labels") == true)
+    #expect((reviewPacket["includedArtifacts"] as? [String])?.contains("normal split derivation") == true)
     #expect((reviewPacket["externalEvidencePolicy"] as? String)?.contains("offline validation evidence only") == true)
     let candidateSummary = try #require(payload["customWorkoutCandidateRuleSummary"] as? [String: Any])
     let candidateRows = try #require(payload["customWorkoutCandidateRuleRows"] as? [[String: Any]])
@@ -3989,7 +4515,7 @@ private func intervalForGoalMeasuredText(
 
     let json = DiagnosticsExport.parityPacketJSON(workout: workout, forceReenrichResult: forceResult, generatedAt: start)
 
-    #expect(json.contains("\"packetVersion\" : 1"))
+    #expect(json.contains("\"packetVersion\" : 3"))
     #expect(json.contains("\"reviewPacket\""))
     #expect(json.contains("\"includedArtifacts\""))
     #expect(json.contains("offline validation evidence only"))
@@ -3999,6 +4525,9 @@ private func intervalForGoalMeasuredText(
     #expect(json.contains("\"forceReenrichResult\""))
     #expect(json.contains("\"invalidatedCache\" : true"))
     #expect(json.contains("\"evidenceCounts\""))
+    #expect(json.contains("\"splitDerivation\""))
+    #expect(json.contains("\"source\" : \"unavailable\""))
+    #expect(json.contains("Fewer than two usable Apple Health distance samples are available."))
     #expect(json.contains("\"workoutKitPlanAudit\""))
     #expect(json.contains("\"reconstructedIntervals\""))
     #expect(json.contains("\"activityBoundaryCandidateSummary\""))
@@ -6555,7 +7084,10 @@ private func intervalForGoalMeasuredText(
                 unit: "m",
                 points: [
                     WorkoutEvidencePoint(date: start.addingTimeInterval(300), value: 1_000),
-                    WorkoutEvidencePoint(date: start.addingTimeInterval(600), value: 1_000)
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(600), value: 1_000),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(900), value: 1_000),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(1_200), value: 1_000),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(1_500), value: 1_000)
                 ]
             )
         ]
@@ -6574,8 +7106,8 @@ private func intervalForGoalMeasuredText(
         expectedMaxHeartRateBpm: 172,
         expectedAverageCadenceSpm: 175,
         expectedRouteAvailable: false,
-        expectedSplitCount: 2,
-        expectedSplitTimesSeconds: [303, 300]
+        expectedSplitCount: 5,
+        expectedSplitTimesSeconds: [303, 300, 300, 300, 300]
     )
 
     let results = GoldenAppleFitnessValidation.results(workouts: [workout], expected: [expected])

@@ -193,6 +193,24 @@ RunSignal uses the same profile-style convention:
 
 Keep period-specific Week, Month, Year, and All-Time Analytics separate from this compact profile summary.
 
+### D-015 — Normal kilometer splits require validated boundary evidence
+
+- Status: Active
+- Established: 2026-07-17
+
+Normal one-kilometer splits are distinct from custom-workout interval rows under D-005.
+
+- Detailed distance must be ordered, deduplicated, non-overlapping, and reconciled to the workout summary before it can validate a boundary chain or produce window-interpolated splits.
+- A complete validated HealthKit `lap` chain is preferred because Apple defines laps as equal-distance partitions. Documented legacy zero-duration laps are expanded from the prior boundary.
+- A contiguous public HealthKit segment-event chain may supply normal split boundaries only when it starts with the workout, ends with the final distance evidence, has the exact expected kilometer-plus-partial row count, each full row distance-validates as approximately one kilometer, and no materially different validated chain competes with it.
+- Older Apple Watch runs can expose kilometer and mile segment chains at the same time. RunSignal selects the validated kilometer chain and ignores the interleaved mile chain.
+- Displayed split time subtracts only a reliable pause-event timeline that reconciles to the HealthKit workout's elapsed-minus-active duration. Elapsed boundary dates remain available for sample slicing and diagnostics.
+- When no boundary chain passes, RunSignal derives crossings by accruing every distance contribution across its actual HealthKit sample start/end window on that active-time clock. It never credits a long sample's entire distance at the sample start timestamp.
+- Summary-only evidence produces no kilometer rows; whole-run distance, duration, and average pace remain available with a clear unavailable reason.
+- Developer review and parity exports must name the selected normal-split source and retain the chain counts, selected rows, and validation or rejection reason needed to audit that choice later.
+- Segment events remain debug-only for custom-workout Work, Recovery, Cooldown, and Open / Extra reconstruction.
+- This derived behavior is cache-versioned under D-007 so stored legacy splits rebuild during targeted hydration.
+
 ## Major Change Timeline
 
 ### 2026-06-05 to 2026-06-11 — Foundation and evidence model
@@ -254,3 +272,11 @@ Keep period-specific Week, Month, Year, and All-Time Analytics separate from thi
 - Batched automatic-analysis aggregate publication without expanding the newest-20-within-30-days evidence queue.
 - Redesigned Interval Library around repeated prescriptions, with one-offs collapsed, explicit workout/Work-rep/target counts, inspectable pace charts, and source-workout links.
 - Added shared accessible run-type colors, a verified 3K Best Effort bucket with cache invalidation, and trailing-four-week/YTD/all-time running statistics.
+
+### 2026-07-17 — Legacy Apple Watch split correction
+
+- Confirmed from the paired iPhone's stored 2019 evidence that distance samples cover multi-minute start/end windows while the previous split engine credited their full contribution at the start timestamp.
+- Confirmed that the January 3 and January 5 runs contain simultaneous contiguous kilometer and mile segment chains; the kilometer chains reproduce the Apple Fitness split times supplied in the recording and screenshots.
+- Confirmed that the January 14 run's apparent 7:29 third split contains a 2:25 explicit pause; subtracting the pause produces Apple Fitness's displayed 5:04 while the boundary itself remains valid.
+- Added lap-first validated normal-split selection, distance quality/reconciliation gates, pause-aware active split timing, ambiguity rejection, interval-aware distance fallback, honest unavailable states, derived-cache invalidation, physical-evidence regression fixtures, and parity/review v3 audit fields.
+- Added an Indoor/Outdoor environment filter to Run History without changing the Most Recent or custom-workout analysis paths.

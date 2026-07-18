@@ -73,50 +73,22 @@ enum PlannedWorkoutTargetPresentation {
 public struct RunWorkoutSegments: Equatable, Sendable {
     public var workoutID: String
     public var kilometerSplits: [DerivedSplitEstimate]
+    public var splitSource: DerivedSplitSource
+    public var splitUnavailableReason: String?
     public var events: [WorkoutEvidenceEvent]
     public var eventSummary: WorkoutEventSummary
 
     public init(workout: CanonicalWorkout, analysis: DerivedWorkoutAnalysis?) {
         workoutID = workout.id
         let derivedSplits = analysis?.splitEstimates ?? []
-        kilometerSplits = derivedSplits.isEmpty ? Self.fallbackKilometerSplits(workout: workout) : derivedSplits
+        kilometerSplits = derivedSplits
+        splitSource = analysis?.splitSource ?? {
+            guard let confidence = derivedSplits.first?.confidence else { return .unavailable }
+            return confidence == .strong ? .validatedSegmentEvents : .distanceSampleWindows
+        }()
+        splitUnavailableReason = analysis?.splitUnavailableReason
         events = workout.evidence?.events ?? []
         eventSummary = WorkoutEventSummary(events: events)
-    }
-
-    private static func fallbackKilometerSplits(workout: CanonicalWorkout) -> [DerivedSplitEstimate] {
-        guard let distanceMeters = workout.distanceMeters,
-              distanceMeters >= 1_000,
-              let pace = workout.paceSecondsPerKm else {
-            return []
-        }
-
-        let fullKilometers = Int(distanceMeters / 1_000)
-        var splits = (1...fullKilometers).map { index in
-            DerivedSplitEstimate(
-                label: "KM \(index)",
-                distanceMeters: 1_000,
-                durationSecondsEstimate: pace,
-                paceSecondsPerKmEstimate: pace,
-                confidence: .limited
-            )
-        }
-
-        let remainder = distanceMeters.truncatingRemainder(dividingBy: 1_000)
-        let duration = PaceMath.secondsForDistance(paceSecondsPerKm: pace, distanceMeters: remainder)
-        if remainder >= 10, duration >= 5 {
-            splits.append(
-                DerivedSplitEstimate(
-                    label: "Final",
-                    distanceMeters: remainder,
-                    durationSecondsEstimate: duration,
-                    paceSecondsPerKmEstimate: pace,
-                    confidence: .limited
-                )
-            )
-        }
-
-        return splits
     }
 }
 

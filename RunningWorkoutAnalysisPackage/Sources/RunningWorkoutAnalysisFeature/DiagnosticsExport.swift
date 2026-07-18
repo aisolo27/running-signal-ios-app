@@ -3,7 +3,7 @@ import Foundation
 private let rawDebugReviewPacketScopeMarkdown = """
 ## Review Packet Scope
 
-This packet bundles Raw HealthKit Debug, WorkoutKit plan audit, HealthKit activity rows, resolved activity-boundary rows, structured comparison, fallback labels, pause/tail diagnostics, source metadata, and boundary warnings. Resolved rows are the normal-detail source only when the structured evidence gate passes.
+This packet bundles Raw HealthKit Debug, normal split derivation, WorkoutKit plan audit, HealthKit activity rows, resolved activity-boundary rows, structured comparison, fallback labels, pause/tail diagnostics, source metadata, and boundary warnings. Resolved rows are the normal-detail source only when the structured evidence gate passes.
 
 Whole-run stats remain usable when custom interval rows are blocked. External HealthFit/FIT archives stay offline validation evidence; attach or reference them separately and do not treat FIT as app input or runtime truth.
 
@@ -16,6 +16,7 @@ public enum DiagnosticsExport {
             scope: "resolved-row-review-packet",
             includedArtifacts: [
                 "Raw HealthKit Debug",
+                "normal split derivation",
                 "WorkoutKit plan audit",
                 "HealthKit workout activities",
                 "resolved activity-boundary rows",
@@ -132,6 +133,9 @@ public enum DiagnosticsExport {
         let segmentMarkers = evidence.map {
             DerivedAnalyticsEngine.intervalCandidates(workout: workout, evidence: $0)
         } ?? []
+        let splitDiagnostics = evidence.map {
+            DerivedAnalyticsEngine.splitDiagnostics(workout: workout, evidence: $0)
+        }
         let plannedSteps = evidence?.workoutPlanAudit?.plannedSteps ?? []
         let activityCandidate = activityBoundaryCandidate(
             plannedSteps: plannedSteps,
@@ -183,6 +187,12 @@ public enum DiagnosticsExport {
         | Metric | Count |
         |---|---:|
         \(evidenceCountRows(workout: workout, evidence: evidence))
+
+        ## Normal Split Derivation
+
+        This section audits normal one-kilometer splits only. It does not approve segment events as custom-workout interval rows.
+
+        \(splitDiagnosticsMarkdown(splitDiagnostics))
 
         ## WorkoutKit Plan Audit
 
@@ -296,6 +306,9 @@ public enum DiagnosticsExport {
         let segmentMarkers = evidence.map {
             DerivedAnalyticsEngine.intervalCandidates(workout: workout, evidence: $0)
         } ?? []
+        let splitDiagnostics = evidence.map {
+            DerivedAnalyticsEngine.splitDiagnostics(workout: workout, evidence: $0)
+        }
         let plannedSteps = evidence?.workoutPlanAudit?.plannedSteps ?? []
         let activityCandidate = activityBoundaryCandidate(
             plannedSteps: plannedSteps,
@@ -308,7 +321,7 @@ public enum DiagnosticsExport {
             workout: workout
         )
         let payload = ParityPacketPayload(
-            packetVersion: 1,
+            packetVersion: 3,
             generatedAt: generatedAt.ISO8601Format(),
             reviewPacket: reviewPacketMetadata,
             workout: RawDebugWorkout(
@@ -348,6 +361,7 @@ public enum DiagnosticsExport {
                 events: evidence?.events.count ?? workout.intervalCount,
                 activities: evidence?.activities.count ?? 0
             ),
+            splitDerivation: splitDiagnostics,
             rawWorkoutEvents: (evidence?.events ?? []).enumerated().map { offset, event in
                 RawDebugWorkoutEvent(index: offset + 1, event: event, workout: workout, segmentMarkers: segmentMarkers)
             },
@@ -408,6 +422,61 @@ public enum DiagnosticsExport {
             ("Workout activities", evidence?.activities.count ?? 0)
         ]
         return rows.map { "| \($0.0) | \($0.1) |" }.joined(separator: "\n")
+    }
+
+    private static func splitDiagnosticsMarkdown(_ diagnostics: DerivedSplitDiagnostics?) -> String {
+        guard let diagnostics else {
+            return "Unavailable. Detailed Apple Health evidence is not loaded for this workout."
+        }
+
+        let summary = """
+        | Field | Value |
+        |---|---|
+        | Source | \(markdownCell(diagnostics.sourceLabel)) |
+        | Source ID | `\(diagnostics.source.rawValue)` |
+        | Detailed distance | \(RunFormatters.distance(diagnostics.totalDistanceMeters)) |
+        | Workout summary distance | \(RunFormatters.distance(diagnostics.workoutSummaryDistanceMeters)) |
+        | Distance reconciliation delta | \(diagnostics.distanceReconciliationDeltaMeters.map { String(format: "%.1f m", $0) } ?? "Unavailable") |
+        | Distance samples | \(diagnostics.distanceSampleCount) |
+        | Maximum distance window | \(diagnostics.maximumDistanceSampleWindowSeconds.map(RunFormatters.duration) ?? "Unavailable") |
+        | Uncovered distance-window time | \(diagnostics.uncoveredDistanceWindowSeconds.map(RunFormatters.duration) ?? "Unavailable") |
+        | Lap events | \(diagnostics.lapEventCount) |
+        | Eligible lap events | \(diagnostics.eligibleLapEventCount) |
+        | Selected lap rows | \(diagnostics.selectedLapEventCount) |
+        | Segment events | \(diagnostics.segmentEventCount) |
+        | Eligible segment events | \(diagnostics.eligibleSegmentEventCount) |
+        | Expected full kilometers | \(diagnostics.expectedFullKilometerCount) |
+        | Expected rows | \(diagnostics.expectedRowCount) |
+        | Complete chains | \(diagnostics.completeSegmentChainCount) |
+        | Chains ending at final distance evidence | \(diagnostics.terminalSegmentChainCount) |
+        | Distance-validated chains | \(diagnostics.distanceValidatedSegmentChainCount) |
+        | Selected segment rows | \(diagnostics.selectedSegmentEventCount) |
+        | Pause adjustment across selected rows | \(diagnostics.pauseAdjustmentSeconds.map(RunFormatters.duration) ?? "Unavailable") |
+        | Final distance evidence offset | \(diagnostics.terminalEvidenceOffsetSeconds.map(RunFormatters.duration) ?? "Unavailable") |
+        | Fallback reason | \(markdownCell(diagnostics.fallbackReason ?? "None")) |
+        """
+        let rows = diagnostics.splitEstimates.enumerated().map { index, split in
+            "| \(index + 1) | \(markdownCell(split.label)) | \(RunFormatters.distance(split.distanceMeters)) | \(RunFormatters.duration(split.durationSecondsEstimate)) | \(RunFormatters.pace(split.paceSecondsPerKmEstimate)) | \(split.confidence.label) |"
+        }.joined(separator: "\n")
+        let splitTable = rows.isEmpty
+            ? "No normal split rows were produced."
+            : """
+              | Row | Label | Distance | Time | Pace | Confidence |
+              |---:|---|---:|---:|---:|---|
+              \(rows)
+              """
+        let notes = diagnostics.validationNotes.isEmpty
+            ? "- None"
+            : diagnostics.validationNotes.map { "- \($0)" }.joined(separator: "\n")
+
+        return """
+        \(summary)
+
+        \(splitTable)
+
+        Validation notes:
+        \(notes)
+        """
     }
 
     private static func workoutKitPlanAuditMarkdown(_ audit: WorkoutPlanAudit?) -> String {
@@ -973,6 +1042,9 @@ public enum DiagnosticsExport {
                 events: evidence?.events.count ?? workout.intervalCount,
                 activities: evidence?.activities.count ?? 0
             ),
+            splitDerivation: evidence.map {
+                DerivedAnalyticsEngine.splitDiagnostics(workout: workout, evidence: $0)
+            },
             rawWorkoutEvents: (evidence?.events ?? []).enumerated().map { offset, event in
                 RawDebugWorkoutEvent(index: offset + 1, event: event, workout: workout, segmentMarkers: segmentMarkers)
             },
@@ -2266,6 +2338,7 @@ private struct RawDebugPayload: Codable {
     var reviewPacket: ReviewPacketMetadata
     var workout: RawDebugWorkout
     var evidenceCounts: RawDebugEvidenceCounts
+    var splitDerivation: DerivedSplitDiagnostics?
     var rawWorkoutEvents: [RawDebugWorkoutEvent]
     var workoutActivities: [RawDebugWorkoutActivity]
     var workoutKitPlanAudit: RawDebugPlanAudit?
@@ -2291,6 +2364,7 @@ private struct ParityPacketPayload: Codable {
     var cacheStatus: ParityPacketCacheStatus
     var forceReenrichResult: ParityPacketForceReenrichResult?
     var evidenceCounts: RawDebugEvidenceCounts
+    var splitDerivation: DerivedSplitDiagnostics?
     var rawWorkoutEvents: [RawDebugWorkoutEvent]
     var workoutActivities: [RawDebugWorkoutActivity]
     var workoutKitPlanAudit: RawDebugPlanAudit?
