@@ -27,6 +27,7 @@ enum RunShareTemplate: String, CaseIterable, Identifiable, Sendable {
 enum RunShareCanvas: String, CaseIterable, Identifiable, Sendable {
     case story
     case post
+    case fullList
 
     var id: String { rawValue }
 
@@ -34,6 +35,16 @@ enum RunShareCanvas: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .story: "Story"
         case .post: "Post"
+        case .fullList: "Full List"
+        }
+    }
+
+    static func options(for template: RunShareTemplate) -> [RunShareCanvas] {
+        switch template {
+        case .splits:
+            return [.story, .post, .fullList]
+        case .summary, .workoutReps:
+            return [.story, .post]
         }
     }
 
@@ -41,6 +52,10 @@ enum RunShareCanvas: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .story: CGSize(width: 360, height: 640)
         case .post: CGSize(width: 360, height: 450)
+        case .fullList: CGSize(
+            width: RunShareLayout.fullListWidthPoints,
+            height: RunShareLayout.fullListMaximumHeightPoints
+        )
         }
     }
 
@@ -52,10 +67,40 @@ enum RunShareCanvas: String, CaseIterable, Identifiable, Sendable {
         switch (self, template) {
         case (.story, .splits): 11
         case (.post, .splits): 7
+        case (.fullList, .splits): RunShareLayout.fullListRowCapacity
         case (.story, .workoutReps): 9
         case (.post, .workoutReps): 6
-        case (_, .summary): 1
+        case (.fullList, .summary), (.fullList, .workoutReps): 1
+        case (.story, .summary), (.post, .summary): 1
         }
+    }
+}
+
+enum RunShareLayout {
+    static let exportScale: CGFloat = 3
+    static let fullListExportWidthPixels: CGFloat = 1_080
+    static let fullListMaximumHeightPixels: CGFloat = 12_000
+    static let fullListMaximumRowsPerImage = 200
+    static let fullListRowHeightPoints: CGFloat = 20
+    static let fullListFixedHeightPoints: CGFloat = 280
+
+    static let fullListWidthPoints = fullListExportWidthPixels / exportScale
+    static let fullListMaximumHeightPoints = fullListMaximumHeightPixels / exportScale
+    static let fullListPixelLimitedRowCapacity = max(
+        1,
+        Int((fullListMaximumHeightPoints - fullListFixedHeightPoints) / fullListRowHeightPoints)
+    )
+    static let fullListRowCapacity = min(
+        fullListMaximumRowsPerImage,
+        fullListPixelLimitedRowCapacity
+    )
+
+    static func fullListHeightPoints(rowCount: Int) -> CGFloat {
+        let boundedRows = min(max(0, rowCount), fullListRowCapacity)
+        return min(
+            fullListMaximumHeightPoints,
+            fullListFixedHeightPoints + CGFloat(boundedRows) * fullListRowHeightPoints
+        )
     }
 }
 
@@ -70,6 +115,15 @@ enum RunShareAppearance: String, CaseIterable, Identifiable, Sendable {
         case .darkCard: "Dark Card"
         case .transparentOverlay: "Overlay"
         }
+    }
+
+    static func options(
+        for template: RunShareTemplate,
+        canvas: RunShareCanvas
+    ) -> [RunShareAppearance] {
+        canvas == .fullList
+            ? [.darkCard]
+            : [.darkCard, .transparentOverlay]
     }
 }
 
@@ -239,7 +293,7 @@ struct RunShareModel: Equatable, Sendable {
         case .splits: count = splitRows.count
         case .workoutReps: count = workRows.count
         }
-        return max(1, Int(ceil(Double(count) / Double(canvas.rowCapacity(for: template)))))
+        return max(1, pageRanges(count: count, capacity: canvas.rowCapacity(for: template)).count)
     }
 
     func splitRows(page: Int, canvas: RunShareCanvas) -> [RunShareSplitRow] {
@@ -250,12 +304,34 @@ struct RunShareModel: Equatable, Sendable {
         pageSlice(workRows, page: page, capacity: canvas.rowCapacity(for: .workoutReps))
     }
 
+    func pointSize(template: RunShareTemplate, canvas: RunShareCanvas, page: Int) -> CGSize {
+        guard template == .splits, canvas == .fullList else { return canvas.pointSize }
+        return CGSize(
+            width: RunShareLayout.fullListWidthPoints,
+            height: RunShareLayout.fullListHeightPoints(
+                rowCount: splitRows(page: page, canvas: canvas).count
+            )
+        )
+    }
+
     private func pageSlice<Element>(_ values: [Element], page: Int, capacity: Int) -> [Element] {
         guard !values.isEmpty, capacity > 0 else { return [] }
-        let clampedPage = max(0, min(page, Int(ceil(Double(values.count) / Double(capacity))) - 1))
-        let start = clampedPage * capacity
-        let end = min(values.count, start + capacity)
-        return Array(values[start..<end])
+        let ranges = pageRanges(count: values.count, capacity: capacity)
+        let clampedPage = max(0, min(page, ranges.count - 1))
+        return Array(values[ranges[clampedPage]])
+    }
+
+    private func pageRanges(count: Int, capacity: Int) -> [Range<Int>] {
+        guard count > 0, capacity > 0 else { return [] }
+        let pageCount = Int(ceil(Double(count) / Double(capacity)))
+        let baseSize = count / pageCount
+        let remainder = count % pageCount
+        var start = 0
+        return (0..<pageCount).map { page in
+            let size = baseSize + (page < remainder ? 1 : 0)
+            defer { start += size }
+            return start..<(start + size)
+        }
     }
 }
 

@@ -256,7 +256,7 @@ public struct DerivedAnalysisRefreshSummary: Equatable, Sendable {
 @MainActor
 @Observable
 public final class RunningAnalysisStore {
-    private static let personalBestCacheKey = "RunSignal.PersonalBestEffortSummary.v3"
+    private static let personalBestCacheKey = "RunSignal.PersonalBestEffortSummary.v4"
     private static let foregroundSyncMinimumInterval: TimeInterval = 15 * 60
     private static let refreshLogger = Logger(
         subsystem: "com.adrielsolorzano.runninganalysis",
@@ -352,7 +352,7 @@ public final class RunningAnalysisStore {
     public var bestEffortCoverageSummary: BestEffortCoverageSummary {
         let eligibleIDs = bestEffortEligibleWorkoutIDs
         let checkedIDs = bestEffortHistoryCheckpoint.checkedWorkoutIDs
-            .union(cachedEvidenceWorkoutIDs)
+            .union(bestEffortHistoryCheckpoint.requiresFullRescan ? [] : cachedEvidenceWorkoutIDs)
             .intersection(eligibleIDs)
         let failedIDs = bestEffortHistoryCheckpoint.failedWorkoutIDs
             .subtracting(checkedIDs)
@@ -371,6 +371,14 @@ public final class RunningAnalysisStore {
             isCheckingDetailedData: isCheckingBestEffortHistory,
             pauseMessage: bestEffortAnalysisPauseMessage
         )
+    }
+
+    public func lifetimeBestEffortAchievements(
+        for workoutID: String
+    ) -> [PersonalBestEffortRankedRecord] {
+        guard bestEffortCoverageSummary.isComplete else { return [] }
+        return personalBestEffortSummary.rankedAllTime
+            .filter { $0.record.workoutID == workoutID }
     }
 
     public var shouldSyncHealthKitOnForeground: Bool {
@@ -743,7 +751,10 @@ public final class RunningAnalysisStore {
             bestEffortHistoryCheckpoint.failedWorkoutIDs.removeAll()
             BestEffortHistoryCheckpointStore.save(bestEffortHistoryCheckpoint, defaults: syncDefaults)
         }
-        guard !bestEffortPendingWorkoutIDs.isEmpty else { return }
+        guard !bestEffortPendingWorkoutIDs.isEmpty else {
+            finishBestEffortFullRescanIfComplete()
+            return
+        }
 
         isCheckingBestEffortHistory = true
         bestEffortAnalysisPauseMessage = nil
@@ -773,6 +784,7 @@ public final class RunningAnalysisStore {
             let requestedIDs = Array(bestEffortPendingWorkoutIDs.prefix(4))
             guard !requestedIDs.isEmpty else {
                 bestEffortAnalysisPauseMessage = nil
+                finishBestEffortFullRescanIfComplete()
                 return
             }
 
@@ -793,7 +805,8 @@ public final class RunningAnalysisStore {
             }.value
             personalBestEffortSummary = mergePersonalBestEfforts(
                 cached: personalBestEffortSummary,
-                computed: PersonalBestEffortSummary(allTime: exactRecords)
+                computed: PersonalBestEffortEngine.summary(from: exactRecords),
+                replacingWorkoutIDs: returnedIDs
             )
             savePersonalBestEffortCache(personalBestEffortSummary)
 
@@ -814,7 +827,7 @@ public final class RunningAnalysisStore {
     private var bestEffortPendingWorkoutIDs: [String] {
         let resolvedIDs = bestEffortHistoryCheckpoint.checkedWorkoutIDs
             .union(bestEffortHistoryCheckpoint.failedWorkoutIDs)
-            .union(cachedEvidenceWorkoutIDs)
+            .union(bestEffortHistoryCheckpoint.requiresFullRescan ? [] : cachedEvidenceWorkoutIDs)
         return V1WorkoutFilters.completedRuns(from: workouts)
             .filter { !isSampleWorkout($0) && !resolvedIDs.contains($0.id) }
             .sorted { lhs, rhs in
@@ -824,6 +837,15 @@ public final class RunningAnalysisStore {
                 return lhs.startDate > rhs.startDate
             }
             .map(\.id)
+    }
+
+    private func finishBestEffortFullRescanIfComplete() {
+        guard bestEffortHistoryCheckpoint.requiresFullRescan,
+              bestEffortHistoryCheckpoint.failedWorkoutIDs.isEmpty,
+              bestEffortHistoryCheckpoint.checkedWorkoutIDs.isSuperset(of: bestEffortEligibleWorkoutIDs)
+        else { return }
+        bestEffortHistoryCheckpoint.requiresFullRescan = false
+        BestEffortHistoryCheckpointStore.save(bestEffortHistoryCheckpoint, defaults: syncDefaults)
     }
 
     public func refreshFromHealthKit() async {
@@ -1562,12 +1584,13 @@ public final class RunningAnalysisStore {
             refreshTrainingPeriodSummaryCache(affectedBy: workout, persist: true)
         }
         snapshot = AnalyticsEngine.snapshot(for: workouts, healthContext: healthContext)
-        let derived = PersonalBestEffortSummary(
-            allTime: derivedAnalysesByWorkoutID.values.flatMap { $0.personalBestEffortRecords ?? [] }
+        let derived = PersonalBestEffortEngine.summary(
+            from: derivedAnalysesByWorkoutID.values.flatMap { $0.personalBestEffortRecords ?? [] }
         )
         personalBestEffortSummary = mergePersonalBestEfforts(
             cached: loadPersonalBestEffortCache(),
-            computed: derived
+            computed: derived,
+            replacingWorkoutIDs: Set(derivedAnalysesByWorkoutID.keys)
         )
         savePersonalBestEffortCache(personalBestEffortSummary)
         refreshEvidenceQueueSummary()
@@ -2300,11 +2323,7 @@ public final class RunningAnalysisStore {
     private func refreshPersonalBestEffortsFromInMemoryEvidence() async {
         personalBestEffortRefreshGeneration += 1
         let generation = personalBestEffortRefreshGeneration
-        let currentIDs = Set(workouts.map(\.id))
-        let cached: PersonalBestEffortSummary? = loadPersonalBestEffortCache().flatMap { summary in
-            let records = summary.allTime.filter { currentIDs.contains($0.workoutID) }
-            return records.isEmpty ? nil : PersonalBestEffortSummary(allTime: records)
-        }
+        let cached = validatedPersonalBestEffortCache(loadPersonalBestEffortCache())
         let hasDetailedEvidence = workouts.contains { $0.evidence != nil }
         guard hasDetailedEvidence || cached == nil else {
             personalBestEffortSummary = cached ?? PersonalBestEffortSummary(allTime: [])
@@ -2316,42 +2335,35 @@ public final class RunningAnalysisStore {
             PersonalBestEffortEngine.summarize(workouts: workoutSnapshot)
         }.value
         guard generation == personalBestEffortRefreshGeneration, !Task.isCancelled else { return }
-        let derived = PersonalBestEffortSummary(
-            allTime: derivedAnalysesByWorkoutID.values.flatMap { $0.personalBestEffortRecords ?? [] }
+        let derived = PersonalBestEffortEngine.summary(
+            from: derivedAnalysesByWorkoutID.values.flatMap { $0.personalBestEffortRecords ?? [] }
         )
+        let mergedWithDerived = mergePersonalBestEfforts(
+            cached: cached,
+            computed: derived,
+            replacingWorkoutIDs: Set(derivedAnalysesByWorkoutID.keys)
+        )
+        let detailedWorkoutIDs = Set(workoutSnapshot.compactMap { workout in
+            workout.evidence == nil ? nil : workout.id
+        })
         personalBestEffortSummary = mergePersonalBestEfforts(
-            cached: mergePersonalBestEfforts(cached: cached, computed: derived),
-            computed: computed
+            cached: mergedWithDerived,
+            computed: computed,
+            replacingWorkoutIDs: detailedWorkoutIDs
         )
         savePersonalBestEffortCache(personalBestEffortSummary)
     }
 
     private func mergePersonalBestEfforts(
         cached: PersonalBestEffortSummary?,
-        computed: PersonalBestEffortSummary
+        computed: PersonalBestEffortSummary,
+        replacingWorkoutIDs: Set<String> = []
     ) -> PersonalBestEffortSummary {
-        let candidates = ((cached?.allTime ?? []) + computed.allTime)
-            .filter { $0.confidence == .exact || $0.confidence == .exactTotal }
-        let grouped = Dictionary(grouping: candidates, by: \.bucket)
-        let selected = PersonalBestEffortBucket.allCases.compactMap { bucket -> PersonalBestEffortRecord? in
-            guard let records = grouped[bucket], !records.isEmpty else { return nil }
-            return records.sorted { lhs, rhs in
-                let lhsRank = personalBestConfidenceRank(lhs.confidence)
-                let rhsRank = personalBestConfidenceRank(rhs.confidence)
-                if lhsRank != rhsRank { return lhsRank > rhsRank }
-                if bucket == .longestRun { return lhs.distanceMeters > rhs.distanceMeters }
-                return (lhs.durationSeconds ?? .greatestFiniteMagnitude) < (rhs.durationSeconds ?? .greatestFiniteMagnitude)
-            }.first
-        }
-        return PersonalBestEffortSummary(allTime: selected)
-    }
-
-    private func personalBestConfidenceRank(_ confidence: PersonalBestEffortConfidence) -> Int {
-        switch confidence {
-        case .exact, .exactTotal: 2
-        case .estimated: 1
-        case .unavailable: 0
-        }
+        PersonalBestEffortEngine.merging(
+            cached: cached,
+            computed: computed,
+            replacingWorkoutIDs: replacingWorkoutIDs
+        )
     }
 
     private func loadPersonalBestEffortCache() -> PersonalBestEffortSummary? {
@@ -2359,14 +2371,38 @@ public final class RunningAnalysisStore {
         guard let decoded = try? JSONDecoder().decode(PersonalBestEffortSummary.self, from: data) else {
             return nil
         }
-        return PersonalBestEffortSummary(
-            allTime: decoded.allTime.filter { $0.confidence == .exact || $0.confidence == .exactTotal }
+        return PersonalBestEffortEngine.summary(
+            from: PersonalBestEffortEngine.candidateRecords(in: decoded)
         )
     }
 
     private func savePersonalBestEffortCache(_ summary: PersonalBestEffortSummary) {
         guard let data = try? JSONEncoder().encode(summary) else { return }
         syncDefaults.set(data, forKey: Self.personalBestCacheKey)
+    }
+
+    private func validatedPersonalBestEffortCache(
+        _ cached: PersonalBestEffortSummary?
+    ) -> PersonalBestEffortSummary? {
+        guard let cached else { return nil }
+        let eligibleIDs = bestEffortEligibleWorkoutIDs
+        let invalidatesBestEffortHistory = PersonalBestEffortEngine
+            .candidateRecords(in: cached)
+            .contains {
+                !eligibleIDs.contains($0.workoutID)
+            }
+        if invalidatesBestEffortHistory {
+            bestEffortHistoryCheckpoint = BestEffortHistoryCheckpoint(requiresFullRescan: true)
+            BestEffortHistoryCheckpointStore.save(bestEffortHistoryCheckpoint, defaults: syncDefaults)
+            let empty = PersonalBestEffortSummary(allTime: [])
+            savePersonalBestEffortCache(empty)
+            return nil
+        }
+
+        let validRecords = PersonalBestEffortEngine.candidateRecords(in: cached)
+            .filter { eligibleIDs.contains($0.workoutID) }
+        guard !validRecords.isEmpty else { return nil }
+        return PersonalBestEffortEngine.summary(from: validRecords)
     }
 
     private func loadPersistedTrainingPeriodSummaries() {

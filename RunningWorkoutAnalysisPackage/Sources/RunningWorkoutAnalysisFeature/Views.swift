@@ -1466,6 +1466,7 @@ struct WorkoutDetailView: View {
     @Environment(\.runDisplayPolicy) private var runDisplayPolicy
     @AppStorage("RunSignal.DeveloperModeEnabled") private var developerModeEnabled = false
     @State private var presentation: WorkoutDetailPresentation?
+    @State private var routeAchievements: [WorkoutRouteAchievement] = []
     @State private var showingShareRun = false
 
     private var workout: CanonicalWorkout? {
@@ -1492,6 +1493,8 @@ struct WorkoutDetailView: View {
 
                     RouteAndSeriesPanel(
                         workout: workout,
+                        achievements: routeAchievements,
+                        lifetimeRankingsVerified: store.bestEffortCoverageSummary.isComplete,
                         isLoading: store.analyzingWorkoutIDs.contains(workout.id)
                     )
 
@@ -1546,6 +1549,23 @@ struct WorkoutDetailView: View {
                 WorkoutDetailPresentation.make(workout: workout, analysis: analysis)
             }.value
         }
+        .task(id: routeAchievementSignature) {
+            guard let workout,
+                  let route = workout.evidence?.route,
+                  route.count >= 2
+            else {
+                routeAchievements = []
+                return
+            }
+            let rankedRecords = store.lifetimeBestEffortAchievements(for: workout.id)
+            routeAchievements = await Task.detached(priority: .userInitiated) {
+                WorkoutRouteAchievementMapper.make(
+                    route: route,
+                    rankedRecords: rankedRecords,
+                    workoutID: workout.id
+                )
+            }.value
+        }
         .modifier(
             WorkoutSharePresentationModifier(
                 workout: workout,
@@ -1554,6 +1574,18 @@ struct WorkoutDetailView: View {
                 isPresented: $showingShareRun
             )
         )
+    }
+
+    private var routeAchievementSignature: String {
+        let coverage = store.bestEffortCoverageSummary.isComplete ? "complete" : "pending"
+        let records = store.lifetimeBestEffortAchievements(for: workoutID)
+            .map { ranked in
+                let duration = ranked.record.durationSeconds ?? 0
+                return "\(ranked.record.bucket.rawValue)-\(ranked.lifetimeRank)-\(duration)"
+            }
+            .joined(separator: "|")
+        let loadedAt = workout?.evidence?.loadedAt.timeIntervalSinceReferenceDate ?? 0
+        return "\(workoutID)-\(loadedAt)-\(coverage)-\(records)"
     }
 }
 
@@ -1927,13 +1959,24 @@ private struct WorkoutCategoryCard: View {
 
 struct RouteAndSeriesPanel: View {
     let workout: CanonicalWorkout
+    var achievements: [WorkoutRouteAchievement] = []
+    var lifetimeRankingsVerified = true
     let isLoading: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader("Route")
             if let route = workout.evidence?.route, route.count >= 2 {
-                WorkoutRouteMap(route: route)
+                WorkoutRouteMap(route: route, achievements: achievements)
+                if !lifetimeRankingsVerified {
+                    Label(
+                        "Lifetime markers appear after RunSignal finishes verifying Best Efforts across your eligible run history.",
+                        systemImage: "hourglass"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
             } else if isLoading {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(.thinMaterial)
@@ -1993,6 +2036,8 @@ struct RouteAndSeriesPanel: View {
 
 struct WorkoutRouteMap: View {
     let route: [WorkoutRoutePoint]
+    var achievements: [WorkoutRouteAchievement] = []
+    @State private var selectedAchievementID: String?
 
     private var coordinates: [CLLocationCoordinate2D] {
         route.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
@@ -2022,20 +2067,83 @@ struct WorkoutRouteMap: View {
         )
     }
 
+    private var selectedAchievement: WorkoutRouteAchievement? {
+        achievements.first { $0.id == selectedAchievementID }
+    }
+
     var body: some View {
-        Map(initialPosition: .region(region)) {
+        Map(initialPosition: .region(region), selection: $selectedAchievementID) {
             MapPolyline(coordinates: coordinates)
                 .stroke(.blue, lineWidth: 4)
+            if let selectedAchievement {
+                MapPolyline(coordinates: selectedAchievement.route.map(\.coordinate))
+                    .stroke(selectedAchievement.tint, lineWidth: 7)
+            }
             if let start = coordinates.first {
                 Marker("Start", systemImage: "play.fill", coordinate: start)
             }
             if let finish = coordinates.last {
                 Marker("Finish", systemImage: "flag.checkered", coordinate: finish)
             }
+            ForEach(achievements) { achievement in
+                Marker(
+                    achievement.title,
+                    systemImage: "medal.fill",
+                    coordinate: achievement.marker.coordinate
+                )
+                .tint(achievement.tint)
+                .tag(achievement.id)
+            }
         }
         .frame(height: 220)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .accessibilityLabel("Workout route map")
+        .accessibilityValue(achievementAccessibilityValue)
+        .accessibilityIdentifier("workout-route-map")
+        .overlay(alignment: .bottom) {
+            if let selectedAchievement {
+                HStack(spacing: 8) {
+                    Image(systemName: "medal.fill")
+                        .foregroundStyle(selectedAchievement.tint)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(selectedAchievement.title)
+                            .font(.caption.bold())
+                        Text(RunFormatters.duration(selectedAchievement.durationSeconds))
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(RunSignalTextStyle.secondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(10)
+                .background(.regularMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .padding(8)
+                .allowsHitTesting(false)
+                .accessibilityIdentifier("route-achievement-callout")
+            }
+        }
+    }
+
+    private var achievementAccessibilityValue: String {
+        guard !achievements.isEmpty else { return "No lifetime achievements on this route" }
+        return achievements.map(\.title).joined(separator: ", ")
+    }
+}
+
+private extension WorkoutRoutePoint {
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+}
+
+private extension WorkoutRouteAchievement {
+    var tint: Color {
+        switch lifetimeRank {
+        case 1: Color(red: 0.96, green: 0.74, blue: 0.12)
+        case 2: Color(red: 0.72, green: 0.75, blue: 0.79)
+        case 3: Color(red: 0.72, green: 0.42, blue: 0.20)
+        default: .secondary
+        }
     }
 }
 

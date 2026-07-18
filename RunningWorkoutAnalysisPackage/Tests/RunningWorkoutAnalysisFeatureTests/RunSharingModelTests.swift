@@ -1,6 +1,9 @@
 import Foundation
 import Testing
 @testable import RunningWorkoutAnalysisFeature
+#if os(iOS)
+import UIKit
+#endif
 
 @Test func shareSummaryUsesDisplayPolicyAndHidesUnavailableTemplates() throws {
     let workout = shareWorkout(distance: 11_265.4, duration: 2_970)
@@ -18,6 +21,17 @@ import Testing
     #expect(model.availableTemplates == [.summary])
     #expect(model.routePoints.count == 3)
     #expect(model.routePoints.allSatisfy { (0...1).contains($0.x) && (0...1).contains($0.y) })
+}
+
+@Test func shareFormatOptionsKeepFullListExclusiveToSplitsAndOpaque() {
+    #expect(RunShareCanvas.options(for: .summary) == [.story, .post])
+    #expect(RunShareCanvas.options(for: .workoutReps) == [.story, .post])
+    #expect(RunShareCanvas.options(for: .splits) == [.story, .post, .fullList])
+    #expect(RunShareAppearance.options(for: .splits, canvas: .fullList) == [.darkCard])
+    #expect(
+        RunShareAppearance.options(for: .splits, canvas: .story)
+            == [.darkCard, .transparentOverlay]
+    )
 }
 
 @Test func shareSplitsFollowThePrimaryUnitAndPaginateEveryRow() throws {
@@ -40,12 +54,88 @@ import Testing
     #expect(model.splitRows.first?.pace.contains("/mi") == true)
     #expect(model.availableTemplates == [.summary, .splits])
     #expect(model.pageCount(template: .splits, canvas: .story) == 2)
-    #expect(model.splitRows(page: 0, canvas: .story).count == 11)
-    #expect(model.splitRows(page: 1, canvas: .story).count == 2)
+    #expect(model.splitRows(page: 0, canvas: .story).count == 7)
+    #expect(model.splitRows(page: 1, canvas: .story).count == 6)
     #expect(model.pageCount(template: .splits, canvas: .post) == 2)
     #expect(model.splitRows(page: 0, canvas: .post).count == 7)
     #expect(model.splitRows(page: 1, canvas: .post).count == 6)
 }
+
+@Test func shareStoryAndPostSplitPagesAreBalancedWithoutChangingRowIdentity() {
+    let model = shareSplitModel(count: 28)
+
+    #expect(model.pageCount(template: .splits, canvas: .story) == 3)
+    #expect((0..<3).map { model.splitRows(page: $0, canvas: .story).count } == [10, 9, 9])
+    #expect(model.pageCount(template: .splits, canvas: .post) == 4)
+    #expect((0..<4).map { model.splitRows(page: $0, canvas: .post).count } == [7, 7, 7, 7])
+
+    let storyIDs = (0..<3).flatMap { model.splitRows(page: $0, canvas: .story).map(\.id) }
+    let postIDs = (0..<4).flatMap { model.splitRows(page: $0, canvas: .post).map(\.id) }
+    #expect(storyIDs == Array(0..<28))
+    #expect(postIDs == Array(0..<28))
+}
+
+@Test func shareFullListFitsOneHundredSixtyOneRowsInOneImage() {
+    let model = shareSplitModel(count: 161)
+    let size = model.pointSize(template: .splits, canvas: .fullList, page: 0)
+
+    #expect(model.pageCount(template: .splits, canvas: .fullList) == 1)
+    #expect(model.splitRows(page: 0, canvas: .fullList).count == 161)
+    #expect(size.width * RunShareLayout.exportScale == 1_080)
+    #expect(size.height * RunShareLayout.exportScale <= 12_000)
+}
+
+@Test func shareFullListUsesThePixelLimitedCapacityAndBalancesItsFallback() {
+    let capacity = RunShareLayout.fullListRowCapacity
+    let atCapacity = shareSplitModel(count: capacity)
+    let aboveCapacity = shareSplitModel(count: capacity + 1)
+
+    #expect(capacity <= RunShareLayout.fullListMaximumRowsPerImage)
+    #expect(capacity == RunShareLayout.fullListPixelLimitedRowCapacity)
+    #expect(atCapacity.pageCount(template: .splits, canvas: .fullList) == 1)
+    #expect(
+        atCapacity.pointSize(template: .splits, canvas: .fullList, page: 0).height
+            * RunShareLayout.exportScale
+            <= RunShareLayout.fullListMaximumHeightPixels
+    )
+
+    #expect(aboveCapacity.pageCount(template: .splits, canvas: .fullList) == 2)
+    let pageCounts = (0..<2).map { aboveCapacity.splitRows(page: $0, canvas: .fullList).count }
+    #expect(pageCounts.max()! - pageCounts.min()! <= 1)
+    #expect(pageCounts.allSatisfy { $0 <= capacity })
+    let flattenedIDs = (0..<2).flatMap {
+        aboveCapacity.splitRows(page: $0, canvas: .fullList).map(\.id)
+    }
+    #expect(flattenedIDs == Array(0..<(capacity + 1)))
+    #expect((0..<2).allSatisfy {
+        aboveCapacity.pointSize(template: .splits, canvas: .fullList, page: $0).height
+            * RunShareLayout.exportScale
+            <= RunShareLayout.fullListMaximumHeightPixels
+    })
+}
+
+#if os(iOS)
+@Test @MainActor
+func shareFullListRendererProducesAnOpaqueGuardrailedPNGCanvas() throws {
+    let model = shareSplitModel(count: 161)
+    let image = try #require(
+        RunShareImageRenderer.render(
+            model: model,
+            template: .splits,
+            canvas: .fullList,
+            appearance: .darkCard,
+            routeStyle: .none,
+            page: 0,
+            mapImage: nil
+        )
+    )
+    let cgImage = try #require(image.cgImage)
+
+    #expect(cgImage.width == Int(RunShareLayout.fullListExportWidthPixels))
+    #expect(cgImage.height <= Int(RunShareLayout.fullListMaximumHeightPixels))
+    #expect([.none, .noneSkipFirst, .noneSkipLast].contains(cgImage.alphaInfo))
+}
+#endif
 
 @Test func shareWorkoutRepsUseOnlyOfficialRowsAndPreserveAuthoredDistance() throws {
     let workout = shareWorkout(distance: 8_000, duration: 2_700)
@@ -143,6 +233,26 @@ private func shareWorkout(distance: Double, duration: Double) -> CanonicalWorkou
         routePointCount: route.count,
         inferredRunType: .easy,
         evidence: evidence
+    )
+}
+
+private func shareSplitModel(count: Int) -> RunShareModel {
+    let workout = shareWorkout(
+        distance: Double(count) * 1_000,
+        duration: Double(count) * 300
+    )
+    var presentation = WorkoutDetailPresentation.make(workout: workout, analysis: nil)
+    presentation.segments.kilometerSplits = (0..<count).map { index in
+        shareSplit(
+            label: "KM \(index + 1)",
+            meters: 1_000,
+            pace: 270 + Double(index % 45)
+        )
+    }
+    return RunShareModelBuilder.make(
+        workout: workout,
+        presentation: presentation,
+        policy: .kilometersOnly
     )
 }
 

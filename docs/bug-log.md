@@ -76,6 +76,7 @@ Read only the section relevant to the task. Add entries only for recurring proje
 
 ## SwiftUI
 
+- `PHPhotoLibrary.performChanges` executes its change block on PhotoKit's queue. Do not create that block inside an `@MainActor`-isolated saver or Swift concurrency will trap on `com.apple.PHPhotoLibrary.changes` during a real-device save. Keep preview/render state on the main actor, but make the PhotoKit transaction helper nonisolated and physically test both one-page and multi-page saves.
 - Keep launch work cheap: explicit branded launch screen plus a lightweight startup view until bootstrap completes.
 - Foreground HealthKit checks must use the persisted last-sync date as well as the in-memory throttle. Background/foreground anchored checks stay quiet; only an explicit user refresh should present the loading banner.
 - Scroll-heavy screens need a bottom safe-area inset so the floating tab bar does not cover content.

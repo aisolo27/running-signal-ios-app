@@ -2591,7 +2591,7 @@ private func intervalForGoalMeasuredText(
     let cached = PersonalBestEffortSummary(allTime: [estimatedHalfMarathon, exactLongestRun])
     syncDefaults.defaults.set(
         try JSONEncoder().encode(cached),
-        forKey: "RunSignal.PersonalBestEffortSummary.v3"
+        forKey: "RunSignal.PersonalBestEffortSummary.v4"
     )
 
     let store = RunningAnalysisStore(syncDefaults: syncDefaults.defaults)
@@ -2764,6 +2764,193 @@ private func intervalForGoalMeasuredText(
     #expect(store.bestEffortCoverageSummary.pendingRunCount == 1)
     #expect(store.bestEffortCoverageSummary.statusTitle == "Best Effort analysis paused")
     #expect(store.bestEffortCoverageSummary.detailText.contains("Low Power Mode"))
+}
+
+@MainActor
+@Test func lifetimeBestEffortAchievementsRequireCompleteCoverage() async throws {
+    let context = try inMemoryModelContext()
+    let completeDefaults = isolatedDefaults()
+    defer { completeDefaults.reset() }
+    let incompleteDefaults = isolatedDefaults()
+    defer { incompleteDefaults.reset() }
+    let workout = testWorkout(
+        id: "ranked-achievement",
+        start: Date(timeIntervalSince1970: 41_000),
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    PersistenceService.upsert([workout], context: context)
+    let record = storeBestEffortRecord(
+        workout: workout,
+        bucket: .fiveKilometer,
+        durationSeconds: 1_500
+    )
+    let summary = PersonalBestEffortEngine.summary(from: [record])
+    let summaryData = try JSONEncoder().encode(summary)
+    completeDefaults.defaults.set(summaryData, forKey: "RunSignal.PersonalBestEffortSummary.v4")
+    incompleteDefaults.defaults.set(summaryData, forKey: "RunSignal.PersonalBestEffortSummary.v4")
+    BestEffortHistoryCheckpointStore.save(
+        BestEffortHistoryCheckpoint(checkedWorkoutIDs: [workout.id]),
+        defaults: completeDefaults.defaults
+    )
+
+    let completeStore = RunningAnalysisStore(syncDefaults: completeDefaults.defaults)
+    await completeStore.bootstrap(modelContext: context)
+    let incompleteStore = RunningAnalysisStore(syncDefaults: incompleteDefaults.defaults)
+    await incompleteStore.bootstrap(modelContext: context)
+
+    #expect(completeStore.bestEffortCoverageSummary.isComplete)
+    #expect(completeStore.lifetimeBestEffortAchievements(for: workout.id) == [
+        PersonalBestEffortRankedRecord(record: record, lifetimeRank: 1)
+    ])
+    #expect(!incompleteStore.bestEffortCoverageSummary.isComplete)
+    #expect(incompleteStore.lifetimeBestEffortAchievements(for: workout.id).isEmpty)
+}
+
+@MainActor
+@Test func rankedCacheAndCheckpointUpgradeIgnoreWinnerOnlyVersions() async throws {
+    let context = try inMemoryModelContext()
+    let syncDefaults = isolatedDefaults()
+    defer { syncDefaults.reset() }
+    let workout = testWorkout(
+        id: "winner-only-version",
+        start: Date(timeIntervalSince1970: 42_000),
+        distanceMeters: 1_000,
+        durationSeconds: 300
+    )
+    PersistenceService.upsert([workout], context: context)
+    let winnerOnly = PersonalBestEffortSummary(allTime: [
+        storeBestEffortRecord(
+            workout: workout,
+            bucket: .oneKilometer,
+            durationSeconds: 300
+        )
+    ])
+    syncDefaults.defaults.set(
+        try JSONEncoder().encode(winnerOnly),
+        forKey: "RunSignal.PersonalBestEffortSummary.v3"
+    )
+    syncDefaults.defaults.set(
+        try JSONEncoder().encode(BestEffortHistoryCheckpoint(checkedWorkoutIDs: [workout.id])),
+        forKey: "RunSignal.BestEffortHistoryCheckpoint.v2"
+    )
+
+    let store = RunningAnalysisStore(syncDefaults: syncDefaults.defaults)
+    await store.bootstrap(modelContext: context)
+
+    #expect(!store.bestEffortCoverageSummary.isComplete)
+    #expect(store.bestEffortCoverageSummary.pendingRunCount == 1)
+    #expect(!store.personalBestEffortSummary.rankedAllTime.contains {
+        $0.record.workoutID == workout.id
+    })
+}
+
+@MainActor
+@Test func deletingRankedHolderClearsRanksAndRequiresTruthfulRescan() async throws {
+    let context = try inMemoryModelContext()
+    let syncDefaults = isolatedDefaults()
+    defer { syncDefaults.reset() }
+    let start = Date(timeIntervalSince1970: 43_000)
+    let workouts = [
+        testWorkout(id: "deleted-gold", start: start, distanceMeters: 1_000, durationSeconds: 230),
+        testWorkout(id: "kept-silver", start: start.addingTimeInterval(1_000), distanceMeters: 1_000, durationSeconds: 240),
+        testWorkout(id: "kept-bronze", start: start.addingTimeInterval(2_000), distanceMeters: 1_000, durationSeconds: 250)
+    ]
+    PersistenceService.upsert(workouts, context: context)
+    let cached = PersonalBestEffortEngine.summary(from: workouts.map {
+        storeBestEffortRecord(workout: $0, bucket: .oneKilometer, durationSeconds: $0.durationSeconds)
+    })
+    syncDefaults.defaults.set(
+        try JSONEncoder().encode(cached),
+        forKey: "RunSignal.PersonalBestEffortSummary.v4"
+    )
+    BestEffortHistoryCheckpointStore.save(
+        BestEffortHistoryCheckpoint(checkedWorkoutIDs: Set(workouts.map(\.id))),
+        defaults: syncDefaults.defaults
+    )
+    let syncService = StubHealthKitWorkoutSyncService(
+        batchResults: [[
+            HealthKitWorkoutSyncResult(
+                authorizationState: .partial,
+                deletedWorkoutIDs: ["deleted-gold"]
+            )
+        ]]
+    )
+    let store = RunningAnalysisStore(
+        healthKitService: StubHealthKitService(),
+        syncService: syncService,
+        syncDefaults: syncDefaults.defaults
+    )
+
+    await store.bootstrap(modelContext: context)
+    #expect(store.bestEffortCoverageSummary.isComplete)
+    await store.syncHealthKitChanges()
+
+    #expect(store.personalBestEffortSummary.rankedAllTime.isEmpty)
+    #expect(store.bestEffortCoverageSummary.pendingRunCount == 2)
+    #expect(!store.bestEffortCoverageSummary.isComplete)
+    #expect(store.lifetimeBestEffortAchievements(for: "kept-silver").isEmpty)
+    let checkpoint = BestEffortHistoryCheckpointStore.load(defaults: syncDefaults.defaults)
+    #expect(checkpoint.requiresFullRescan)
+    #expect(checkpoint.checkedWorkoutIDs.isEmpty)
+}
+
+@MainActor
+@Test func duplicateInvalidationOfRankedHolderRequiresTruthfulRescan() async throws {
+    let context = try inMemoryModelContext()
+    let syncDefaults = isolatedDefaults()
+    defer { syncDefaults.reset() }
+    let start = Date(timeIntervalSince1970: 44_000)
+    let original = testWorkout(
+        id: "duplicate-holder",
+        start: start,
+        distanceMeters: 1_000,
+        durationSeconds: 240
+    )
+    PersistenceService.upsert([original], context: context)
+    let cached = PersonalBestEffortEngine.summary(from: [
+        storeBestEffortRecord(
+            workout: original,
+            bucket: .oneKilometer,
+            durationSeconds: 240
+        )
+    ])
+    syncDefaults.defaults.set(
+        try JSONEncoder().encode(cached),
+        forKey: "RunSignal.PersonalBestEffortSummary.v4"
+    )
+    BestEffortHistoryCheckpointStore.save(
+        BestEffortHistoryCheckpoint(checkedWorkoutIDs: [original.id]),
+        defaults: syncDefaults.defaults
+    )
+    var preferred = testWorkout(
+        id: "preferred-duplicate",
+        start: start.addingTimeInterval(10),
+        distanceMeters: 1_000,
+        durationSeconds: 240
+    )
+    preferred.sourceName = "Apple Watch"
+    let syncService = StubHealthKitWorkoutSyncService(
+        batchResults: [[
+            HealthKitWorkoutSyncResult(
+                authorizationState: .partial,
+                fetchedWorkouts: [preferred]
+            )
+        ]]
+    )
+    let store = RunningAnalysisStore(
+        healthKitService: StubHealthKitService(),
+        syncService: syncService,
+        syncDefaults: syncDefaults.defaults
+    )
+
+    await store.bootstrap(modelContext: context)
+    await store.syncHealthKitChanges()
+
+    #expect(store.workouts.first { $0.id == original.id }?.isDuplicate == true)
+    #expect(store.personalBestEffortSummary.rankedAllTime.isEmpty)
+    #expect(store.bestEffortCoverageSummary.pendingRunCount == 1)
+    #expect(BestEffortHistoryCheckpointStore.load(defaults: syncDefaults.defaults).requiresFullRescan)
 }
 
 @MainActor
@@ -8700,5 +8887,27 @@ private func testWorkout(
         durationSeconds: durationSeconds,
         inferredRunType: inferredRunType,
         manualRunType: manualRunType
+    )
+}
+
+private func storeBestEffortRecord(
+    workout: CanonicalWorkout,
+    bucket: PersonalBestEffortBucket,
+    durationSeconds: Double
+) -> PersonalBestEffortRecord {
+    let distanceMeters = bucket.distanceMeters ?? workout.distanceMeters ?? 0
+    return PersonalBestEffortRecord(
+        bucket: bucket,
+        workoutID: workout.id,
+        date: workout.startDate,
+        distanceMeters: distanceMeters,
+        durationSeconds: durationSeconds,
+        paceSecondsPerKm: durationSeconds / (distanceMeters / 1_000),
+        method: .exactSegment,
+        confidence: .exact,
+        caveats: [],
+        segmentStartDate: workout.startDate,
+        segmentEndDate: workout.startDate.addingTimeInterval(durationSeconds),
+        sourceWorkoutDistanceMeters: workout.distanceMeters
     )
 }

@@ -3,13 +3,16 @@ import Foundation
 public struct BestEffortHistoryCheckpoint: Codable, Equatable, Sendable {
     public var checkedWorkoutIDs: Set<String>
     public var failedWorkoutIDs: Set<String>
+    public var requiresFullRescan: Bool
 
     public init(
         checkedWorkoutIDs: Set<String> = [],
-        failedWorkoutIDs: Set<String> = []
+        failedWorkoutIDs: Set<String> = [],
+        requiresFullRescan: Bool = false
     ) {
         self.checkedWorkoutIDs = checkedWorkoutIDs
         self.failedWorkoutIDs = failedWorkoutIDs
+        self.requiresFullRescan = requiresFullRescan
     }
 
     public mutating func retainWorkouts(ids: Set<String>) {
@@ -20,7 +23,7 @@ public struct BestEffortHistoryCheckpoint: Codable, Equatable, Sendable {
 }
 
 enum BestEffortHistoryCheckpointStore {
-    private static let key = "RunSignal.BestEffortHistoryCheckpoint.v2"
+    private static let key = "RunSignal.BestEffortHistoryCheckpoint.v3"
 
     static func load(defaults: UserDefaults) -> BestEffortHistoryCheckpoint {
         guard let data = defaults.data(forKey: key),

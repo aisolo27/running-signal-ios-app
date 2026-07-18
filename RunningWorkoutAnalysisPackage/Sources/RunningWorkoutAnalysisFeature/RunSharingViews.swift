@@ -53,11 +53,28 @@ struct RunShareSheet: View {
         model.pageCount(template: template, canvas: canvas)
     }
 
+    private var canvasOptions: [RunShareCanvas] {
+        RunShareCanvas.options(for: template)
+    }
+
+    private var isFullList: Bool {
+        template == .splits && canvas == .fullList
+    }
+
+    private var effectiveAppearance: RunShareAppearance {
+        RunShareAppearance.options(for: template, canvas: canvas).contains(appearance)
+            ? appearance
+            : .darkCard
+    }
+
     private var hasRoute: Bool {
         !model.routePoints.isEmpty
     }
 
     private var previewSize: CGSize {
+        if isFullList {
+            return CGSize(width: 205, height: 440)
+        }
         let scale: CGFloat = canvas == .story ? 0.57 : 0.84
         return CGSize(width: canvas.pointSize.width * scale, height: canvas.pointSize.height * scale)
     }
@@ -80,20 +97,22 @@ struct RunShareSheet: View {
 
                         optionSection("Format") {
                             Picker("Format", selection: $canvas) {
-                                ForEach(RunShareCanvas.allCases) { option in
+                                ForEach(canvasOptions) { option in
                                     Text(option.title).tag(option)
                                 }
                             }
                             .pickerStyle(.segmented)
                         }
 
-                        optionSection("Style") {
-                            Picker("Style", selection: $appearance) {
-                                ForEach(RunShareAppearance.allCases) { option in
-                                    Text(option.title).tag(option)
+                        if !isFullList {
+                            optionSection("Style") {
+                                Picker("Style", selection: $appearance) {
+                                    ForEach(RunShareAppearance.options(for: template, canvas: canvas)) { option in
+                                        Text(option.title).tag(option)
+                                    }
                                 }
+                                .pickerStyle(.segmented)
                             }
-                            .pickerStyle(.segmented)
                         }
 
                         if template == .summary {
@@ -161,7 +180,12 @@ struct RunShareSheet: View {
             }
         }
         .presentationDetents([.large])
-        .onChange(of: template) { _, _ in resetPage() }
+        .onChange(of: template) { _, newTemplate in
+            if !RunShareCanvas.options(for: newTemplate).contains(canvas) {
+                canvas = .story
+            }
+            resetPage()
+        }
         .onChange(of: canvas) { _, _ in resetPage() }
         .onChange(of: routeStyle) { _, newValue in
             if newValue != .map { mapImage = nil }
@@ -182,15 +206,17 @@ struct RunShareSheet: View {
                 model: model,
                 template: template,
                 canvas: canvas,
-                appearance: appearance,
+                appearance: effectiveAppearance,
                 routeStyle: effectiveRouteStyle,
                 page: selectedPage,
                 mapImage: mapImage,
                 scale: 1
             )
         }
-        .sheet(item: $activityPayload) { payload in
-            RunShareActivityView(images: payload.images)
+        .sheet(item: $activityPayload, onDismiss: {
+            activityPayload = nil
+        }) { payload in
+            RunShareActivityView(urls: payload.files.urls)
         }
         .alert("Photos Access Needed", isPresented: $photoAccessBlocked) {
             Button("Not Now", role: .cancel) {}
@@ -205,22 +231,41 @@ struct RunShareSheet: View {
 
     private var preview: some View {
         VStack(spacing: 10) {
-            Group {
-                if let previewImage {
+            if isFullList, let previewImage {
+                ScrollView(.vertical) {
                     Image(uiImage: previewImage)
                         .resizable()
                         .interpolation(.high)
-                        .aspectRatio(contentMode: .fit)
-                } else {
-                    ProgressView("Preparing preview")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(.black.opacity(0.35))
+                        .frame(
+                            width: previewSize.width,
+                            height: previewSize.width * previewImage.size.height / max(1, previewImage.size.width)
+                        )
                 }
+                .scrollIndicators(.visible)
+                .frame(width: previewSize.width, height: previewSize.height)
+                .background(.black.opacity(0.35))
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .shadow(color: .black.opacity(0.28), radius: 14, y: 8)
+                .accessibilityIdentifier("run-share-preview")
+                .accessibilityLabel("Scrollable full split list preview")
+            } else {
+                Group {
+                    if let previewImage {
+                        Image(uiImage: previewImage)
+                            .resizable()
+                            .interpolation(.high)
+                            .aspectRatio(contentMode: .fit)
+                    } else {
+                        ProgressView("Preparing preview")
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .background(.black.opacity(0.35))
+                    }
+                }
+                .frame(width: previewSize.width, height: previewSize.height)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .shadow(color: .black.opacity(0.28), radius: 14, y: 8)
+                .accessibilityIdentifier("run-share-preview")
             }
-            .frame(width: previewSize.width, height: previewSize.height)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .shadow(color: .black.opacity(0.28), radius: 14, y: 8)
-            .accessibilityIdentifier("run-share-preview")
 
             if pageCount > 1 {
                 HStack(spacing: 14) {
@@ -273,7 +318,7 @@ struct RunShareSheet: View {
         return [
             template.rawValue,
             canvas.rawValue,
-            appearance.rawValue,
+            effectiveAppearance.rawValue,
             effectiveRouteStyle.rawValue,
             String(selectedPage),
             String(mapIdentity)
@@ -298,7 +343,7 @@ struct RunShareSheet: View {
     }
 
     @MainActor
-    private func preparedImages() async -> [UIImage] {
+    private func preparedPNGFiles() async -> RunSharePreparedFiles? {
         isPreparing = true
         statusMessage = nil
         defer { isPreparing = false }
@@ -313,28 +358,39 @@ struct RunShareSheet: View {
             mapImage = exportMap
         }
 
-        return (0..<pageCount).compactMap { page in
-            RunShareImageRenderer.render(
-                model: model,
-                template: template,
-                canvas: canvas,
-                appearance: appearance,
-                routeStyle: effectiveRouteStyle,
-                page: page,
-                mapImage: exportMap
-            )
+        do {
+            return try RunSharePreparedFiles.make(
+                pageCount: pageCount,
+                baseFilename: exportFilename
+            ) { page in
+                guard let image = RunShareImageRenderer.render(
+                    model: model,
+                    template: template,
+                    canvas: canvas,
+                    appearance: effectiveAppearance,
+                    routeStyle: effectiveRouteStyle,
+                    page: page,
+                    mapImage: exportMap
+                ), let data = image.pngData() else {
+                    throw RunSharePreparationError.renderFailed
+                }
+                return data
+            }
+        } catch {
+            return nil
         }
     }
 
     @MainActor
     private func saveToPhotos() async {
-        let images = await preparedImages()
-        guard images.count == pageCount else {
+        guard let files = await preparedPNGFiles(), files.urls.count == pageCount else {
             statusMessage = "RunSignal could not render every page. Nothing was saved."
             return
         }
 
-        switch await RunSharePhotoLibrarySaver.save(images: images, baseFilename: exportFilename) {
+        let saveResult = await RunSharePhotoLibrarySaver.save(urls: files.urls)
+        withExtendedLifetime(files) {}
+        switch saveResult {
         case .saved(let count):
             statusMessage = count == 1 ? "Saved to Photos." : "Saved \(count) images to Photos."
         case .denied, .restricted:
@@ -346,12 +402,11 @@ struct RunShareSheet: View {
 
     @MainActor
     private func shareImages() async {
-        let images = await preparedImages()
-        guard images.count == pageCount else {
+        guard let files = await preparedPNGFiles(), files.urls.count == pageCount else {
             statusMessage = "RunSignal could not render every page for sharing."
             return
         }
-        activityPayload = RunShareActivityPayload(images: images)
+        activityPayload = RunShareActivityPayload(files: files)
     }
 
     private var exportFilename: String {
@@ -373,12 +428,21 @@ struct RunShareCardView: View {
     private var foreground: Color { .white }
     private var secondary: Color { .white.opacity(0.72) }
     private var horizontalPadding: CGFloat { canvas == .story ? 24 : 20 }
+    private var cardSize: CGSize { model.pointSize(template: template, canvas: canvas, page: page) }
+    private var contentSpacing: CGFloat {
+        switch canvas {
+        case .story: 16
+        case .post: 11
+        case .fullList: 14
+        }
+    }
+    private var verticalPadding: CGFloat { canvas == .post ? 18 : 24 }
 
     var body: some View {
         ZStack {
             background
 
-            VStack(alignment: .leading, spacing: canvas == .story ? 16 : 11) {
+            VStack(alignment: .leading, spacing: contentSpacing) {
                 header
 
                 switch template {
@@ -394,10 +458,10 @@ struct RunShareCardView: View {
                 footer
             }
             .padding(.horizontal, horizontalPadding)
-            .padding(.vertical, canvas == .story ? 24 : 18)
+            .padding(.vertical, verticalPadding)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(width: canvas.pointSize.width, height: canvas.pointSize.height)
+        .frame(width: cardSize.width, height: cardSize.height)
         .environment(\.colorScheme, .dark)
         .clipped()
     }
@@ -478,28 +542,51 @@ struct RunShareCardView: View {
         }
     }
 
+    @ViewBuilder
     private var splitsContent: some View {
         let rows = model.splitRows(page: page, canvas: canvas)
-        return sharePanel(padding: 12) {
-            VStack(alignment: .leading, spacing: canvas == .story ? 9 : 6) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(model.splitUnitTitle)
-                        .font(.headline.bold())
-                        .foregroundStyle(foreground)
-                    Spacer()
-                    if model.pageCount(template: .splits, canvas: canvas) > 1 {
-                        Text("\(page + 1)/\(model.pageCount(template: .splits, canvas: canvas))")
-                            .font(.caption.monospacedDigit().bold())
-                            .foregroundStyle(secondary)
+        if canvas == .fullList {
+            sharePanel(padding: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    splitHeading
+                    Text("Longer bar = faster · line = run average")
+                        .font(.caption2)
+                        .foregroundStyle(secondary)
+
+                    VStack(spacing: 0) {
+                        ForEach(rows) { row in
+                            RunShareFullListSplitRowView(row: row, accent: accent)
+                                .frame(height: RunShareLayout.fullListRowHeightPoints)
+                        }
                     }
                 }
-                Text("Longer bar = faster · line = run average")
-                    .font(.caption2)
-                    .foregroundStyle(secondary)
+            }
+        } else {
+            sharePanel(padding: 12) {
+                VStack(alignment: .leading, spacing: canvas == .story ? 9 : 6) {
+                    splitHeading
+                    Text("Longer bar = faster · line = run average")
+                        .font(.caption2)
+                        .foregroundStyle(secondary)
 
-                ForEach(rows) { row in
-                    RunShareSplitRowView(row: row, accent: accent, compact: canvas == .post)
+                    ForEach(rows) { row in
+                        RunShareSplitRowView(row: row, accent: accent, compact: canvas == .post)
+                    }
                 }
+            }
+        }
+    }
+
+    private var splitHeading: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(model.splitUnitTitle)
+                .font(.headline.bold())
+                .foregroundStyle(foreground)
+            Spacer()
+            if model.pageCount(template: .splits, canvas: canvas) > 1 {
+                Text("\(page + 1)/\(model.pageCount(template: .splits, canvas: canvas))")
+                    .font(.caption.monospacedDigit().bold())
+                    .foregroundStyle(secondary)
             }
         }
     }
@@ -652,6 +739,7 @@ struct RunShareCardView: View {
         switch canvas {
         case .story: CGSize(width: 304, height: 200)
         case .post: CGSize(width: 312, height: 125)
+        case .fullList: CGSize(width: 312, height: 125)
         }
     }
 }
@@ -702,6 +790,55 @@ private struct RunShareSplitRowView: View {
                 }
             }
             .frame(width: compact ? 68 : 74, alignment: .trailing)
+        }
+    }
+}
+
+private struct RunShareFullListSplitRowView: View {
+    let row: RunShareSplitRow
+    let accent: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 4) {
+                Text(row.label)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white)
+                if let distance = row.distance {
+                    Text(distance)
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.64))
+                }
+            }
+            .lineLimit(1)
+            .frame(width: 58, alignment: .leading)
+
+            GeometryReader { geometry in
+                let averageX = geometry.size.width * row.normalizedAveragePace
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.10))
+                    Capsule()
+                        .fill(accent.gradient)
+                        .frame(width: max(6, geometry.size.width * row.normalizedPace))
+                    Rectangle()
+                        .fill(.white.opacity(0.85))
+                        .frame(width: 1.5)
+                        .offset(x: max(0, min(geometry.size.width - 1.5, averageX)))
+                }
+            }
+            .frame(height: 9)
+
+            Text(row.pace)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .frame(width: 65, alignment: .trailing)
+
+            Text(row.heartRate ?? "—")
+                .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.white.opacity(row.heartRate == nil ? 0.42 : 0.64))
+                .lineLimit(1)
+                .frame(width: 45, alignment: .trailing)
         }
     }
 }
@@ -826,7 +963,7 @@ private struct RunShareRouteShape: View {
     }
 }
 
-private enum RunShareImageRenderer {
+enum RunShareImageRenderer {
     @MainActor
     static func render(
         model: RunShareModel,
@@ -836,9 +973,9 @@ private enum RunShareImageRenderer {
         routeStyle: RunShareRouteStyle,
         page: Int,
         mapImage: UIImage?,
-        scale: CGFloat = 3
+        scale: CGFloat = RunShareLayout.exportScale
     ) -> UIImage? {
-        let size = canvas.pointSize
+        let size = model.pointSize(template: template, canvas: canvas, page: page)
         let content = RunShareCardView(
             model: model,
             template: template,
@@ -858,6 +995,56 @@ private enum RunShareImageRenderer {
     }
 }
 
+private enum RunSharePreparationError: Error {
+    case renderFailed
+}
+
+private final class RunSharePreparedFiles {
+    let urls: [URL]
+    private let directoryURL: URL
+
+    private init(urls: [URL], directoryURL: URL) {
+        self.urls = urls
+        self.directoryURL = directoryURL
+    }
+
+    deinit {
+        try? FileManager.default.removeItem(at: directoryURL)
+    }
+
+    @MainActor
+    static func make(
+        pageCount: Int,
+        baseFilename: String,
+        renderPNG: (Int) throws -> Data
+    ) throws -> RunSharePreparedFiles {
+        let directoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("RunSignal-Share-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directoryURL,
+            withIntermediateDirectories: true
+        )
+
+        do {
+            var urls: [URL] = []
+            urls.reserveCapacity(pageCount)
+            for page in 0..<pageCount {
+                let filename = pageCount == 1
+                    ? "\(baseFilename).png"
+                    : "\(baseFilename)-\(page + 1).png"
+                let url = directoryURL.appendingPathComponent(filename)
+                let pngData = try autoreleasepool { try renderPNG(page) }
+                try pngData.write(to: url, options: .atomic)
+                urls.append(url)
+            }
+            return RunSharePreparedFiles(urls: urls, directoryURL: directoryURL)
+        } catch {
+            try? FileManager.default.removeItem(at: directoryURL)
+            throw error
+        }
+    }
+}
+
 private enum RunSharePhotoSaveResult: Equatable, Sendable {
     case saved(Int)
     case denied
@@ -866,21 +1053,7 @@ private enum RunSharePhotoSaveResult: Equatable, Sendable {
 }
 
 private enum RunSharePhotoLibrarySaver {
-    @MainActor
-    static func save(images: [UIImage], baseFilename: String) async -> RunSharePhotoSaveResult {
-        let data = images.compactMap { $0.pngData() }
-        guard data.count == images.count else {
-            return .failed("RunSignal could not prepare the PNG images for Photos.")
-        }
-
-        return await savePNGData(data, baseFilename: baseFilename)
-    }
-
-    private static func savePNGData(
-        _ data: [Data],
-        baseFilename: String
-    ) async -> RunSharePhotoSaveResult {
-
+    static func save(urls: [URL]) async -> RunSharePhotoSaveResult {
         let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
         let resolvedStatus: PHAuthorizationStatus
         if status == .notDetermined {
@@ -904,22 +1077,20 @@ private enum RunSharePhotoLibrarySaver {
 
         return await withCheckedContinuation { continuation in
             PHPhotoLibrary.shared().performChanges {
-                for (index, pngData) in data.enumerated() {
+                for url in urls {
                     let options = PHAssetResourceCreationOptions()
-                    options.originalFilename = data.count == 1
-                        ? "\(baseFilename).png"
-                        : "\(baseFilename)-\(index + 1).png"
+                    options.originalFilename = url.lastPathComponent
                     if #available(iOS 26.0, *) {
                         options.contentType = .png
                     } else {
                         options.uniformTypeIdentifier = UTType.png.identifier
                     }
                     PHAssetCreationRequest.forAsset()
-                        .addResource(with: .photo, data: pngData, options: options)
+                        .addResource(with: .photo, fileURL: url, options: options)
                 }
             } completionHandler: { success, error in
                 if success {
-                    continuation.resume(returning: .saved(data.count))
+                    continuation.resume(returning: .saved(urls.count))
                 } else {
                     continuation.resume(
                         returning: .failed(error?.localizedDescription ?? "Photos could not save the run images.")
@@ -932,14 +1103,14 @@ private enum RunSharePhotoLibrarySaver {
 
 private struct RunShareActivityPayload: Identifiable {
     let id = UUID()
-    let images: [UIImage]
+    let files: RunSharePreparedFiles
 }
 
 private struct RunShareActivityView: UIViewControllerRepresentable {
-    let images: [UIImage]
+    let urls: [URL]
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: images, applicationActivities: nil)
+        UIActivityViewController(activityItems: urls, applicationActivities: nil)
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}

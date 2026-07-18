@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import RunningWorkoutAnalysisFeature
 
-@Test func threeKilometerUpgradeIgnoresCompletedLegacyHistoryCheckpoint() throws {
+@Test func rankedBestEffortUpgradeIgnoresWinnerOnlyHistoryCheckpoint() throws {
     let suiteName = "RunSignalTests.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suiteName))
     defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -12,7 +12,7 @@ import Testing
     )
     defaults.set(
         try JSONEncoder().encode(legacy),
-        forKey: "RunSignal.BestEffortHistoryCheckpoint.v1"
+        forKey: "RunSignal.BestEffortHistoryCheckpoint.v2"
     )
 
     let loaded = BestEffortHistoryCheckpointStore.load(defaults: defaults)
@@ -26,7 +26,8 @@ import Testing
     defer { defaults.removePersistentDomain(forName: suiteName) }
     let checkpoint = BestEffortHistoryCheckpoint(
         checkedWorkoutIDs: ["checked"],
-        failedWorkoutIDs: ["failed"]
+        failedWorkoutIDs: ["failed"],
+        requiresFullRescan: true
     )
 
     BestEffortHistoryCheckpointStore.save(checkpoint, defaults: defaults)

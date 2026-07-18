@@ -240,16 +240,34 @@ Changing the display preference must not query HealthKit, start import or analys
 - Status: Active
 - Established: 2026-07-17
 
-RunSignal renders share images locally from the same runner-facing workout presentation used by Workout Details. The supported templates are Summary, Splits, and official Workout Reps; the supported canvases are 9:16 Story and 4:5 Post. Long Split and Workout Rep results paginate instead of dropping rows.
+RunSignal renders share images locally from the same runner-facing workout presentation used by Workout Details. The supported templates are Summary, Splits, and official Workout Reps; the social-ready canvases are 9:16 Story and 4:5 Post. Splits additionally support an opaque `Full List` canvas whose height follows the available rows. Long results never drop rows.
 
 - Summary defaults to `Route Shape`, which shows the route trace without street, address, or map labels. Route Shape preserves its geometry through one centered aspect-fit scale in both Story and Post canvases. The runner may deliberately choose `Map` or `No Route` before export.
 - Workout Reps consumes only resolver-approved product rows under D-005. Blocked or unavailable custom interval evidence must never be reconstructed for a share card.
 - Measured distance and pace follow D-016's active display policy. WorkoutKit prescriptions retain their authored values and units.
 - Dark Card exports are opaque and retain structured backing panels. Transparent Overlay exports retain PNG transparency for placement over a runner-selected photo in another app and use panel-free text, chart, and route elements with readability shadows. All templates retain the workout date and run classification while omitting the custom workout name.
+- Story and Post continuation pages distribute rows as evenly as possible while preserving their original order. `Full List` uses compact one-line split rows, a 1,080-pixel export width, a 200-row and 12,000-pixel per-image guardrail, and balanced continuation images only when a result exceeds either guardrail. It is intentionally Dark Card only because a very tall transparent overlay is not a useful photo-compositing format.
+- Tall exports render and encode one page at a time through temporary PNG resources so fallback pages do not retain several large raw bitmaps and encoded copies together. Temporary resources are removed after Photos or the system share flow finishes.
 - `Share…` uses the system activity sheet and does not need photo-library access.
 - `Save to Photos` requests PhotoKit `.addOnly` authorization just in time, after the runner taps the action. The app declares `NSPhotoLibraryAddUsageDescription`, adds only the generated PNG assets, does not request read/write library access, and offers Settings recovery after denial.
 
 This is a local presentation/export feature. It does not write HealthKit, upload workouts, add a backend, or change evidence and analytics caches.
+
+### D-018 — Route achievements are exact standard-distance lifetime ranks only
+
+- Status: Active
+- Established: 2026-07-18
+
+Workout Details may mark the exact portion of a hydrated Apple Health route where the viewed workout currently ranks first, second, or third for one of RunSignal's fixed Best Effort distances from 400 meters through the marathon.
+
+- Gold, silver, and bronze require exact segment evidence, retained segment start/end timestamps, and completed all-history Best Effort verification. Estimates, incomplete or failed history coverage, `Longest run`, and records without a usable current route never publish a lifetime medal.
+- The existing `allTime` Best Effort summary remains the rank-one compatibility surface. A separate ranked cache retains at most three unique workouts per standard-distance bucket, deduplicated by workout and recomputed through the same distance-only history pass. Advancing both the summary-cache and history-checkpoint versions forces one resumable rescan rather than presenting prior winner-only coverage as complete top-three coverage.
+- Historical ranking verification remains distance-only and off the main actor. It does not load routes for the full corpus. Route projection occurs only for the currently hydrated workout, interpolates trustworthy timestamp boundaries, highlights the selected segment, and places its medal near the temporal midpoint.
+- Indoor exact records remain valid Best Efforts but have no route marker. Invalid, sparse, missing, or time-misaligned route coordinates fail closed without weakening the underlying Best Effort record.
+- Named/community segments, public leaderboards, a segment database, and backend segment matching are explicitly out of scope. Runner-facing labels use only fixed standard-distance identities such as `1K`, `1 mile`, `5K`, `10 mile`, `20K`, and `Half marathon`.
+- Route medals remain an interactive Workout Details feature. They are not added automatically to Summary route-shape or map exports; any future sharing support requires a separate explicit runner-controlled decision.
+
+This decision extends D-010 and D-017 without changing HealthKit read-only behavior or making route coordinates part of the global ranked cache.
 
 ## Major Change Timeline
 

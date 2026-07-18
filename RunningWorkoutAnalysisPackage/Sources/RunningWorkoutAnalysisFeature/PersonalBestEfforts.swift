@@ -103,8 +103,48 @@ public struct PersonalBestEffortRecord: Codable, Equatable, Sendable {
     public var sourceWorkoutDistanceMeters: Double?
 }
 
+public struct PersonalBestEffortRankedRecord: Codable, Equatable, Sendable {
+    public var record: PersonalBestEffortRecord
+    public var lifetimeRank: Int
+
+    public init(record: PersonalBestEffortRecord, lifetimeRank: Int) {
+        self.record = record
+        self.lifetimeRank = lifetimeRank
+    }
+}
+
 public struct PersonalBestEffortSummary: Codable, Equatable, Sendable {
     public var allTime: [PersonalBestEffortRecord]
+    public var rankedAllTime: [PersonalBestEffortRankedRecord]
+
+    public init(
+        allTime: [PersonalBestEffortRecord],
+        rankedAllTime: [PersonalBestEffortRankedRecord]? = nil
+    ) {
+        self.allTime = allTime
+        self.rankedAllTime = rankedAllTime
+            ?? PersonalBestEffortEngine.rankedRecords(from: allTime)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case allTime
+        case rankedAllTime
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        allTime = try container.decode([PersonalBestEffortRecord].self, forKey: .allTime)
+        rankedAllTime = try container.decodeIfPresent(
+            [PersonalBestEffortRankedRecord].self,
+            forKey: .rankedAllTime
+        ) ?? PersonalBestEffortEngine.rankedRecords(from: allTime)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(allTime, forKey: .allTime)
+        try container.encode(rankedAllTime, forKey: .rankedAllTime)
+    }
 }
 
 public enum PersonalBestEffortEngine {
@@ -114,9 +154,74 @@ public enum PersonalBestEffortEngine {
         let included = workouts.filter { !$0.isDuplicate }
         let records = included.flatMap(records(for:))
 
-        return PersonalBestEffortSummary(
-            allTime: bestRecords(from: records)
+        return summary(from: records)
+    }
+
+    static func summary(from records: [PersonalBestEffortRecord]) -> PersonalBestEffortSummary {
+        let ranked = rankedRecords(from: records)
+        let rankOneByBucket = Dictionary(
+            uniqueKeysWithValues: ranked
+                .filter { $0.lifetimeRank == 1 }
+                .map { ($0.record.bucket, $0.record) }
         )
+        let longestRun = bestLongestRun(from: records)
+        let winners = PersonalBestEffortBucket.allCases.compactMap { bucket in
+            bucket == .longestRun ? longestRun : rankOneByBucket[bucket]
+        }
+        return PersonalBestEffortSummary(allTime: winners, rankedAllTime: ranked)
+    }
+
+    static func rankedRecords(
+        from records: [PersonalBestEffortRecord],
+        limitPerBucket: Int = 3
+    ) -> [PersonalBestEffortRankedRecord] {
+        guard limitPerBucket > 0 else { return [] }
+        let exactSegments = records.filter {
+            $0.bucket.isSegmentBucket
+                && $0.method == .exactSegment
+                && $0.confidence == .exact
+                && ($0.durationSeconds?.isFinite == true)
+                && ($0.durationSeconds ?? 0) > 0
+        }
+        let deduplicated = Dictionary(grouping: exactSegments) {
+            RankedRecordKey(bucket: $0.bucket, workoutID: $0.workoutID)
+        }.compactMap { _, candidates in
+            candidates.sorted(by: segmentRecordIsPreferred).first
+        }
+        let recordsByBucket = Dictionary(grouping: deduplicated, by: \.bucket)
+
+        return PersonalBestEffortBucket.allCases
+            .filter(\.isSegmentBucket)
+            .flatMap { bucket in
+                (recordsByBucket[bucket] ?? [])
+                    .sorted(by: segmentRecordIsPreferred)
+                    .prefix(limitPerBucket)
+                    .enumerated()
+                    .map { index, record in
+                        PersonalBestEffortRankedRecord(
+                            record: record,
+                            lifetimeRank: index + 1
+                        )
+                    }
+            }
+    }
+
+    static func merging(
+        cached: PersonalBestEffortSummary?,
+        computed: PersonalBestEffortSummary,
+        replacingWorkoutIDs: Set<String> = []
+    ) -> PersonalBestEffortSummary {
+        let retainedCached = candidateRecords(in: cached)
+            .filter { !replacingWorkoutIDs.contains($0.workoutID) }
+        return summary(from: retainedCached + candidateRecords(in: computed))
+    }
+
+    static func candidateRecords(
+        in summary: PersonalBestEffortSummary?
+    ) -> [PersonalBestEffortRecord] {
+        guard let summary else { return [] }
+        return summary.rankedAllTime.map(\.record)
+            + summary.allTime.filter { $0.bucket == .longestRun }
     }
 
     public static func records(for workout: CanonicalWorkout) -> [PersonalBestEffortRecord] {
@@ -334,25 +439,23 @@ public enum PersonalBestEffortEngine {
         )
     }
 
-    private static func bestRecords(from records: [PersonalBestEffortRecord]) -> [PersonalBestEffortRecord] {
-        PersonalBestEffortBucket.allCases.compactMap { bucket in
-            let bucketRecords = records.filter { $0.bucket == bucket }
-            guard !bucketRecords.isEmpty else { return nil }
-            if bucket == .longestRun {
-                return bucketRecords.max(by: longestRunLessPreferred)
+    private static func bestLongestRun(
+        from records: [PersonalBestEffortRecord]
+    ) -> PersonalBestEffortRecord? {
+        records
+            .filter {
+                $0.bucket == .longestRun
+                    && $0.method == .totalDistance
+                    && $0.confidence == .exactTotal
             }
-            let evidenceBackedRecords = bucketRecords.filter { $0.confidence != .estimated }
-            guard !evidenceBackedRecords.isEmpty else { return nil }
-            return evidenceBackedRecords.min(by: segmentLessPreferred)
-        }
+            .sorted(by: longestRunRecordIsPreferred)
+            .first
     }
 
-    private static func segmentLessPreferred(_ lhs: PersonalBestEffortRecord, _ rhs: PersonalBestEffortRecord) -> Bool {
-        let lhsRank = confidenceRank(lhs.confidence)
-        let rhsRank = confidenceRank(rhs.confidence)
-        if lhsRank != rhsRank {
-            return lhsRank > rhsRank
-        }
+    private static func segmentRecordIsPreferred(
+        _ lhs: PersonalBestEffortRecord,
+        _ rhs: PersonalBestEffortRecord
+    ) -> Bool {
         let lhsDuration = lhs.durationSeconds ?? .infinity
         let rhsDuration = rhs.durationSeconds ?? .infinity
         if lhsDuration != rhsDuration {
@@ -364,23 +467,17 @@ public enum PersonalBestEffortEngine {
         return lhs.workoutID < rhs.workoutID
     }
 
-    private static func longestRunLessPreferred(_ lhs: PersonalBestEffortRecord, _ rhs: PersonalBestEffortRecord) -> Bool {
+    private static func longestRunRecordIsPreferred(
+        _ lhs: PersonalBestEffortRecord,
+        _ rhs: PersonalBestEffortRecord
+    ) -> Bool {
         if lhs.distanceMeters != rhs.distanceMeters {
-            return lhs.distanceMeters < rhs.distanceMeters
+            return lhs.distanceMeters > rhs.distanceMeters
         }
         if lhs.date != rhs.date {
-            return lhs.date < rhs.date
+            return lhs.date > rhs.date
         }
-        return lhs.workoutID > rhs.workoutID
-    }
-
-    private static func confidenceRank(_ confidence: PersonalBestEffortConfidence) -> Int {
-        switch confidence {
-        case .exactTotal: 3
-        case .exact: 2
-        case .estimated: 1
-        case .unavailable: 0
-        }
+        return lhs.workoutID < rhs.workoutID
     }
 
     private static func distanceSourceCaveats(
@@ -501,6 +598,11 @@ public enum PersonalBestEffortEngine {
         }
         return result
     }
+}
+
+private struct RankedRecordKey: Hashable {
+    var bucket: PersonalBestEffortBucket
+    var workoutID: String
 }
 
 private struct SegmentWindow {
