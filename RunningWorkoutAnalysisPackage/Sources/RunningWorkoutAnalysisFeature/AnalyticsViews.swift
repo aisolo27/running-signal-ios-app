@@ -67,66 +67,6 @@ struct AnalyticsView: View {
                     }
                     .pickerStyle(.segmented)
 
-                    NavigationLink {
-                        IntervalLibraryView(store: store, groups: intervalLibraryGroups)
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "repeat.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(.cyan)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Interval Library")
-                                    .font(.headline)
-                                    .foregroundStyle(.primary)
-                                Text(intervalLibrarySummaryText)
-                                    .font(.caption)
-                                    .foregroundStyle(RunSignalTextStyle.secondary)
-                                    .multilineTextAlignment(.leading)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .foregroundStyle(RunSignalTextStyle.secondary)
-                        }
-                        .padding()
-                        .background(.background)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                    .buttonStyle(.plain)
-
-                    NavigationLink {
-                        BestEffortsView(store: store)
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "medal.fill")
-                                .font(.title2)
-                                .foregroundStyle(.green)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Best Efforts")
-                                    .font(.headline)
-                                    .foregroundStyle(.primary)
-                                Text(bestEffortSummaryText)
-                                    .font(.caption)
-                                    .foregroundStyle(RunSignalTextStyle.secondary)
-                            }
-                            Spacer()
-                            if store.isLoading {
-                                ProgressView()
-                                    .controlSize(.small)
-                            } else {
-                                Image(systemName: "chevron.right")
-                                    .foregroundStyle(RunSignalTextStyle.secondary)
-                            }
-                        }
-                        .padding()
-                        .background(.background)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                    .buttonStyle(.plain)
-
-                    RunningStatisticsView(
-                        statistics: store.runningProfileStatistics
-                    )
-
                     PeriodSignalView(
                         store: store,
                         summary: store.trainingPeriodSummary(
@@ -135,6 +75,13 @@ struct AnalyticsView: View {
                         ),
                         periodStarts: periodStarts,
                         selectedPeriodStart: $selectedPeriodStart
+                    )
+
+                    AnalyticsDestinationsView(
+                        store: store,
+                        intervalLibraryGroups: intervalLibraryGroups,
+                        intervalLibrarySummary: intervalLibrarySummaryText,
+                        bestEffortSummary: bestEffortSummaryText
                     )
                 }
             }
@@ -171,6 +118,89 @@ struct AnalyticsView: View {
             return "\(sections.secondaryGroups.count) one-off structured workout\(sections.secondaryGroups.count == 1 ? "" : "s")"
         }
         return "\(sections.primaryComparisons.count) repeated prescription\(sections.primaryComparisons.count == 1 ? "" : "s") · comparisons and trends"
+    }
+}
+
+private struct AnalyticsDestinationsView: View {
+    var store: RunningAnalysisStore
+    let intervalLibraryGroups: [IntervalLibraryGroup]
+    let intervalLibrarySummary: String
+    let bestEffortSummary: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("More Analytics")
+                .font(.title3.bold())
+            Text("Explore your records, repeated workouts, and long-term running totals.")
+                .font(.caption)
+                .foregroundStyle(RunSignalTextStyle.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            destinationLink(
+                title: "Interval Library",
+                subtitle: intervalLibrarySummary,
+                systemImage: "repeat.circle.fill",
+                tint: .cyan
+            ) {
+                IntervalLibraryView(store: store, groups: intervalLibraryGroups)
+            }
+
+            destinationLink(
+                title: "Best Efforts",
+                subtitle: bestEffortSummary,
+                systemImage: "medal.fill",
+                tint: .green,
+                showsProgress: store.isLoading
+            ) {
+                BestEffortsView(store: store)
+            }
+
+            destinationLink(
+                title: "Running Statistics",
+                subtitle: "Four-week averages, year-to-date totals, and all-time totals",
+                systemImage: "chart.bar.fill",
+                tint: .blue
+            ) {
+                RunningStatisticsView(statistics: store.runningProfileStatistics)
+            }
+        }
+        .padding(.top, 8)
+    }
+
+    private func destinationLink<Destination: View>(
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        tint: Color,
+        showsProgress: Bool = false,
+        @ViewBuilder destination: () -> Destination
+    ) -> some View {
+        NavigationLink(destination: destination) {
+            HStack(spacing: 12) {
+                Image(systemName: systemImage)
+                    .font(.title2)
+                    .foregroundStyle(tint)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer()
+                if showsProgress {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(RunSignalTextStyle.secondary)
+                }
+            }
+            .padding(.vertical, 10)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -291,39 +321,42 @@ private struct RunningStatisticsView: View {
     let statistics: RunningProfileStatistics
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                Image(systemName: "chart.bar.fill")
-                    .font(.title2)
-                    .foregroundStyle(.blue)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Running Statistics")
-                        .font(.headline)
-                    Text("Four-week averages with separate year-to-date and all-time totals.")
-                        .font(.caption)
-                        .foregroundStyle(RunSignalTextStyle.secondary)
-                }
-            }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Averages cover the latest 28 days. Totals use the calendar year and your full loaded history.")
+                    .font(.subheadline)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-            statisticsSection(
-                title: "Last 4 Weeks Average",
-                items: [
-                    MetricItem(title: "Runs / Week", value: String(format: "%.1f", statistics.averagePerWeek.runs), detail: "28 days ÷ 4"),
-                    MetricItem(title: "Time / Week", value: RunFormatters.duration(statistics.averagePerWeek.durationSeconds), detail: "Rolling average"),
-                    MetricItem(
-                        title: "Distance / Week",
-                        value: RunFormatters.distance(statistics.averagePerWeek.distanceMeters, policy: runDisplayPolicy),
-                        detail: "Rolling average",
-                        secondaryValue: RunFormatters.secondaryDistance(statistics.averagePerWeek.distanceMeters, policy: runDisplayPolicy)
-                    )
-                ]
-            )
-            statisticsSection(title: "Year to Date", items: totalItems(statistics.yearToDate))
-            statisticsSection(title: "All Time", items: totalItems(statistics.allTime))
+                statisticsSection(
+                    title: "Last 4 Weeks",
+                    items: [
+                        MetricItem(
+                            title: "Runs / Week",
+                            value: RunFormatters.roundedAverage(statistics.averagePerWeek.runs),
+                            detail: "28-day average · rounded"
+                        ),
+                        MetricItem(
+                            title: "Time / Week",
+                            value: RunFormatters.statisticsDuration(statistics.averagePerWeek.durationSeconds),
+                            detail: "28-day average"
+                        ),
+                        MetricItem(
+                            title: "Distance / Week",
+                            value: RunFormatters.distance(statistics.averagePerWeek.distanceMeters, policy: runDisplayPolicy),
+                            detail: "28-day average",
+                            secondaryValue: RunFormatters.secondaryDistance(statistics.averagePerWeek.distanceMeters, policy: runDisplayPolicy)
+                        )
+                    ]
+                )
+                statisticsSection(title: "Year to Date", items: totalItems(statistics.yearToDate))
+                statisticsSection(title: "All Time", items: totalItems(statistics.allTime))
+            }
+            .padding()
+            .padding(.bottom, 120)
         }
-        .padding()
-        .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .navigationTitle("Running Statistics")
+        .runSignalInlineNavigationTitle()
         .accessibilityIdentifier("running-statistics")
     }
 
@@ -338,7 +371,7 @@ private struct RunningStatisticsView: View {
     private func totalItems(_ totals: RunningProfileTotals) -> [MetricItem] {
         [
             MetricItem(title: "Runs", value: "\(totals.runCount)", detail: "Completed"),
-            MetricItem(title: "Time", value: RunFormatters.duration(totals.durationSeconds), detail: "Total"),
+            MetricItem(title: "Time", value: RunFormatters.statisticsDuration(totals.durationSeconds), detail: "Total"),
             MetricItem(
                 title: "Distance",
                 value: RunFormatters.distance(totals.distanceMeters, policy: runDisplayPolicy),

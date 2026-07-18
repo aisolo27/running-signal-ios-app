@@ -66,6 +66,14 @@ import Testing
     #expect(RunFormatters.distance(400) == "0.40 km")
 }
 
+@Test func runningStatisticsUseReadableRoundedValues() {
+    #expect(RunFormatters.roundedAverage(5.8) == "6")
+    #expect(RunFormatters.roundedAverage(5.4) == "5")
+    #expect(RunFormatters.statisticsDuration(4 * 3_600 + 17 * 60 + 54) == "4 hr 18 min")
+    #expect(RunFormatters.statisticsDuration(109 * 3_600 + 54 * 60 + 24) == "109 hr 54 min")
+    #expect(RunFormatters.statisticsDuration(nil) == "Unavailable")
+}
+
 @Test func mediumDateWithYearIncludesRunYear() throws {
     var components = DateComponents()
     components.calendar = Calendar(identifier: .gregorian)

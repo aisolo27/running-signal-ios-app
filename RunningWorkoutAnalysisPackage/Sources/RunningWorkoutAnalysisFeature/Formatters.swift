@@ -111,6 +111,25 @@ enum RunFormatters {
         return String(format: "%d:%02d", minutes, secs)
     }
 
+    static func statisticsDuration(_ seconds: Double?) -> String {
+        guard let seconds, seconds.isFinite, seconds >= 0 else { return "Unavailable" }
+        let totalMinutes = Int((seconds / 60).rounded())
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        if hours > 0, minutes > 0 {
+            return "\(hours) hr \(minutes) min"
+        }
+        if hours > 0 {
+            return "\(hours) hr"
+        }
+        return "\(minutes) min"
+    }
+
+    static func roundedAverage(_ value: Double?) -> String {
+        guard let value, value.isFinite, value >= 0 else { return "Unavailable" }
+        return "\(Int(value.rounded()))"
+    }
+
     static func pace(
         _ secondsPerKm: Double?,
         policy: RunDisplayPolicy = .kilometersOnly
