@@ -130,6 +130,9 @@ public enum DerivedSplitSource: String, Codable, Equatable, Sendable {
 }
 
 public struct DerivedSplitDiagnostics: Codable, Equatable, Sendable {
+    public var unit: RunningDistanceUnit? = nil
+    public var targetDistanceMeters: Double? = nil
+    public var rowPrefix: String? = nil
     public var source: DerivedSplitSource
     public var sourceLabel: String
     public var totalDistanceMeters: Double?
@@ -140,6 +143,7 @@ public struct DerivedSplitDiagnostics: Codable, Equatable, Sendable {
     public var segmentEventCount: Int
     public var eligibleSegmentEventCount: Int
     public var expectedFullKilometerCount: Int
+    public var expectedFullUnitCount: Int? = nil
     public var expectedRowCount: Int
     public var completeSegmentChainCount: Int
     public var terminalSegmentChainCount: Int
@@ -238,7 +242,7 @@ public struct DerivedWorkoutInterval: Codable, Equatable, Sendable {
 }
 
 public struct DerivedWorkoutAnalysis: Codable, Equatable, Sendable {
-    public static let currentVersion = "derived-workout-v6"
+    public static let currentVersion = "derived-workout-v7"
 
     public var workoutID: String
     public var calculationVersion: String
@@ -260,6 +264,9 @@ public struct DerivedWorkoutAnalysis: Codable, Equatable, Sendable {
     public var splitEstimates: [DerivedSplitEstimate]?
     public var splitSource: DerivedSplitSource? = nil
     public var splitUnavailableReason: String? = nil
+    public var mileSplitEstimates: [DerivedSplitEstimate]? = nil
+    public var mileSplitSource: DerivedSplitSource? = nil
+    public var mileSplitUnavailableReason: String? = nil
     public var executionSegments: [DerivedExecutionSegment]?
     public var intervalCandidates: [DerivedWorkoutInterval]?
     public var officialIntervalWorkout: OfficialIntervalWorkout? = nil
@@ -409,7 +416,8 @@ public enum DerivedAnalyticsEngine {
         var evidenceWorkout = workout
         evidenceWorkout.evidence = evidence
         let personalBestEffortRecords = PersonalBestEffortEngine.records(for: evidenceWorkout)
-        let splitDerivation = splitDiagnostics(workout: workout, evidence: evidence)
+        let splitDerivation = splitDiagnostics(workout: workout, evidence: evidence, unit: .kilometers)
+        let mileSplitDerivation = splitDiagnostics(workout: workout, evidence: evidence, unit: .miles)
 
         return DerivedWorkoutAnalysis(
             workoutID: workout.id,
@@ -437,6 +445,9 @@ public enum DerivedAnalyticsEngine {
             splitEstimates: splitDerivation.splitEstimates,
             splitSource: splitDerivation.source,
             splitUnavailableReason: splitDerivation.source == .unavailable ? splitDerivation.fallbackReason : nil,
+            mileSplitEstimates: mileSplitDerivation.splitEstimates,
+            mileSplitSource: mileSplitDerivation.source,
+            mileSplitUnavailableReason: mileSplitDerivation.source == .unavailable ? mileSplitDerivation.fallbackReason : nil,
             executionSegments: executionSegments(heartRateSeries: heartRateSeries, speedSeries: speedSeries),
             intervalCandidates: resolvedRows.isEmpty ? nil : resolvedRows,
             officialIntervalWorkout: officialIntervalWorkout,
@@ -531,15 +542,19 @@ public enum DerivedAnalyticsEngine {
 
     public static func splitDiagnostics(
         workout: CanonicalWorkout,
-        evidence: WorkoutEvidence
+        evidence: WorkoutEvidence,
+        unit: RunningDistanceUnit = .kilometers
     ) -> DerivedSplitDiagnostics {
+        let targetMeters = unit.metersPerUnit
+        let rowPrefix = unit.normalSplitRowPrefix
+        let unitName = unit == .kilometers ? "kilometer" : "mile"
         let lapEventCount = evidence.events.filter(isLapEvent).count
         let segmentEventCount = evidence.events.filter(isSegmentEvent).count
         let distanceAssessment = assessDistanceSeries(workout: workout, evidence: evidence)
         let totalDistance = distanceAssessment.totalDistanceMeters ?? workout.distanceMeters
-        let fullKilometers = totalDistance.flatMap { $0.isFinite && $0 > 0 ? Int($0 / 1_000) : nil } ?? 0
-        let remainderDistance = (totalDistance ?? 0) - (Double(fullKilometers) * 1_000)
-        let expectedRowCount = fullKilometers + (remainderDistance >= 10 ? 1 : 0)
+        let fullUnits = totalDistance.flatMap { $0.isFinite && $0 > 0 ? Int($0 / targetMeters) : nil } ?? 0
+        let remainderDistance = (totalDistance ?? 0) - (Double(fullUnits) * targetMeters)
+        let expectedRowCount = fullUnits + (remainderDistance >= 10 ? 1 : 0)
         let pauseAssessment = normalSplitPauseAssessment(workout: workout, events: evidence.events)
 
         let emptySegmentEvaluation = SegmentSplitEvaluation(
@@ -573,6 +588,9 @@ public enum DerivedAnalyticsEngine {
             validationNotes: [String]
         ) -> DerivedSplitDiagnostics {
             DerivedSplitDiagnostics(
+                unit: unit,
+                targetDistanceMeters: targetMeters,
+                rowPrefix: rowPrefix,
                 source: source,
                 sourceLabel: source.label,
                 totalDistanceMeters: totalDistance,
@@ -582,7 +600,10 @@ public enum DerivedAnalyticsEngine {
                 selectedLapEventCount: source == .validatedLapEvents ? splits.count : 0,
                 segmentEventCount: segmentEventCount,
                 eligibleSegmentEventCount: segmentEvaluation.eligibleSegmentEventCount,
-                expectedFullKilometerCount: fullKilometers,
+                expectedFullKilometerCount: totalDistance.flatMap {
+                    $0.isFinite && $0 > 0 ? Int($0 / 1_000) : nil
+                } ?? 0,
+                expectedFullUnitCount: fullUnits,
                 expectedRowCount: expectedRowCount,
                 completeSegmentChainCount: source == .validatedLapEvents
                     ? lapEvaluation.completeChainCount
@@ -606,11 +627,16 @@ public enum DerivedAnalyticsEngine {
             )
         }
 
-        guard let totalDistance, totalDistance.isFinite, totalDistance >= 1_000 else {
+        let permitsFinalOnlyProjection = unit == .miles
+            && fullUnits == 0
+            && remainderDistance >= 10
+        guard let totalDistance,
+              totalDistance.isFinite,
+              fullUnits > 0 || permitsFinalOnlyProjection else {
             return diagnostics(
                 source: .unavailable,
                 splits: [],
-                fallbackReason: distanceAssessment.rejectionReason ?? "Apple Health did not retain enough distance evidence for one-kilometer splits.",
+                fallbackReason: distanceAssessment.rejectionReason ?? "Apple Health did not retain enough distance evidence for \(unitName) splits.",
                 validationNotes: distanceAssessment.validationNotes
             )
         }
@@ -632,7 +658,10 @@ public enum DerivedAnalyticsEngine {
                 totalDistance: totalDistance,
                 distanceSeries: distanceAssessment.series,
                 terminalEvidenceDate: terminalEvidenceDate,
-                pauseTimeline: pauseTimeline
+                pauseTimeline: pauseTimeline,
+                targetMeters: targetMeters,
+                rowPrefix: rowPrefix,
+                unitName: unitName
             )
         } else {
             lapEvaluation = LapSplitEvaluation(
@@ -662,7 +691,10 @@ public enum DerivedAnalyticsEngine {
                 workout: workout,
                 evidence: evidence,
                 distanceSeries: distanceSeries,
-                pauseTimeline: pauseTimeline
+                pauseTimeline: pauseTimeline,
+                targetMeters: targetMeters,
+                rowPrefix: rowPrefix,
+                unitName: unitName
             )
         } else {
             segmentEvaluation = emptySegmentEvaluation
@@ -692,7 +724,9 @@ public enum DerivedAnalyticsEngine {
         let estimatedSplits = distanceSeriesSplitEstimates(
             workout: workout,
             distanceSeries: distanceSeries,
-            pauseTimeline: pauseTimeline
+            pauseTimeline: pauseTimeline,
+            targetMeters: targetMeters,
+            rowPrefix: rowPrefix
         )
         return diagnostics(
             source: estimatedSplits.isEmpty ? .unavailable : .distanceSampleWindows,
@@ -700,7 +734,7 @@ public enum DerivedAnalyticsEngine {
             lapEvaluation: lapEvaluation,
             segmentEvaluation: segmentEvaluation,
             fallbackReason: estimatedSplits.isEmpty
-                ? "The reconciled distance windows could not produce chronological one-kilometer crossings."
+                ? "The reconciled distance windows could not produce chronological one-\(unitName) crossings."
                 : segmentEvaluation.fallbackReason ?? lapEvaluation.fallbackReason,
             validationNotes: distanceAssessment.validationNotes
                 + pauseAssessment.validationNotes
@@ -714,11 +748,14 @@ public enum DerivedAnalyticsEngine {
         workout: CanonicalWorkout,
         evidence: WorkoutEvidence,
         distanceSeries: WorkoutMetricSeries,
-        pauseTimeline: NormalSplitPauseTimeline
+        pauseTimeline: NormalSplitPauseTimeline,
+        targetMeters: Double,
+        rowPrefix: String,
+        unitName: String
     ) -> SegmentSplitEvaluation {
         let segmentEventCount = evidence.events.filter(isSegmentEvent).count
         let totalDistance = distanceSeries.points.map(\.value).reduce(0, +)
-        guard totalDistance.isFinite, totalDistance >= 1_000 else {
+        guard totalDistance.isFinite, totalDistance >= 10 else {
             return SegmentSplitEvaluation(
                 splits: nil,
                 segmentEventCount: segmentEventCount,
@@ -727,16 +764,15 @@ public enum DerivedAnalyticsEngine {
                 terminalChainCount: 0,
                 validatedChainCount: 0,
                 terminalEvidenceDate: nil,
-                fallbackReason: "The detailed distance total is below one kilometer.",
+                fallbackReason: "The detailed distance total is below the final-partial threshold.",
                 validationNotes: []
             )
         }
 
-        let targetMeters = 1_000.0
-        let fullKilometers = Int(totalDistance / targetMeters)
-        let remainderDistance = totalDistance - (Double(fullKilometers) * targetMeters)
+        let fullUnits = Int(totalDistance / targetMeters)
+        let remainderDistance = totalDistance - (Double(fullUnits) * targetMeters)
         let includesFinalPartial = remainderDistance >= 10
-        let expectedRowCount = fullKilometers + (includesFinalPartial ? 1 : 0)
+        let expectedRowCount = fullUnits + (includesFinalPartial ? 1 : 0)
         guard expectedRowCount > 0 else {
             return SegmentSplitEvaluation(
                 splits: nil,
@@ -746,7 +782,7 @@ public enum DerivedAnalyticsEngine {
                 terminalChainCount: 0,
                 validatedChainCount: 0,
                 terminalEvidenceDate: nil,
-                fallbackReason: "No kilometer or final-partial rows are expected from the detailed distance total.",
+                fallbackReason: "No \(unitName) or final-partial rows are expected from the detailed distance total.",
                 validationNotes: []
             )
         }
@@ -772,7 +808,7 @@ public enum DerivedAnalyticsEngine {
                 terminalChainCount: 0,
                 validatedChainCount: 0,
                 terminalEvidenceDate: terminalEvidenceDate,
-                fallbackReason: "Too few eligible segment events exist for the expected kilometer-plus-partial row count.",
+                fallbackReason: "Too few eligible segment events exist for the expected \(unitName)-plus-partial row count.",
                 validationNotes: []
             )
         }
@@ -799,7 +835,7 @@ public enum DerivedAnalyticsEngine {
                 terminalEvidenceDate: terminalEvidenceDate,
                 fallbackReason: startCandidates.isEmpty
                     ? "No eligible segment event starts with the workout."
-                    : "No contiguous segment chain has the expected kilometer-plus-partial row count.",
+                    : "No contiguous segment chain has the expected \(unitName)-plus-partial row count.",
                 validationNotes: []
             )
         }
@@ -825,15 +861,15 @@ public enum DerivedAnalyticsEngine {
 
         let scoredChains = terminalChains.compactMap { chain -> (events: [WorkoutEvidenceEvent], score: Double)? in
             var score = 0.0
-            for event in chain.prefix(fullKilometers) {
+            for event in chain.prefix(fullUnits) {
                 guard let measuredDistance = intervalDistance(
                     start: event.startDate,
                     end: event.endDate,
                     series: distanceSeries,
                     workoutStart: workout.startDate
                 ),
-                    measuredDistance >= 750,
-                    measuredDistance <= 1_250 else {
+                    measuredDistance >= targetMeters * 0.75,
+                    measuredDistance <= targetMeters * 1.25 else {
                     return nil
                 }
                 score += abs(measuredDistance - targetMeters) / targetMeters
@@ -858,8 +894,8 @@ public enum DerivedAnalyticsEngine {
                 terminalChainCount: terminalChains.count,
                 validatedChainCount: 0,
                 terminalEvidenceDate: terminalEvidenceDate,
-                fallbackReason: "Complete segment chains exist, but none distance-validate every full row as approximately one kilometer.",
-                validationNotes: ["Full kilometer rows must validate between 750 and 1,250 meters."]
+                fallbackReason: "Complete segment chains exist, but none distance-validate every full row as approximately one \(unitName).",
+                validationNotes: ["Full \(unitName) rows must validate within 25 percent of \(String(format: "%.3f", targetMeters)) meters."]
             )
         }
 
@@ -889,10 +925,10 @@ public enum DerivedAnalyticsEngine {
             let pauseOverlap = pauseTimeline.overlapSeconds(start: event.startDate, end: event.endDate)
             let duration = max(0, elapsedDuration - pauseOverlap)
             return DerivedSplitEstimate(
-                label: isFinal ? "Final" : "KM \(index + 1)",
+                label: isFinal ? "Final" : "\(rowPrefix) \(index + 1)",
                 distanceMeters: distance,
                 durationSecondsEstimate: duration,
-                paceSecondsPerKmEstimate: duration / (distance / targetMeters),
+                paceSecondsPerKmEstimate: duration / (distance / 1_000),
                 confidence: .strong,
                 elapsedStartOffsetSeconds: event.startDate.timeIntervalSince(workout.startDate),
                 elapsedEndOffsetSeconds: event.endDate.timeIntervalSince(workout.startDate),
@@ -909,7 +945,7 @@ public enum DerivedAnalyticsEngine {
             terminalEvidenceDate: terminalEvidenceDate,
             fallbackReason: nil,
             validationNotes: [
-                "Full kilometer rows validated between 750 and 1,250 meters against the reconciled distance timeline.",
+                "Full \(unitName) rows validated within 25 percent of \(String(format: "%.3f", targetMeters)) meters against the reconciled distance timeline.",
                 "The selected segment chain was unique at displayed one-second precision.",
                 pauseTimeline.totalPausedSeconds > 0
                     ? "Displayed split time subtracts the reliable pause timeline that reconciles to HealthKit workout duration."
@@ -959,7 +995,10 @@ public enum DerivedAnalyticsEngine {
         totalDistance: Double,
         distanceSeries: WorkoutMetricSeries?,
         terminalEvidenceDate: Date,
-        pauseTimeline: NormalSplitPauseTimeline
+        pauseTimeline: NormalSplitPauseTimeline,
+        targetMeters: Double,
+        rowPrefix: String,
+        unitName: String
     ) -> LapSplitEvaluation {
         let rawLapCount = evidence.events.filter(isLapEvent).count
         let normalizedLaps = normalizedLapEvents(
@@ -1003,7 +1042,10 @@ public enum DerivedAnalyticsEngine {
                 workout: workout,
                 evidence: syntheticEvidence,
                 distanceSeries: distanceSeries,
-                pauseTimeline: pauseTimeline
+                pauseTimeline: pauseTimeline,
+                targetMeters: targetMeters,
+                rowPrefix: rowPrefix,
+                unitName: unitName
             )
             return LapSplitEvaluation(
                 splits: evaluation.splits,
@@ -1021,9 +1063,9 @@ public enum DerivedAnalyticsEngine {
             )
         }
 
-        let fullKilometers = Int(totalDistance / 1_000)
-        let remainder = totalDistance - (Double(fullKilometers) * 1_000)
-        let expectedCount = fullKilometers + (remainder >= 10 ? 1 : 0)
+        let fullUnits = Int(totalDistance / targetMeters)
+        let remainder = totalDistance - (Double(fullUnits) * targetMeters)
+        let expectedCount = fullUnits + (remainder >= 10 ? 1 : 0)
         guard normalizedLaps.count == expectedCount,
               let first = normalizedLaps.first,
               let last = normalizedLaps.last,
@@ -1039,19 +1081,19 @@ public enum DerivedAnalyticsEngine {
                 completeChainCount: 0,
                 terminalChainCount: 0,
                 validatedChainCount: 0,
-                fallbackReason: "Lap events do not form the expected complete kilometer-plus-partial workout chain.",
+                fallbackReason: "Lap events do not form the expected complete \(unitName)-plus-partial workout chain.",
                 validationNotes: []
             )
         }
 
         let splits = normalizedLaps.enumerated().compactMap { index, lap -> DerivedSplitEstimate? in
             let isFinal = remainder >= 10 && index == normalizedLaps.count - 1
-            let distance = isFinal ? remainder : 1_000
+            let distance = isFinal ? remainder : targetMeters
             let pauseOverlap = pauseTimeline.overlapSeconds(start: lap.startDate, end: lap.endDate)
             let duration = pauseTimeline.activeDuration(start: lap.startDate, end: lap.endDate)
             guard duration >= (isFinal ? 5 : 1) else { return nil }
             return DerivedSplitEstimate(
-                label: isFinal ? "Final" : "KM \(index + 1)",
+                label: isFinal ? "Final" : "\(rowPrefix) \(index + 1)",
                 distanceMeters: distance,
                 durationSecondsEstimate: duration,
                 paceSecondsPerKmEstimate: duration / (distance / 1_000),
@@ -1274,7 +1316,7 @@ public enum DerivedAnalyticsEngine {
         guard let selected = ranked.first, selected.2 <= tolerance else {
             return NormalSplitPauseAssessment(
                 timeline: nil,
-                rejectionReason: "Workout duration indicates paused time, but HealthKit pause events do not reconcile well enough to assign it safely to kilometer rows.",
+                rejectionReason: "Workout duration indicates paused time, but HealthKit pause events do not reconcile well enough to assign it safely to normal split rows.",
                 validationNotes: ["Expected paused time: \(String(format: "%.1f", expectedPaused)) seconds."]
             )
         }
@@ -1341,10 +1383,10 @@ public enum DerivedAnalyticsEngine {
     private static func distanceSeriesSplitEstimates(
         workout: CanonicalWorkout,
         distanceSeries: WorkoutMetricSeries,
-        pauseTimeline: NormalSplitPauseTimeline
+        pauseTimeline: NormalSplitPauseTimeline,
+        targetMeters: Double,
+        rowPrefix: String
     ) -> [DerivedSplitEstimate] {
-
-        let targetMeters = 1_000.0
         var cumulativeDistance = 0.0
         var nextTarget = targetMeters
         var previousCrossingDate = workout.startDate
@@ -1381,10 +1423,10 @@ public enum DerivedAnalyticsEngine {
                     let splitNumber = estimates.count + 1
                     estimates.append(
                         DerivedSplitEstimate(
-                            label: "KM \(splitNumber)",
+                            label: "\(rowPrefix) \(splitNumber)",
                             distanceMeters: targetMeters,
                             durationSecondsEstimate: splitDuration,
-                            paceSecondsPerKmEstimate: splitDuration,
+                            paceSecondsPerKmEstimate: splitDuration / (targetMeters / 1_000),
                             confidence: .moderate,
                             elapsedStartOffsetSeconds: previousCrossingDate.timeIntervalSince(workout.startDate),
                             elapsedEndOffsetSeconds: crossingDate.timeIntervalSince(workout.startDate),
@@ -1398,8 +1440,8 @@ public enum DerivedAnalyticsEngine {
             previousSampleEnd = sampleWindow.end
         }
 
-        let completedKilometers = floor(cumulativeDistance / targetMeters) * targetMeters
-        let remainderDistance = cumulativeDistance - completedKilometers
+        let completedUnits = floor(cumulativeDistance / targetMeters) * targetMeters
+        let remainderDistance = cumulativeDistance - completedUnits
         let finalEvidenceDate = min(previousSampleEnd ?? workout.endDate, workout.endDate)
         let remainderPauseOverlap = pauseTimeline.overlapSeconds(start: previousCrossingDate, end: finalEvidenceDate)
         let remainderDuration = pauseTimeline.activeDuration(start: previousCrossingDate, end: finalEvidenceDate)
@@ -1409,7 +1451,7 @@ public enum DerivedAnalyticsEngine {
                     label: "Final",
                     distanceMeters: remainderDistance,
                     durationSecondsEstimate: remainderDuration,
-                    paceSecondsPerKmEstimate: remainderDuration / (remainderDistance / targetMeters),
+                    paceSecondsPerKmEstimate: remainderDuration / (remainderDistance / 1_000),
                     confidence: .moderate,
                     elapsedStartOffsetSeconds: previousCrossingDate.timeIntervalSince(workout.startDate),
                     elapsedEndOffsetSeconds: finalEvidenceDate.timeIntervalSince(workout.startDate),

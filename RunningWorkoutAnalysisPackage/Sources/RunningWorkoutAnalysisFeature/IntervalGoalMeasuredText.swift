@@ -1,25 +1,35 @@
 import Foundation
 
 enum IntervalGoalMeasuredText {
-    static func metricItems(for interval: ReconstructedWorkoutInterval) -> [MetricItem] {
+    static func metricItems(
+        for interval: ReconstructedWorkoutInterval,
+        policy: RunDisplayPolicy = .kilometersOnly
+    ) -> [MetricItem] {
         return metricItems(
             plannedGoalType: interval.plannedGoalType,
             plannedGoalValue: interval.plannedGoalValue,
+            plannedDistancePrescription: interval.plannedDistancePrescription,
             measuredDistanceMeters: interval.actualDistanceMeters,
             displayDurationSeconds: interval.displayDurationSeconds,
             measuredPaceSecondsPerKm: measuredPaceSecondsPerKm(for: interval),
-            durationBasisLabel: durationBasisLabel(for: interval)
+            durationBasisLabel: durationBasisLabel(for: interval),
+            policy: policy
         )
     }
 
-    static func metricItems(for row: IntervalAnalysisRow) -> [MetricItem] {
+    static func metricItems(
+        for row: IntervalAnalysisRow,
+        policy: RunDisplayPolicy = .kilometersOnly
+    ) -> [MetricItem] {
         metricItems(
             plannedGoalType: row.plannedGoalType,
             plannedGoalValue: row.plannedGoalValue,
+            plannedDistancePrescription: row.plannedDistancePrescription,
             measuredDistanceMeters: row.distanceMeters,
             displayDurationSeconds: row.displayDurationSeconds,
             measuredPaceSecondsPerKm: row.paceSecondsPerKm,
-            durationBasisLabel: row.displayBasisLabel
+            durationBasisLabel: row.displayBasisLabel,
+            policy: policy
         )
     }
 
@@ -41,10 +51,12 @@ enum IntervalGoalMeasuredText {
     private static func metricItems(
         plannedGoalType: PlannedWorkoutGoalType,
         plannedGoalValue: Double?,
+        plannedDistancePrescription: PlannedDistancePrescription?,
         measuredDistanceMeters: Double?,
         displayDurationSeconds: Double,
         measuredPaceSecondsPerKm: Double?,
-        durationBasisLabel: String
+        durationBasisLabel: String,
+        policy: RunDisplayPolicy
     ) -> [MetricItem] {
         switch plannedGoalType {
         case .distance:
@@ -55,31 +67,39 @@ enum IntervalGoalMeasuredText {
             }()
             if !completedGoal {
                 return [
-                    MetricItem(title: "Distance", value: RunFormatters.compactDistance(measuredDistanceMeters), detail: "Shortened · HealthKit"),
+                    MetricItem(title: "Distance", value: RunFormatters.compactDistance(measuredDistanceMeters, policy: policy), detail: "Shortened · HealthKit"),
                     MetricItem(title: "Time", value: RunFormatters.duration(displayDurationSeconds), detail: durationBasisLabel),
-                    MetricItem(title: "Pace", value: RunFormatters.pace(measuredPaceSecondsPerKm), detail: "Measured distance")
+                    MetricItem(title: "Pace", value: RunFormatters.pace(measuredPaceSecondsPerKm, policy: policy), detail: "Measured distance")
                 ]
             }
             return [
-                MetricItem(title: "Distance", value: RunFormatters.compactDistance(plannedGoalValue), detail: "Workout plan"),
+                MetricItem(
+                    title: "Distance",
+                    value: plannedDistancePrescription?.displayText
+                        ?? RunFormatters.compactDistance(plannedGoalValue, policy: policy),
+                    detail: "Workout plan"
+                ),
                 MetricItem(title: "Time", value: RunFormatters.duration(displayDurationSeconds), detail: durationBasisLabel),
                 MetricItem(
                     title: "Pace",
-                    value: RunFormatters.pace(goalPaceSecondsPerKm(durationSeconds: displayDurationSeconds, plannedDistanceMeters: plannedGoalValue)),
+                    value: RunFormatters.pace(
+                        goalPaceSecondsPerKm(durationSeconds: displayDurationSeconds, plannedDistanceMeters: plannedGoalValue),
+                        policy: policy
+                    ),
                     detail: "Planned distance"
                 )
             ]
         case .time:
             return [
-                MetricItem(title: "Distance", value: RunFormatters.compactDistance(measuredDistanceMeters), detail: "HealthKit"),
+                MetricItem(title: "Distance", value: RunFormatters.compactDistance(measuredDistanceMeters, policy: policy), detail: "HealthKit"),
                 MetricItem(title: "Time", value: RunFormatters.duration(displayDurationSeconds), detail: durationBasisLabel),
-                MetricItem(title: "Pace", value: RunFormatters.pace(measuredPaceSecondsPerKm), detail: durationBasisLabel)
+                MetricItem(title: "Pace", value: RunFormatters.pace(measuredPaceSecondsPerKm, policy: policy), detail: durationBasisLabel)
             ]
         case .open, .energy, .unavailable:
             return [
-                MetricItem(title: "Measured Distance", value: RunFormatters.compactDistance(measuredDistanceMeters), detail: "HealthKit"),
+                MetricItem(title: "Measured Distance", value: RunFormatters.compactDistance(measuredDistanceMeters, policy: policy), detail: "HealthKit"),
                 MetricItem(title: "Measured Time", value: RunFormatters.duration(displayDurationSeconds), detail: durationBasisLabel),
-                MetricItem(title: "Measured Pace", value: RunFormatters.pace(measuredPaceSecondsPerKm), detail: durationBasisLabel)
+                MetricItem(title: "Measured Pace", value: RunFormatters.pace(measuredPaceSecondsPerKm, policy: policy), detail: durationBasisLabel)
             ]
         }
     }

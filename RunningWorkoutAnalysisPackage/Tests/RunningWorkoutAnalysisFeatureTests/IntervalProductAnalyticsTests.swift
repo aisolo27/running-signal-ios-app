@@ -241,6 +241,90 @@ import Testing
     #expect(groups.first { $0.workouts.map(\.workoutID).contains("2000-60") }?.signature.workCount == 3)
 }
 
+@Test func intervalLibrarySignatureRetainsAuthoredDistancePrescription() throws {
+    var work = productInterval(
+        goalType: .distance,
+        goalValue: 800,
+        measuredDistance: 815,
+        activeDuration: 200
+    )
+    work.plannedDistancePrescription = PlannedDistancePrescription(value: 800, unit: .meters)
+    let signature = try #require(IntervalLibraryBuilder.signature(for: OfficialIntervalWorkout(
+        workoutID: "authored-800m",
+        startDate: Date(timeIntervalSince1970: 25_000),
+        rows: [work]
+    )))
+
+    #expect(signature.workGoals.first?.value == 800)
+    #expect(signature.workGoals.first?.plannedDistancePrescription?.displayText == "800 m")
+}
+
+@Test func intervalLibraryGroupsLegacyAndAuthoredRowsWithoutLosingTheAuthoredLabel() throws {
+    var authored = productInterval(
+        goalType: .distance,
+        goalValue: 800,
+        measuredDistance: 810,
+        activeDuration: 200
+    )
+    authored.plannedDistancePrescription = PlannedDistancePrescription(value: 800, unit: .meters)
+    var legacy = productInterval(
+        goalType: .distance,
+        goalValue: 800,
+        measuredDistance: 805,
+        activeDuration: 201
+    )
+    legacy.plannedGoalDisplayText = "800 m"
+
+    let groups = IntervalLibraryBuilder.groups(from: [
+        OfficialIntervalWorkout(
+            workoutID: "legacy-800m",
+            startDate: Date(timeIntervalSince1970: 25_000),
+            rows: [legacy]
+        ),
+        OfficialIntervalWorkout(
+            workoutID: "authored-800m",
+            startDate: Date(timeIntervalSince1970: 26_000),
+            rows: [authored]
+        )
+    ])
+
+    #expect(groups.count == 1)
+    let group = try #require(groups.first)
+    #expect(group.workouts.count == 2)
+    #expect(group.signature.workGoals.first?.plannedDistancePrescription?.displayText == "800 m")
+}
+
+@Test func intervalLibraryRecoversAuthoredUnitsFromLegacyRunnerFacingLabels() throws {
+    var metric = productInterval(
+        goalType: .distance,
+        goalValue: 400,
+        measuredDistance: 405,
+        activeDuration: 100
+    )
+    metric.plannedGoalDisplayText = "400 m"
+    var imperial = productInterval(
+        goalType: .distance,
+        goalValue: RunningDistanceUnit.metersPerMile,
+        measuredDistance: 1_620,
+        activeDuration: 420
+    )
+    imperial.plannedGoalDisplayText = "1 mi"
+
+    let metricSignature = try #require(IntervalLibraryBuilder.signature(for: OfficialIntervalWorkout(
+        workoutID: "legacy-400m",
+        startDate: Date(timeIntervalSince1970: 27_000),
+        rows: [metric]
+    )))
+    let imperialSignature = try #require(IntervalLibraryBuilder.signature(for: OfficialIntervalWorkout(
+        workoutID: "legacy-1mi",
+        startDate: Date(timeIntervalSince1970: 28_000),
+        rows: [imperial]
+    )))
+
+    #expect(metricSignature.workGoals.first?.plannedDistancePrescription?.displayText == "400 m")
+    #expect(imperialSignature.workGoals.first?.plannedDistancePrescription?.displayText == "1 mi")
+}
+
 @Test func intervalLibraryExcludesNoPlanAndNoWorkRows() {
     let start = Date(timeIntervalSince1970: 20_000)
     var noPlan = productInterval(goalType: .distance, goalValue: 400, measuredDistance: 400, activeDuration: 100)
@@ -268,13 +352,136 @@ import Testing
     let point = IntervalLibraryBuilder.trendPoint(for: workout)
 
     #expect(point.workCount == 3)
-    #expect(point.aggregatePaceSecondsPerKilometer == 252 / 1.0)
+    #expect(point.aggregatePaceSecondsPerKilometer == 250)
+    #expect(point.aggregationBasis == .completedPrescribedDistance)
+    #expect(point.aggregatedWorkRepCount == 2)
+    #expect(point.aggregateWorkDurationSeconds == 200)
+    #expect(point.aggregateWorkDistanceMeters == 800)
+    #expect(point.measuredWorkDurationSeconds == 252)
+    #expect(point.measuredWorkDistanceMeters == 1_000)
     #expect(point.onTargetCount == 3)
     #expect(point.shortenedCount == 1)
     #expect((point.fadePercent ?? 0) > 8)
     #expect((point.consistencyCoefficientOfVariationPercent ?? 0) > 3)
     #expect(abs((point.durationWeightedHeartRate ?? 0) - ((150 * 96 + 170 * 104 + 180 * 52) / 252)) < 0.001)
     #expect(abs((point.durationWeightedPower ?? 0) - ((300 * 96 + 340 * 104 + 360 * 52) / 252)) < 0.001)
+}
+
+@Test func fixedDistanceAggregateIncludesCompletedAndOvershootButExcludesShortenedRep() {
+    let completed = productInterval(
+        index: 1,
+        goalType: .distance,
+        goalValue: 400,
+        measuredDistance: 400,
+        activeDuration: 96
+    )
+    let overshoot = productInterval(
+        index: 2,
+        goalType: .distance,
+        goalValue: 400,
+        measuredDistance: 450,
+        activeDuration: 100
+    )
+    let shortened = productInterval(
+        index: 3,
+        goalType: .distance,
+        goalValue: 400,
+        measuredDistance: 200,
+        activeDuration: 52
+    )
+
+    let point = IntervalLibraryBuilder.trendPoint(for: OfficialIntervalWorkout(
+        workoutID: "fixed-basis",
+        startDate: Date(timeIntervalSince1970: 31_000),
+        rows: [completed, overshoot, shortened]
+    ))
+
+    #expect(point.aggregationBasis == .completedPrescribedDistance)
+    #expect(point.aggregatedWorkRepCount == 2)
+    #expect(point.aggregateWorkDurationSeconds == 196)
+    #expect(point.aggregateWorkDistanceMeters == 800)
+    #expect(point.aggregatePaceSecondsPerKilometer == 245)
+    #expect(point.shortenedCount == 1)
+    #expect(point.measuredWorkDistanceMeters == 1_050)
+    #expect(point.aggregatePaceSecondsPerKilometer != 248)
+}
+
+@Test func timeAndOpenWorkAggregateUsesOnlyMeasuredDistanceBasis() {
+    let time = productInterval(
+        index: 1,
+        goalType: .time,
+        goalValue: 120,
+        measuredDistance: 480,
+        activeDuration: 120
+    )
+    let open = productInterval(
+        index: 2,
+        goalType: .open,
+        measuredDistance: 820,
+        activeDuration: 205
+    )
+
+    let point = IntervalLibraryBuilder.trendPoint(for: OfficialIntervalWorkout(
+        workoutID: "measured-basis",
+        startDate: Date(timeIntervalSince1970: 32_000),
+        rows: [time, open]
+    ))
+
+    #expect(point.aggregationBasis == .measuredDistance)
+    #expect(point.aggregatedWorkRepCount == 2)
+    #expect(point.aggregateWorkDurationSeconds == 325)
+    #expect(point.aggregateWorkDistanceMeters == 1_300)
+    #expect(point.measuredWorkDistanceMeters == point.aggregateWorkDistanceMeters)
+    #expect(point.aggregatePaceSecondsPerKilometer == 250)
+}
+
+@Test func mixedGoalAggregateNeverUsesPrescribedAndMeasuredDenominatorsTogether() {
+    let fixed = productInterval(
+        index: 1,
+        goalType: .distance,
+        goalValue: 400,
+        measuredDistance: 450,
+        activeDuration: 100
+    )
+    let time = productInterval(
+        index: 2,
+        goalType: .time,
+        goalValue: 150,
+        measuredDistance: 600,
+        activeDuration: 150
+    )
+
+    let point = IntervalLibraryBuilder.trendPoint(for: OfficialIntervalWorkout(
+        workoutID: "no-hybrid",
+        startDate: Date(timeIntervalSince1970: 33_000),
+        rows: [fixed, time]
+    ))
+
+    #expect(point.aggregationBasis == .measuredDistance)
+    #expect(point.aggregateWorkDistanceMeters == 1_050)
+    #expect(abs((point.aggregatePaceSecondsPerKilometer ?? 0) - (250 / 1.05)) < 0.001)
+    #expect(point.aggregatePaceSecondsPerKilometer != 250)
+}
+
+@Test func exactTargetDeltaPresentationUsesPrimaryPaceUnitWithoutChangingCanonicalEvaluation() throws {
+    let threshold = PlannedWorkoutTarget(
+        kind: .pace,
+        lowerBound: 230,
+        upperBound: 230,
+        unit: "s/km",
+        displayText: "pace 3:50 /km",
+        semantics: .threshold
+    )
+    let row = productInterval(
+        goalType: .distance,
+        goalValue: 400,
+        measuredDistance: 400,
+        activeDuration: 96
+    )
+    let evaluation = try #require(WorkTargetEvaluator.evaluate(interval: row, plannedTargets: [threshold]))
+
+    #expect(evaluation.measurement.paceSecondsPerKilometer == 240)
+    #expect(WorkTargetPresentation.exactTargetDeltaText(evaluation, policy: .milesOnly) == "16s/mi slower")
 }
 
 @Test func runClassifierRequiresOfficialStructuredRowsForInterval() {

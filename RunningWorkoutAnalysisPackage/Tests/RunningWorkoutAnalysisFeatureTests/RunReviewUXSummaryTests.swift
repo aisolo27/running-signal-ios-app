@@ -84,6 +84,74 @@ import Testing
     #expect(expectedData.confidence == .moderate)
 }
 
+@Test func workoutReviewAndFadeSummaryPresentationFollowsMilePolicy() throws {
+    let start = Date(timeIntervalSinceReferenceDate: 1_650)
+    let run = workout(
+        id: "mile-summary",
+        start: start,
+        distance: 5_000,
+        duration: 1_800,
+        type: .interval
+    )
+    let review = WorkoutReviewUXSummary.make(
+        workout: run,
+        supportedIntervals: nil,
+        blockedReasons: [],
+        policy: .milesOnly
+    )
+    let wholeRun = try #require(review.signals.first { $0.title == "Whole Run" })
+
+    #expect(wholeRun.value == "9:39/mi")
+    #expect(wholeRun.detail == "3.11 mi")
+
+    let result = WorkoutIntervalReconstructionResult(
+        planSource: .workoutKit,
+        windowSource: .healthKitActivityBoundaries,
+        intervals: [
+            reconstructedInterval(
+                index: 1,
+                label: "Work 1",
+                stepType: .work,
+                start: start,
+                duration: 100,
+                elapsedDuration: 100,
+                activeDuration: 100,
+                pauseOverlap: 0,
+                displayRule: .elapsedRowWindow,
+                distance: 400,
+                pace: 250,
+                heartRate: 150,
+                maxHeartRate: 160,
+                power: 300,
+                cadence: 180
+            ),
+            reconstructedInterval(
+                index: 2,
+                label: "Work 2",
+                stepType: .work,
+                start: start.addingTimeInterval(100),
+                duration: 104,
+                elapsedDuration: 104,
+                activeDuration: 104,
+                pauseOverlap: 0,
+                displayRule: .elapsedRowWindow,
+                distance: 400,
+                pace: 260,
+                heartRate: 155,
+                maxHeartRate: 165,
+                power: 305,
+                cadence: 181
+            )
+        ]
+    )
+    let execution = IntervalExecutionUXSummary.make(
+        summary: IntervalAnalysisSummary(workout: run, result: result),
+        policy: .milesOnly
+    )
+
+    #expect(execution.signals.contains { $0.title == "Fade" && $0.value == "+16s/mi" })
+}
+
 @Test func resolvedRowsPreferNativeActivityDurationAndStatistics() throws {
     let start = Date(timeIntervalSinceReferenceDate: 1_700)
     let workout = workout(id: "native-activity", start: start, distance: 400, duration: 120, type: .interval)

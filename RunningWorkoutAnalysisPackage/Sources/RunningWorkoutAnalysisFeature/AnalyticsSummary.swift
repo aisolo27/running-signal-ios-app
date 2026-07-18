@@ -690,9 +690,9 @@ public enum WorkoutChartMetric: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    var unit: String {
+    func unit(policy: RunDisplayPolicy) -> String {
         switch self {
-        case .pace: "/km"
+        case .pace: policy.primaryUnit.paceSuffix
         case .heartRate: "bpm"
         case .power: "W"
         case .cadence: "spm"
@@ -881,15 +881,20 @@ public enum IntervalAnalysisMetric: String, CaseIterable, Identifiable, Sendable
         }
     }
 
-    var unit: String {
+    func unit(policy: RunDisplayPolicy) -> String {
         switch self {
-        case .pace: "/km"
+        case .pace: policy.primaryUnit.paceSuffix
         case .heartRate: "bpm"
         case .power: "W"
         case .cadence: "spm"
         case .duration: "time"
-        case .distance: "m"
+        case .distance: RunFormatters.chartDistanceUnit(policy: policy)
         }
+    }
+
+    func presentationChartValue(_ canonicalChartValue: Double, policy: RunDisplayPolicy) -> Double {
+        guard self == .distance else { return canonicalChartValue }
+        return RunFormatters.chartDistanceValue(canonicalChartValue, policy: policy)
     }
 
     var usesTotalAggregate: Bool {
@@ -918,13 +923,19 @@ public struct IntervalWorkRepeatSummary: Equatable, Sendable {
     public var primaryDistanceMeters: Double
     public var primaryDurationSeconds: Double
     public var primaryPaceSecondsPerKm: Double?
+    public var aggregationBasis: IntervalWorkAggregationBasis
+    public var aggregatedRepeatCount: Int
+    public var shortenedRepeatCount: Int
 
     public init(
         repeatCount: Int,
         totalDistanceMeters: Double,
         totalActiveDurationSeconds: Double,
         primaryDistanceMeters: Double? = nil,
-        primaryDurationSeconds: Double? = nil
+        primaryDurationSeconds: Double? = nil,
+        aggregationBasis: IntervalWorkAggregationBasis = .measuredDistance,
+        aggregatedRepeatCount: Int? = nil,
+        shortenedRepeatCount: Int = 0
     ) {
         self.repeatCount = repeatCount
         self.totalDistanceMeters = totalDistanceMeters
@@ -937,6 +948,9 @@ public struct IntervalWorkRepeatSummary: Equatable, Sendable {
         primaryPaceSecondsPerKm = self.primaryDistanceMeters > 0
             ? self.primaryDurationSeconds / (self.primaryDistanceMeters / 1_000)
             : nil
+        self.aggregationBasis = aggregationBasis
+        self.aggregatedRepeatCount = aggregatedRepeatCount ?? repeatCount
+        self.shortenedRepeatCount = shortenedRepeatCount
     }
 }
 
@@ -958,6 +972,7 @@ public struct IntervalAnalysisRow: Identifiable, Equatable, Sendable {
     public var stepType: DerivedIntervalLabel
     public var plannedGoalType: PlannedWorkoutGoalType
     public var plannedGoalValue: Double?
+    public var plannedDistancePrescription: PlannedDistancePrescription?
     public var plannedGoalDisplayText: String
     public var plannedTargetDisplayText: String?
     public var plannedTargets: [PlannedWorkoutTarget]?
@@ -982,6 +997,7 @@ public struct IntervalAnalysisRow: Identifiable, Equatable, Sendable {
         stepType = interval.stepType
         plannedGoalType = interval.plannedGoalType
         plannedGoalValue = interval.plannedGoalValue
+        plannedDistancePrescription = interval.plannedDistancePrescription
         plannedGoalDisplayText = interval.plannedGoalDisplayText
         plannedTargetDisplayText = interval.plannedTargetDisplayText
         plannedTargets = interval.plannedTargets
@@ -1102,19 +1118,38 @@ public struct IntervalAnalysisSummary: Equatable, Sendable {
         let totalDuration = workRows
             .map(\.activeDurationSeconds)
             .reduce(0, +)
-        let primaryDistance = workRows
-            .compactMap(\.distanceMeters)
-            .reduce(0, +)
-        let primaryDuration = workRows
-            .map(\.displayDurationSeconds)
-            .reduce(0, +)
+        let usesPrescribedDistance = workRows.allSatisfy {
+            $0.plannedGoalType == .distance && ($0.plannedGoalValue ?? 0) > 0
+        }
+        let aggregateRows: [IntervalAnalysisRow]
+        let aggregationBasis: IntervalWorkAggregationBasis
+        if usesPrescribedDistance {
+            aggregateRows = workRows.filter { row in
+                guard let prescribed = row.plannedGoalValue,
+                      let measured = row.measuredDistanceMeters else { return false }
+                return measured >= prescribed * 0.9
+            }
+            aggregationBasis = .completedPrescribedDistance
+        } else {
+            aggregateRows = workRows.filter { ($0.measuredDistanceMeters ?? 0) > 0 }
+            aggregationBasis = .measuredDistance
+        }
+        let primaryDistance = aggregateRows.reduce(0) { partial, row in
+            partial + (usesPrescribedDistance ? (row.plannedGoalValue ?? 0) : (row.measuredDistanceMeters ?? 0))
+        }
+        let primaryDuration = aggregateRows.reduce(0) { partial, row in
+            partial + (usesPrescribedDistance ? row.displayDurationSeconds : row.activeDurationSeconds)
+        }
 
         return IntervalWorkRepeatSummary(
             repeatCount: workRows.count,
             totalDistanceMeters: totalDistance,
             totalActiveDurationSeconds: totalDuration,
             primaryDistanceMeters: primaryDistance,
-            primaryDurationSeconds: primaryDuration
+            primaryDurationSeconds: primaryDuration,
+            aggregationBasis: aggregationBasis,
+            aggregatedRepeatCount: aggregateRows.count,
+            shortenedRepeatCount: usesPrescribedDistance ? workRows.count - aggregateRows.count : 0
         )
     }
 
@@ -1154,6 +1189,13 @@ public struct IntervalAnalysisSummary: Equatable, Sendable {
 
         switch metric {
         case .pace:
+            if rows.contains(where: { $0.stepType == .work }),
+               let workSummary = workRepeatSummary {
+                guard workSummary.aggregatedRepeatCount > 0,
+                      let pace = workSummary.primaryPaceSecondsPerKm,
+                      pace > 0 else { return nil }
+                return IntervalAnalysisMetricValue(displayValue: pace, chartValue: 3_600 / pace)
+            }
             let totals = sourceRows.reduce(into: (duration: 0.0, distance: 0.0)) { partial, row in
                 guard let distance = row.distanceMeters,
                       distance > 0,
@@ -1166,11 +1208,27 @@ public struct IntervalAnalysisSummary: Equatable, Sendable {
             let pace = totals.duration / (totals.distance / 1_000)
             return IntervalAnalysisMetricValue(displayValue: pace, chartValue: 3_600 / pace)
         case .duration:
+            if rows.contains(where: { $0.stepType == .work }),
+               let workSummary = workRepeatSummary {
+                guard workSummary.aggregatedRepeatCount > 0 else { return nil }
+                return IntervalAnalysisMetricValue(
+                    displayValue: workSummary.primaryDurationSeconds,
+                    chartValue: workSummary.primaryDurationSeconds
+                )
+            }
             let total = sourceRows
                 .compactMap { $0.value(for: metric)?.displayValue }
                 .reduce(0, +)
             return total > 0 ? IntervalAnalysisMetricValue(displayValue: total, chartValue: total) : nil
         case .distance:
+            if rows.contains(where: { $0.stepType == .work }),
+               let workSummary = workRepeatSummary {
+                guard workSummary.aggregatedRepeatCount > 0 else { return nil }
+                return IntervalAnalysisMetricValue(
+                    displayValue: workSummary.primaryDistanceMeters,
+                    chartValue: workSummary.primaryDistanceMeters
+                )
+            }
             let total = sourceRows
                 .compactMap { $0.value(for: metric)?.displayValue }
                 .reduce(0, +)

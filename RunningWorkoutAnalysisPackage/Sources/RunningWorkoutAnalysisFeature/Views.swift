@@ -115,7 +115,7 @@ struct RunsView: View {
 
                 Text("\(filteredHistory.count) past \(filteredHistory.count == 1 ? "run" : "runs")")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
             }
 
             if runs.isEmpty {
@@ -174,7 +174,7 @@ struct RunsView: View {
                                     Spacer()
                                     Text("\(section.workouts.count) runs")
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(RunSignalTextStyle.secondary)
                                     Image(systemName: collapsedYears.contains(section.year) ? "chevron.right" : "chevron.down")
                                 }
                                 .contentShape(Rectangle())
@@ -219,7 +219,7 @@ struct HealthKitImportProgressView: View {
                         .font(.subheadline.weight(.semibold))
                     Text(presentation.detailText)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -232,7 +232,7 @@ struct HealthKitImportProgressView: View {
                     Text("\(progress.importedWorkoutCount) runs available")
                 }
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(RunSignalTextStyle.secondary)
             }
         }
         .accessibilityElement(children: .combine)
@@ -253,7 +253,7 @@ struct HealthAccessRecoveryView: View {
                     .padding(.top, 4)
             }
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(RunSignalTextStyle.secondary)
             .fixedSize(horizontal: false, vertical: true)
         } label: {
             Label("How to Review Health Access", systemImage: "checklist")
@@ -310,6 +310,8 @@ struct SettingsView: View {
     var store: RunningAnalysisStore
     @AppStorage("RunSignal.DeveloperModeEnabled") private var developerModeEnabled = false
     @AppStorage("RunSignal.TemperatureUnit") private var temperatureUnitRaw = TemperatureUnitPreference.system.rawValue
+    @AppStorage("RunSignal.PrimaryDistanceUnit.v1") private var primaryDistanceUnitRaw = RunningDistanceUnit.initialDefault().rawValue
+    @AppStorage("RunSignal.ShowSecondaryDistance.v1") private var showsSecondaryDistance = false
 
     var body: some View {
         let healthPresentation = store.healthKitConnectionPresentation
@@ -327,7 +329,7 @@ struct SettingsView: View {
                             .font(.headline)
                         Text(healthPresentation.detailText)
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(RunSignalTextStyle.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     if healthPresentation.showsHealthAccessRecoveryGuidance {
@@ -336,7 +338,7 @@ struct SettingsView: View {
                     if let importSummary = store.healthKitImportJobSummary {
                         LabeledContent(importSummary.statusTitle, value: importSummary.detailText)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(RunSignalTextStyle.secondary)
                     }
                     if healthPresentation.showsPrimaryAction {
                         Button {
@@ -352,6 +354,40 @@ struct SettingsView: View {
             }
 
             Section("Display") {
+                Picker("Primary distance & pace", selection: $primaryDistanceUnitRaw) {
+                    Text("Miles").tag(RunningDistanceUnit.miles.rawValue)
+                    Text("Kilometers").tag(RunningDistanceUnit.kilometers.rawValue)
+                }
+
+                Toggle("Show secondary distance & pace", isOn: $showsSecondaryDistance)
+
+                Text("Your primary unit controls measured distance, pace, charts, and normal splits. Workout prescriptions and Best Effort names keep their original identity. When enabled, secondary distance appears smaller in parentheses on selected summary cards, and Workout Details also shows the opposite-unit pace beneath Avg pace.")
+                    .font(.caption)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Live Preview")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(RunSignalTextStyle.secondary)
+
+                    LabeledContent("Distance") {
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text(previewPrimaryDistance)
+                                .monospacedDigit()
+                            if let previewSecondaryDistance {
+                                Text("(\(previewSecondaryDistance))")
+                                    .font(.caption2.monospacedDigit().weight(.medium))
+                                    .foregroundStyle(RunSignalTextStyle.metricSupporting)
+                            }
+                        }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Preview distance")
+                    .accessibilityValue(previewAccessibilityDistance)
+                    LabeledContent("Pace", value: RunFormatters.pace(300, policy: settingsDisplayPolicy))
+                }
+
                 Picker("Temperature", selection: $temperatureUnitRaw) {
                     ForEach(TemperatureUnitPreference.allCases) { preference in
                         Text(preference.label).tag(preference.rawValue)
@@ -366,14 +402,14 @@ struct SettingsView: View {
                     LabeledContent {
                         Text(store.currentHeartRateZoneProfile?.method.label
                              ?? (healthPresentation.showsProgress ? "Waiting for runs" : "Set Up"))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(RunSignalTextStyle.secondary)
                     } label: {
                         Label("Heart Rate Zones", systemImage: "heart.text.square")
                     }
                 }
                 Text("RunSignal keeps effective-dated zone profiles so changing zones does not rewrite older runs.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
             }
 
             Section("Data & Diagnostics") {
@@ -385,7 +421,7 @@ struct SettingsView: View {
                     LabeledContent("Access request", value: store.authorizationState.label)
                     Text("RunSignal keeps the preferred Apple Watch or HealthKit workout visible and hides likely duplicates.")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                 } label: {
                     Label("Data Details", systemImage: "chart.bar.doc.horizontal")
                 }
@@ -419,6 +455,25 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+    }
+
+    private var settingsDisplayPolicy: RunDisplayPolicy {
+        RunDisplayPolicy(
+            primaryUnit: RunningDistanceUnit(rawValue: primaryDistanceUnitRaw) ?? RunningDistanceUnit.initialDefault(),
+            showsSecondaryDistance: showsSecondaryDistance
+        )
+    }
+
+    private var previewPrimaryDistance: String {
+        RunFormatters.distance(5_000, policy: settingsDisplayPolicy)
+    }
+
+    private var previewSecondaryDistance: String? {
+        RunFormatters.secondaryDistance(5_000, policy: settingsDisplayPolicy)
+    }
+
+    private var previewAccessibilityDistance: String {
+        RunFormatters.accessibilityDistance(5_000, policy: settingsDisplayPolicy, includeSecondary: true)
     }
 }
 
@@ -583,7 +638,7 @@ private struct HeartRateZoneSettingsView: View {
                 }
                 Text(selectedMethod.detail)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
             }
 
             if selectedMethod != .manual {
@@ -605,7 +660,7 @@ private struct HeartRateZoneSettingsView: View {
                     }
                     Text("The maximum comes from credible completed running workouts in the previous six months. Automatic HRR uses the latest resting-heart-rate value available from Apple Health.")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                 }
             }
 
@@ -613,7 +668,7 @@ private struct HeartRateZoneSettingsView: View {
                 if selectedMethod == .manual {
                     Text("Tap a zone to edit its lower or upper limit. Changing a limit automatically moves the touching limit in the adjacent zone, so there are no gaps or overlaps.")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
 
                     ForEach(1...5, id: \.self) { zone in
                         NavigationLink {
@@ -639,7 +694,7 @@ private struct HeartRateZoneSettingsView: View {
                 } else if selectedMethod != .manual {
                     Text("RunSignal needs a recent running maximum and a resting heart rate from Apple Health before this method can be used.")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                 }
             }
 
@@ -652,7 +707,7 @@ private struct HeartRateZoneSettingsView: View {
                 } else if presentation == .waitingForRunData {
                     Label(presentation.statusTitle, systemImage: "hourglass")
                         .font(.headline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                         .frame(maxWidth: .infinity)
                 } else {
                     Button {
@@ -674,17 +729,17 @@ private struct HeartRateZoneSettingsView: View {
 
                 Text(presentation.supportingText)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
 
                 if let saveMessage {
                     Text(saveMessage)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                 }
 
                 Text("Saving creates a new effective-dated profile. Earlier workouts keep the profile that was active when they began, so a later lab test does not silently reclassify your history.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
             }
 
             if !store.heartRateZoneProfiles.isEmpty {
@@ -705,11 +760,11 @@ private struct HeartRateZoneSettingsView: View {
                                 Spacer()
                                 Text(effectiveDateText(profile))
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(RunSignalTextStyle.secondary)
                             }
                             Text(profile.ranges.map { "Z\($0.zone) \($0.displayRange)" }.joined(separator: " · "))
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(RunSignalTextStyle.secondary)
                         }
                     }
                 }
@@ -797,7 +852,7 @@ private struct ManualHeartRateZoneEditorView: View {
             Section {
                 Text("Zone \(zone) is currently \(boundaries.ranges[zone - 1].displayRange). Adjacent zone limits update automatically.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
             }
         }
         .navigationTitle("Zone \(zone)")
@@ -824,6 +879,7 @@ private struct ManualHeartRateZoneEditorView: View {
 
 struct FeaturedRunRow: View {
     let workout: CanonicalWorkout
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
 
     private var run: RunWorkout {
         RunWorkout(workout: workout)
@@ -842,9 +898,19 @@ struct FeaturedRunRow: View {
                 RunTypeTag(runType: workout.effectiveRunType)
             }
             MetricGrid(items: [
-                MetricItem(title: "Distance", value: RunFormatters.distance(workout.distanceMeters), detail: workout.sourceName),
+                MetricItem(
+                    title: "Distance",
+                    value: RunFormatters.distance(workout.distanceMeters, policy: runDisplayPolicy),
+                    detail: workout.sourceName,
+                    secondaryValue: RunFormatters.secondaryDistance(workout.distanceMeters, policy: runDisplayPolicy),
+                    accessibilityValue: RunFormatters.accessibilityDistance(
+                        workout.distanceMeters,
+                        policy: runDisplayPolicy,
+                        includeSecondary: true
+                    )
+                ),
                 MetricItem(title: "Time", value: RunFormatters.duration(workout.durationSeconds), detail: "Workout"),
-                MetricItem(title: "Pace", value: RunFormatters.pace(workout.paceSecondsPerKm), detail: "Average"),
+                MetricItem(title: "Pace", value: RunFormatters.pace(workout.paceSecondsPerKm, policy: runDisplayPolicy), detail: "Average"),
                 MetricItem(title: "Avg HR", value: RunFormatters.number(workout.averageHeartRate, suffix: " bpm"), detail: "HealthKit")
             ])
         }
@@ -854,6 +920,7 @@ struct FeaturedRunRow: View {
 
 struct V1WorkoutRow: View {
     let workout: CanonicalWorkout
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
 
     private var run: RunWorkout {
         RunWorkout(workout: workout)
@@ -872,7 +939,7 @@ struct V1WorkoutRow: View {
                 Spacer()
                 RunTypeTag(runType: workout.effectiveRunType)
             }
-            Text("\(RunFormatters.distance(workout.distanceMeters)) · \(RunFormatters.duration(workout.durationSeconds)) · \(RunFormatters.pace(workout.paceSecondsPerKm))")
+            Text("\(RunFormatters.distance(workout.distanceMeters, policy: runDisplayPolicy)) · \(RunFormatters.duration(workout.durationSeconds)) · \(RunFormatters.pace(workout.paceSecondsPerKm, policy: runDisplayPolicy))")
                 .font(.caption)
                 .foregroundStyle(.primary)
             Text("Avg HR \(RunFormatters.number(workout.averageHeartRate, suffix: " bpm")) · \(workout.sourceName)")
@@ -886,6 +953,7 @@ struct V1WorkoutRow: View {
 struct PersonalBestEffortRow: View {
     let effort: PersonalBestEffortRecord
     let titleFont: Font
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
 
     var body: some View {
         let trust = BestEffortUXSummary.make(effort: effort)
@@ -904,7 +972,7 @@ struct PersonalBestEffortRow: View {
             VStack(alignment: .trailing, spacing: 3) {
                 Text(primaryValue)
                     .font(titleFont.monospacedDigit())
-                Text(RunFormatters.pace(effort.paceSecondsPerKm))
+                Text(RunFormatters.pace(effort.paceSecondsPerKm, policy: runDisplayPolicy))
                     .font(.caption2)
                     .foregroundStyle(RunSignalTextStyle.secondary)
                 ConfidencePill(text: trust.title, confidence: trust.confidence)
@@ -917,7 +985,7 @@ struct PersonalBestEffortRow: View {
 
     private var primaryValue: String {
         if effort.bucket == .longestRun {
-            return RunFormatters.compactDistance(effort.distanceMeters)
+            return RunFormatters.compactDistance(effort.distanceMeters, policy: runDisplayPolicy)
         }
         return RunFormatters.duration(effort.durationSeconds)
     }
@@ -951,14 +1019,14 @@ struct HealthKitPermissionReviewView: View {
                             Spacer()
                             Text(item.scope.rawValue)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(RunSignalTextStyle.secondary)
                         }
                         Text(item.healthKitIdentifier)
                             .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(RunSignalTextStyle.secondary)
                         Text(item.reason)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(RunSignalTextStyle.secondary)
                         Label(item.visibleFeature, systemImage: "eye")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.blue)
@@ -1049,7 +1117,7 @@ struct GoldenValidationCard: View {
                         .font(.headline)
                     Text("\(RunFormatters.distance(result.workout.distanceMeters)) · \(RunFormatters.duration(result.workout.durationSeconds)) · \(result.workout.sourceName)")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                 }
                 Spacer()
                 Text(result.status.label)
@@ -1064,7 +1132,7 @@ struct GoldenValidationCard: View {
                             .font(.caption.bold())
                         Text(field.detail)
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(RunSignalTextStyle.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
@@ -1073,7 +1141,7 @@ struct GoldenValidationCard: View {
                             .font(.caption.monospacedDigit())
                         Text(field.expectedValue)
                             .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(RunSignalTextStyle.secondary)
                     }
                 }
             }
@@ -1179,7 +1247,7 @@ struct HealthKitAuditCard: View {
                         .font(.headline)
                     Text("\(RunFormatters.shortDate.string(from: row.workout.startDate)) · \(RunFormatters.distance(row.workout.distanceMeters)) · \(RunFormatters.duration(row.workout.durationSeconds))")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                 }
                 Spacer()
                 ConfidencePill(text: auditStatus.label, confidence: auditStatus)
@@ -1198,7 +1266,7 @@ struct HealthKitAuditCard: View {
                     ForEach(row.caveats.prefix(3), id: \.self) { caveat in
                         Text(caveat)
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(RunSignalTextStyle.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -1229,7 +1297,7 @@ struct HealthKitAuditFieldTile: View {
                     .frame(width: 16)
                 Text(field.label)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
                     .lineLimit(2)
             }
             Text(field.value)
@@ -1238,7 +1306,7 @@ struct HealthKitAuditFieldTile: View {
                 .minimumScaleFactor(0.75)
             Text(field.detail)
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(RunSignalTextStyle.tertiary)
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -1294,7 +1362,7 @@ struct RunTypeBridgePanel: View {
 
             Text("Import reviewed web-app run types, then match them to iPhone HealthKit workouts by date, time, distance, and duration.")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(RunSignalTextStyle.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             MetricGrid(items: [
@@ -1349,7 +1417,7 @@ struct ReconciliationRowView: View {
                     .font(.subheadline.bold())
                 Text(row.reason)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
@@ -1589,7 +1657,7 @@ private struct WorkoutEnvironmentCard: View {
                                 .font(.headline)
                             Text("Approximate city based on this workout's route")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(RunSignalTextStyle.secondary)
                         }
                         Spacer()
                     }
@@ -1626,6 +1694,7 @@ private struct WorkoutEnvironmentCard: View {
 
 struct FitnessWorkoutMetrics: View {
     let workout: CanonicalWorkout
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1639,10 +1708,34 @@ struct FitnessWorkoutMetrics: View {
             MetricItem(title: "Workout time", value: RunFormatters.duration(workout.durationSeconds), detail: elapsedDetail)
         ]
         if workout.distanceMeters != nil {
-            values.append(MetricItem(title: "Distance", value: RunFormatters.distance(workout.distanceMeters), detail: "Apple Health"))
+            values.append(
+                MetricItem(
+                    title: "Distance",
+                    value: RunFormatters.distance(workout.distanceMeters, policy: runDisplayPolicy),
+                    detail: "Apple Health",
+                    secondaryValue: RunFormatters.secondaryDistance(workout.distanceMeters, policy: runDisplayPolicy),
+                    accessibilityValue: RunFormatters.accessibilityDistance(
+                        workout.distanceMeters,
+                        policy: runDisplayPolicy,
+                        includeSecondary: true
+                    )
+                )
+            )
         }
         if workout.paceSecondsPerKm != nil {
-            values.append(MetricItem(title: "Avg pace", value: RunFormatters.pace(workout.paceSecondsPerKm), detail: "Distance / time"))
+            values.append(
+                MetricItem(
+                    title: "Avg pace",
+                    value: RunFormatters.pace(workout.paceSecondsPerKm, policy: runDisplayPolicy),
+                    detail: "Distance / time",
+                    secondaryValue: RunFormatters.secondaryPace(workout.paceSecondsPerKm, policy: runDisplayPolicy),
+                    accessibilityValue: RunFormatters.accessibilityPace(
+                        workout.paceSecondsPerKm,
+                        policy: runDisplayPolicy,
+                        includeSecondary: true
+                    )
+                )
+            )
         }
         if workout.averageHeartRate != nil {
             values.append(MetricItem(title: "Avg heart rate", value: RunFormatters.number(workout.averageHeartRate, suffix: " bpm"), detail: "Workout average"))
@@ -1752,7 +1845,7 @@ private struct WorkoutCategoryCard: View {
                     Spacer()
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.caption.bold())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -1938,6 +2031,7 @@ struct WorkoutChartsPanel: View {
 struct WorkoutPlanOverviewCard: View {
     let audit: WorkoutPlanAudit
     @State private var rowsExpanded = false
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
 
     private var plannedRows: [PlannedWorkoutStep] {
         audit.plannedSteps.sorted { $0.index < $1.index }
@@ -2013,7 +2107,11 @@ struct WorkoutPlanOverviewCard: View {
     }
 
     private func targetSummary(_ step: PlannedWorkoutStep) -> String? {
-        PlannedWorkoutTargetPresentation.runnerText(step.plannedTargetDisplayText)
+        RunnerPlannedWorkoutTargetText.text(
+            fallback: step.plannedTargetDisplayText,
+            targets: step.plannedTargets,
+            policy: runDisplayPolicy
+        )
     }
 
     private func stepPrescription(_ step: PlannedWorkoutStep) -> String {
@@ -2021,6 +2119,8 @@ struct WorkoutPlanOverviewCard: View {
         switch step.plannedGoalType {
         case .time:
             goalText = step.plannedGoalValue.map(RunFormatters.duration) ?? step.plannedGoalDisplayText
+        case .distance:
+            goalText = step.plannedDistancePrescription?.displayText ?? step.plannedGoalDisplayText
         default:
             goalText = step.plannedGoalDisplayText
         }
@@ -2057,6 +2157,7 @@ private struct WorkoutPlanSummaryRow: View {
 
 private struct WorkoutPlanStepRow: View {
     let step: PlannedWorkoutStep
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -2078,7 +2179,7 @@ private struct WorkoutPlanStepRow: View {
 
             Spacer(minLength: 8)
 
-            Text(step.plannedGoalDisplayText)
+            Text(step.plannedDistancePrescription?.displayText ?? step.plannedGoalDisplayText)
                 .font(.caption.monospacedDigit().bold())
                 .foregroundStyle(tint)
                 .multilineTextAlignment(.trailing)
@@ -2095,7 +2196,11 @@ private struct WorkoutPlanStepRow: View {
         } else {
             parts.append(step.stepType.displayName)
         }
-        if let plannedTargetDisplayText = PlannedWorkoutTargetPresentation.runnerText(step.plannedTargetDisplayText) {
+        if let plannedTargetDisplayText = RunnerPlannedWorkoutTargetText.text(
+            fallback: step.plannedTargetDisplayText,
+            targets: step.plannedTargets,
+            policy: runDisplayPolicy
+        ) {
             parts.append(plannedTargetDisplayText)
         }
         return parts.joined(separator: " · ")
@@ -2124,54 +2229,82 @@ private struct WorkoutPlanStepRow: View {
     }
 }
 
+private enum RunnerPlannedWorkoutTargetText {
+    static func text(
+        fallback: String?,
+        targets: [PlannedWorkoutTarget]?,
+        policy: RunDisplayPolicy
+    ) -> String? {
+        guard let paceTarget = targets?.first(where: { $0.kind == .pace }) else {
+            return PlannedWorkoutTargetPresentation.runnerText(fallback, policy: policy)
+        }
+
+        switch (paceTarget.lowerBound, paceTarget.upperBound) {
+        case let (lower?, upper?) where abs(lower - upper) >= 0.5:
+            return PlannedWorkoutTargetPresentation.runnerPaceRange(
+                lowerSecondsPerKm: lower,
+                upperSecondsPerKm: upper,
+                policy: policy
+            )
+        case let (lower?, _):
+            return RunFormatters.pace(lower, policy: policy)
+        case let (_, upper?):
+            return RunFormatters.pace(upper, policy: policy)
+        default:
+            return PlannedWorkoutTargetPresentation.runnerText(fallback, policy: policy)
+        }
+    }
+}
+
 struct SplitsAndEventsPanel: View {
     let workout: CanonicalWorkout
     let segments: RunWorkoutSegments
     let supportedIntervals: WorkoutIntervalReconstructionResult?
     let intervalUnavailableMessage: String?
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader("1 km Splits")
-            if segments.kilometerSplits.isEmpty {
+            SectionHeader(runDisplayPolicy.primaryUnit.normalSplitTitle)
+            if displayedSplits.isEmpty {
                 EmptyStateView(
                     title: "Splits unavailable",
-                    message: segments.splitUnavailableReason
-                        ?? "Apple Health did not retain enough trustworthy distance timing to calculate kilometer splits for this run. Whole-run distance, time, and average pace remain available."
+                    message: segments.splitUnavailableReason(for: runDisplayPolicy.primaryUnit)
+                        ?? "Apple Health did not retain enough trustworthy distance timing to calculate \(splitUnitName) splits for this run. Whole-run distance, time, and average pace remain available."
                 )
             } else {
                 VStack(spacing: 8) {
-                    ForEach(Array(segments.kilometerSplits.enumerated()), id: \.element.label) { index, split in
+                    ForEach(Array(displayedSplits.enumerated()), id: \.element.label) { index, split in
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(split.label)
                                     .font(.subheadline.bold())
                                 if split.label == "Final" {
-                                    Text(RunFormatters.distance(split.distanceMeters))
+                                    Text(RunFormatters.distance(split.distanceMeters, policy: runDisplayPolicy))
                                         .font(.caption2)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(RunSignalTextStyle.secondary)
                                 }
-                                Text(splitSourceLabel(segments.splitSource))
+                                Text(splitSourceLabel(segments.splitSource(for: runDisplayPolicy.primaryUnit)))
                                     .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(RunSignalTextStyle.secondary)
                                 if let pauseOverlap = split.pauseOverlapSeconds, pauseOverlap >= 0.5 {
                                     Text("Active time · \(RunFormatters.duration(pauseOverlap)) pause excluded")
                                         .font(.caption2)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(RunSignalTextStyle.secondary)
                                 }
                                 if let metrics = splitMetricsText(at: index) {
                                     Text(metrics)
                                         .font(.caption2)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(RunSignalTextStyle.secondary)
                                 }
                             }
                             Spacer()
                             VStack(alignment: .trailing, spacing: 3) {
                                 Text(RunFormatters.duration(split.durationSecondsEstimate))
                                     .font(.subheadline.monospacedDigit().bold())
-                                Text(RunFormatters.pace(split.paceSecondsPerKmEstimate))
+                                Text(RunFormatters.pace(split.paceSecondsPerKmEstimate, policy: runDisplayPolicy))
                                     .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(RunSignalTextStyle.secondary)
                             }
                         }
                         .padding(10)
@@ -2201,9 +2334,9 @@ struct SplitsAndEventsPanel: View {
 
     private func splitMetricsText(at index: Int) -> String? {
         guard let evidence = workout.evidence,
-              segments.kilometerSplits.indices.contains(index) else { return nil }
-        let split = segments.kilometerSplits[index]
-        let fallbackStartOffset = segments.kilometerSplits[..<index]
+              displayedSplits.indices.contains(index) else { return nil }
+        let split = displayedSplits[index]
+        let fallbackStartOffset = displayedSplits[..<index]
             .map(\.durationSecondsEstimate)
             .reduce(0, +)
         let startOffset = split.elapsedStartOffsetSeconds ?? fallbackStartOffset
@@ -2248,6 +2381,14 @@ struct SplitsAndEventsPanel: View {
             "Unavailable"
         }
     }
+
+    private var displayedSplits: [DerivedSplitEstimate] {
+        segments.splits(for: runDisplayPolicy.primaryUnit)
+    }
+
+    private var splitUnitName: String {
+        runDisplayPolicy.primaryUnit == .kilometers ? "kilometer" : "mile"
+    }
 }
 
 private struct WorkoutIntervalsCard: View {
@@ -2278,6 +2419,7 @@ private struct WorkoutIntervalsCard: View {
 private struct WorkoutIntervalSummaryRow: View {
     let interval: ReconstructedWorkoutInterval
     let simplifiesSingleWorkLabel: Bool
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -2285,8 +2427,12 @@ private struct WorkoutIntervalSummaryRow: View {
                 Text(label)
                     .font(.headline)
                 Spacer()
-                if let target = interval.plannedTargetDisplayText, !target.isEmpty {
-                    Text(PlannedWorkoutTargetPresentation.runnerText(target) ?? target)
+                if let target = RunnerPlannedWorkoutTargetText.text(
+                    fallback: interval.plannedTargetDisplayText,
+                    targets: interval.plannedTargets,
+                    policy: runDisplayPolicy
+                ) {
+                    Text(target)
                         .font(.caption.bold())
                         .foregroundStyle(.blue)
                 }
@@ -2309,7 +2455,7 @@ private struct WorkoutIntervalSummaryRow: View {
     }
 
     private var intervalItems: [MetricItem] {
-        var items = IntervalGoalMeasuredText.metricItems(for: interval)
+        var items = IntervalGoalMeasuredText.metricItems(for: interval, policy: runDisplayPolicy)
         if let heartRate = interval.averageHeartRateBpm {
             items.append(MetricItem(title: "Avg HR", value: RunFormatters.number(heartRate, suffix: " bpm"), detail: "HealthKit activity"))
         }
@@ -2514,7 +2660,7 @@ struct RawHealthKitWorkoutDebugView: View {
                                             .font(.subheadline.bold())
                                         Text("\(interval.markerKind.displayName) · \(interval.source.displayName) · \(interval.confidence.label)")
                                             .font(.caption2)
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(RunSignalTextStyle.secondary)
                                     }
                                     Spacer()
                                     VStack(alignment: .trailing, spacing: 2) {
@@ -2522,12 +2668,12 @@ struct RawHealthKitWorkoutDebugView: View {
                                             .font(.subheadline.monospacedDigit().bold())
                                         Text(RunFormatters.distance(interval.distanceMeters))
                                             .font(.caption2)
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(RunSignalTextStyle.secondary)
                                     }
                                 }
                                 Text("\(RunFormatters.duration(interval.startOffsetSeconds)) -> \(RunFormatters.duration(interval.endOffsetSeconds)) from workout start")
                                     .font(.caption2.monospacedDigit())
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(RunSignalTextStyle.secondary)
                                 MetricGrid(items: [
                                     MetricItem(title: "Pace", value: RunFormatters.pace(interval.paceSecondsPerKm), detail: "Derived"),
                                     MetricItem(title: "Avg HR", value: RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"), detail: "Window")
@@ -2535,7 +2681,7 @@ struct RawHealthKitWorkoutDebugView: View {
                                 if !interval.caveats.isEmpty {
                                     Text(interval.caveats.joined(separator: " "))
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(RunSignalTextStyle.secondary)
                                 }
                             }
                             .padding(10)
@@ -2657,7 +2803,7 @@ struct RawHealthKitWorkoutDebugView: View {
                         ForEach(Array(audit.summaryLines.enumerated()), id: \.offset) { _, line in
                             Text(line)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(RunSignalTextStyle.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
@@ -2703,7 +2849,7 @@ struct RawHealthKitWorkoutDebugView: View {
                 if !result.notes.isEmpty {
                     Text(result.notes.joined(separator: " · "))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -2743,7 +2889,7 @@ struct RawHealthKitWorkoutDebugView: View {
 
                 Text("\(interval.confidence.label) · \(interval.sourceNote)")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.top, 8)
@@ -2784,7 +2930,7 @@ struct RawHealthKitWorkoutDebugView: View {
 
                 Text("\(row.isOpenTail ? "Medium" : "High") · Resolved activity-boundary row")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.top, 8)
@@ -2900,7 +3046,7 @@ struct RawHealthKitWorkoutDebugView: View {
 
                 Text("\(RunFormatters.duration(row.startOffsetSeconds)) -> \(RunFormatters.duration(row.endOffsetSeconds)) from workout start")
                     .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
             }
             .padding(.top, 8)
         } label: {
@@ -3155,7 +3301,7 @@ struct DebugMetricProvenanceRow: View {
             Spacer()
             Text(value)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(RunSignalTextStyle.secondary)
                 .multilineTextAlignment(.trailing)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -3185,7 +3331,7 @@ private struct RawIntervalCompactLabel: View {
                 }
                 Text(subtitle)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
                     .lineLimit(2)
             }
             Spacer(minLength: 8)
@@ -3194,7 +3340,7 @@ private struct RawIntervalCompactLabel: View {
                     .font(.subheadline.monospacedDigit().bold())
                 Text(distance)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
             }
         }
     }
@@ -3217,12 +3363,12 @@ struct WholeRunStatusCard: View {
                 }
                 Text(summary.detail)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let loadedRunCount {
                     Text("\(loadedRunCount) completed running workouts loaded. Duplicate-like workouts are hidden from this v1 list.")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -3406,7 +3552,7 @@ struct HeaderBlock: View {
                 .textCase(nil)
             Text(subtitle)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(RunSignalTextStyle.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -3444,9 +3590,10 @@ struct ListSectionTitle: View {
 }
 
 enum RunSignalTextStyle {
-    static let prominentSecondary = Color.primary.opacity(0.86)
-    static let secondary = Color.primary.opacity(0.74)
-    static let tertiary = Color.primary.opacity(0.62)
+    static let metricSupporting = Color.primary
+    static let prominentSecondary = Color.primary.opacity(0.92)
+    static let secondary = Color.primary.opacity(0.84)
+    static let tertiary = Color.primary.opacity(0.74)
 }
 
 struct NoticeCard: View {
@@ -3464,7 +3611,7 @@ struct NoticeCard: View {
                     .font(.subheadline.bold())
                 Text(message)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
@@ -3492,7 +3639,7 @@ struct EvidenceRefreshJobCard: View {
                         .font(.subheadline.bold())
                     Text("\(summary.scopeKey) - \(summary.statusTitle) - \(summary.detailText)")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
@@ -3514,7 +3661,7 @@ struct EvidenceRefreshJobCard: View {
             if let lastError = summary.lastError, !lastError.isEmpty {
                 Text(lastError)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -3534,17 +3681,17 @@ struct EvidenceRefreshJobCard: View {
 
             Text("Retry and resume preserve existing cached evidence unless HealthKit returns usable replacement evidence.")
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(RunSignalTextStyle.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(derivedSummary.detailText)
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(RunSignalTextStyle.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text("Physical proof: \(interruptionProof.detailText)")
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(RunSignalTextStyle.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding()
@@ -3595,12 +3742,12 @@ struct EmptyStateView: View {
         VStack(spacing: 10) {
             Image(systemName: "tray")
                 .font(.largeTitle)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(RunSignalTextStyle.secondary)
             Text(title)
                 .font(.headline)
             Text(message)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(RunSignalTextStyle.secondary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -3666,21 +3813,30 @@ struct MetricGrid: View {
             ForEach(items) { item in
                 VStack(alignment: .leading, spacing: 5) {
                     Text(item.title)
-                        .font(.caption)
-                        .foregroundStyle(.primary)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(RunSignalTextStyle.metricSupporting)
                     Text(item.value)
                         .font(.headline.monospacedDigit())
+                        .foregroundStyle(.primary)
                         .lineLimit(2)
                         .minimumScaleFactor(0.75)
+                    if let secondaryValue = item.secondaryValue {
+                        Text("(\(secondaryValue))")
+                            .font(.caption2.monospacedDigit().weight(.medium))
+                            .foregroundStyle(RunSignalTextStyle.metricSupporting)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
                     Text(item.detail)
-                        .font(.caption2)
-                        .foregroundStyle(.primary)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(RunSignalTextStyle.metricSupporting)
                         .lineLimit(2)
                 }
                 .frame(maxWidth: .infinity, minHeight: 82, alignment: .topLeading)
                 .padding()
                 .background(.thinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
+                .runSignalAccessibilityValue(item.accessibilityValue)
             }
         }
     }
@@ -3691,6 +3847,20 @@ struct MetricItem: Identifiable {
     let title: String
     let value: String
     let detail: String
+    var secondaryValue: String? = nil
+    var accessibilityValue: String? = nil
+}
+
+private extension View {
+    @ViewBuilder
+    func runSignalAccessibilityValue(_ value: String?) -> some View {
+        if let value {
+            accessibilityElement(children: .combine)
+                .accessibilityValue(value)
+        } else {
+            self
+        }
+    }
 }
 
 struct ConfidencePill: View {

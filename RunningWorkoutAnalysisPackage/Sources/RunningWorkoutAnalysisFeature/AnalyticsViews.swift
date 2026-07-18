@@ -41,7 +41,7 @@ struct AnalyticsView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Training trends from your completed Apple Health runs.")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if healthPresentation.showsProgress {
@@ -57,7 +57,7 @@ struct AnalyticsView: View {
                          ? "Analytics will appear after RunSignal finds your first completed run."
                          : "Your loaded runs are available in Runs. Training totals and trends will appear when the history check finishes.")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
                     Picker("Period", selection: $selectedPeriod) {
@@ -80,12 +80,12 @@ struct AnalyticsView: View {
                                     .foregroundStyle(.primary)
                                 Text(intervalLibrarySummaryText)
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(RunSignalTextStyle.secondary)
                                     .multilineTextAlignment(.leading)
                             }
                             Spacer()
                             Image(systemName: "chevron.right")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(RunSignalTextStyle.secondary)
                         }
                         .padding()
                         .background(.background)
@@ -106,7 +106,7 @@ struct AnalyticsView: View {
                                     .foregroundStyle(.primary)
                                 Text(bestEffortSummaryText)
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(RunSignalTextStyle.secondary)
                             }
                             Spacer()
                             if store.isLoading {
@@ -114,7 +114,7 @@ struct AnalyticsView: View {
                                     .controlSize(.small)
                             } else {
                                 Image(systemName: "chevron.right")
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(RunSignalTextStyle.secondary)
                             }
                         }
                         .padding()
@@ -194,7 +194,7 @@ private struct BestEffortsView: View {
             Section {
                 Text("RunSignal shows only best efforts verified from detailed Apple Health distance samples. Estimated times are never displayed as records.")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
             }
 
             if !coverage.isComplete {
@@ -268,7 +268,7 @@ private struct BestEffortCoverageCard: View {
                     .font(.subheadline.bold())
                 Text(coverage.detailText)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if !coverage.showsProgress,
                    coverage.historyImportStatus != .running,
@@ -286,6 +286,8 @@ private struct BestEffortCoverageCard: View {
 }
 
 private struct RunningStatisticsView: View {
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
+
     let statistics: RunningProfileStatistics
 
     var body: some View {
@@ -299,7 +301,7 @@ private struct RunningStatisticsView: View {
                         .font(.headline)
                     Text("Four-week averages with separate year-to-date and all-time totals.")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                 }
             }
 
@@ -308,7 +310,12 @@ private struct RunningStatisticsView: View {
                 items: [
                     MetricItem(title: "Runs / Week", value: String(format: "%.1f", statistics.averagePerWeek.runs), detail: "28 days ÷ 4"),
                     MetricItem(title: "Time / Week", value: RunFormatters.duration(statistics.averagePerWeek.durationSeconds), detail: "Rolling average"),
-                    MetricItem(title: "Distance / Week", value: RunFormatters.distance(statistics.averagePerWeek.distanceMeters), detail: "Rolling average")
+                    MetricItem(
+                        title: "Distance / Week",
+                        value: RunFormatters.distance(statistics.averagePerWeek.distanceMeters, policy: runDisplayPolicy),
+                        detail: "Rolling average",
+                        secondaryValue: RunFormatters.secondaryDistance(statistics.averagePerWeek.distanceMeters, policy: runDisplayPolicy)
+                    )
                 ]
             )
             statisticsSection(title: "Year to Date", items: totalItems(statistics.yearToDate))
@@ -332,13 +339,20 @@ private struct RunningStatisticsView: View {
         [
             MetricItem(title: "Runs", value: "\(totals.runCount)", detail: "Completed"),
             MetricItem(title: "Time", value: RunFormatters.duration(totals.durationSeconds), detail: "Total"),
-            MetricItem(title: "Distance", value: RunFormatters.distance(totals.distanceMeters), detail: "Total"),
+            MetricItem(
+                title: "Distance",
+                value: RunFormatters.distance(totals.distanceMeters, policy: runDisplayPolicy),
+                detail: "Total",
+                secondaryValue: RunFormatters.secondaryDistance(totals.distanceMeters, policy: runDisplayPolicy)
+            ),
             MetricItem(title: "Elevation", value: String(format: "%.0f m", totals.elevationGainMeters), detail: "Gain")
         ]
     }
 }
 
 private struct IntervalLibraryView: View {
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
+
     var store: RunningAnalysisStore
     let groups: [IntervalLibraryGroup]
     @State private var showsSecondaryGroups = false
@@ -350,7 +364,10 @@ private struct IntervalLibraryView: View {
     private var primaryBroadGroups: [(key: [IntervalGoalSignature], groups: [IntervalLibraryGroup])] {
         Dictionary(grouping: sections.primaryComparisons, by: { $0.signature.workGoals })
             .map { (key: $0.key, groups: $0.value) }
-            .sorted { intervalGoalListLabel($0.key) < intervalGoalListLabel($1.key) }
+            .sorted {
+                intervalGoalListLabel($0.key, policy: runDisplayPolicy)
+                    < intervalGoalListLabel($1.key, policy: runDisplayPolicy)
+            }
     }
 
     var body: some View {
@@ -358,7 +375,7 @@ private struct IntervalLibraryView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Repeated prescriptions are shown first so you can compare like-for-like workouts. Single and one-off sessions remain available below.")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if groups.isEmpty {
@@ -376,7 +393,7 @@ private struct IntervalLibraryView: View {
 
                     ForEach(primaryBroadGroups, id: \.key) { broad in
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("\(intervalGoalListLabel(broad.key)) Work")
+                            Text("\(intervalGoalListLabel(broad.key, policy: runDisplayPolicy)) Work")
                                 .font(.headline)
                             ForEach(broad.groups) { group in
                                 intervalGroupLink(group)
@@ -404,7 +421,7 @@ private struct IntervalLibraryView: View {
                                         .font(.headline)
                                     Text("\(sections.secondaryGroups.count) workout plan\(sections.secondaryGroups.count == 1 ? "" : "s") · kept for reference")
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(RunSignalTextStyle.secondary)
                                 }
                             }
                         )
@@ -426,12 +443,12 @@ private struct IntervalLibraryView: View {
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(intervalPrescriptionLabel(group.signature))
+                    Text(intervalPrescriptionLabel(group.signature, policy: runDisplayPolicy))
                         .font(.subheadline.bold())
                         .foregroundStyle(.primary)
                     Text("\(group.totalWorkoutCount) workout\(group.totalWorkoutCount == 1 ? "" : "s") · \(group.totalWorkRepCount) Work reps")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                 }
                 Spacer()
                 Image(systemName: group.classification == .primaryComparison ? "chart.xyaxis.line" : "chevron.right")
@@ -446,6 +463,8 @@ private struct IntervalLibraryView: View {
 }
 
 private struct IntervalTrendView: View {
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
+
     var store: RunningAnalysisStore
     let group: IntervalLibraryGroup
     @State private var selectedWorkoutID: String?
@@ -466,6 +485,16 @@ private struct IntervalTrendView: View {
         return sortedTrendPoints.last
     }
 
+    private var latestPoint: IntervalTrendPoint? {
+        sortedTrendPoints.last
+    }
+
+    private var bestPoint: IntervalTrendPoint? {
+        sortedTrendPoints
+            .filter { $0.aggregatePaceSecondsPerKilometer != nil }
+            .min { ($0.aggregatePaceSecondsPerKilometer ?? .infinity) < ($1.aggregatePaceSecondsPerKilometer ?? .infinity) }
+    }
+
     private var workoutsByID: [String: CanonicalWorkout] {
         Dictionary(uniqueKeysWithValues: store.workouts.map { ($0.id, $0) })
     }
@@ -473,16 +502,21 @@ private struct IntervalTrendView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                HeaderBlock(
-                    title: intervalPrescriptionLabel(group.signature),
-                    subtitle: "Trend across workouts with the same planned work and recovery structure."
-                )
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(intervalPrescriptionLabel(group.signature, policy: runDisplayPolicy))
+                        .font(.headline)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Comparing workouts with the same planned work and recovery structure.")
+                        .font(.caption)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 MetricGrid(items: [
                     MetricItem(title: "Workouts", value: "\(group.totalWorkoutCount)", detail: "Same prescription"),
                     MetricItem(title: "Work Reps", value: "\(group.totalWorkRepCount)", detail: "Across workouts"),
-                    MetricItem(title: "Latest Avg Work Pace", value: RunFormatters.pace(group.latestAverageWorkPaceSecondsPerKilometer), detail: "Aggregate"),
-                    MetricItem(title: "Best Avg Work Pace", value: RunFormatters.pace(group.bestAverageWorkPaceSecondsPerKilometer), detail: "Fastest aggregate"),
+                    MetricItem(title: "Latest Avg Work Pace", value: RunFormatters.pace(group.latestAverageWorkPaceSecondsPerKilometer, policy: runDisplayPolicy), detail: latestPoint?.aggregationBasis.label ?? "Aggregate"),
+                    MetricItem(title: "Best Avg Work Pace", value: RunFormatters.pace(group.bestAverageWorkPaceSecondsPerKilometer, policy: runDisplayPolicy), detail: bestPoint?.aggregationBasis.label ?? "Fastest aggregate"),
                     MetricItem(title: "On Target", value: onTargetText, detail: "Targetable Work reps"),
                     MetricItem(title: "Change", value: paceChangeText, detail: "Latest vs previous")
                 ])
@@ -491,9 +525,9 @@ private struct IntervalTrendView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(RunFormatters.mediumDateWithYear.string(from: selectedPoint.startDate))
                             .font(.subheadline.bold())
-                        Text("\(RunFormatters.pace(selectedPoint.aggregatePaceSecondsPerKilometer)) average Work pace · \(intervalResultSummary(selectedPoint))")
+                        Text("\(RunFormatters.pace(selectedPoint.aggregatePaceSecondsPerKilometer, policy: runDisplayPolicy)) average Work pace · \(selectedPoint.aggregationBasis.label) · \(intervalResultSummary(selectedPoint))")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(RunSignalTextStyle.secondary)
                     }
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -538,7 +572,7 @@ private struct IntervalTrendView: View {
                             AxisGridLine()
                             AxisValueLabel {
                                 if let speedLike = value.as(Double.self), speedLike > 0 {
-                                    Text(RunFormatters.pace(3_600 / speedLike))
+                                    Text(RunFormatters.pace(3_600 / speedLike, policy: runDisplayPolicy))
                                 }
                             }
                         }
@@ -599,9 +633,9 @@ private struct IntervalTrendView: View {
         guard let delta = group.latestVersusPreviousAverageWorkPaceDeltaSecondsPerKilometer else {
             return "Unavailable"
         }
-        let seconds = Int(abs(delta).rounded())
+        let seconds = RunFormatters.paceDeltaSeconds(delta, policy: runDisplayPolicy)
         if seconds == 0 { return "No change" }
-        return "\(seconds)s/km \(delta < 0 ? "faster" : "slower")"
+        return "\(seconds)s\(runDisplayPolicy.primaryUnit.paceSuffix) \(delta < 0 ? "faster" : "slower")"
     }
 
     private func intervalResultSummary(_ point: IntervalTrendPoint) -> String {
@@ -615,16 +649,19 @@ private struct IntervalTrendView: View {
                     .font(.subheadline.bold())
                 Text(intervalResultSummary(point))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
-                Text(RunFormatters.pace(point.aggregatePaceSecondsPerKilometer))
+                Text(RunFormatters.pace(point.aggregatePaceSecondsPerKilometer, policy: runDisplayPolicy))
                     .font(.subheadline.monospacedDigit())
+                Text(point.aggregationBasis.label)
+                    .font(.caption2)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
                 if workoutsByID[point.workoutID] != nil {
                     Image(systemName: "chevron.right")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                 }
             }
         }
@@ -634,22 +671,23 @@ private struct IntervalTrendView: View {
     }
 }
 
-private func intervalPrescriptionLabel(_ signature: IntervalPrescriptionSignature) -> String {
-    let work = intervalGoalListLabel(signature.workGoals)
-    let recovery = intervalGoalListLabel(signature.recoveryGoals)
+private func intervalPrescriptionLabel(_ signature: IntervalPrescriptionSignature, policy: RunDisplayPolicy) -> String {
+    let work = intervalGoalListLabel(signature.workGoals, policy: policy)
+    let recovery = intervalGoalListLabel(signature.recoveryGoals, policy: policy)
     let recoveryText = signature.recoveryCount > 0 ? " / \(recovery) Recovery" : ""
     return "\(signature.workCount) × \(work)\(recoveryText)"
 }
 
-private func intervalGoalListLabel(_ goals: [IntervalGoalSignature]) -> String {
+private func intervalGoalListLabel(_ goals: [IntervalGoalSignature], policy: RunDisplayPolicy) -> String {
     guard !goals.isEmpty else { return "Open" }
-    return goals.map(intervalGoalLabel).joined(separator: " + ")
+    return goals.map { intervalGoalLabel($0, policy: policy) }.joined(separator: " + ")
 }
 
-private func intervalGoalLabel(_ goal: IntervalGoalSignature) -> String {
+private func intervalGoalLabel(_ goal: IntervalGoalSignature, policy: RunDisplayPolicy) -> String {
     switch goal.type {
     case .distance:
-        return RunFormatters.compactDistance(goal.value)
+        return goal.plannedDistancePrescription?.displayText
+            ?? RunFormatters.compactDistance(goal.value, policy: policy)
     case .time:
         return goal.value.map { RunFormatters.duration($0) } ?? "Timed"
     case .open: return "Open"
@@ -659,6 +697,8 @@ private func intervalGoalLabel(_ goal: IntervalGoalSignature) -> String {
 }
 
 private struct PeriodSignalView: View {
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
+
     var store: RunningAnalysisStore
     var summary: TrainingPeriodAnalyticsSummary
     var periodStarts: [Date]
@@ -690,9 +730,14 @@ private struct PeriodSignalView: View {
             }
 
             MetricGrid(items: [
-                MetricItem(title: "Distance", value: RunFormatters.distance(summary.totalDistanceMeters), detail: distanceDetail),
+                MetricItem(
+                    title: "Distance",
+                    value: RunFormatters.distance(summary.totalDistanceMeters, policy: runDisplayPolicy),
+                    detail: distanceDetail,
+                    secondaryValue: RunFormatters.secondaryDistance(summary.totalDistanceMeters, policy: runDisplayPolicy)
+                ),
                 MetricItem(title: "Runs", value: "\(summary.runCount)", detail: "Completed"),
-                MetricItem(title: "Avg pace", value: RunFormatters.pace(summary.averagePaceSecondsPerKm), detail: "Distance/time"),
+                MetricItem(title: "Avg pace", value: RunFormatters.pace(summary.averagePaceSecondsPerKm, policy: runDisplayPolicy), detail: "Distance/time"),
                 MetricItem(title: "Detailed Data", value: evidenceStatus, detail: evidenceDetail)
             ])
 
@@ -721,11 +766,11 @@ private struct PeriodSignalView: View {
                                     .foregroundStyle(.primary)
                                 Text("Browse and manage \(summary.runCount) \(summary.runCount == 1 ? "run" : "runs")")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(RunSignalTextStyle.secondary)
                             }
                             Spacer()
                             Image(systemName: "chevron.right")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(RunSignalTextStyle.secondary)
                         }
                         .padding()
                         .background(.background)
@@ -849,7 +894,7 @@ private struct PeriodNavigator: View {
                         .font(.headline)
                     Text(title)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                 }
 
                 Spacer()
@@ -950,6 +995,8 @@ private struct PeriodStartGroup: Identifiable {
 }
 
 private struct PeriodComparisonPanel: View {
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
+
     let summary: TrainingPeriodAnalyticsSummary
 
     var body: some View {
@@ -967,13 +1014,13 @@ private struct PeriodComparisonPanel: View {
                     Divider()
                     comparisonRow(
                         firstTitle: "Previous",
-                        firstValue: RunFormatters.distance(comparison.totalDistanceMeters),
+                        firstValue: RunFormatters.distance(comparison.totalDistanceMeters, policy: runDisplayPolicy),
                         secondTitle: "Previous pace",
-                        secondValue: RunFormatters.pace(comparison.averagePaceSecondsPerKm)
+                        secondValue: RunFormatters.pace(comparison.averagePaceSecondsPerKm, policy: runDisplayPolicy)
                     )
                     Text(summary.comparisonScopeLabel)
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding()
@@ -991,7 +1038,7 @@ private struct PeriodComparisonPanel: View {
     private func signedDistance(_ meters: Double?) -> String {
         guard let meters else { return "Unavailable" }
         let prefix = meters > 0 ? "+" : ""
-        return "\(prefix)\(RunFormatters.distance(meters))"
+        return "\(prefix)\(RunFormatters.distance(meters, policy: runDisplayPolicy))"
     }
 
     private func signedInt(_ value: Int?) -> String {
@@ -1015,7 +1062,7 @@ private struct PeriodComparisonPanel: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(RunSignalTextStyle.secondary)
             Text(value)
                 .font(.headline.monospacedDigit())
         }
@@ -1024,6 +1071,8 @@ private struct PeriodComparisonPanel: View {
 }
 
 private struct PeriodDistanceChart: View {
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
+
     let summary: TrainingPeriodAnalyticsSummary
     @State private var selectedBucketLabel: String?
 
@@ -1039,20 +1088,27 @@ private struct PeriodDistanceChart: View {
                 if let selectedBucket {
                     Text(selectedBucket.label)
                         .font(.subheadline.bold())
-                    Text(RunFormatters.distance(selectedBucket.distanceMeters))
-                        .font(.title3.monospacedDigit().bold())
-                        .foregroundStyle(.blue)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(RunFormatters.distance(selectedBucket.distanceMeters, policy: runDisplayPolicy))
+                            .font(.title3.monospacedDigit().bold())
+                            .foregroundStyle(.blue)
+                        if let secondaryDistance = RunFormatters.secondaryDistance(selectedBucket.distanceMeters, policy: runDisplayPolicy) {
+                            Text("(\(secondaryDistance))")
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(RunSignalTextStyle.secondary)
+                        }
+                    }
                 } else {
                     Text("Tap or drag across the bars to see distance")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                 }
             }
             Chart {
                 ForEach(summary.distanceBuckets) { bucket in
                     BarMark(
                         x: .value("Period", bucket.label),
-                        y: .value("Distance", bucket.distanceMeters / 1_000)
+                        y: .value("Distance", RunFormatters.chartDistanceValue(bucket.distanceMeters, policy: runDisplayPolicy))
                     )
                     .foregroundStyle(bucketColor(bucket))
                     .cornerRadius(4)
@@ -1065,7 +1121,7 @@ private struct PeriodDistanceChart: View {
                 }
             }
             .frame(height: 150)
-            .chartYAxisLabel("km")
+            .chartYAxisLabel(RunFormatters.chartDistanceUnit(policy: runDisplayPolicy))
             .chartOverlay { proxy in
                 GeometryReader { geometry in
                     Rectangle()
@@ -1107,6 +1163,8 @@ private struct PeriodDistanceChart: View {
 }
 
 private struct WeekSignalView: View {
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
+
     var store: RunningAnalysisStore
     var summary: WeeklyAnalyticsSummary
     var weekStarts: [Date]
@@ -1127,9 +1185,14 @@ private struct WeekSignalView: View {
             )
 
             MetricGrid(items: [
-                MetricItem(title: "Distance", value: RunFormatters.distance(summary.totalDistanceMeters), detail: "Monday-start week"),
+                MetricItem(
+                    title: "Distance",
+                    value: RunFormatters.distance(summary.totalDistanceMeters, policy: runDisplayPolicy),
+                    detail: "Monday-start week",
+                    secondaryValue: RunFormatters.secondaryDistance(summary.totalDistanceMeters, policy: runDisplayPolicy)
+                ),
                 MetricItem(title: "Runs", value: "\(summary.runCount)", detail: "Non-duplicate"),
-                MetricItem(title: "Avg pace", value: RunFormatters.pace(summary.averagePaceSecondsPerKm), detail: "Distance/time"),
+                MetricItem(title: "Avg pace", value: RunFormatters.pace(summary.averagePaceSecondsPerKm, policy: runDisplayPolicy), detail: "Distance/time"),
                 MetricItem(title: "Evidence", value: evidenceStatus, detail: evidenceDetail)
             ])
 
@@ -1189,7 +1252,7 @@ private struct WeekNavigator: View {
                     .font(.headline)
                 Text(title)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
             }
 
             Spacer()
@@ -1205,6 +1268,8 @@ private struct WeekNavigator: View {
 }
 
 private struct DailyDistanceChart: View {
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
+
     let days: [WeeklyDailyDistance]
 
     var body: some View {
@@ -1213,13 +1278,13 @@ private struct DailyDistanceChart: View {
             Chart(days) { day in
                 BarMark(
                     x: .value("Day", weekdayLabel(day.date)),
-                    y: .value("Distance", day.distanceMeters / 1_000)
+                    y: .value("Distance", RunFormatters.chartDistanceValue(day.distanceMeters, policy: runDisplayPolicy))
                 )
                 .foregroundStyle(day.distanceMeters > 0 ? .blue : .secondary.opacity(0.25))
                 .cornerRadius(4)
             }
             .frame(height: 150)
-            .chartYAxisLabel("km")
+            .chartYAxisLabel(RunFormatters.chartDistanceUnit(policy: runDisplayPolicy))
         }
         .padding()
         .background(.background)
@@ -1234,6 +1299,8 @@ private struct DailyDistanceChart: View {
 }
 
 private struct WeeklyCategoryTotalsView: View {
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
+
     let totals: [WeeklyRunCategoryTotal]
 
     private var visibleTotals: [WeeklyRunCategoryTotal] {
@@ -1257,7 +1324,7 @@ private struct WeeklyCategoryTotalsView: View {
                         }
                         Text("\(total.runCount)")
                             .font(.title3.monospacedDigit().bold())
-                        Text(RunFormatters.distance(total.distanceMeters))
+                        Text(RunFormatters.distance(total.distanceMeters, policy: runDisplayPolicy))
                             .font(.caption2)
                             .foregroundStyle(RunSignalTextStyle.tertiary)
                     }
@@ -1295,6 +1362,8 @@ private struct PeriodWorkoutCollectionView: View {
 }
 
 private struct WeeklyWorkoutList: View {
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
+
     var store: RunningAnalysisStore
     let rows: [WeeklyWorkoutRow]
     var title = "Runs This Week"
@@ -1431,9 +1500,9 @@ private struct WeeklyWorkoutList: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
-                Text(RunFormatters.distance(row.workout.distanceMeters))
+                Text(RunFormatters.distance(row.workout.distanceMeters, policy: runDisplayPolicy))
                     .font(.subheadline.monospacedDigit().bold())
-                Text(RunFormatters.pace(row.workout.paceSecondsPerKm))
+                Text(RunFormatters.pace(row.workout.paceSecondsPerKm, policy: runDisplayPolicy))
                     .font(.caption2)
                     .foregroundStyle(RunSignalTextStyle.secondary)
             }
@@ -1640,6 +1709,8 @@ struct WorkoutChartDeck: View {
 }
 
 private struct WorkoutChartCard: View {
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
+
     let series: WorkoutChartSeries
     let intervalMarkers: [WorkoutChartIntervalMarker]
     let intervalSpans: [WorkoutChartIntervalSpan]
@@ -1714,11 +1785,11 @@ private struct WorkoutChartCard: View {
                     Text(series.metric.title)
                         .font(.subheadline.bold())
                     HStack(alignment: .lastTextBaseline, spacing: 6) {
-                        Text(WorkoutChartFormatter.value(headlineValue, metric: series.metric))
+                        Text(WorkoutChartFormatter.value(headlineValue, metric: series.metric, policy: runDisplayPolicy))
                             .font(.title3.monospacedDigit().bold())
                         Text(selectionCaption)
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(RunSignalTextStyle.secondary)
                     }
                 }
                 Spacer()
@@ -1734,9 +1805,9 @@ private struct WorkoutChartCard: View {
                         .font(.caption.bold())
                         .buttonStyle(.bordered)
                 }
-                Text(series.metric.unit)
+                Text(series.metric.unit(policy: runDisplayPolicy))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
             }
 
             if series.isRenderable {
@@ -1798,7 +1869,7 @@ private struct WorkoutChartCard: View {
                         AxisTick()
                         AxisValueLabel {
                             if let chartValue = value.as(Double.self) {
-                                Text(WorkoutChartFormatter.axisValue(chartValue, metric: series.metric))
+                                Text(WorkoutChartFormatter.axisValue(chartValue, metric: series.metric, policy: runDisplayPolicy))
                             }
                         }
                     }
@@ -1869,7 +1940,7 @@ private struct HeartRateZoneDetailView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Average Heart Rate")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(RunSignalTextStyle.secondary)
                         Text(RunFormatters.number(workout.averageHeartRate, suffix: " bpm"))
                             .font(.title.bold().monospacedDigit())
                     }
@@ -1908,7 +1979,7 @@ private struct HeartRateZoneDetailView: View {
 
                     Text("Estimated time in each heart rate zone")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
 
                     if analysis.unclassifiedDurationSeconds >= 1 {
                         LabeledContent(
@@ -1943,7 +2014,7 @@ private struct HeartRateZoneDetailView: View {
                         }
                         Text(analysis.profile.sourceDetail)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(RunSignalTextStyle.secondary)
                     }
                     .padding()
                     .background(.background)
@@ -1991,7 +2062,7 @@ private struct HeartRateZoneDurationRow: View {
                     .font(.subheadline.monospacedDigit().bold())
                 Text(range?.displayRange ?? "")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
             }
             ProgressView(value: fraction)
                 .tint(HeartRateZonePalette.color(for: duration.zone))
@@ -2066,11 +2137,11 @@ private extension Array where Element == ReconstructedWorkoutInterval {
 }
 
 private enum WorkoutChartFormatter {
-    static func value(_ value: Double?, metric: WorkoutChartMetric) -> String {
+    static func value(_ value: Double?, metric: WorkoutChartMetric, policy: RunDisplayPolicy) -> String {
         guard let value else { return "Unavailable" }
         switch metric {
         case .pace:
-            return RunFormatters.pace(value)
+            return RunFormatters.pace(value, policy: policy)
         case .heartRate:
             return RunFormatters.number(value, suffix: " bpm")
         case .power:
@@ -2080,10 +2151,11 @@ private enum WorkoutChartFormatter {
         }
     }
 
-    static func axisValue(_ value: Double, metric: WorkoutChartMetric) -> String {
+    static func axisValue(_ value: Double, metric: WorkoutChartMetric, policy: RunDisplayPolicy) -> String {
         switch metric {
         case .pace:
-            return RunFormatters.pace(value).replacingOccurrences(of: " /km", with: "")
+            return RunFormatters.pace(value, policy: policy)
+                .replacingOccurrences(of: policy.primaryUnit.paceSuffix, with: "")
         case .heartRate, .power, .cadence:
             return RunFormatters.number(value, suffix: "")
         }
@@ -2095,11 +2167,11 @@ private enum WorkoutChartFormatter {
 }
 
 private enum IntervalMetricFormatter {
-    static func value(_ value: Double?, metric: IntervalAnalysisMetric) -> String {
+    static func value(_ value: Double?, metric: IntervalAnalysisMetric, policy: RunDisplayPolicy) -> String {
         guard let value else { return "Unavailable" }
         switch metric {
         case .pace:
-            return RunFormatters.pace(value)
+            return RunFormatters.pace(value, policy: policy)
         case .heartRate:
             return RunFormatters.number(value, suffix: " bpm")
         case .power:
@@ -2109,15 +2181,16 @@ private enum IntervalMetricFormatter {
         case .duration:
             return RunFormatters.duration(value)
         case .distance:
-            return RunFormatters.compactDistance(value)
+            return RunFormatters.compactDistance(value, policy: policy)
         }
     }
 
-    static func axisValue(_ chartValue: Double, metric: IntervalAnalysisMetric) -> String {
+    static func axisValue(_ chartValue: Double, metric: IntervalAnalysisMetric, policy: RunDisplayPolicy) -> String {
         switch metric {
         case .pace:
             guard chartValue > 0 else { return "" }
-            return RunFormatters.pace(3_600 / chartValue).replacingOccurrences(of: " /km", with: "")
+            return RunFormatters.pace(3_600 / chartValue, policy: policy)
+                .replacingOccurrences(of: policy.primaryUnit.paceSuffix, with: "")
         case .heartRate:
             return RunFormatters.number(chartValue, suffix: "")
         case .power:
@@ -2127,9 +2200,11 @@ private enum IntervalMetricFormatter {
         case .duration:
             return RunFormatters.duration(chartValue)
         case .distance:
-            return chartValue >= 1_000
-                ? String(format: "%.1f km", chartValue / 1_000)
-                : "\(Int(chartValue.rounded())) m"
+            return RunFormatters.number(
+                chartValue,
+                suffix: " \(RunFormatters.chartDistanceUnit(policy: policy))",
+                decimals: abs(chartValue) < 10 ? 1 : 0
+            )
         }
     }
 }
@@ -2210,7 +2285,7 @@ struct IntervalAnalysisScreen: View {
 
                     Text("This chart compares the same metric across your Work reps. Tap a rep to inspect it; Repeat Details below shows every Work and Recovery row.")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
                     if availableMetrics.count > 1 {
@@ -2270,6 +2345,8 @@ struct IntervalAnalysisScreen: View {
 }
 
 private struct IntervalResultsPanel: View {
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
+
     let summary: IntervalAnalysisSummary
     let evaluations: [WorkTargetEvaluation]
 
@@ -2289,7 +2366,7 @@ private struct IntervalResultsPanel: View {
                         .font(.headline)
                     Text(prescriptionTitle)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                 }
                 Spacer()
                 if !targeted.isEmpty || !exactTargeted.isEmpty {
@@ -2312,13 +2389,19 @@ private struct IntervalResultsPanel: View {
             if let measuredDistanceText {
                 Label(measuredDistanceText, systemImage: "waveform.path.ecg")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
+            }
+
+            if let shortenedAggregateText {
+                Text(shortenedAggregateText)
+                    .font(.caption)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
             }
 
             if targeted.contains(where: { $0.completionStatus == .shortened }) {
                 Text("A shortened rep keeps its pace result separate from completion.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
             }
         }
         .padding()
@@ -2335,7 +2418,7 @@ private struct IntervalResultsPanel: View {
                 abs(($0.plannedGoalValue ?? 0) - (first.plannedGoalValue ?? 0)) < 0.5
         }
         guard matchingGoals.count == workRows.count else { return "\(workRows.count) work intervals" }
-        return "\(workRows.count) × \(first.plannedGoalDisplayText)"
+        return "\(workRows.count) × \(authoredGoalText(first))"
     }
 
     private var metricItems: [MetricItem] {
@@ -2344,16 +2427,23 @@ private struct IntervalResultsPanel: View {
         }
         return [
             MetricItem(title: "Work Intervals", value: "\(workSummary.repeatCount)", detail: "Completed"),
-            MetricItem(title: "Work Distance", value: RunFormatters.compactDistance(workSummary.primaryDistanceMeters), detail: "Prescribed basis"),
-            MetricItem(title: "Work Time", value: RunFormatters.duration(workSummary.primaryDurationSeconds), detail: "Completed intervals"),
-            MetricItem(title: "Avg Work Pace", value: RunFormatters.pace(workSummary.primaryPaceSecondsPerKm), detail: "Prescribed basis")
+            MetricItem(title: "Work Distance", value: RunFormatters.compactDistance(workSummary.aggregatedRepeatCount > 0 ? workSummary.primaryDistanceMeters : nil, policy: runDisplayPolicy), detail: workSummary.aggregationBasis.label),
+            MetricItem(title: "Work Time", value: RunFormatters.duration(workSummary.aggregatedRepeatCount > 0 ? workSummary.primaryDurationSeconds : nil), detail: "\(workSummary.aggregatedRepeatCount) reps in aggregate"),
+            MetricItem(title: "Avg Work Pace", value: RunFormatters.pace(workSummary.primaryPaceSecondsPerKm, policy: runDisplayPolicy), detail: workSummary.aggregationBasis.label)
         ]
+    }
+
+    private var shortenedAggregateText: String? {
+        guard let workSummary = summary.workRepeatSummary,
+              workSummary.shortenedRepeatCount > 0 else { return nil }
+        let count = workSummary.shortenedRepeatCount
+        return "\(count) shortened Work rep\(count == 1 ? "" : "s") remains visible and is excluded from the completed prescribed-distance aggregate."
     }
 
     private var measuredDistanceText: String? {
         guard let workSummary = summary.workRepeatSummary,
               abs(workSummary.totalDistanceMeters - workSummary.primaryDistanceMeters) >= 5 else { return nil }
-        return "Apple Health measured \(RunFormatters.compactDistance(workSummary.totalDistanceMeters)) across the work intervals."
+        return "Apple Health measured \(RunFormatters.compactDistance(workSummary.totalDistanceMeters, policy: runDisplayPolicy)) across the work intervals."
     }
 
     private var exactTargetSummary: String? {
@@ -2365,14 +2455,14 @@ private struct IntervalResultsPanel: View {
               }) else { return nil }
         let measuredPaces = exactTargeted.compactMap(\.measurement.paceSecondsPerKilometer)
         guard !measuredPaces.isEmpty else {
-            return "Exact pace target \(RunFormatters.pace(target)) · comparison unavailable"
+            return "Exact pace target \(RunFormatters.pace(target, policy: runDisplayPolicy)) · comparison unavailable"
         }
         let average = measuredPaces.reduce(0, +) / Double(measuredPaces.count)
-        let delta = Int(abs(average - target).rounded())
+        let delta = RunFormatters.paceDeltaSeconds(average - target, policy: runDisplayPolicy)
         let comparison = delta == 0
             ? "average matched"
-            : "average \(delta)s/km \(average < target ? "faster" : "slower")"
-        return "Exact pace target \(RunFormatters.pace(target)) · \(comparison)"
+            : "average \(delta)s\(runDisplayPolicy.primaryUnit.paceSuffix) \(average < target ? "faster" : "slower")"
+        return "Exact pace target \(RunFormatters.pace(target, policy: runDisplayPolicy)) · \(comparison)"
     }
 }
 
@@ -2391,6 +2481,8 @@ private struct IntervalMetricPicker: View {
 }
 
 private struct IntervalPrimaryScrubChart: View {
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
+
     let summary: IntervalAnalysisSummary
     let intervals: [ReconstructedWorkoutInterval]
     let rows: [IntervalAnalysisRow]
@@ -2412,12 +2504,12 @@ private struct IntervalPrimaryScrubChart: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .lastTextBaseline) {
-                Text(IntervalMetricFormatter.value(headlineValue?.displayValue, metric: metric))
+                Text(IntervalMetricFormatter.value(headlineValue?.displayValue, metric: metric, policy: runDisplayPolicy))
                     .font(.title2.monospacedDigit().bold())
                     .foregroundStyle(intervalMetricTint(metric))
                 Text(selectedRow?.label ?? "Average Work")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
                 Spacer()
                 if selectedIntervalIndex != nil {
                     Button("Average") {
@@ -2446,7 +2538,7 @@ private struct IntervalPrimaryScrubChart: View {
                 }
 
                 if let aggregate = summary.aggregateValue(for: metric) {
-                    RuleMark(y: .value("Average", aggregate.chartValue))
+                    RuleMark(y: .value("Average", metric.presentationChartValue(aggregate.chartValue, policy: runDisplayPolicy)))
                         .foregroundStyle(.secondary.opacity(0.6))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
                 }
@@ -2455,7 +2547,7 @@ private struct IntervalPrimaryScrubChart: View {
                     if let value = row.value(for: metric) {
                         BarMark(
                             x: .value("Interval", xPosition(for: row)),
-                            y: .value(metric.title, value.chartValue),
+                            y: .value(metric.title, metric.presentationChartValue(value.chartValue, policy: runDisplayPolicy)),
                             width: .ratio(0.62)
                         )
                         .foregroundStyle(barTint(for: row))
@@ -2471,6 +2563,7 @@ private struct IntervalPrimaryScrubChart: View {
                 }
             }
             .frame(height: 260)
+            .chartYAxisLabel(metric.unit(policy: runDisplayPolicy))
             .chartXAxis {
                 AxisMarks(values: Array(1...max(rows.count, 1))) { value in
                     AxisGridLine()
@@ -2491,7 +2584,7 @@ private struct IntervalPrimaryScrubChart: View {
                     AxisTick()
                     AxisValueLabel {
                         if let chartValue = value.as(Double.self) {
-                            Text(IntervalMetricFormatter.axisValue(chartValue, metric: metric))
+                            Text(IntervalMetricFormatter.axisValue(chartValue, metric: metric, policy: runDisplayPolicy))
                         }
                     }
                 }
@@ -2538,6 +2631,8 @@ private struct IntervalPrimaryScrubChart: View {
 }
 
 private struct IntervalSelectedRowPanel: View {
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
+
     let summary: IntervalAnalysisSummary
     let metric: IntervalAnalysisMetric
     let selectedRow: IntervalAnalysisRow?
@@ -2551,7 +2646,7 @@ private struct IntervalSelectedRowPanel: View {
                         .font(.subheadline.bold())
                     Text(subtitle)
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                 }
                 Spacer()
                 Text(selectedRow == nil ? "Average" : "Selected")
@@ -2595,7 +2690,7 @@ private struct IntervalSelectedRowPanel: View {
 
     private var subtitle: String {
         if let selectedRow {
-            return "\(selectedRow.plannedGoalDisplayText) · \(selectedRow.displayBasisLabel)"
+            return "\(authoredGoalText(selectedRow)) · \(selectedRow.displayBasisLabel)"
         }
         return "Across all completed work intervals"
     }
@@ -2603,15 +2698,15 @@ private struct IntervalSelectedRowPanel: View {
     private var metricItems: [MetricItem] {
         if let selectedRow {
             return [
-                MetricItem(title: metric.title, value: IntervalMetricFormatter.value(selectedRow.value(for: metric)?.displayValue, metric: metric), detail: selectedRow.roleAbbreviation),
-            ] + IntervalGoalMeasuredText.metricItems(for: selectedRow)
+                MetricItem(title: metric.title, value: IntervalMetricFormatter.value(selectedRow.value(for: metric)?.displayValue, metric: metric, policy: runDisplayPolicy), detail: selectedRow.roleAbbreviation),
+            ] + IntervalGoalMeasuredText.metricItems(for: selectedRow, policy: runDisplayPolicy)
         }
 
         return [
-            MetricItem(title: metric.title, value: IntervalMetricFormatter.value(summary.aggregateValue(for: metric)?.displayValue, metric: metric), detail: summary.aggregateCaption(for: metric)),
-            MetricItem(title: "Distance", value: IntervalMetricFormatter.value(summary.aggregateValue(for: .distance)?.displayValue, metric: .distance), detail: "Total"),
-            MetricItem(title: "Duration", value: IntervalMetricFormatter.value(summary.aggregateValue(for: .duration)?.displayValue, metric: .duration), detail: "Total"),
-            MetricItem(title: "Pace", value: IntervalMetricFormatter.value(summary.aggregateValue(for: .pace)?.displayValue, metric: .pace), detail: "Aggregate")
+            MetricItem(title: metric.title, value: IntervalMetricFormatter.value(summary.aggregateValue(for: metric)?.displayValue, metric: metric, policy: runDisplayPolicy), detail: summary.aggregateCaption(for: metric)),
+            MetricItem(title: "Distance", value: IntervalMetricFormatter.value(summary.aggregateValue(for: .distance)?.displayValue, metric: .distance, policy: runDisplayPolicy), detail: "Total"),
+            MetricItem(title: "Duration", value: IntervalMetricFormatter.value(summary.aggregateValue(for: .duration)?.displayValue, metric: .duration, policy: runDisplayPolicy), detail: "Total"),
+            MetricItem(title: "Pace", value: IntervalMetricFormatter.value(summary.aggregateValue(for: .pace)?.displayValue, metric: .pace, policy: runDisplayPolicy), detail: "Aggregate")
         ]
     }
 }
@@ -2736,6 +2831,8 @@ private struct IntervalRepeatGroupCard: View {
 }
 
 private struct IntervalAnalysisCompactRow: View {
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
+
     let row: IntervalAnalysisRow
     var evaluation: WorkTargetEvaluation? = nil
     var showsBackground = true
@@ -2746,9 +2843,9 @@ private struct IntervalAnalysisCompactRow: View {
                 Text(row.label)
                     .font(.subheadline.bold())
                     .foregroundStyle(intervalRoleTint(for: row))
-                Text(row.plannedGoalDisplayText)
+                Text(authoredGoalText(row))
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
             }
 
             Spacer()
@@ -2760,9 +2857,9 @@ private struct IntervalAnalysisCompactRow: View {
                 }
                 Text(displayDistance)
                     .font(.subheadline.monospacedDigit().bold())
-                Text(RunFormatters.pace(row.paceSecondsPerKm))
+                Text(RunFormatters.pace(row.paceSecondsPerKm, policy: runDisplayPolicy))
                     .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(RunSignalTextStyle.secondary)
             }
         }
         .padding(showsBackground ? 10 : 4)
@@ -2772,10 +2869,14 @@ private struct IntervalAnalysisCompactRow: View {
 
     private var displayDistance: String {
         if row.plannedGoalType == .distance {
-            return RunFormatters.compactDistance(row.plannedGoalValue)
+            return authoredGoalText(row)
         }
-        return RunFormatters.compactDistance(row.distanceMeters)
+        return RunFormatters.compactDistance(row.distanceMeters, policy: runDisplayPolicy)
     }
+}
+
+private func authoredGoalText(_ row: IntervalAnalysisRow) -> String {
+    row.plannedDistancePrescription?.displayText ?? row.plannedGoalDisplayText
 }
 
 private func intervalRoleTint(for row: IntervalAnalysisRow) -> Color {
@@ -2805,6 +2906,8 @@ private func intervalMetricTint(_ metric: IntervalAnalysisMetric) -> Color {
 }
 
 struct IntervalDetailView: View {
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
+
     let workout: CanonicalWorkout
     let interval: ReconstructedWorkoutInterval
 
@@ -2859,7 +2962,7 @@ struct IntervalDetailView: View {
 
     private var intervalMetricItems: [MetricItem] {
         let detailBasis = interval.windowSource == .healthKitActivityBoundaries ? "Activity row" : "Window"
-        var items = IntervalGoalMeasuredText.metricItems(for: interval) + [
+        var items = IntervalGoalMeasuredText.metricItems(for: interval, policy: runDisplayPolicy) + [
             MetricItem(title: "Avg HR", value: RunFormatters.number(interval.averageHeartRateBpm, suffix: " bpm"), detail: detailBasis),
             MetricItem(title: "Cadence", value: RunFormatters.number(interval.averageCadence, suffix: " spm"), detail: detailBasis),
             MetricItem(title: "Power", value: RunFormatters.number(interval.averagePower, suffix: " W"), detail: detailBasis)
@@ -2872,10 +2975,12 @@ struct IntervalDetailView: View {
 }
 
 private struct WorkTargetBadge: View {
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
+
     let evaluation: WorkTargetEvaluation
 
     var body: some View {
-        Label(WorkTargetPresentation.badgeLabel(for: evaluation), systemImage: symbol)
+        Label(WorkTargetPresentation.badgeLabel(for: evaluation, policy: runDisplayPolicy), systemImage: symbol)
             .font(.caption2.bold())
             .foregroundStyle(tint)
             .labelStyle(.titleAndIcon)
@@ -2892,20 +2997,23 @@ private struct WorkTargetBadge: View {
     }
 
     private var accessibilityText: String {
-        if let comparison = WorkTargetPresentation.exactTargetDeltaText(evaluation) {
+        if let comparison = WorkTargetPresentation.exactTargetDeltaText(evaluation, policy: runDisplayPolicy) {
             return "Exact pace target comparison: \(comparison), completion \(evaluation.completionStatus.runnerLabel)"
         }
         return "Pace result \(evaluation.result.runnerLabel), completion \(evaluation.completionStatus.runnerLabel)"
     }
+
 }
 
 private struct WorkTargetDetailGrid: View {
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
+
     let evaluation: WorkTargetEvaluation
 
     var body: some View {
         MetricGrid(items: [
             MetricItem(title: "Target", value: targetText, detail: targetDetail),
-            MetricItem(title: "Actual", value: RunFormatters.pace(evaluation.measurement.paceSecondsPerKilometer), detail: evaluation.measurement.basis.runnerLabel),
+            MetricItem(title: "Actual", value: RunFormatters.pace(evaluation.measurement.paceSecondsPerKilometer, policy: runDisplayPolicy), detail: evaluation.measurement.basis.runnerLabel),
             MetricItem(title: resultTitle, value: resultText, detail: deltaText),
             MetricItem(title: "Completion", value: evaluation.completionStatus.runnerLabel, detail: "Separate from pace")
         ])
@@ -2920,19 +3028,19 @@ private struct WorkTargetDetailGrid: View {
     }
 
     private var resultText: String {
-        WorkTargetPresentation.exactTargetDeltaText(evaluation) ?? evaluation.result.runnerLabel
+        WorkTargetPresentation.exactTargetDeltaText(evaluation, policy: runDisplayPolicy) ?? evaluation.result.runnerLabel
     }
 
     private var targetText: String {
         if let exact = evaluation.exactTargetSecondsPerKilometer {
-            return RunFormatters.pace(exact)
+            return RunFormatters.pace(exact, policy: runDisplayPolicy)
         }
         guard let range = evaluation.targetRange else { return "Unavailable" }
-        return "\(RunFormatters.pace(range.fastestSecondsPerKilometer))–\(RunFormatters.pace(range.slowestSecondsPerKilometer))"
+        return "\(RunFormatters.pace(range.fastestSecondsPerKilometer, policy: runDisplayPolicy))–\(RunFormatters.pace(range.slowestSecondsPerKilometer, policy: runDisplayPolicy))"
     }
 
     private var deltaText: String {
-        if WorkTargetPresentation.exactTargetDeltaText(evaluation) != nil {
+        if WorkTargetPresentation.exactTargetDeltaText(evaluation, policy: runDisplayPolicy) != nil {
             return "Exact target comparison; no tolerance range"
         }
         guard let pace = evaluation.measurement.paceSecondsPerKilometer,
@@ -2941,8 +3049,8 @@ private struct WorkTargetDetailGrid: View {
         let edge = pace < range.fastestSecondsPerKilometer
             ? range.fastestSecondsPerKilometer
             : range.slowestSecondsPerKilometer
-        let delta = Int(abs(pace - edge).rounded())
-        return "\(delta)s/km \(pace < edge ? "faster" : "slower")"
+        let delta = RunFormatters.paceDeltaSeconds(pace - edge, policy: runDisplayPolicy)
+        return "\(delta)s\(runDisplayPolicy.primaryUnit.paceSuffix) \(pace < edge ? "faster" : "slower")"
     }
 }
 

@@ -207,10 +207,25 @@ public enum WorkTargetEvaluator {
 public struct IntervalGoalSignature: Codable, Equatable, Hashable, Sendable {
     public var type: PlannedWorkoutGoalType
     public var value: Double?
+    public var plannedDistancePrescription: PlannedDistancePrescription?
 
-    public init(type: PlannedWorkoutGoalType, value: Double?) {
+    public init(
+        type: PlannedWorkoutGoalType,
+        value: Double?,
+        plannedDistancePrescription: PlannedDistancePrescription? = nil
+    ) {
         self.type = type
         self.value = value.map { ($0 * 10).rounded() / 10 }
+        self.plannedDistancePrescription = plannedDistancePrescription
+    }
+
+    public static func == (lhs: IntervalGoalSignature, rhs: IntervalGoalSignature) -> Bool {
+        lhs.type == rhs.type && lhs.value == rhs.value
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(type)
+        hasher.combine(value)
     }
 }
 
@@ -263,8 +278,11 @@ enum OfficialIntervalWorkoutMerger {
 }
 
 enum WorkTargetPresentation {
-    static func badgeLabel(for evaluation: WorkTargetEvaluation) -> String {
-        if let exactDelta = exactTargetDeltaText(evaluation) {
+    static func badgeLabel(
+        for evaluation: WorkTargetEvaluation,
+        policy: RunDisplayPolicy = .kilometersOnly
+    ) -> String {
+        if let exactDelta = exactTargetDeltaText(evaluation, policy: policy) {
             return exactDelta
         }
         let result = resultLabel(evaluation.result)
@@ -305,12 +323,29 @@ enum WorkTargetPresentation {
         }
     }
 
-    static func exactTargetDeltaText(_ evaluation: WorkTargetEvaluation) -> String? {
+    static func exactTargetDeltaText(
+        _ evaluation: WorkTargetEvaluation,
+        policy: RunDisplayPolicy = .kilometersOnly
+    ) -> String? {
         guard let target = evaluation.exactTargetSecondsPerKilometer,
               let actual = evaluation.measurement.paceSecondsPerKilometer else { return nil }
-        let delta = Int(abs(actual - target).rounded())
+        let delta = RunFormatters.paceDeltaSeconds(actual - target, policy: policy)
         if delta == 0 { return "Matches exact target" }
-        return "\(delta)s/km \(actual < target ? "faster" : "slower")"
+        return "\(delta)s/\(policy.primaryUnit.abbreviation) \(actual < target ? "faster" : "slower")"
+    }
+}
+
+public enum IntervalWorkAggregationBasis: String, Codable, Equatable, Hashable, Sendable {
+    case completedPrescribedDistance
+    case measuredDistance
+    case unavailable
+
+    public var label: String {
+        switch self {
+        case .completedPrescribedDistance: "Completed prescribed distance"
+        case .measuredDistance: "Measured Work distance"
+        case .unavailable: "Unavailable"
+        }
     }
 }
 
@@ -320,6 +355,12 @@ public struct IntervalTrendPoint: Identifiable, Equatable, Sendable {
     public var startDate: Date
     public var workCount: Int
     public var aggregatePaceSecondsPerKilometer: Double?
+    public var aggregationBasis: IntervalWorkAggregationBasis
+    public var aggregatedWorkRepCount: Int
+    public var aggregateWorkDurationSeconds: Double
+    public var aggregateWorkDistanceMeters: Double?
+    public var measuredWorkDurationSeconds: Double
+    public var measuredWorkDistanceMeters: Double?
     public var onTargetCount: Int
     public var fastCount: Int
     public var slowCount: Int
@@ -415,8 +456,12 @@ public enum IntervalLibraryBuilder {
         let grouped = Dictionary(grouping: signed, by: \.0)
         return grouped.map { signature, entries in
             let workouts = entries.map(\.1).sorted { $0.startDate < $1.startDate }
+            let displaySignature = entries
+                .map(\.0)
+                .max { authoredDistanceCount(in: $0) < authoredDistanceCount(in: $1) }
+                ?? signature
             return IntervalLibraryGroup(
-                signature: signature,
+                signature: displaySignature,
                 workouts: workouts,
                 trendPoints: workouts.map(trendPoint(for:))
             )
@@ -451,37 +496,122 @@ public enum IntervalLibraryBuilder {
         let evaluations = workRows.compactMap { row in
             WorkTargetEvaluator.evaluate(interval: row, plannedTargets: workout.plannedTargetsByRow[row.index] ?? row.plannedTargets)
         }
-        let totals = evaluations.reduce(into: (duration: 0.0, distance: 0.0)) { partial, evaluation in
-            guard let duration = evaluation.measurement.durationSeconds,
-                  let distance = evaluation.measurement.distanceMeters,
-                  duration > 0,
-                  distance > 0 else { return }
-            partial.duration += duration
-            partial.distance += distance
-        }
-        let paces = evaluations.compactMap(\.measurement.paceSecondsPerKilometer)
+        let aggregation = aggregation(for: workRows, evaluations: evaluations)
 
         return IntervalTrendPoint(
             workoutID: workout.workoutID,
             startDate: workout.startDate,
             workCount: workRows.count,
-            aggregatePaceSecondsPerKilometer: totals.distance > 0
-                ? totals.duration / (totals.distance / 1_000)
-                : nil,
+            aggregatePaceSecondsPerKilometer: aggregation.paceSecondsPerKilometer,
+            aggregationBasis: aggregation.basis,
+            aggregatedWorkRepCount: aggregation.includedRepCount,
+            aggregateWorkDurationSeconds: aggregation.durationSeconds,
+            aggregateWorkDistanceMeters: aggregation.distanceMeters,
+            measuredWorkDurationSeconds: aggregation.measuredDurationSeconds,
+            measuredWorkDistanceMeters: aggregation.measuredDistanceMeters,
             onTargetCount: evaluations.count { $0.result == .onTarget },
             fastCount: evaluations.count { $0.result == .fast },
             slowCount: evaluations.count { $0.result == .slow },
             noTargetCount: evaluations.count { $0.result == .noTarget },
             shortenedCount: evaluations.count { $0.completionStatus == .shortened },
-            fadePercent: fadePercent(paces),
-            consistencyCoefficientOfVariationPercent: coefficientOfVariationPercent(paces),
+            fadePercent: fadePercent(aggregation.includedPaces),
+            consistencyCoefficientOfVariationPercent: coefficientOfVariationPercent(aggregation.includedPaces),
             durationWeightedHeartRate: durationWeightedAverage(workRows, value: \.averageHeartRateBpm),
             durationWeightedPower: durationWeightedAverage(workRows, value: \.averagePower)
         )
     }
 
+    private struct WorkAggregation {
+        var basis: IntervalWorkAggregationBasis
+        var includedRepCount: Int
+        var durationSeconds: Double
+        var distanceMeters: Double?
+        var measuredDurationSeconds: Double
+        var measuredDistanceMeters: Double?
+        var paceSecondsPerKilometer: Double?
+        var includedPaces: [Double]
+    }
+
+    private static func aggregation(
+        for workRows: [ReconstructedWorkoutInterval],
+        evaluations: [WorkTargetEvaluation]
+    ) -> WorkAggregation {
+        let measuredTotals = workRows.reduce(into: (duration: 0.0, distance: 0.0, distanceCount: 0)) { partial, row in
+            let duration = row.activeTimerDurationSeconds
+            if duration > 0 {
+                partial.duration += duration
+            }
+            if let distance = row.actualDistanceMeters, distance > 0 {
+                partial.distance += distance
+                partial.distanceCount += 1
+            }
+        }
+
+        let isFixedDistancePrescription = !workRows.isEmpty && workRows.allSatisfy {
+            $0.plannedGoalType == .distance && ($0.plannedGoalValue ?? 0) > 0
+        }
+
+        if isFixedDistancePrescription {
+            let included = evaluations.filter {
+                $0.completionStatus == .completed && $0.measurement.basis == .completedPlannedDistance
+            }
+            let totals = included.reduce(into: (duration: 0.0, distance: 0.0)) { partial, evaluation in
+                guard let duration = evaluation.measurement.durationSeconds,
+                      let prescribedDistance = evaluation.measurement.distanceMeters,
+                      duration > 0,
+                      prescribedDistance > 0 else { return }
+                partial.duration += duration
+                partial.distance += prescribedDistance
+            }
+            return WorkAggregation(
+                basis: .completedPrescribedDistance,
+                includedRepCount: included.count,
+                durationSeconds: totals.duration,
+                distanceMeters: totals.distance > 0 ? totals.distance : nil,
+                measuredDurationSeconds: measuredTotals.duration,
+                measuredDistanceMeters: measuredTotals.distanceCount > 0 ? measuredTotals.distance : nil,
+                paceSecondsPerKilometer: totals.distance > 0
+                    ? totals.duration / (totals.distance / 1_000)
+                    : nil,
+                includedPaces: included.compactMap(\.measurement.paceSecondsPerKilometer)
+            )
+        }
+
+        let measuredRows = workRows.compactMap { row -> (duration: Double, distance: Double, pace: Double)? in
+            let duration = row.activeTimerDurationSeconds
+            guard duration > 0,
+                  let distance = row.actualDistanceMeters,
+                  distance > 0 else { return nil }
+            return (duration, distance, duration / (distance / 1_000))
+        }
+        let measuredAggregate = measuredRows.reduce(into: (duration: 0.0, distance: 0.0)) { partial, row in
+            partial.duration += row.duration
+            partial.distance += row.distance
+        }
+        return WorkAggregation(
+            basis: workRows.isEmpty ? .unavailable : .measuredDistance,
+            includedRepCount: measuredRows.count,
+            durationSeconds: measuredAggregate.duration,
+            distanceMeters: measuredAggregate.distance > 0 ? measuredAggregate.distance : nil,
+            measuredDurationSeconds: measuredTotals.duration,
+            measuredDistanceMeters: measuredTotals.distanceCount > 0 ? measuredTotals.distance : nil,
+            paceSecondsPerKilometer: measuredAggregate.distance > 0
+                ? measuredAggregate.duration / (measuredAggregate.distance / 1_000)
+                : nil,
+            includedPaces: measuredRows.map { $0.pace }
+        )
+    }
+
     private static func goalSignature(_ row: ReconstructedWorkoutInterval) -> IntervalGoalSignature {
-        IntervalGoalSignature(type: row.plannedGoalType, value: row.plannedGoalValue)
+        IntervalGoalSignature(
+            type: row.plannedGoalType,
+            value: row.plannedGoalValue,
+            plannedDistancePrescription: row.plannedDistancePrescription
+                ?? PlannedDistancePrescription.recoveringLegacyDisplayText(
+                    row.plannedGoalDisplayText,
+                    canonicalMeters: row.plannedGoalValue
+                )
+        )
     }
 
     private static func condensedGoals(_ goals: [IntervalGoalSignature]) -> [IntervalGoalSignature] {
@@ -518,5 +648,11 @@ public enum IntervalLibraryBuilder {
         let work = signature.workGoals.map { "\($0.type.rawValue):\($0.value ?? -1)" }.joined(separator: ",")
         let recovery = signature.recoveryGoals.map { "\($0.type.rawValue):\($0.value ?? -1)" }.joined(separator: ",")
         return "\(work)|\(signature.workCount)|\(recovery)|\(signature.recoveryCount)"
+    }
+
+    private static func authoredDistanceCount(in signature: IntervalPrescriptionSignature) -> Int {
+        (signature.workGoals + signature.recoveryGoals).count {
+            $0.plannedDistancePrescription != nil
+        }
     }
 }

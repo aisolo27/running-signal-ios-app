@@ -56,17 +56,114 @@ public struct RunWorkout: Identifiable, Equatable, Sendable {
 }
 
 enum PlannedWorkoutTargetPresentation {
-    static func runnerText(_ rawText: String?) -> String? {
+    static func runnerText(
+        _ rawText: String?,
+        policy: RunDisplayPolicy = .kilometersOnly
+    ) -> String? {
         guard let rawText else { return nil }
-        let text = rawText
-            .components(separatedBy: ", speed")
-            .first?
-            .components(separatedBy: ", metric")
-            .first?
-            .replacingOccurrences(of: "pace range ", with: "", options: .caseInsensitive)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let text, !text.isEmpty else { return nil }
-        return text
+        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard let legacyPace = LegacyPace.parse(trimmed) else { return rawText }
+
+        guard let upperSecondsPerKm = legacyPace.upperSecondsPerKm else {
+            return RunFormatters.pace(legacyPace.lowerSecondsPerKm, policy: policy)
+        }
+        return runnerPaceRange(
+            lowerSecondsPerKm: legacyPace.lowerSecondsPerKm,
+            upperSecondsPerKm: upperSecondsPerKm,
+            policy: policy
+        )
+    }
+
+    static func runnerPaceRange(
+        lowerSecondsPerKm: Double,
+        upperSecondsPerKm: Double,
+        policy: RunDisplayPolicy
+    ) -> String {
+        let suffix = policy.primaryUnit.paceSuffix
+        let lower = RunFormatters.pace(lowerSecondsPerKm, policy: policy)
+        let upper = RunFormatters.pace(upperSecondsPerKm, policy: policy)
+        let compactLower = lower.hasSuffix(suffix)
+            ? String(lower.dropLast(suffix.count))
+            : lower
+        return "\(compactLower)–\(upper)"
+    }
+
+    private struct LegacyPace {
+        let lowerSecondsPerKm: Double
+        let upperSecondsPerKm: Double?
+
+        static func parse(_ text: String) -> Self? {
+            if let values = captures(in: text, using: rangePattern),
+               values.count == 5,
+               let lower = seconds(minutes: values[0], seconds: values[1]),
+               let upper = seconds(minutes: values[2], seconds: values[3]),
+               let unit = unit(values[4]) {
+                return LegacyPace(
+                    lowerSecondsPerKm: canonicalSecondsPerKm(lower, sourceUnit: unit),
+                    upperSecondsPerKm: canonicalSecondsPerKm(upper, sourceUnit: unit)
+                )
+            }
+
+            if let values = captures(in: text, using: singlePattern),
+               values.count == 3,
+               let value = seconds(minutes: values[0], seconds: values[1]),
+               let unit = unit(values[2]) {
+                return LegacyPace(
+                    lowerSecondsPerKm: canonicalSecondsPerKm(value, sourceUnit: unit),
+                    upperSecondsPerKm: nil
+                )
+            }
+
+            return nil
+        }
+
+        private static let auditSuffix = #"(?:,\s*speed\s+[^,]+(?:,\s*metric\s+.+)?)?"#
+        private static let rangePattern = try! NSRegularExpression(
+            pattern: #"^(?:pace\s+range\s+)?(\d{1,3}):([0-5]\d)\s*[-–—]\s*(\d{1,3}):([0-5]\d)\s*/\s*(km|mi)\s*"#
+                + auditSuffix
+                + #"$"#,
+            options: [.caseInsensitive]
+        )
+        private static let singlePattern = try! NSRegularExpression(
+            pattern: #"^(?:pace\s+)?(\d{1,3}):([0-5]\d)\s*/\s*(km|mi)\s*"#
+                + auditSuffix
+                + #"$"#,
+            options: [.caseInsensitive]
+        )
+
+        private static func captures(
+            in text: String,
+            using expression: NSRegularExpression
+        ) -> [String]? {
+            let fullRange = NSRange(text.startIndex..<text.endIndex, in: text)
+            guard let match = expression.firstMatch(in: text, range: fullRange),
+                  match.range == fullRange else { return nil }
+            return (1..<match.numberOfRanges).compactMap { index in
+                guard let range = Range(match.range(at: index), in: text) else { return nil }
+                return String(text[range])
+            }
+        }
+
+        private static func seconds(minutes: String, seconds: String) -> Double? {
+            guard let minutes = Double(minutes), let seconds = Double(seconds) else { return nil }
+            return minutes * 60 + seconds
+        }
+
+        private static func unit(_ rawValue: String) -> RunningDistanceUnit? {
+            switch rawValue.lowercased() {
+            case "km": .kilometers
+            case "mi": .miles
+            default: nil
+            }
+        }
+
+        private static func canonicalSecondsPerKm(
+            _ secondsPerSourceUnit: Double,
+            sourceUnit: RunningDistanceUnit
+        ) -> Double {
+            secondsPerSourceUnit / (sourceUnit.metersPerUnit / 1_000)
+        }
     }
 }
 
@@ -75,6 +172,9 @@ public struct RunWorkoutSegments: Equatable, Sendable {
     public var kilometerSplits: [DerivedSplitEstimate]
     public var splitSource: DerivedSplitSource
     public var splitUnavailableReason: String?
+    public var mileSplits: [DerivedSplitEstimate]
+    public var mileSplitSource: DerivedSplitSource
+    public var mileSplitUnavailableReason: String?
     public var events: [WorkoutEvidenceEvent]
     public var eventSummary: WorkoutEventSummary
 
@@ -87,8 +187,36 @@ public struct RunWorkoutSegments: Equatable, Sendable {
             return confidence == .strong ? .validatedSegmentEvents : .distanceSampleWindows
         }()
         splitUnavailableReason = analysis?.splitUnavailableReason
+        let derivedMileSplits = analysis?.mileSplitEstimates ?? []
+        mileSplits = derivedMileSplits
+        mileSplitSource = analysis?.mileSplitSource ?? {
+            guard let confidence = derivedMileSplits.first?.confidence else { return .unavailable }
+            return confidence == .strong ? .validatedSegmentEvents : .distanceSampleWindows
+        }()
+        mileSplitUnavailableReason = analysis?.mileSplitUnavailableReason
         events = workout.evidence?.events ?? []
         eventSummary = WorkoutEventSummary(events: events)
+    }
+
+    public func splits(for unit: RunningDistanceUnit) -> [DerivedSplitEstimate] {
+        switch unit {
+        case .kilometers: kilometerSplits
+        case .miles: mileSplits
+        }
+    }
+
+    public func splitSource(for unit: RunningDistanceUnit) -> DerivedSplitSource {
+        switch unit {
+        case .kilometers: splitSource
+        case .miles: mileSplitSource
+        }
+    }
+
+    public func splitUnavailableReason(for unit: RunningDistanceUnit) -> String? {
+        switch unit {
+        case .kilometers: splitUnavailableReason
+        case .miles: mileSplitUnavailableReason
+        }
     }
 }
 

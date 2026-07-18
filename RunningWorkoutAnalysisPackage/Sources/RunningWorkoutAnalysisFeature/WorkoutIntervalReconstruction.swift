@@ -8,6 +8,91 @@ public enum PlannedWorkoutGoalType: String, Codable, Equatable, Sendable {
     case unavailable
 }
 
+public enum PlannedDistanceUnit: String, Codable, Equatable, Hashable, Sendable {
+    case meters
+    case kilometers
+    case miles
+    case yards
+    case feet
+
+    public var abbreviation: String {
+        switch self {
+        case .meters: "m"
+        case .kilometers: "km"
+        case .miles: "mi"
+        case .yards: "yd"
+        case .feet: "ft"
+        }
+    }
+
+    public var metersPerUnit: Double {
+        switch self {
+        case .meters: 1
+        case .kilometers: 1_000
+        case .miles: 1_609.344
+        case .yards: 0.9144
+        case .feet: 0.3048
+        }
+    }
+}
+
+/// The distance exactly as authored in WorkoutKit. Canonical calculations continue to use
+/// `plannedGoalValue` in meters so presentation cannot affect completion or target evaluation.
+public struct PlannedDistancePrescription: Codable, Equatable, Hashable, Sendable {
+    public var value: Double
+    public var unit: PlannedDistanceUnit
+
+    public init(value: Double, unit: PlannedDistanceUnit) {
+        self.value = value
+        self.unit = unit
+    }
+
+    public var canonicalMeters: Double {
+        value * unit.metersPerUnit
+    }
+
+    public var displayText: String {
+        "\(Self.numberLabel(value)) \(unit.abbreviation)"
+    }
+
+    /// Older derived interval caches retained the runner-facing authored label but predate the
+    /// typed prescription field. Recover only labels that reconcile to the canonical meter value.
+    public static func recoveringLegacyDisplayText(
+        _ displayText: String,
+        canonicalMeters: Double?
+    ) -> PlannedDistancePrescription? {
+        let trimmed = displayText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowercased = trimmed.lowercased()
+        let units: [PlannedDistanceUnit] = [.kilometers, .miles, .yards, .feet, .meters]
+
+        for unit in units {
+            let suffix = " \(unit.abbreviation)"
+            guard lowercased.hasSuffix(suffix) else { continue }
+            let numberText = trimmed.dropLast(suffix.count)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: ",", with: "")
+            guard let value = Double(numberText), value.isFinite, value > 0 else { return nil }
+
+            let recovered = PlannedDistancePrescription(value: value, unit: unit)
+            if let canonicalMeters, canonicalMeters.isFinite, canonicalMeters > 0 {
+                let tolerance = max(0.5, canonicalMeters * 0.000_1)
+                guard abs(recovered.canonicalMeters - canonicalMeters) <= tolerance else { return nil }
+            }
+            return recovered
+        }
+        return nil
+    }
+
+    private static func numberLabel(_ value: Double) -> String {
+        if abs(value.rounded() - value) < 0.000_001 {
+            return String(Int(value.rounded()))
+        }
+        return String(format: "%.3f", value)
+            .replacingOccurrences(of: #"0+$"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\.$"#, with: "", options: .regularExpression)
+    }
+}
+
 public enum IntervalPlanSource: String, Codable, Equatable, Sendable {
     case workoutKit
     case runSignal
@@ -79,6 +164,7 @@ public struct PlannedWorkoutStep: Codable, Equatable, Sendable {
     public var repeatIndex: Int?
     public var plannedGoalType: PlannedWorkoutGoalType
     public var plannedGoalValue: Double?
+    public var plannedDistancePrescription: PlannedDistancePrescription?
     public var plannedGoalDisplayText: String
     public var plannedTargetDisplayText: String?
     public var plannedTargets: [PlannedWorkoutTarget]?
@@ -91,6 +177,7 @@ public struct PlannedWorkoutStep: Codable, Equatable, Sendable {
         repeatIndex: Int? = nil,
         plannedGoalType: PlannedWorkoutGoalType,
         plannedGoalValue: Double? = nil,
+        plannedDistancePrescription: PlannedDistancePrescription? = nil,
         plannedGoalDisplayText: String,
         plannedTargetDisplayText: String? = nil,
         plannedTargets: [PlannedWorkoutTarget]? = nil
@@ -102,6 +189,7 @@ public struct PlannedWorkoutStep: Codable, Equatable, Sendable {
         self.repeatIndex = repeatIndex
         self.plannedGoalType = plannedGoalType
         self.plannedGoalValue = plannedGoalValue
+        self.plannedDistancePrescription = plannedDistancePrescription
         self.plannedGoalDisplayText = plannedGoalDisplayText
         self.plannedTargetDisplayText = plannedTargetDisplayText
         self.plannedTargets = plannedTargets
@@ -159,6 +247,7 @@ public struct ReconstructedWorkoutInterval: Codable, Equatable, Sendable {
     public var stepType: DerivedIntervalLabel
     public var plannedGoalType: PlannedWorkoutGoalType
     public var plannedGoalValue: Double?
+    public var plannedDistancePrescription: PlannedDistancePrescription? = nil
     public var plannedGoalDisplayText: String
     public var plannedTargetDisplayText: String?
     public var plannedTargets: [PlannedWorkoutTarget]?
@@ -739,6 +828,7 @@ public enum WorkoutIntervalReconstructionEngine {
             stepType: step.stepType,
             plannedGoalType: step.plannedGoalType,
             plannedGoalValue: step.plannedGoalValue,
+            plannedDistancePrescription: step.plannedDistancePrescription,
             plannedGoalDisplayText: step.plannedGoalDisplayText,
             plannedTargetDisplayText: step.plannedTargetDisplayText,
             plannedTargets: step.plannedTargets,

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import RunningWorkoutAnalysisFeature
 
@@ -255,4 +256,58 @@ import Testing
             plannedGoalDisplayText: "Open"
         )
     ])
+}
+
+@Test func customWorkoutStepModelPreservesAuthored400m800mAndOneMilePrescriptions() throws {
+    let prescriptions: [(meters: Double, prescription: PlannedDistancePrescription)] = [
+        (400, PlannedDistancePrescription(value: 400, unit: .meters)),
+        (800, PlannedDistancePrescription(value: 800, unit: .meters)),
+        (1_609.344, PlannedDistancePrescription(value: 1, unit: .miles))
+    ]
+    let model = CustomWorkoutStepModel(
+        blocks: [
+            CustomWorkoutRepeatBlock(
+                blockIndex: 1,
+                iterationCount: 1,
+                steps: prescriptions.enumerated().map { offset, item in
+                    CustomWorkoutPlanStep(
+                        originalStepIndex: offset + 1,
+                        role: .work,
+                        goalType: .distance,
+                        goalValue: item.meters,
+                        distancePrescription: item.prescription
+                    )
+                }
+            )
+        ]
+    )
+
+    let planned = model.plannedStepsPreservingCurrentAuditShape
+
+    #expect(planned.map(\.plannedGoalValue) == prescriptions.map { Optional($0.meters) })
+    #expect(planned.map(\.plannedDistancePrescription) == prescriptions.map { Optional($0.prescription) })
+    #expect(planned.map(\.plannedGoalDisplayText) == ["400 m", "800 m", "1 mi"])
+    #expect(planned[2].plannedDistancePrescription?.canonicalMeters == 1_609.344)
+
+    let encoded = try JSONEncoder().encode(planned[2])
+    let decoded = try JSONDecoder().decode(PlannedWorkoutStep.self, from: encoded)
+    #expect(decoded.plannedDistancePrescription == PlannedDistancePrescription(value: 1, unit: .miles))
+}
+
+@Test func plannedWorkoutStepDecodesLegacyPayloadWithoutDistancePrescription() throws {
+    let legacyJSON = Data(#"""
+    {
+        "index":1,
+        "label":"Work 1",
+        "stepType":"work",
+        "plannedGoalType":"distance",
+        "plannedGoalValue":400,
+        "plannedGoalDisplayText":"400 m"
+    }
+    """#.utf8)
+
+    let decoded = try JSONDecoder().decode(PlannedWorkoutStep.self, from: legacyJSON)
+
+    #expect(decoded.plannedGoalValue == 400)
+    #expect(decoded.plannedDistancePrescription == nil)
 }

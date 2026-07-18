@@ -83,5 +83,5 @@ Read only the section relevant to the task. Add entries only for recurring proje
 - Visible history-row and detail hydration must not silently reclassify a workout. Row hydration may recover a cached plan name; classification belongs to import, analysis, or explicit review workflows.
 - Large history surfaces need search and direct year/type navigation. Do not place the complete run corpus inline in both Runs and All-Time Analytics.
 - Keep normal workout review runner-facing. Raw HealthKit events, evidence gates, parity packets, and audit wording belong behind Developer Mode.
-- Dark-mode secondary metadata needs explicit readable contrast.
+- Dark-mode secondary metadata needs explicit readable contrast. Metric labels, supporting captions, and parenthetical secondary units must use shared semantic colors; subordinate hierarchy should come from typography and placement, not near-background gray.
 - When interval UI changes, compare prescribed, measured, elapsed, pause, active/timer, distance, pace basis, Raw Debug, and product rows for the same case.

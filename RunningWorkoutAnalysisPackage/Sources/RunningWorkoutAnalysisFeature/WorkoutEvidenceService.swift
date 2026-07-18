@@ -720,31 +720,58 @@ private enum WorkoutKitPlanAuditFormatter {
             repeatIndex: repeatIndex,
             plannedGoalType: goal.type,
             plannedGoalValue: goal.value,
+            plannedDistancePrescription: goal.distancePrescription,
             plannedGoalDisplayText: goal.display,
             plannedTargetDisplayText: step.alert.map(alertLabel),
             plannedTargets: step.alert.map { [plannedTarget($0)] }
         )
     }
 
-    private static func plannedGoal(_ goal: WorkoutGoal) -> (type: PlannedWorkoutGoalType, value: Double?, display: String) {
+    private static func plannedGoal(
+        _ goal: WorkoutGoal
+    ) -> (
+        type: PlannedWorkoutGoalType,
+        value: Double?,
+        distancePrescription: PlannedDistancePrescription?,
+        display: String
+    ) {
         switch goal {
         case .open:
-            return (.open, nil, "Open")
+            return (.open, nil, nil, "Open")
         case .distance(let value, let unit):
             let meters = Measurement(value: value, unit: unit).converted(to: .meters).value
-            return (.distance, meters, distanceDisplay(meters))
+            return (
+                .distance,
+                meters,
+                plannedDistanceUnit(unit).map { PlannedDistancePrescription(value: value, unit: $0) },
+                distanceDisplay(meters)
+            )
         case .time(let value, let unit):
             let seconds = Measurement(value: value, unit: unit).converted(to: .seconds).value
-            return (.time, seconds, "\(Int(seconds.rounded())) s")
+            return (.time, seconds, nil, "\(Int(seconds.rounded())) s")
         case .energy(let value, let unit):
             let kilocalories = Measurement(value: value, unit: unit).converted(to: .kilocalories).value
-            return (.energy, kilocalories, "\(numberLabel(kilocalories)) kcal")
+            return (.energy, kilocalories, nil, "\(numberLabel(kilocalories)) kcal")
         case .poolSwimDistanceWithTime(let distance, let time):
             let meters = distance.converted(to: .meters).value
             let seconds = time.converted(to: .seconds).value
-            return (.distance, meters, "\(distanceDisplay(meters)) in \(Int(seconds.rounded())) s")
+            let prescription = plannedDistanceUnit(distance.unit).map {
+                PlannedDistancePrescription(value: distance.value, unit: $0)
+            }
+            return (.distance, meters, prescription, "\(distanceDisplay(meters)) in \(Int(seconds.rounded())) s")
         @unknown default:
-            return (.unavailable, nil, String(describing: goal))
+            return (.unavailable, nil, nil, String(describing: goal))
+        }
+    }
+
+    private static func plannedDistanceUnit(_ unit: UnitLength) -> PlannedDistanceUnit? {
+        switch unit.symbol.lowercased() {
+        case UnitLength.meters.symbol.lowercased(): .meters
+        case UnitLength.kilometers.symbol.lowercased(): .kilometers
+        case UnitLength.miles.symbol.lowercased(): .miles
+        case UnitLength.yards.symbol.lowercased(): .yards
+        case UnitLength.feet.symbol.lowercased(): .feet
+        default: nil
         }
     }
 

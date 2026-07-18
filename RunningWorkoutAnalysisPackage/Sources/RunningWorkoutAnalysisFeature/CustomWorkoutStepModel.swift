@@ -21,6 +21,7 @@ struct CustomWorkoutPlanStep: Codable, Equatable, Sendable {
     var role: CustomWorkoutStepRole
     var goalType: PlannedWorkoutGoalType
     var goalValue: Double?
+    var distancePrescription: PlannedDistancePrescription?
     var source: CustomWorkoutStepSource
 
     init(
@@ -28,12 +29,14 @@ struct CustomWorkoutPlanStep: Codable, Equatable, Sendable {
         role: CustomWorkoutStepRole,
         goalType: PlannedWorkoutGoalType,
         goalValue: Double? = nil,
+        distancePrescription: PlannedDistancePrescription? = nil,
         source: CustomWorkoutStepSource = .workoutKit
     ) {
         self.originalStepIndex = originalStepIndex
         self.role = role
         self.goalType = goalType
         self.goalValue = goalValue
+        self.distancePrescription = distancePrescription
         self.source = source
     }
 }
@@ -58,6 +61,7 @@ struct ExpandedCustomWorkoutPlanStep: Codable, Equatable, Sendable {
     var role: CustomWorkoutStepRole
     var goalType: PlannedWorkoutGoalType
     var goalValue: Double?
+    var distancePrescription: PlannedDistancePrescription?
     var source: CustomWorkoutStepSource
 }
 
@@ -119,7 +123,12 @@ struct CustomWorkoutStepModel: Codable, Equatable, Sendable {
                 repeatIndex: step.repeatIteration,
                 plannedGoalType: step.goalType,
                 plannedGoalValue: step.goalValue,
-                plannedGoalDisplayText: plannedGoalDisplayText(type: step.goalType, value: step.goalValue)
+                plannedDistancePrescription: step.distancePrescription,
+                plannedGoalDisplayText: plannedGoalDisplayText(
+                    type: step.goalType,
+                    value: step.goalValue,
+                    distancePrescription: step.distancePrescription
+                )
             )
         }
     }
@@ -138,6 +147,7 @@ struct CustomWorkoutStepModel: Codable, Equatable, Sendable {
             role: step.role,
             goalType: step.goalType,
             goalValue: step.goalValue,
+            distancePrescription: step.distancePrescription,
             source: step.source
         )
     }
@@ -161,9 +171,16 @@ struct CustomWorkoutStepModel: Codable, Equatable, Sendable {
         }
     }
 
-    private func plannedGoalDisplayText(type: PlannedWorkoutGoalType, value: Double?) -> String {
+    private func plannedGoalDisplayText(
+        type: PlannedWorkoutGoalType,
+        value: Double?,
+        distancePrescription: PlannedDistancePrescription?
+    ) -> String {
         switch type {
         case .distance:
+            if let distancePrescription {
+                return distancePrescription.displayText
+            }
             guard let value else { return "Distance unavailable" }
             return distanceDisplay(meters: value)
         case .time:

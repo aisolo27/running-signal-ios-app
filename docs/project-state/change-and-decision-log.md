@@ -211,6 +211,30 @@ Normal one-kilometer splits are distinct from custom-workout interval rows under
 - Segment events remain debug-only for custom-workout Work, Recovery, Cooldown, and Open / Extra reconstruction.
 - This derived behavior is cache-versioned under D-007 so stored legacy splits rebuild during targeted hydration.
 
+### D-016 — Running units are presentation policy; prescriptions and aggregate bases stay explicit
+
+- Status: Active
+- Established: 2026-07-17
+
+RunSignal stores and evaluates completed evidence in canonical units: meters, seconds, and seconds per kilometer. The runner chooses a primary distance-and-pace unit of kilometers or miles plus an optional secondary distance-and-pace presentation. The primary unit controls general measured distance, pace, charts, and normal split basis. Secondary distance appears only on selected summary surfaces; secondary pace appears only beneath Avg pace on Workout Details. Neither changes calculations, target status, completion status, grouping, Best Efforts, or cache identity.
+
+On dual-unit summary cards, the secondary value is subordinate evidence: render it on a separate line, in parentheses, with smaller typography and medium weight. Use the same adaptive primary/off-white foreground as the headline metric so hierarchy comes from size, weight, placement, and parentheses rather than poor contrast. It must not share the primary metric's headline hierarchy or appear as a peer bullet value. Supporting metric labels and captions must use explicit semantic high-contrast colors in dark mode.
+
+WorkoutKit fixed-distance prescriptions retain their authored unit when available. A plan such as `1 mi warmup · 5 × 800 m · 0.5 mi cooldown` must not be flattened into one display unit. Runner-facing pace presentation follows the selected primary denominator, while raw plan/debug evidence remains auditable. Race and Best Effort identities such as `400m`, `1 Mile`, `5K`, and `Half Marathon` remain stable names.
+
+Legacy cached target text may be converted for runner presentation only when it strictly matches an explicit `/km` or `/mi` pace value or range. Opaque and non-pace target text remains unchanged. This parsing is display-only and must never create or alter target evaluation.
+
+Interval Library aggregate bases are explicit:
+
+- Repeated comparable fixed-distance Work uses fully completed reps only. Main average Completed Work pace equals total active/timer duration divided by total prescribed distance.
+- Shortened fixed-distance reps stay visible separately and use measured HealthKit distance plus pause-adjusted active time.
+- Repeated time-based or open Work uses a clearly labeled measured basis because no prescribed distance denominator exists.
+- Mixed prescribed and measured distances must never enter one unlabeled aggregate. HealthKit-measured Work totals may remain supporting evidence.
+
+This decision extends D-012 without weakening D-005 or D-006. It also generalizes D-015: a mile split is a separately validated 1,609.344-meter projection, never a relabeled kilometer row. Kilometer and mile projections must each preserve the same distance reconciliation, pause, ambiguity, partial-row, unavailable-state, diagnostic, and targeted cache-version requirements.
+
+Changing the display preference must not query HealthKit, start import or analysis work, broadly hydrate evidence, or rewrite unit-neutral training and Best Effort caches. Runner formatting follows the preference; developer parity and diagnostic exports remain explicitly canonical unless their schema names another unit.
+
 ## Major Change Timeline
 
 ### 2026-06-05 to 2026-06-11 — Foundation and evidence model

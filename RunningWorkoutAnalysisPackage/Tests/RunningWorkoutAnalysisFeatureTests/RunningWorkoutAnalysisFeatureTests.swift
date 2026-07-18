@@ -108,7 +108,30 @@ import Testing
 @Test func runnerTargetTextRemovesRawSpeedAndMetricDetails() {
     let raw = "pace range 6:00-6:30 /km, speed 2.56 m/s-2.78 m/s, metric current"
 
-    #expect(PlannedWorkoutTargetPresentation.runnerText(raw) == "6:00-6:30 /km")
+    #expect(PlannedWorkoutTargetPresentation.runnerText(raw) == "6:00–6:30/km")
+}
+
+@Test func runnerTargetTextConvertsRecognizableLegacyPaceRangesAndSingles() {
+    let kilometers = RunDisplayPolicy(primaryUnit: .kilometers, showsSecondaryDistance: false)
+    let miles = RunDisplayPolicy(primaryUnit: .miles, showsSecondaryDistance: false)
+
+    #expect(
+        PlannedWorkoutTargetPresentation.runnerText(
+            "pace range 6:00-6:30 /km, speed 2.56 m/s-2.78 m/s, metric current",
+            policy: miles
+        ) == "9:39–10:28/mi"
+    )
+    #expect(
+        PlannedWorkoutTargetPresentation.runnerText("9:39-10:28 /mi", policy: kilometers)
+            == "6:00–6:30/km"
+    )
+    #expect(PlannedWorkoutTargetPresentation.runnerText("pace 6:00 /km", policy: miles) == "9:39/mi")
+    #expect(PlannedWorkoutTargetPresentation.runnerText("10:00 /mi", policy: kilometers) == "6:13/km")
+}
+
+@Test func runnerTargetTextPreservesOpaqueAndNonPaceText() {
+    #expect(PlannedWorkoutTargetPresentation.runnerText("Heart rate zone 4, custom") == "Heart rate zone 4, custom")
+    #expect(PlannedWorkoutTargetPresentation.runnerText("pace range comfortably hard") == "pace range comfortably hard")
 }
 
 @Test func intervalGoalMeasuredItemsSeparateDistanceGoalStats() {
@@ -122,7 +145,7 @@ import Testing
 
     let items = IntervalGoalMeasuredText.metricItems(for: interval)
     #expect(items.map(\.title) == ["Distance", "Time", "Pace"])
-    #expect(items.map(\.value) == ["400 m", "1:33", "3:53 /km"])
+    #expect(items.map(\.value) == ["400 m", "1:33", "3:53/km"])
     #expect(items.map(\.detail) == ["Workout plan", "Elapsed window", "Planned distance"])
 }
 
@@ -147,7 +170,7 @@ import Testing
 
     let items = IntervalGoalMeasuredText.metricItems(for: interval)
     #expect(items.map(\.title) == ["Distance", "Time", "Pace"])
-    #expect(items.map(\.value) == ["400 m", "1:35", "3:58 /km"])
+    #expect(items.map(\.value) == ["400 m", "1:35", "3:58/km"])
     #expect(items.map(\.detail) == ["Workout plan", "Elapsed window", "Planned distance"])
 }
 
@@ -162,7 +185,7 @@ import Testing
 
     let items = IntervalGoalMeasuredText.metricItems(for: interval)
     #expect(items.map(\.title) == ["Distance", "Time", "Pace"])
-    #expect(items.map(\.value) == ["178 m", "2:00", "11:12 /km"])
+    #expect(items.map(\.value) == ["178 m", "2:00", "11:12/km"])
     #expect(items.map(\.detail) == ["HealthKit", "Elapsed window", "Elapsed window"])
 }
 
@@ -177,7 +200,7 @@ import Testing
 
     let items = IntervalGoalMeasuredText.metricItems(for: interval)
     #expect(items.map(\.title) == ["Measured Distance", "Measured Time", "Measured Pace"])
-    #expect(items.map(\.value) == ["43 m", "0:19", "7:14 /km"])
+    #expect(items.map(\.value) == ["43 m", "0:19", "7:14/km"])
     #expect(items.map(\.detail) == ["HealthKit", "Elapsed window", "Elapsed window"])
 }
 
@@ -194,7 +217,7 @@ import Testing
     interval.durationDisplayRule = .activeTimer
 
     let items = IntervalGoalMeasuredText.metricItems(for: interval)
-    #expect(items.map(\.value) == ["1.21 km", "7:41", "6:21 /km"])
+    #expect(items.map(\.value) == ["1.21 km", "7:41", "6:21/km"])
     #expect(items.map(\.detail) == ["Shortened · HealthKit", "Active timer", "Measured distance"])
 }
 
@@ -3108,6 +3131,259 @@ private func intervalForGoalMeasuredText(
     #expect(analysis.bestEffortEstimates.first { $0.label == "1K" }?.durationSecondsEstimate == 120)
 }
 
+@Test func fiveKilometersDerivesGenuineKilometerAndMileSplitProjections() throws {
+    let start = Date(timeIntervalSince1970: 8_250)
+    let workout = testWorkout(
+        id: "five-k-unit-splits",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    let points = (1...5).map { index in
+        WorkoutEvidencePoint(date: start.addingTimeInterval(Double(index * 300)), value: 1_000)
+    }
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [.distance: WorkoutMetricSeries(metric: .distance, unit: "m", points: points)]
+    )
+
+    let analysis = DerivedAnalyticsEngine.analyze(workout: workout, evidence: evidence)
+    let segments = RunWorkoutSegments(workout: workout, analysis: analysis)
+    let kilometers = segments.splits(for: .kilometers)
+    let miles = segments.splits(for: .miles)
+
+    #expect(kilometers.map(\.label) == ["KM 1", "KM 2", "KM 3", "KM 4", "KM 5"])
+    #expect(kilometers.allSatisfy { abs($0.distanceMeters - 1_000) < 0.001 })
+    #expect(miles.map(\.label) == ["Mile 1", "Mile 2", "Mile 3", "Final"])
+    #expect(miles.prefix(3).allSatisfy { abs($0.distanceMeters - RunningDistanceUnit.metersPerMile) < 0.001 })
+    #expect(abs(try #require(miles.last).distanceMeters - (5_000 - 3 * RunningDistanceUnit.metersPerMile)) < 0.001)
+    #expect(miles.allSatisfy { abs($0.paceSecondsPerKmEstimate - 300) < 0.001 })
+    #expect(segments.splitSource(for: .kilometers) == .distanceSampleWindows)
+    #expect(segments.splitSource(for: .miles) == .distanceSampleWindows)
+}
+
+@Test func detailedSubMileRunPublishesTruthfulFinalMileProjection() throws {
+    let start = Date(timeIntervalSince1970: 8_275)
+    let workout = testWorkout(
+        id: "detailed-sub-mile-splits",
+        start: start,
+        distanceMeters: 1_500,
+        durationSeconds: 450
+    )
+    let points = (1...3).map { index in
+        WorkoutEvidencePoint(date: start.addingTimeInterval(Double(index * 150)), value: 500)
+    }
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [.distance: WorkoutMetricSeries(metric: .distance, unit: "m", points: points)]
+    )
+
+    let analysis = DerivedAnalyticsEngine.analyze(workout: workout, evidence: evidence)
+    let mileSplits = try #require(analysis.mileSplitEstimates)
+    let final = try #require(mileSplits.first)
+
+    #expect(mileSplits.count == 1)
+    #expect(final.label == "Final")
+    #expect(abs(final.distanceMeters - 1_500) < 0.001)
+    #expect(abs(final.durationSecondsEstimate - 450) < 0.001)
+    #expect(abs(final.paceSecondsPerKmEstimate - 300) < 0.001)
+    #expect(analysis.mileSplitSource == .distanceSampleWindows)
+}
+
+@Test func subKilometerRunKeepsKilometerMinimumWhileMileUsesValidatedFinalBoundary() throws {
+    let start = Date(timeIntervalSince1970: 8_285)
+    let workout = testWorkout(
+        id: "sub-kilometer-mile-final",
+        start: start,
+        distanceMeters: 800,
+        durationSeconds: 240
+    )
+    var points: [WorkoutEvidencePoint] = []
+    for index in 0..<4 {
+        points.append(WorkoutEvidencePoint(
+            date: start.addingTimeInterval(Double(index * 60)),
+            value: 200,
+            startDate: start.addingTimeInterval(Double(index * 60)),
+            endDate: start.addingTimeInterval(Double((index + 1) * 60))
+        ))
+    }
+    let boundary = WorkoutEvidenceEvent(
+        startDate: start,
+        endDate: workout.endDate,
+        type: "segment",
+        kind: .segment
+    )
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [.distance: WorkoutMetricSeries(metric: .distance, unit: "m", points: points)],
+        events: [boundary]
+    )
+
+    let kilometerDiagnostics = DerivedAnalyticsEngine.splitDiagnostics(
+        workout: workout,
+        evidence: evidence,
+        unit: .kilometers
+    )
+    let mileDiagnostics = DerivedAnalyticsEngine.splitDiagnostics(
+        workout: workout,
+        evidence: evidence,
+        unit: .miles
+    )
+    let final = try #require(mileDiagnostics.splitEstimates.first)
+
+    #expect(kilometerDiagnostics.source == .unavailable)
+    #expect(kilometerDiagnostics.splitEstimates.isEmpty)
+    #expect(mileDiagnostics.source == .validatedSegmentEvents)
+    #expect(mileDiagnostics.splitEstimates.count == 1)
+    #expect(final.label == "Final")
+    #expect(abs(final.distanceMeters - 800) < 0.001)
+    #expect(abs(final.durationSecondsEstimate - 240) < 0.001)
+}
+
+@Test func pausedKilometerAndMileSplitsReconcileToActiveWorkoutDuration() throws {
+    let start = Date(timeIntervalSince1970: 8_300)
+    var workout = testWorkout(
+        id: "paused-unit-splits",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    workout.endDate = start.addingTimeInterval(1_600)
+    workout.elapsedSeconds = 1_600
+    let windows = [
+        (0.0, 300.0),
+        (300.0, 600.0),
+        (600.0, 1_000.0),
+        (1_000.0, 1_300.0),
+        (1_300.0, 1_600.0)
+    ].map { startOffset, endOffset in
+        WorkoutEvidencePoint(
+            date: start.addingTimeInterval(startOffset),
+            value: 1_000,
+            startDate: start.addingTimeInterval(startOffset),
+            endDate: start.addingTimeInterval(endOffset)
+        )
+    }
+    let pauses = [
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(650),
+            endDate: start.addingTimeInterval(650),
+            type: "pause",
+            kind: .pause
+        ),
+        WorkoutEvidenceEvent(
+            startDate: start.addingTimeInterval(750),
+            endDate: start.addingTimeInterval(750),
+            type: "resume",
+            kind: .resume
+        )
+    ]
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [.distance: WorkoutMetricSeries(metric: .distance, unit: "m", points: windows)],
+        events: pauses
+    )
+
+    let analysis = DerivedAnalyticsEngine.analyze(workout: workout, evidence: evidence)
+    let kilometerSplits = try #require(analysis.splitEstimates)
+    let mileSplits = try #require(analysis.mileSplitEstimates)
+
+    #expect(abs(kilometerSplits.map(\.durationSecondsEstimate).reduce(0, +) - workout.durationSeconds) < 0.001)
+    #expect(abs(mileSplits.map(\.durationSecondsEstimate).reduce(0, +) - workout.durationSeconds) < 0.001)
+    #expect(abs(kilometerSplits.compactMap(\.pauseOverlapSeconds).reduce(0, +) - 100) < 0.001)
+    #expect(abs(mileSplits.compactMap(\.pauseOverlapSeconds).reduce(0, +) - 100) < 0.001)
+}
+
+@Test func interleavedKilometerAndMileChainsSelectTheirOwnValidatedBoundaries() {
+    let start = Date(timeIntervalSince1970: 8_350)
+    let workout = testWorkout(
+        id: "interleaved-unit-segment-chains",
+        start: start,
+        distanceMeters: 5_000,
+        durationSeconds: 1_500
+    )
+    var points: [WorkoutEvidencePoint] = []
+    for index in 0..<5 {
+        points.append(WorkoutEvidencePoint(
+            date: start.addingTimeInterval(Double(index * 300)),
+            value: 1_000,
+            startDate: start.addingTimeInterval(Double(index * 300)),
+            endDate: start.addingTimeInterval(Double((index + 1) * 300))
+        ))
+    }
+    let kilometerBoundaries = stride(from: 0.0, to: 1_500.0, by: 300.0).map { offset in
+        (offset, offset + 300)
+    }
+    let secondsPerMeter = 1_500.0 / 5_000.0
+    let mileBoundaryOffsets = (0...3).map { index in
+        min(Double(index) * RunningDistanceUnit.metersPerMile * secondsPerMeter, 1_500)
+    } + [1_500]
+    let mileBoundaries = zip(mileBoundaryOffsets, mileBoundaryOffsets.dropFirst()).map { ($0, $1) }
+    var events: [WorkoutEvidenceEvent] = []
+    for (startOffset, endOffset) in kilometerBoundaries + mileBoundaries {
+        events.append(
+            WorkoutEvidenceEvent(
+                startDate: start.addingTimeInterval(startOffset),
+                endDate: start.addingTimeInterval(endOffset),
+                type: "segment",
+                kind: .segment
+            )
+        )
+    }
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [.distance: WorkoutMetricSeries(metric: .distance, unit: "m", points: points)],
+        events: events
+    )
+
+    let kilometerDiagnostics = DerivedAnalyticsEngine.splitDiagnostics(workout: workout, evidence: evidence, unit: .kilometers)
+    let mileDiagnostics = DerivedAnalyticsEngine.splitDiagnostics(workout: workout, evidence: evidence, unit: .miles)
+
+    let kilometerLabels = kilometerDiagnostics.splitEstimates.map { $0.label }
+    let mileLabels = mileDiagnostics.splitEstimates.map { $0.label }
+    #expect(kilometerDiagnostics.source == DerivedSplitSource.validatedSegmentEvents)
+    #expect(kilometerLabels == ["KM 1", "KM 2", "KM 3", "KM 4", "KM 5"])
+    #expect(mileDiagnostics.source == DerivedSplitSource.validatedSegmentEvents)
+    #expect(mileLabels == ["Mile 1", "Mile 2", "Mile 3", "Final"])
+    #expect(mileDiagnostics.unit == RunningDistanceUnit.miles)
+    #expect(mileDiagnostics.targetDistanceMeters == RunningDistanceUnit.metersPerMile)
+    #expect(mileDiagnostics.expectedFullKilometerCount == 5)
+    #expect(mileDiagnostics.expectedFullUnitCount == 3)
+}
+
+@Test func derivedWorkoutV6JSONDecodesWithoutMileProjectionFields() throws {
+    let start = Date(timeIntervalSince1970: 8_400)
+    let workout = testWorkout(id: "v6-split-decode", start: start, distanceMeters: 5_000, durationSeconds: 1_500)
+    let points = (1...5).map { index in
+        WorkoutEvidencePoint(date: start.addingTimeInterval(Double(index * 300)), value: 1_000)
+    }
+    let evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [.distance: WorkoutMetricSeries(metric: .distance, unit: "m", points: points)]
+    )
+    let current = DerivedAnalyticsEngine.analyze(workout: workout, evidence: evidence)
+    let encoded = try JSONEncoder().encode(current)
+    var object = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    object["calculationVersion"] = "derived-workout-v6"
+    object.removeValue(forKey: "mileSplitEstimates")
+    object.removeValue(forKey: "mileSplitSource")
+    object.removeValue(forKey: "mileSplitUnavailableReason")
+    let v6Data = try JSONSerialization.data(withJSONObject: object)
+
+    let decoded = try JSONDecoder().decode(DerivedWorkoutAnalysis.self, from: v6Data)
+
+    #expect(decoded.calculationVersion == "derived-workout-v6")
+    #expect(decoded.splitEstimates?.count == 5)
+    #expect(decoded.mileSplitEstimates == nil)
+    #expect(decoded.mileSplitSource == nil)
+}
+
 @Test func legacyDistanceSamplesAccrueAcrossTheirHealthKitWindows() throws {
     let start = Date(timeIntervalSince1970: 9_000)
     let workout = testWorkout(
@@ -3445,8 +3721,12 @@ private func intervalForGoalMeasuredText(
 
     #expect(analysis.splitSource == .unavailable)
     #expect(analysis.splitEstimates?.isEmpty == true)
+    #expect(analysis.mileSplitSource == .unavailable)
+    #expect(analysis.mileSplitEstimates?.isEmpty == true)
     #expect(segments.kilometerSplits.isEmpty)
+    #expect(segments.splits(for: .miles).isEmpty)
     #expect(segments.splitUnavailableReason?.contains("distance") == true)
+    #expect(segments.splitUnavailableReason(for: .miles)?.contains("distance") == true)
 }
 
 @Test func unreconciledDistanceSeriesCannotPublishSplits() {
@@ -3702,8 +3982,11 @@ private func legacy2019SegmentEvents(start: Date) -> [WorkoutEvidenceEvent] {
     workout.evidence = evidence
     let currentPrepared = PreparedWorkoutPersistence.make(workout: workout, evidence: evidence)
     var outdatedAnalysis = currentPrepared.analysis
-    outdatedAnalysis.calculationVersion = "derived-workout-v3"
+    outdatedAnalysis.calculationVersion = "derived-workout-v6"
     outdatedAnalysis.splitEstimates = Array((outdatedAnalysis.splitEstimates ?? []).prefix(10))
+    outdatedAnalysis.mileSplitEstimates = nil
+    outdatedAnalysis.mileSplitSource = nil
+    outdatedAnalysis.mileSplitUnavailableReason = nil
     let outdatedPrepared = PreparedWorkoutPersistence(
         evidenceData: currentPrepared.evidenceData,
         analysis: outdatedAnalysis,
@@ -3719,6 +4002,7 @@ private func legacy2019SegmentEvents(start: Date) -> [WorkoutEvidenceEvent] {
 
     await store.bootstrap(modelContext: context)
     #expect(store.derivedAnalysis(for: workout.id)?.splitEstimates?.count == 10)
+    #expect(store.derivedAnalysis(for: workout.id)?.mileSplitEstimates == nil)
 
     await store.hydrateCachedEvidenceIfAvailable(for: workout.id)
 
@@ -3727,6 +4011,9 @@ private func legacy2019SegmentEvents(start: Date) -> [WorkoutEvidenceEvent] {
     #expect(rebuilt.splitEstimates?.count == 12)
     #expect(rebuilt.splitEstimates?[10].label == "KM 11")
     #expect(rebuilt.splitEstimates?[11].label == "Final")
+    #expect(rebuilt.mileSplitEstimates?.count == 7)
+    #expect(rebuilt.mileSplitEstimates?[5].label == "Mile 6")
+    #expect(rebuilt.mileSplitEstimates?[6].label == "Final")
 }
 
 @Test func automaticHeartRateZonesUseSixMonthRunningMaximum() {

@@ -11,6 +11,8 @@ public struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("RunSignal.HealthKitOnboardingCompleted.v1") private var didCompleteHealthKitOnboarding = false
+    @AppStorage("RunSignal.PrimaryDistanceUnit.v1") private var primaryDistanceUnitRaw = RunningDistanceUnit.initialDefault().rawValue
+    @AppStorage("RunSignal.ShowSecondaryDistance.v1") private var showsSecondaryDistance = false
     @State private var store = RunningAnalysisStore()
     @State private var selectedTab = AppTab.runs
     @State private var didScheduleStartupMaintenance = false
@@ -59,6 +61,7 @@ public struct ContentView: View {
                 .zIndex(1)
             }
         }
+        .environment(\.runDisplayPolicy, runDisplayPolicy)
         .task {
             Self.startupLogger.notice("Bootstrap started")
             await store.bootstrap(modelContext: modelContext)
@@ -81,6 +84,13 @@ public struct ContentView: View {
                 await store.syncHealthKitChangesOnForeground()
             }
         }
+    }
+
+    private var runDisplayPolicy: RunDisplayPolicy {
+        RunDisplayPolicy(
+            primaryUnit: RunningDistanceUnit(rawValue: primaryDistanceUnitRaw) ?? RunningDistanceUnit.initialDefault(),
+            showsSecondaryDistance: showsSecondaryDistance
+        )
     }
 
     private var shouldPresentHealthKitOnboarding: Bool {
@@ -264,7 +274,7 @@ private struct RunSignalStartupView: View {
 
                     Text("Loading runs")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
                 }
 
                 ProgressView()

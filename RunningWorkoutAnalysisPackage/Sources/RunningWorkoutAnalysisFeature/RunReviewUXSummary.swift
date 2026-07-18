@@ -222,7 +222,8 @@ public struct WorkoutReviewUXSummary: Equatable, Sendable {
     public static func make(
         workout: CanonicalWorkout,
         supportedIntervals: WorkoutIntervalReconstructionResult?,
-        blockedReasons: [String]
+        blockedReasons: [String],
+        policy: RunDisplayPolicy = .kilometersOnly
     ) -> WorkoutReviewUXSummary {
         let isHealthKitSource = workout.dataSourceLabel.contains("HealthKit")
         let hasDetailedSeries = isHealthKitSource && workout.seriesAvailable && workout.seriesSampleCount > 0
@@ -272,8 +273,8 @@ public struct WorkoutReviewUXSummary: Equatable, Sendable {
         let signals = [
             ReviewSignal(
                 title: "Whole Run",
-                value: RunFormatters.pace(workout.paceSecondsPerKm),
-                detail: RunFormatters.distance(workout.distanceMeters),
+                value: RunFormatters.pace(workout.paceSecondsPerKm, policy: policy),
+                detail: RunFormatters.distance(workout.distanceMeters, policy: policy),
                 confidence: workout.distanceMeters == nil || workout.durationSeconds <= 0 ? .limited : .strong
             ),
             ReviewSignal(
@@ -374,7 +375,10 @@ public struct IntervalExecutionUXSummary: Equatable, Sendable {
     public var confidence: ConfidenceLevel
     public var signals: [ReviewSignal]
 
-    public static func make(summary: IntervalAnalysisSummary) -> IntervalExecutionUXSummary {
+    public static func make(
+        summary: IntervalAnalysisSummary,
+        policy: RunDisplayPolicy = .kilometersOnly
+    ) -> IntervalExecutionUXSummary {
         let workRows = summary.rows.filter { $0.stepType == .work }
         let recoveryRows = summary.rows.filter { $0.stepType == .recovery }
         let pausedRows = summary.rows.filter { ($0.pauseOverlapSeconds ?? 0) > 0 }
@@ -383,7 +387,7 @@ public struct IntervalExecutionUXSummary: Equatable, Sendable {
         let title = workRows.isEmpty
             ? "\(summary.rows.count) official rows"
             : "\(workRows.count) work reps official"
-        let fadeSignal = workFadeSignal(workRows: workRows)
+        let fadeSignal = workFadeSignal(workRows: workRows, policy: policy)
         let detail = workRows.isEmpty
             ? "Official rows are available; no Work rows were detected, so the summary stays whole-structure focused."
             : "Work reps drive the execution read. Warmup, recovery, cooldown, pauses, and Open / Extra remain visible context."
@@ -429,7 +433,10 @@ public struct IntervalExecutionUXSummary: Equatable, Sendable {
         )
     }
 
-    private static func workFadeSignal(workRows: [IntervalAnalysisRow]) -> ReviewSignal {
+    private static func workFadeSignal(
+        workRows: [IntervalAnalysisRow],
+        policy: RunDisplayPolicy
+    ) -> ReviewSignal {
         guard workRows.count >= 2,
               let firstPace = workRows.first?.paceSecondsPerKm,
               let lastPace = workRows.last?.paceSecondsPerKm,
@@ -442,7 +449,8 @@ public struct IntervalExecutionUXSummary: Equatable, Sendable {
         let delta = lastPace - firstPace
         let confidence: ConfidenceLevel = abs(delta) <= 5 ? .strong : .moderate
         let direction = delta > 0 ? "slower" : "faster"
-        let value = "\(delta > 0 ? "+" : "")\(Int(delta.rounded()))s/km"
+        let displayDelta = Int(RunFormatters.paceSecondsPerUnit(delta, policy: policy).rounded())
+        let value = "\(displayDelta > 0 ? "+" : "")\(displayDelta)s/\(policy.primaryUnit.abbreviation)"
         return ReviewSignal(title: "Fade", value: value, detail: "Last rep \(direction)", confidence: confidence)
     }
 }

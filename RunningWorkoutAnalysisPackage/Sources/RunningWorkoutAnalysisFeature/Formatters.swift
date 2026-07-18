@@ -61,17 +61,42 @@ enum RunFormatters {
         return formatter
     }()
 
-    static func distance(_ meters: Double?) -> String {
+    static func distance(
+        _ meters: Double?,
+        policy: RunDisplayPolicy = .kilometersOnly,
+        includeSecondary: Bool = false
+    ) -> String {
         guard let meters else { return "Unavailable" }
-        return String(format: "%.2f km", meters / 1_000)
+        let primary = distance(meters, unit: policy.primaryUnit, compact: false)
+        guard includeSecondary, let secondaryUnit = policy.secondaryUnit else { return primary }
+        return "\(primary) (\(distance(meters, unit: secondaryUnit, compact: false)))"
     }
 
-    static func compactDistance(_ meters: Double?) -> String {
+    static func compactDistance(
+        _ meters: Double?,
+        policy: RunDisplayPolicy = .kilometersOnly,
+        includeSecondary: Bool = false
+    ) -> String {
         guard let meters else { return "Unavailable" }
-        if meters < 1_000 {
-            return "\(Int(meters.rounded())) m"
-        }
-        return String(format: "%.2f km", meters / 1_000)
+        let primary = distance(meters, unit: policy.primaryUnit, compact: true)
+        guard includeSecondary, let secondaryUnit = policy.secondaryUnit else { return primary }
+        return "\(primary) (\(distance(meters, unit: secondaryUnit, compact: true)))"
+    }
+
+    static func secondaryDistance(_ meters: Double?, policy: RunDisplayPolicy) -> String? {
+        guard let meters, let secondaryUnit = policy.secondaryUnit else { return nil }
+        return distance(meters, unit: secondaryUnit, compact: false)
+    }
+
+    static func secondaryPace(_ secondsPerKm: Double?, policy: RunDisplayPolicy) -> String? {
+        guard let secondsPerKm,
+              secondsPerKm.isFinite,
+              secondsPerKm > 0,
+              let secondaryUnit = policy.secondaryUnit else { return nil }
+        return pace(
+            secondsPerKm,
+            policy: RunDisplayPolicy(primaryUnit: secondaryUnit, showsSecondaryDistance: false)
+        )
     }
 
     static func duration(_ seconds: Double?) -> String {
@@ -86,10 +111,56 @@ enum RunFormatters {
         return String(format: "%d:%02d", minutes, secs)
     }
 
-    static func pace(_ secondsPerKm: Double?) -> String {
+    static func pace(
+        _ secondsPerKm: Double?,
+        policy: RunDisplayPolicy = .kilometersOnly
+    ) -> String {
         guard let secondsPerKm, secondsPerKm.isFinite, secondsPerKm > 0 else { return "Unavailable" }
-        let rounded = Int(secondsPerKm.rounded())
-        return String(format: "%d:%02d /km", rounded / 60, rounded % 60)
+        let secondsPerUnit = paceSecondsPerUnit(secondsPerKm, policy: policy)
+        let rounded = Int(secondsPerUnit.rounded())
+        return String(format: "%d:%02d%@", rounded / 60, rounded % 60, policy.primaryUnit.paceSuffix)
+    }
+
+    static func paceSecondsPerUnit(_ secondsPerKm: Double, policy: RunDisplayPolicy) -> Double {
+        secondsPerKm * (policy.primaryUnit.metersPerUnit / 1_000)
+    }
+
+    static func paceDeltaSeconds(_ secondsPerKm: Double, policy: RunDisplayPolicy) -> Int {
+        Int(abs(paceSecondsPerUnit(secondsPerKm, policy: policy)).rounded())
+    }
+
+    static func chartDistanceValue(_ meters: Double, policy: RunDisplayPolicy) -> Double {
+        meters / policy.primaryUnit.metersPerUnit
+    }
+
+    static func chartDistanceUnit(policy: RunDisplayPolicy) -> String {
+        policy.primaryUnit.abbreviation
+    }
+
+    static func accessibilityDistance(
+        _ meters: Double?,
+        policy: RunDisplayPolicy,
+        includeSecondary: Bool = false
+    ) -> String {
+        guard let meters else { return "Distance unavailable" }
+        let primaryValue = meters / policy.primaryUnit.metersPerUnit
+        let primary = "\(decimal(primaryValue, minimumFractionDigits: 0, maximumFractionDigits: 2)) \(policy.primaryUnit.label.lowercased())"
+        guard includeSecondary, let secondaryUnit = policy.secondaryUnit else { return primary }
+        let secondaryValue = meters / secondaryUnit.metersPerUnit
+        return "\(primary), equivalent to \(decimal(secondaryValue, minimumFractionDigits: 0, maximumFractionDigits: 2)) \(secondaryUnit.label.lowercased())"
+    }
+
+    static func accessibilityPace(
+        _ secondsPerKm: Double?,
+        policy: RunDisplayPolicy,
+        includeSecondary: Bool = false
+    ) -> String {
+        guard let secondsPerKm, secondsPerKm.isFinite, secondsPerKm > 0 else {
+            return "Pace unavailable"
+        }
+        let primary = accessibilityPace(secondsPerKm, unit: policy.primaryUnit)
+        guard includeSecondary, let secondaryUnit = policy.secondaryUnit else { return primary }
+        return "\(primary), equivalent to \(accessibilityPace(secondsPerKm, unit: secondaryUnit))"
     }
 
     static func number(_ value: Double?, suffix: String = "", decimals: Int = 0) -> String {
@@ -134,5 +205,32 @@ enum RunFormatters {
         formatter.maximumFractionDigits = 0
         formatter.minimumFractionDigits = 0
         return formatter.string(from: NSNumber(value: value)) ?? String(format: "%.0f", value)
+    }
+
+    private static func distance(_ meters: Double, unit: RunningDistanceUnit, compact: Bool) -> String {
+        if compact, unit == .kilometers, meters < 1_000 {
+            return "\(integer(meters.rounded())) m"
+        }
+        let value = meters / unit.metersPerUnit
+        return "\(decimal(value, minimumFractionDigits: compact ? 0 : 2, maximumFractionDigits: 2)) \(unit.abbreviation)"
+    }
+
+    private static func accessibilityPace(_ secondsPerKm: Double, unit: RunningDistanceUnit) -> String {
+        let secondsPerUnit = secondsPerKm * (unit.metersPerUnit / 1_000)
+        let rounded = Int(secondsPerUnit.rounded())
+        let unitName = unit == .miles ? "mile" : "kilometer"
+        return String(format: "%d:%02d per %@", rounded / 60, rounded % 60, unitName)
+    }
+
+    private static func decimal(
+        _ value: Double,
+        minimumFractionDigits: Int,
+        maximumFractionDigits: Int
+    ) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = minimumFractionDigits
+        formatter.maximumFractionDigits = maximumFractionDigits
+        return formatter.string(from: NSNumber(value: value)) ?? String(format: "%.*f", maximumFractionDigits, value)
     }
 }
