@@ -2416,10 +2416,11 @@ struct SplitsAndEventsPanel: View {
     let supportedIntervals: WorkoutIntervalReconstructionResult?
     let intervalUnavailableMessage: String?
     @Environment(\.runDisplayPolicy) private var runDisplayPolicy
+    @State private var selectedSplitDetail: NormalSplitDetailSelection?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(runDisplayPolicy.primaryUnit.normalSplitTitle)
+            NormalSplitsSectionHeader(unit: runDisplayPolicy.primaryUnit)
             if displayedSplits.isEmpty {
                 EmptyStateView(
                     title: "Splits unavailable",
@@ -2427,44 +2428,43 @@ struct SplitsAndEventsPanel: View {
                         ?? "Apple Health did not retain enough trustworthy distance timing to calculate \(splitUnitName) splits for this run. Whole-run distance, time, and average pace remain available."
                 )
             } else {
-                VStack(spacing: 8) {
-                    ForEach(Array(displayedSplits.enumerated()), id: \.element.label) { index, split in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(split.label)
-                                    .font(.subheadline.bold())
-                                if split.label == "Final" {
-                                    Text(RunFormatters.distance(split.distanceMeters, policy: runDisplayPolicy))
-                                        .font(.caption2)
-                                        .foregroundStyle(RunSignalTextStyle.secondary)
-                                }
-                                Text(splitSourceLabel(segments.splitSource(for: runDisplayPolicy.primaryUnit)))
-                                    .font(.caption2)
-                                    .foregroundStyle(RunSignalTextStyle.secondary)
-                                if let pauseOverlap = split.pauseOverlapSeconds, pauseOverlap >= 0.5 {
-                                    Text("Active time · \(RunFormatters.duration(pauseOverlap)) pause excluded")
-                                        .font(.caption2)
-                                        .foregroundStyle(RunSignalTextStyle.secondary)
-                                }
-                                if let metrics = splitMetricsText(at: index) {
-                                    Text(metrics)
-                                        .font(.caption2)
-                                        .foregroundStyle(RunSignalTextStyle.secondary)
-                                }
+                VStack(spacing: 0) {
+                    NormalSplitTableHeader(unit: runDisplayPolicy.primaryUnit)
+                        .padding(.bottom, 8)
+                    Divider()
+
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(displayedSplits.enumerated()), id: \.element.label) { index, split in
+                            let metrics = splitMetricAverages(at: index)
+                            NormalSplitCompactRow(
+                                index: index,
+                                split: split,
+                                heartRate: metrics.heartRate,
+                                policy: runDisplayPolicy
+                            ) {
+                                selectedSplitDetail = NormalSplitDetailSelection(
+                                    id: "\(runDisplayPolicy.primaryUnit.rawValue)-\(split.label)",
+                                    title: split.label,
+                                    split: split,
+                                    metrics: metrics
+                                )
                             }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 3) {
-                                Text(RunFormatters.duration(split.durationSecondsEstimate))
-                                    .font(.subheadline.monospacedDigit().bold())
-                                Text(RunFormatters.pace(split.paceSecondsPerKmEstimate, policy: runDisplayPolicy))
-                                    .font(.caption2)
-                                    .foregroundStyle(RunSignalTextStyle.secondary)
+
+                            if index < displayedSplits.count - 1 {
+                                Divider()
                             }
                         }
-                        .padding(10)
-                        .background(.background)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
+                }
+                .accessibilityIdentifier("normal-splits-table")
+
+                if let sourceNote = NormalSplitPresentation.runnerFacingSourceNote(
+                    segments.splitSource(for: runDisplayPolicy.primaryUnit)
+                ) {
+                    Label(sourceNote, systemImage: "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
+                        .accessibilityIdentifier("normal-splits-estimate-note")
                 }
             }
 
@@ -2484,56 +2484,20 @@ struct SplitsAndEventsPanel: View {
                 }
             }
         }
+        .sheet(item: $selectedSplitDetail) { detail in
+            NormalSplitDetailsSheet(detail: detail, policy: runDisplayPolicy)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
     }
 
-    private func splitMetricsText(at index: Int) -> String? {
-        guard let evidence = workout.evidence,
-              displayedSplits.indices.contains(index) else { return nil }
-        let split = displayedSplits[index]
-        let fallbackStartOffset = displayedSplits[..<index]
-            .map(\.durationSecondsEstimate)
-            .reduce(0, +)
-        let startOffset = split.elapsedStartOffsetSeconds ?? fallbackStartOffset
-        let endOffset = split.elapsedEndOffsetSeconds ?? (startOffset + split.durationSecondsEstimate)
-        let start = workout.startDate.addingTimeInterval(startOffset)
-        let end = workout.startDate.addingTimeInterval(endOffset)
-
-        func average(_ metric: WorkoutEvidenceMetric) -> Double? {
-            guard let points = evidence.series[metric]?.points else { return nil }
-            let values = points
-                .filter { $0.date >= start && $0.date < end }
-                .map(\.value)
-                .filter { $0.isFinite && $0 > 0 }
-            guard !values.isEmpty else { return nil }
-            return values.reduce(0, +) / Double(values.count)
-        }
-
-        var values: [String] = []
-        if let heartRate = average(.heartRate) {
-            values.append("HR \(Int(heartRate.rounded())) bpm")
-        }
-        if let cadence = average(.cadence) {
-            values.append("Cadence \(Int(cadence.rounded())) spm")
-        }
-        if let power = average(.runningPower) {
-            values.append("Power \(Int(power.rounded())) W")
-        }
-        return values.isEmpty ? nil : values.joined(separator: " · ")
-    }
-
-    private func splitSourceLabel(_ source: DerivedSplitSource) -> String {
-        switch source {
-        case .validatedLapEvents:
-            "Apple Health lap boundaries"
-        case .validatedSegmentEvents:
-            "Apple Health split boundaries"
-        case .distanceSampleWindows:
-            "Estimated from Apple Health distance"
-        case .workoutAverageFallback:
-            "Whole-workout average"
-        case .unavailable:
-            "Unavailable"
-        }
+    private func splitMetricAverages(at index: Int) -> NormalSplitMetricAverages {
+        NormalSplitPresentation.metricAverages(
+            at: index,
+            splits: displayedSplits,
+            workoutStartDate: workout.startDate,
+            evidence: workout.evidence
+        )
     }
 
     private var displayedSplits: [DerivedSplitEstimate] {
@@ -2542,6 +2506,205 @@ struct SplitsAndEventsPanel: View {
 
     private var splitUnitName: String {
         runDisplayPolicy.primaryUnit == .kilometers ? "kilometer" : "mile"
+    }
+}
+
+private enum NormalSplitTableLayout {
+    static let splitColumnWidth: CGFloat = 76
+    static let heartRateColumnWidth: CGFloat = 88
+    static let columnSpacing: CGFloat = 12
+}
+
+private struct NormalSplitsSectionHeader: View {
+    let unit: RunningDistanceUnit
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("Splits")
+                .font(.headline)
+            Spacer()
+            Text(unit.normalSplitUnitText)
+                .font(.subheadline.monospacedDigit().weight(.semibold))
+                .foregroundStyle(RunSignalTextStyle.prominentSecondary)
+        }
+        .padding(.top, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("normal-splits-header")
+    }
+}
+
+private struct NormalSplitTableHeader: View {
+    let unit: RunningDistanceUnit
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: NormalSplitTableLayout.columnSpacing) {
+            Text(unit.normalSplitColumnTitle)
+                .frame(width: NormalSplitTableLayout.splitColumnWidth, alignment: .leading)
+            Text("PACE")
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text("AVG HR")
+                .frame(width: NormalSplitTableLayout.heartRateColumnWidth, alignment: .trailing)
+        }
+        .font(.caption2.weight(.semibold))
+        .tracking(0.5)
+        .foregroundStyle(RunSignalTextStyle.secondary)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct NormalSplitCompactRow: View {
+    let index: Int
+    let split: DerivedSplitEstimate
+    let heartRate: Double?
+    let policy: RunDisplayPolicy
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: NormalSplitTableLayout.columnSpacing) {
+                    Text(compactLabel)
+                        .font(.subheadline.monospacedDigit().weight(.semibold))
+                        .frame(width: NormalSplitTableLayout.splitColumnWidth, alignment: .leading)
+                    Text(paceText)
+                        .font(.headline.monospacedDigit())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(heartRateText)
+                        .font(.subheadline.monospacedDigit().weight(.medium))
+                        .frame(width: NormalSplitTableLayout.heartRateColumnWidth, alignment: .trailing)
+                }
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+
+                if let supportingText {
+                    Text(supportingText)
+                        .font(.caption.monospacedDigit().weight(.medium))
+                        .foregroundStyle(RunSignalTextStyle.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint("Shows time, distance, cadence, power, and pause details")
+        .accessibilityIdentifier("normal-split-row-\(index + 1)")
+    }
+
+    private var compactLabel: String {
+        NormalSplitPresentation.compactLabel(split.label, unit: policy.primaryUnit)
+    }
+
+    private var paceText: String {
+        RunFormatters.pace(split.paceSecondsPerKmEstimate, policy: policy)
+    }
+
+    private var heartRateText: String {
+        guard let heartRate else { return "—" }
+        return "\(Int(heartRate.rounded())) bpm"
+    }
+
+    private var supportingText: String? {
+        NormalSplitPresentation.supportingText(for: split, policy: policy)
+    }
+
+    private var accessibilityLabel: String {
+        var parts = [
+            compactLabel,
+            RunFormatters.accessibilityPace(split.paceSecondsPerKmEstimate, policy: policy),
+            heartRate.map { "Average heart rate \(Int($0.rounded())) beats per minute" }
+                ?? "Average heart rate unavailable",
+        ]
+        if let supportingText {
+            parts.append(supportingText)
+        }
+        return parts.joined(separator: ", ")
+    }
+}
+
+private struct NormalSplitDetailSelection: Identifiable {
+    let id: String
+    let title: String
+    let split: DerivedSplitEstimate
+    let metrics: NormalSplitMetricAverages
+}
+
+private struct NormalSplitDetailsSheet: View {
+    let detail: NormalSplitDetailSelection
+    let policy: RunDisplayPolicy
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(RunFormatters.pace(detail.split.paceSecondsPerKmEstimate, policy: policy))
+                            .font(.largeTitle.monospacedDigit().bold())
+                            .foregroundStyle(.primary)
+                        Text("Pace")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(RunSignalTextStyle.secondary)
+                    }
+
+                    MetricGrid(items: detailItems)
+                }
+                .padding()
+            }
+            .navigationTitle(detail.title)
+            .runSignalInlineNavigationTitle()
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private var detailItems: [MetricItem] {
+        var items = [
+            MetricItem(
+                title: "Time",
+                value: RunFormatters.duration(detail.split.durationSecondsEstimate),
+                detail: detail.split.pauseOverlapSeconds.map { $0 >= 0.5 ? "Active split time" : "Split time" } ?? "Split time"
+            ),
+            MetricItem(
+                title: "Distance",
+                value: RunFormatters.distance(detail.split.distanceMeters, policy: policy),
+                detail: "Split distance"
+            ),
+            MetricItem(
+                title: "Avg HR",
+                value: RunFormatters.number(detail.metrics.heartRate, suffix: " bpm"),
+                detail: detail.metrics.heartRate == nil ? "Not available" : "Split average"
+            ),
+            MetricItem(
+                title: "Cadence",
+                value: RunFormatters.number(detail.metrics.cadence, suffix: " spm"),
+                detail: detail.metrics.cadence == nil ? "Not available" : "Split average"
+            ),
+            MetricItem(
+                title: "Power",
+                value: RunFormatters.number(detail.metrics.power, suffix: " W"),
+                detail: detail.metrics.power == nil ? "Not available" : "Split average"
+            ),
+        ]
+
+        if let pauseOverlap = detail.split.pauseOverlapSeconds, pauseOverlap >= 0.5 {
+            items.append(
+                MetricItem(
+                    title: "Pause",
+                    value: RunFormatters.duration(pauseOverlap),
+                    detail: "Excluded from time"
+                )
+            )
+        }
+
+        return items
     }
 }
 

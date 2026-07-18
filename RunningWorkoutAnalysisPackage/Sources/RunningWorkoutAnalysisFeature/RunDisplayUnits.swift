@@ -39,6 +39,15 @@ public enum RunningDistanceUnit: String, CaseIterable, Codable, Identifiable, Se
         }
     }
 
+    var normalSplitUnitText: String { "1 \(abbreviation)" }
+
+    var normalSplitColumnTitle: String {
+        switch self {
+        case .kilometers: "KM"
+        case .miles: "MILE"
+        }
+    }
+
     var normalSplitRowPrefix: String {
         switch self {
         case .kilometers: "KM"

@@ -8,6 +8,7 @@ final class RunningWorkoutAnalysisUITests: XCTestCase {
     @MainActor
     func testSettingsTabLoadsHealthKitStatus() throws {
         let app = XCUIApplication()
+        app.launchArguments += ["-RunSignal.HealthKitOnboardingCompleted.v1", "true"]
         app.launch()
 
         XCTAssertTrue(app.tabBars.buttons["Runs"].waitForExistence(timeout: 5))
