@@ -1463,8 +1463,10 @@ struct ReconciliationRowView: View {
 struct WorkoutDetailView: View {
     var store: RunningAnalysisStore
     let workoutID: String
+    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
     @AppStorage("RunSignal.DeveloperModeEnabled") private var developerModeEnabled = false
     @State private var presentation: WorkoutDetailPresentation?
+    @State private var showingShareRun = false
 
     private var workout: CanonicalWorkout? {
         store.workouts.first { $0.id == workoutID }
@@ -1544,6 +1546,50 @@ struct WorkoutDetailView: View {
                 WorkoutDetailPresentation.make(workout: workout, analysis: analysis)
             }.value
         }
+        .modifier(
+            WorkoutSharePresentationModifier(
+                workout: workout,
+                presentation: presentation,
+                policy: runDisplayPolicy,
+                isPresented: $showingShareRun
+            )
+        )
+    }
+}
+
+private struct WorkoutSharePresentationModifier: ViewModifier {
+    let workout: CanonicalWorkout?
+    let presentation: WorkoutDetailPresentation?
+    let policy: RunDisplayPolicy
+    @Binding var isPresented: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        content
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        isPresented = true
+                    } label: {
+                        Label("Share Run", systemImage: "square.and.arrow.up")
+                    }
+                    .disabled(workout == nil || presentation == nil)
+                    .accessibilityIdentifier("workout-share-run")
+                }
+            }
+            .sheet(isPresented: $isPresented) {
+                if let workout, let presentation {
+                    RunShareSheet(
+                        workout: workout,
+                        presentation: presentation,
+                        policy: policy
+                    )
+                }
+            }
+        #else
+        content
+        #endif
     }
 }
 

@@ -235,6 +235,22 @@ This decision extends D-012 without weakening D-005 or D-006. It also generalize
 
 Changing the display preference must not query HealthKit, start import or analysis work, broadly hydrate evidence, or rewrite unit-neutral training and Best Effort caches. Runner formatting follows the preference; developer parity and diagnostic exports remain explicitly canonical unless their schema names another unit.
 
+### D-017 — Share cards are runner-controlled exports with least-privilege Photos access
+
+- Status: Active
+- Established: 2026-07-17
+
+RunSignal renders share images locally from the same runner-facing workout presentation used by Workout Details. The supported templates are Summary, Splits, and official Workout Reps; the supported canvases are 9:16 Story and 4:5 Post. Long Split and Workout Rep results paginate instead of dropping rows.
+
+- Summary defaults to `Route Shape`, which shows the route trace without street, address, or map labels. The runner may deliberately choose `Map` or `No Route` before export.
+- Workout Reps consumes only resolver-approved product rows under D-005. Blocked or unavailable custom interval evidence must never be reconstructed for a share card.
+- Measured distance and pace follow D-016's active display policy. WorkoutKit prescriptions retain their authored values and units.
+- Dark Card exports are opaque. Transparent Overlay exports retain PNG transparency for placement over a runner-selected photo in another app.
+- `Share…` uses the system activity sheet and does not need photo-library access.
+- `Save to Photos` requests PhotoKit `.addOnly` authorization just in time, after the runner taps the action. The app declares `NSPhotoLibraryAddUsageDescription`, adds only the generated PNG assets, does not request read/write library access, and offers Settings recovery after denial.
+
+This is a local presentation/export feature. It does not write HealthKit, upload workouts, add a backend, or change evidence and analytics caches.
+
 ## Major Change Timeline
 
 ### 2026-06-05 to 2026-06-11 — Foundation and evidence model

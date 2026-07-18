@@ -374,6 +374,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = RunSignal;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "RunSignal reads completed running workouts and related metrics to build run history, splits, trends, zones, and verified best efforts on this iPhone. RunSignal never writes Health data.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "RunSignal adds the run result images you choose to your photo library so you can share them.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = NO;
@@ -401,6 +402,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = RunSignal;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "RunSignal reads completed running workouts and related metrics to build run history, splits, trends, zones, and verified best efforts on this iPhone. RunSignal never writes Health data.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "RunSignal adds the run result images you choose to your photo library so you can share them.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = NO;
