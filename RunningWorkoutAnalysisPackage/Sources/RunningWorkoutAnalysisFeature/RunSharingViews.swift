@@ -19,6 +19,7 @@ struct RunShareSheet: View {
     @State private var routeStyle: RunShareRouteStyle
     @State private var selectedPage = 0
     @State private var mapImage: UIImage?
+    @State private var previewImage: UIImage?
     @State private var isPreparing = false
     @State private var statusMessage: String?
     @State private var activityPayload: RunShareActivityPayload?
@@ -56,8 +57,9 @@ struct RunShareSheet: View {
         !model.routePoints.isEmpty
     }
 
-    private var previewScale: CGFloat {
-        canvas == .story ? 0.57 : 0.84
+    private var previewSize: CGSize {
+        let scale: CGFloat = canvas == .story ? 0.57 : 0.84
+        return CGSize(width: canvas.pointSize.width * scale, height: canvas.pointSize.height * scale)
     }
 
     var body: some View {
@@ -175,6 +177,18 @@ struct RunShareSheet: View {
                 accent: model.accent
             )
         }
+        .task(id: previewTaskID) {
+            previewImage = RunShareImageRenderer.render(
+                model: model,
+                template: template,
+                canvas: canvas,
+                appearance: appearance,
+                routeStyle: effectiveRouteStyle,
+                page: selectedPage,
+                mapImage: mapImage,
+                scale: 1
+            )
+        }
         .sheet(item: $activityPayload) { payload in
             RunShareActivityView(images: payload.images)
         }
@@ -191,19 +205,19 @@ struct RunShareSheet: View {
 
     private var preview: some View {
         VStack(spacing: 10) {
-            let size = canvas.pointSize
-            RunShareCardView(
-                model: model,
-                template: template,
-                canvas: canvas,
-                appearance: appearance,
-                routeStyle: effectiveRouteStyle,
-                page: selectedPage,
-                mapImage: mapImage
-            )
-            .frame(width: size.width, height: size.height)
-            .scaleEffect(previewScale, anchor: .topLeading)
-            .frame(width: size.width * previewScale, height: size.height * previewScale)
+            Group {
+                if let previewImage {
+                    Image(uiImage: previewImage)
+                        .resizable()
+                        .interpolation(.high)
+                        .aspectRatio(contentMode: .fit)
+                } else {
+                    ProgressView("Preparing preview")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(.black.opacity(0.35))
+                }
+            }
+            .frame(width: previewSize.width, height: previewSize.height)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .shadow(color: .black.opacity(0.28), radius: 14, y: 8)
             .accessibilityIdentifier("run-share-preview")
@@ -252,6 +266,18 @@ struct RunShareSheet: View {
 
     private var mapTaskID: String {
         "\(routeStyle.rawValue)-\(canvas.rawValue)-\(workout.id)"
+    }
+
+    private var previewTaskID: String {
+        let mapIdentity = mapImage.map { ObjectIdentifier($0).hashValue } ?? 0
+        return [
+            template.rawValue,
+            canvas.rawValue,
+            appearance.rawValue,
+            effectiveRouteStyle.rawValue,
+            String(selectedPage),
+            String(mapIdentity)
+        ].joined(separator: "-")
     }
 
     @ViewBuilder
@@ -798,7 +824,8 @@ private enum RunShareImageRenderer {
         appearance: RunShareAppearance,
         routeStyle: RunShareRouteStyle,
         page: Int,
-        mapImage: UIImage?
+        mapImage: UIImage?,
+        scale: CGFloat = 3
     ) -> UIImage? {
         let size = canvas.pointSize
         let content = RunShareCardView(
@@ -814,13 +841,13 @@ private enum RunShareImageRenderer {
 
         let renderer = ImageRenderer(content: content)
         renderer.proposedSize = ProposedViewSize(size)
-        renderer.scale = 3
+        renderer.scale = scale
         renderer.isOpaque = appearance == .darkCard
         return renderer.uiImage
     }
 }
 
-private enum RunSharePhotoSaveResult: Equatable {
+private enum RunSharePhotoSaveResult: Equatable, Sendable {
     case saved(Int)
     case denied
     case restricted
@@ -834,6 +861,14 @@ private enum RunSharePhotoLibrarySaver {
         guard data.count == images.count else {
             return .failed("RunSignal could not prepare the PNG images for Photos.")
         }
+
+        return await savePNGData(data, baseFilename: baseFilename)
+    }
+
+    private static func savePNGData(
+        _ data: [Data],
+        baseFilename: String
+    ) async -> RunSharePhotoSaveResult {
 
         let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
         let resolvedStatus: PHAuthorizationStatus
