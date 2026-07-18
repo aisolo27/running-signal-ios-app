@@ -96,6 +96,26 @@ import Testing
     #expect(normalized.allSatisfy { (0...1).contains($0.x) && (0...1).contains($0.y) })
 }
 
+@Test func shareRouteAspectFitsWithoutStretchingPostCanvas() throws {
+    let points = [
+        RunShareRoutePoint(x: 0, y: 0.25),
+        RunShareRoutePoint(x: 1, y: 0.75)
+    ]
+
+    let fitted = RunShareRouteLayout.fittedPoints(
+        points,
+        in: CGSize(width: 300, height: 100),
+        inset: 10
+    )
+    let first = try #require(fitted.first)
+    let last = try #require(fitted.last)
+
+    #expect(abs((last.x - first.x) - 160) < 0.001)
+    #expect(abs((last.y - first.y) - 80) < 0.001)
+    #expect(abs(first.x - 70) < 0.001)
+    #expect(abs(first.y - 10) < 0.001)
+}
+
 private func shareWorkout(distance: Double, duration: Double) -> CanonicalWorkout {
     let start = Date(timeIntervalSince1970: 1_721_000_000)
     let route = [

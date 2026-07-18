@@ -103,6 +103,51 @@ struct RunShareRoutePoint: Equatable, Sendable {
     var y: Double
 }
 
+enum RunShareRouteLayout {
+    static func fittedPoints(
+        _ points: [RunShareRoutePoint],
+        in size: CGSize,
+        inset: CGFloat = 0
+    ) -> [CGPoint] {
+        guard !points.isEmpty, size.width > 0, size.height > 0 else { return [] }
+
+        let minimumX = points.map(\.x).min() ?? 0
+        let maximumX = points.map(\.x).max() ?? minimumX
+        let minimumY = points.map(\.y).min() ?? 0
+        let maximumY = points.map(\.y).max() ?? minimumY
+        let spanX = maximumX - minimumX
+        let spanY = maximumY - minimumY
+        let availableWidth = max(0, size.width - inset * 2)
+        let availableHeight = max(0, size.height - inset * 2)
+        let epsilon = 0.000_000_1
+
+        let horizontalScale = spanX > epsilon
+            ? Double(availableWidth) / spanX
+            : .greatestFiniteMagnitude
+        let verticalScale = spanY > epsilon
+            ? Double(availableHeight) / spanY
+            : .greatestFiniteMagnitude
+        let scale: Double
+        if spanX <= epsilon, spanY <= epsilon {
+            scale = 0
+        } else {
+            scale = min(horizontalScale, verticalScale)
+        }
+
+        let drawnWidth = CGFloat(spanX * scale)
+        let drawnHeight = CGFloat(spanY * scale)
+        let originX = inset + (availableWidth - drawnWidth) / 2
+        let originY = inset + (availableHeight - drawnHeight) / 2
+
+        return points.map { point in
+            CGPoint(
+                x: originX + CGFloat((point.x - minimumX) * scale),
+                y: originY + CGFloat((point.y - minimumY) * scale)
+            )
+        }
+    }
+}
+
 struct RunShareSplitRow: Identifiable, Equatable, Sendable {
     var id: Int
     var label: String

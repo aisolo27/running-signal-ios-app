@@ -421,32 +421,26 @@ struct RunShareCardView: View {
 
     private var header: some View {
         sharePanel {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HStack(spacing: 7) {
                     Text(model.runType.uppercased())
                         .font(.caption2.bold())
                         .foregroundStyle(accent)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(accent.opacity(0.16))
+                        .padding(.horizontal, appearance == .darkCard ? 8 : 0)
+                        .padding(.vertical, appearance == .darkCard ? 4 : 0)
+                        .background(appearance == .darkCard ? accent.opacity(0.16) : .clear)
                         .clipShape(Capsule())
-                    Spacer()
                     if let environment = model.environment {
                         Text(environment.uppercased())
                             .font(.caption2.bold())
                             .foregroundStyle(secondary)
                     }
                 }
-
-                Text(model.title)
-                    .font(.system(size: canvas == .story ? 24 : 20, weight: .bold, design: .rounded))
-                    .foregroundStyle(foreground)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.72)
-
+                Spacer()
                 Text(model.date)
                     .font(.caption)
                     .foregroundStyle(secondary)
+                    .multilineTextAlignment(.trailing)
             }
         }
     }
@@ -557,7 +551,11 @@ struct RunShareCardView: View {
     private var routeView: some View {
         switch routeStyle {
         case .routeShape:
-            RunShareRouteShape(points: model.routePoints, accent: accent)
+            RunShareRouteShape(
+                points: model.routePoints,
+                accent: accent,
+                showsBackdrop: appearance == .darkCard
+            )
         case .map:
             if let mapImage {
                 Image(uiImage: mapImage)
@@ -565,7 +563,11 @@ struct RunShareCardView: View {
                     .scaledToFill()
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             } else {
-                RunShareRouteShape(points: model.routePoints, accent: accent)
+                RunShareRouteShape(
+                    points: model.routePoints,
+                    accent: accent,
+                    showsBackdrop: appearance == .darkCard
+                )
                     .overlay(alignment: .bottomTrailing) {
                         Text("Loading map")
                             .font(.caption2.bold())
@@ -592,6 +594,12 @@ struct RunShareCardView: View {
                 .foregroundStyle(secondary)
         }
         .padding(.horizontal, 4)
+        .shadow(
+            color: appearance == .transparentOverlay ? .black.opacity(0.9) : .clear,
+            radius: 1.5,
+            x: 0,
+            y: 1
+        )
     }
 
     private func shareMetric(_ label: String, _ value: String, secondary secondaryValue: String? = nil) -> some View {
@@ -620,27 +628,30 @@ struct RunShareCardView: View {
         padding: CGFloat = 14,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        content()
-            .padding(padding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(panelBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .overlay {
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(.white.opacity(appearance == .transparentOverlay ? 0.16 : 0.08), lineWidth: 1)
+        let panelContent = content()
+        return Group {
+            if appearance == .transparentOverlay {
+                panelContent
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .shadow(color: .black.opacity(0.92), radius: 1.6, x: 0, y: 1)
+            } else {
+                panelContent
+                    .padding(padding)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.black.opacity(0.26))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16)
+                            .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                    }
             }
-    }
-
-    private var panelBackground: Color {
-        appearance == .transparentOverlay
-            ? .black.opacity(0.72)
-            : .black.opacity(0.26)
+        }
     }
 
     static func mapPointSize(canvas: RunShareCanvas) -> CGSize {
         switch canvas {
         case .story: CGSize(width: 304, height: 200)
-        case .post: CGSize(width: 312, height: 96)
+        case .post: CGSize(width: 312, height: 125)
         }
     }
 }
@@ -778,15 +789,17 @@ private struct RunShareWorkRowView: View {
 private struct RunShareRouteShape: View {
     let points: [RunShareRoutePoint]
     let accent: Color
+    let showsBackdrop: Bool
 
     var body: some View {
         GeometryReader { geometry in
             Canvas { context, size in
-                guard let first = points.first else { return }
+                let fittedPoints = RunShareRouteLayout.fittedPoints(points, in: size, inset: 18)
+                guard let first = fittedPoints.first else { return }
                 var path = Path()
-                path.move(to: CGPoint(x: first.x * size.width, y: first.y * size.height))
-                for point in points.dropFirst() {
-                    path.addLine(to: CGPoint(x: point.x * size.width, y: point.y * size.height))
+                path.move(to: first)
+                for point in fittedPoints.dropFirst() {
+                    path.addLine(to: point)
                 }
                 context.stroke(
                     path,
@@ -794,17 +807,15 @@ private struct RunShareRouteShape: View {
                     style: StrokeStyle(lineWidth: 4.5, lineCap: .round, lineJoin: .round)
                 )
 
-                if let finish = points.last {
-                    let finishPoint = CGPoint(x: finish.x * size.width, y: finish.y * size.height)
+                if let finishPoint = fittedPoints.last {
                     let marker = Path(ellipseIn: CGRect(x: finishPoint.x - 5, y: finishPoint.y - 5, width: 10, height: 10))
                     context.fill(marker, with: .color(.white))
                     context.stroke(marker, with: .color(accent), lineWidth: 2)
                 }
             }
-            .padding(18)
             .background(
                 RadialGradient(
-                    colors: [accent.opacity(0.18), .clear],
+                    colors: showsBackdrop ? [accent.opacity(0.18), .clear] : [.clear, .clear],
                     center: .center,
                     startRadius: 8,
                     endRadius: max(geometry.size.width, geometry.size.height) * 0.68

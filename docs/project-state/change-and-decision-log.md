@@ -242,10 +242,10 @@ Changing the display preference must not query HealthKit, start import or analys
 
 RunSignal renders share images locally from the same runner-facing workout presentation used by Workout Details. The supported templates are Summary, Splits, and official Workout Reps; the supported canvases are 9:16 Story and 4:5 Post. Long Split and Workout Rep results paginate instead of dropping rows.
 
-- Summary defaults to `Route Shape`, which shows the route trace without street, address, or map labels. The runner may deliberately choose `Map` or `No Route` before export.
+- Summary defaults to `Route Shape`, which shows the route trace without street, address, or map labels. Route Shape preserves its geometry through one centered aspect-fit scale in both Story and Post canvases. The runner may deliberately choose `Map` or `No Route` before export.
 - Workout Reps consumes only resolver-approved product rows under D-005. Blocked or unavailable custom interval evidence must never be reconstructed for a share card.
 - Measured distance and pace follow D-016's active display policy. WorkoutKit prescriptions retain their authored values and units.
-- Dark Card exports are opaque. Transparent Overlay exports retain PNG transparency for placement over a runner-selected photo in another app.
+- Dark Card exports are opaque and retain structured backing panels. Transparent Overlay exports retain PNG transparency for placement over a runner-selected photo in another app and use panel-free text, chart, and route elements with readability shadows. All templates retain the workout date and run classification while omitting the custom workout name.
 - `Share…` uses the system activity sheet and does not need photo-library access.
 - `Save to Photos` requests PhotoKit `.addOnly` authorization just in time, after the runner taps the action. The app declares `NSPhotoLibraryAddUsageDescription`, adds only the generated PNG assets, does not request read/write library access, and offers Settings recovery after denial.
 
