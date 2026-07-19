@@ -18,6 +18,14 @@
 - Treat physical-iPhone and Simulator proof separately. Simulator uses sample data and cannot prove HealthKit behavior.
 - “Push/run/install live to my iPhone” means package tests, Simulator smoke, then physical-device install/run when available.
 
+## Specialized Swift Skills
+
+- Use the global `swiftdata-pro` skill for SwiftData models, queries, persistence, migrations, and store correctness.
+- Use the global `swift-concurrency-pro` skill for actors, isolation, `Sendable`, async task design, cancellation, and concurrency warnings or failures.
+- Use the global `swift-testing-pro` skill when adding or reviewing Swift Testing coverage, diagnosing test failures, or improving test structure.
+- Invoke `$swiftui-pro-audit` only when the user explicitly requests a UI audit, a major SwiftUI screen change, or a pre-release UI quality review. It is review-first and must not change code unless implementation is requested.
+- Preserve RunSignal's established visual language and runner-facing behavior. Local product decisions and current project authority override generic skill preferences; do not broadly redesign or reorganize the UI merely because a skill suggests a different pattern.
+
 ## Product Boundaries
 
 - HealthKit v1 is read-only and HealthKit-only. Do not add FIT/HealthFit/file ingestion, HealthKit writes, backend sync, or AI calls unless the user changes direction.

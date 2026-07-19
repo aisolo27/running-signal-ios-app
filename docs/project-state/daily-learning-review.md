@@ -254,3 +254,56 @@ Docs not updated:
 - `docs/bug-log.md` was not changed because no recurring bug, mistake, toolchain gotcha, or verification lesson was found.
 - `AGENTS.md` was not changed because no new durable routing or tooling rule was found.
 - `docs/project-state/current-state.md`, `docs/project-state/next-work.md`, and `docs/project-state/documentation-index.md` still do not exist in this checkout. The active authority remains `docs/project-state/project-status.md`.
+
+## 2026-07-17
+
+Scope: reviewed Codex session logs from July 17, 2026 whose `session_meta.payload.cwd` or `turn_context.cwd` exactly matched `/Users/adrielsolorzano/Documents/Codex Projects/ios app Running Workout Analysis with Xcode & Codex`. Found 27 exact-cwd files representing 26 unique session IDs; excluded the active daily-learning automation session. Source logs reviewed represented 25 unique source session IDs, including main sessions and user-authorized audit/worker sessions from the branch cleanup, HealthKit split evidence, unit-display, and sharing-flow work.
+
+Completed work:
+
+- Resolved the branch/worktree confusion around `codex/add-change-decision-ledger`: audits found no committed divergence from `main`/`origin/main`, preserved all uncommitted files, verified no conflict markers or obvious secret/scratch artifacts, and pushed the phone-matching source to GitHub `main` at `f5cc0cf`.
+- Released the legacy distance-split and physical evidence pass at `c44efb6` after 355 package tests, physical `AIS17PM` install/launch proof, and iPhone Mirroring verification of corrected January 2019 split rows, outdoor/indoor filtering, and independent 2020/2021/2026 real-workout comparisons.
+- Reconciled HealthKit split evidence semantics: laps are the documented equal-distance event, segments are period-of-interest events, distance samples are windowed contributions rather than odometer points, and whole-workout-average repeated splits must not be shown as strong normal-split evidence.
+- Designed and implemented the miles/kilometers display system on `codex/run-units`, then promoted it to `main` at `c5a8035`. The app keeps meters, seconds, and canonical seconds/km internally while user preference controls runner-facing distance, pace, charts, normal split basis, and selected secondary summaries.
+- Preserved authored WorkoutKit prescription provenance beside canonical meters, including mixed `400 m`, `800 m`, and `1 mi` rows; fixed Interval Library aggregate semantics so completed fixed-distance Work uses prescribed distance, shortened rows stay measured-only, and mixed/open goals avoid hybrid denominators.
+- Fixed legacy cached pace-target presentation so explicit `/km` and `/mi` strings convert under the selected display policy without changing canonical target evaluation.
+- Added truthful final-only mile splits for detailed sub-mile runs while retaining the established one-full-kilometer threshold for kilometer splits.
+- Added display-policy and runner-facing leakage tests, then verified the final units build with 392 package tests, Simulator build/install/launch, and physical iPhone Mirroring across all four display modes.
+- Started a separate run-sharing branch and drafted the core share flow: Summary, Splits, and Workout Reps cards, Story/Post sizing, route/no-route handling, pagination, system sharing, and add-only Photos saving.
+- Performed a physical iPhone UI audit after the units release: 386 package tests passed for that audit source, `AIS17PM` build/install/launch and relaunch persistence passed, and the app was restored to Miles primary with secondary kilometers on.
+
+Pending work:
+
+- The current working tree is dirty with run-sharing source and tests; that feature still needs compilation, permission-path testing, physical UI review, and an explicit commit/push decision before it is treated as done.
+- The physical unit regression matrix still needs the paused January 14 normal-split case and the full June 30 mixed Work/Recovery/Open case checked in both primary units if not covered by a later dedicated pass.
+- The true first-install HealthKit path remains a physical-phone validation item: onboarding before Apple's sheet, 2019-present summary import continuation, distance-only Best Effort coverage completion, interaction, thermal state, and battery impact.
+- Secondary-unit presentation is correct functionally, but the physical audit found compact cards can still feel dense with primary plus secondary values; this is a UI polish candidate, not a blocker.
+- Standing physical HealthKit checks remain: limited-history authorization, observer delivery, anchored deletions, backlog continuation, interruption/resume, Low Power Mode, thermal behavior, battery impact, fresh-workout automatic processing, real city/weather, and real split/zone/interval values.
+
+Mistakes and fixes:
+
+- `push live` was initially blocked by an unbooted Simulator even though package tests and physical install/launch had passed. The later run used XcodeBuildMCP to satisfy the Simulator gate before committing, merging, deleting the feature branch, and pushing.
+- The messy branch state was mostly uncommitted work rather than committed divergence. Future cleanup should first prove branch topology, then classify dirty files, then decide whether the source matches the installed phone build.
+- A docs-only clarification was needed for history-import progress: the visible date-window counter restarts per continuation pass over remaining windows, while the persisted cursor and imported runs remain correct.
+- Earlier split reasoning over-weighted segment chains. The durable rule is lap/segment/event-chain first only when fully validated against public distance evidence, then windowed distance accrual, and never fabricated repeated rows from whole-run average.
+- Unit preferences could have leaked into domain math if treated as a global setting. The implemented fix keeps display preferences outside HealthKit ingestion, analytics caches, target evaluation, and Best Efforts.
+- Cached target strings with explicit `/km` or `/mi` needed strict parsing and conversion; opaque text remains untouched.
+
+Workflow improvements:
+
+- For device/source identity questions, inspect build logs for compiled untracked files and keep a source fingerprint, because version/build `1.0/1` is not enough to prove which dirty source is installed.
+- For unit work, add a self-tested runner-facing string leakage guard before exposing the picker; every visible surface must be converted before the preference is user-facing.
+- For normal splits, keep source/provenance visible in diagnostics. Confidence labels are not a substitute for carrying the actual evidence path.
+- For physical UI audits, record the restored display preference state and separate code changes from read-only audit findings.
+- For sharing or Photos work, treat add-only photo saving and system share-sheet paths as separate permission/interaction proof channels.
+
+Docs updated:
+
+- `docs/project-state/daily-learning-review.md`: updated by this review with the July 17 cross-session learning summary because it consolidates strong source-session evidence while avoiding unnecessary edits to routing-critical docs.
+
+Docs not updated:
+
+- `docs/project-state/project-status.md` was not changed by this review because the source sessions already updated the current product state, next work, known limitations, and latest verification for July 17.
+- `docs/bug-log.md` was not changed because the durable mistakes are already represented by existing bug-log categories or by source-session fixes; this review found no new recurring bug class that needed promotion beyond the daily synthesis.
+- `AGENTS.md` was not changed because existing rules already cover exact-cwd routing, branch-first implementation, push-live semantics, proof-channel separation, and physical-vs-Simulator boundaries.
+- `docs/project-state/current-state.md`, `docs/project-state/next-work.md`, and `docs/project-state/documentation-index.md` still do not exist in this checkout. The active authority remains `docs/project-state/project-status.md`.
