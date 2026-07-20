@@ -130,7 +130,7 @@ struct RunsView: View {
                     )
                     if healthPresentation.showsPrimaryAction {
                         Button {
-                            Task { await store.connectAndImportFromHealthKit() }
+                            Task { await store.performPrimaryHealthAction(healthPresentation.action) }
                         } label: {
                             Label(healthPresentation.action.title, systemImage: healthPresentation.action.systemImage)
                                 .frame(maxWidth: .infinity)
@@ -342,7 +342,7 @@ struct SettingsView: View {
                     }
                     if healthPresentation.showsPrimaryAction {
                         Button {
-                            Task { await store.connectAndImportFromHealthKit() }
+                            Task { await store.performPrimaryHealthAction(healthPresentation.action) }
                         } label: {
                             Label(healthPresentation.action.title, systemImage: healthPresentation.action.systemImage)
                                 .frame(maxWidth: .infinity)
@@ -1545,9 +1545,18 @@ struct WorkoutDetailView: View {
                 return
             }
             let analysis = store.derivedAnalysis(for: workout.id)
-            presentation = await Task.detached(priority: .userInitiated) {
-                WorkoutDetailPresentation.make(workout: workout, analysis: analysis)
-            }.value
+            do {
+                let nextPresentation = try await WorkoutViewComputation.detailPresentation(
+                    workout: workout,
+                    analysis: analysis
+                )
+                try Task.checkCancellation()
+                presentation = nextPresentation
+            } catch is CancellationError {
+                return
+            } catch {
+                assertionFailure("Unexpected workout presentation error: \(error)")
+            }
         }
         .task(id: routeAchievementSignature) {
             guard let workout,
@@ -1558,13 +1567,19 @@ struct WorkoutDetailView: View {
                 return
             }
             let rankedRecords = store.lifetimeBestEffortAchievements(for: workout.id)
-            routeAchievements = await Task.detached(priority: .userInitiated) {
-                WorkoutRouteAchievementMapper.make(
+            do {
+                let nextAchievements = try await WorkoutViewComputation.routeAchievements(
                     route: route,
                     rankedRecords: rankedRecords,
                     workoutID: workout.id
                 )
-            }.value
+                try Task.checkCancellation()
+                routeAchievements = nextAchievements
+            } catch is CancellationError {
+                return
+            } catch {
+                assertionFailure("Unexpected route achievement error: \(error)")
+            }
         }
         .modifier(
             WorkoutSharePresentationModifier(

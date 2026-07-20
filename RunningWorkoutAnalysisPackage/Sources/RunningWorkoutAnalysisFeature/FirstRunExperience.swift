@@ -4,12 +4,14 @@ public enum HealthKitPrimaryAction: Equatable, Sendable {
     case connect
     case continueImport
     case refresh
+    case retryLocalData
 
     public var title: String {
         switch self {
         case .connect: "Connect Apple Health"
         case .continueImport: "Continue History Import"
         case .refresh: "Refresh Apple Health"
+        case .retryLocalData: "Retry Saved Runs"
         }
     }
 
@@ -18,6 +20,7 @@ public enum HealthKitPrimaryAction: Equatable, Sendable {
         case .connect: "heart.text.square"
         case .continueImport: "arrow.clockwise"
         case .refresh: "arrow.clockwise"
+        case .retryLocalData: "arrow.clockwise"
         }
     }
 }
@@ -50,9 +53,22 @@ public struct HealthKitConnectionPresentation: Equatable, Sendable {
         authorizationState: AuthorizationState,
         importStatus: HealthKitImportJobStatus?,
         loadedRunCount: Int,
-        isLoading: Bool
+        isLoading: Bool,
+        localDataLoadFailed: Bool = false
     ) -> HealthKitConnectionPresentation {
         let runLabel = loadedRunCount == 1 ? "run" : "runs"
+
+        if localDataLoadFailed {
+            return HealthKitConnectionPresentation(
+                phase: .failed,
+                title: "Saved Run History Unavailable",
+                detailText: "RunSignal could not read its saved workout cache. Your Apple Health workouts were not changed. Retry the local data load.",
+                action: .retryLocalData,
+                showsProgress: false,
+                showsPrimaryAction: true,
+                loadedRunCount: loadedRunCount
+            )
+        }
 
         if authorizationState == .requesting {
             return HealthKitConnectionPresentation(

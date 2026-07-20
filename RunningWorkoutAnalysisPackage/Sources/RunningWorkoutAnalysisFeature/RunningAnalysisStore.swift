@@ -262,6 +262,10 @@ public final class RunningAnalysisStore {
         subsystem: "com.adrielsolorzano.runninganalysis",
         category: "EvidenceRefresh"
     )
+    private static let persistenceLogger = Logger(
+        subsystem: "com.adrielsolorzano.runninganalysis",
+        category: "Persistence"
+    )
 
     public private(set) var workouts: [CanonicalWorkout] = []
     public private(set) var snapshot = AnalyticsEngine.snapshot(for: [])
@@ -291,6 +295,7 @@ public final class RunningAnalysisStore {
     public private(set) var pendingManualWorkoutIDs: Set<String> = []
     public private(set) var isCheckingBestEffortHistory = false
     public private(set) var bestEffortAnalysisPauseMessage: String?
+    public private(set) var localDataLoadFailed = false
     private var manualWorkoutUpdateVersions: [String: Int] = [:]
 
     public var evidenceRefreshJobSummaries: [EvidenceRefreshJobSummary] {
@@ -301,6 +306,7 @@ public final class RunningAnalysisStore {
     private let syncService: any HealthKitWorkoutSyncServicing
     private let syncDefaults: UserDefaults
     private let syncPersistenceSave: ([CanonicalWorkout], Set<String>, ModelContext) throws -> Void
+    private let persistedWorkoutLoader: (ModelContext) throws -> [CanonicalWorkout]
     private let makeImportBudgetPolicy: () -> IngestionBudgetPolicy
     private var didBootstrap = false
     private var lastForegroundSyncAt: Date?
@@ -325,12 +331,16 @@ public final class RunningAnalysisStore {
         },
         syncPersistenceSave: @escaping ([CanonicalWorkout], Set<String>, ModelContext) throws -> Void = { workouts, ids, context in
             try PersistenceService.applySyncChangesAndSave(upserting: workouts, deletingIDs: ids, context: context)
+        },
+        persistedWorkoutLoader: @escaping (ModelContext) throws -> [CanonicalWorkout] = { context in
+            try PersistenceService.fetchWorkoutsForBootstrap(context: context)
         }
     ) {
         self.healthKitService = healthKitService
         self.syncService = syncService ?? HealthKitWorkoutSyncService(healthKitService: healthKitService)
         self.syncDefaults = syncDefaults
         self.syncPersistenceSave = syncPersistenceSave
+        self.persistedWorkoutLoader = persistedWorkoutLoader
         self.makeImportBudgetPolicy = makeImportBudgetPolicy
         heartRateZoneProfiles = HeartRateZoneProfilePersistence.load(defaults: syncDefaults)
         bestEffortHistoryCheckpoint = BestEffortHistoryCheckpointStore.load(defaults: syncDefaults)
@@ -345,7 +355,8 @@ public final class RunningAnalysisStore {
             authorizationState: authorizationState,
             importStatus: healthKitImportJobSummary?.status,
             loadedRunCount: V1WorkoutFilters.completedRuns(from: workouts).count,
-            isLoading: isLoading
+            isLoading: isLoading,
+            localDataLoadFailed: localDataLoadFailed
         )
     }
 
@@ -661,11 +672,25 @@ public final class RunningAnalysisStore {
 
     public func bootstrap(modelContext: ModelContext) async {
         guard !didBootstrap else { return }
-        didBootstrap = true
         self.modelContext = modelContext
+
+        let persisted: [CanonicalWorkout]
+        do {
+            persisted = try persistedWorkoutLoader(modelContext)
+        } catch {
+            localDataLoadFailed = true
+            Self.persistenceLogger.error("Failed to read the saved workout cache during bootstrap: \(String(describing: error), privacy: .public)")
+            updateHealthKitStatus(
+                authorizationState: .error,
+                message: "RunSignal could not read its saved workout cache. Your Apple Health workouts were not changed. Retry the local data load."
+            )
+            return
+        }
+
+        localDataLoadFailed = false
+        didBootstrap = true
         PersistenceService.pauseRunningEvidenceRefreshJobs(context: modelContext)
 
-        let persisted = PersistenceService.fetchWorkouts(context: modelContext)
         let persistedRealWorkouts = persisted.filter { !isSampleWorkout($0) }
         if persistedRealWorkouts.isEmpty {
             workouts = []
@@ -700,6 +725,15 @@ public final class RunningAnalysisStore {
         refreshEvidenceRefreshJobs()
         refreshHealthKitImportJobSummary()
         bestEffortHistoryCheckpoint.retainWorkouts(ids: bestEffortEligibleWorkoutIDs)
+    }
+
+    public func performPrimaryHealthAction(_ action: HealthKitPrimaryAction) async {
+        if action == .retryLocalData {
+            guard let modelContext else { return }
+            await bootstrap(modelContext: modelContext)
+        } else {
+            await connectAndImportFromHealthKit()
+        }
     }
 
     @discardableResult

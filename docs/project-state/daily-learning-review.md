@@ -307,3 +307,54 @@ Docs not updated:
 - `docs/bug-log.md` was not changed because the durable mistakes are already represented by existing bug-log categories or by source-session fixes; this review found no new recurring bug class that needed promotion beyond the daily synthesis.
 - `AGENTS.md` was not changed because existing rules already cover exact-cwd routing, branch-first implementation, push-live semantics, proof-channel separation, and physical-vs-Simulator boundaries.
 - `docs/project-state/current-state.md`, `docs/project-state/next-work.md`, and `docs/project-state/documentation-index.md` still do not exist in this checkout. The active authority remains `docs/project-state/project-status.md`.
+
+## 2026-07-18
+
+Scope: reviewed Codex session logs from July 18, 2026 whose `session_meta.payload.cwd` or `turn_context.cwd` exactly matched `/Users/adrielsolorzano/Documents/Codex Projects/ios app Running Workout Analysis with Xcode & Codex`. Found three exact-cwd source sessions:
+
+- `019f754b-c07d-7c80-9c50-776beb62d9f6` at `2026-07-18T12:55:26Z`
+- `019f76b4-d620-7d53-9241-6344b505ae60` at `2026-07-18T19:29:50Z`
+- `019f7730-3e63-74b2-93db-4f214a26b227` at `2026-07-18T21:44:38Z`
+
+Completed work:
+
+- Reworked Analytics hierarchy so the selected Week, Month, Year, or All-Time signal begins directly below the period control, while Interval Library, Best Efforts, and Running Statistics move under `More Analytics`; Running Statistics became a separate drill-in screen.
+- Simplified Running Statistics display: trailing-four-week runs/week rounds to a whole runner-readable count, and time statistics omit seconds in favor of explicit hours/minutes.
+- Verified the Analytics change with 398 package tests, Simulator build/launch/navigation checks, and physical `AIS17PM` real-data comparison through iPhone Mirroring, then pushed `main` to `f1d026d`.
+- Designed and implemented the split-sharing and route-achievement pass: `Full List` split export, balanced Story/Post split pagination, exact standard-distance gold/silver/bronze map medals, and no named/community segments.
+- Physically caught and fixed a PhotoKit change-queue actor-isolation crash during Story/Full List saves. The fix removed incorrect `@MainActor` isolation from the PhotoKit transaction path and explicitly retained temporary files through asynchronous save/share work.
+- Verified the sharing/medal release with 414 package tests, 415 iOS feature tests, physical kilometer and mile Full List saves on `AIS17PM`, Photos inspection, share-sheet open/cancel, and route-medal interaction, then pushed `main` to `4b46b95`.
+- Redesigned normal split presentation into a compact runner-facing table led by split number, pace, and average heart rate. Cadence, power, time, active duration, distance, and pause detail moved to a tap-through sheet; validated Apple Health provenance was removed from normal success rows and retained for diagnostics.
+- Verified the split-table redesign with 418 package tests, 420 Simulator tests, physical `AIS17PM` install/launch, and Computer Use over iPhone Mirroring across kilometer and mile modes, Priority 1/3/5 pause behavior, an 11.03 km long run, and archived 2019 data, then pushed `main` to `ca50e44`.
+
+Pending work:
+
+- Standing physical HealthKit checks remain unchanged: fresh import, background delivery, limited-history authorization, anchored deletions, interruption/resume, Low Power Mode, thermal behavior, battery impact, fresh-workout automatic processing, and real city/weather validation.
+- Silver/bronze medal tint and ranking are automated-test proof only until direct physical navigation reaches workouts containing those ranks.
+- The clean-Simulator legacy UI smoke path still needs its first-run fixture assumption reconciled separately; feature-specific iOS test targets passed during the sharing release.
+
+Mistakes and fixes:
+
+- Analytics previously put persistent destinations above the selected period analysis, making the segmented control feel detached from its output. The fix kept Analytics as the existing tab and repaired hierarchy before adding navigation complexity.
+- Story/Post split pagination retained data but produced lopsided pages such as `11/11/6`; balanced pagination now avoids a sparse final page.
+- The first real-device Full List save surfaced a real crash. Device crash reports showed PhotoKit ran its change block on `com.apple.PHPhotoLibrary.changes`, so actor isolation had to match PhotoKit's execution model rather than the preview renderer's main-actor state.
+- The split-table physical audit exposed a pause notice hidden below the fold in the detail sheet. Promoting Pause into the visible metric grid made the affected row's pause math inspectable without hunting.
+- Physical iPhone launch can be blocked by the phone lock state even after build/install succeeds. Treat CoreDevice launch denial as separate from install proof and use iPhone Mirroring or the home-screen app launch when appropriate.
+
+Workflow improvements:
+
+- For runner-facing UI hierarchy, inspect the live phone baseline before coding; the Analytics screenshot and mirrored screen made the first-screen priority obvious.
+- For sharing features, Simulator/sample data is not enough. Use native renderer tests for large image guardrails, then real-device Photos and share-sheet checks for permission, resource lifetime, and crash behavior.
+- For iPhone Mirroring audits, check whether the deferred Computer Use backend is available before falling back to coordinate-driven clicks. It materially improved the split-table live-data audit.
+- Keep proof channels explicit: package tests, iOS feature tests, Simulator launch/UI, physical install/launch, physical interaction, Photos save, system share, and real HealthKit cache behavior each proved different claims.
+
+Docs updated:
+
+- `docs/project-state/daily-learning-review.md`: updated by this review with the July 18 cross-session learning summary and lower-risk workflow lessons.
+
+Docs not updated:
+
+- `docs/project-state/project-status.md` was not changed by this review because source implementation sessions already updated durable product state, verification, and remaining proof boundaries; it also had unrelated uncommitted edits at review time.
+- `docs/bug-log.md` was not changed because the durable PhotoKit actor-isolation lesson was already represented in the SwiftUI section, and no new recurring project-specific bug category needed promotion.
+- `AGENTS.md` was not changed because existing rules already cover exact-cwd routing, proof-channel separation, iPhone proof boundaries, and branch/push-live behavior.
+- `docs/project-state/current-state.md`, `docs/project-state/next-work.md`, and `docs/project-state/documentation-index.md` still do not exist in this checkout. The active authority remains `docs/project-state/project-status.md`.

@@ -1692,42 +1692,32 @@ struct WorkoutChartDeck: View {
         .task(id: presentationID) {
             let workout = workout
             let interval = interval
-            let presentation = await Task.detached(priority: .userInitiated) {
-                let core = WorkoutChartSeriesBuilder.presentationSeries(for: workout)
-                let series: [WorkoutChartSeries]
-                if let interval {
-                    series = core.map {
-                        WorkoutChartSeriesBuilder.clippedSeries(
-                            $0,
-                            start: interval.actualStartDate,
-                            end: interval.actualEndDate
-                        )
-                    }
-                } else {
-                    series = core
+            do {
+                let presentation = try await WorkoutViewComputation.chartDeck(
+                    workout: workout,
+                    interval: interval
+                )
+                try Task.checkCancellation()
+                series = presentation.series
+                officialIntervals = presentation.officialIntervals
+                if !visibleSeries.contains(where: { $0.metric == selectedMetric }),
+                   let first = visibleSeries.first {
+                    selectedMetric = first.metric
                 }
-                let officialIntervals: [ReconstructedWorkoutInterval]
-                if interval == nil,
-                   let evidence = workout.evidence,
-                   let result = CustomWorkoutNormalDetailGate.supportedIntervals(workout: workout, evidence: evidence) {
-                    officialIntervals = result.intervals
+                if interval == nil, let heartRateZoneProfile {
+                    let nextAnalysis = try await WorkoutViewComputation.heartRateZoneAnalysis(
+                        workout: workout,
+                        profile: heartRateZoneProfile
+                    )
+                    try Task.checkCancellation()
+                    heartRateZoneAnalysis = nextAnalysis
                 } else {
-                    officialIntervals = []
+                    heartRateZoneAnalysis = nil
                 }
-                return (series, officialIntervals)
-            }.value
-            series = presentation.0
-            officialIntervals = presentation.1
-            if !visibleSeries.contains(where: { $0.metric == selectedMetric }),
-               let first = visibleSeries.first {
-                selectedMetric = first.metric
-            }
-            if interval == nil, let heartRateZoneProfile {
-                heartRateZoneAnalysis = await Task.detached(priority: .userInitiated) {
-                    HeartRateZoneAnalyzer.analyze(workout: workout, profile: heartRateZoneProfile)
-                }.value
-            } else {
-                heartRateZoneAnalysis = nil
+            } catch is CancellationError {
+                return
+            } catch {
+                assertionFailure("Unexpected workout chart error: \(error)")
             }
         }
         .sheet(item: $presentedHeartRateZoneAnalysis) { analysis in

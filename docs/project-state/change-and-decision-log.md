@@ -62,9 +62,11 @@ Preserve:
 
 - Status: Active
 - Established: 2026-07-10 through 2026-07-11
+- Revised: 2026-07-18
 - Primary commits: `1d51353`, `ea0dcbc`
 
 - Detailed derived preparation and Best Effort distance scanning use immutable snapshots and detached utility-priority work.
+- SwiftUI screen-owned Workout Details, route-achievement, chart, and heart-rate-zone computations use structured `@concurrent` helpers so cancellation from `.task(id:)` propagates into obsolete work. Cancellation must be checked before publishing results.
 - Automatic detailed analysis remains sequential.
 - Main-actor persistence, observable publication, cache refreshes, and aggregate recomputation should be batched or limited to affected scopes where practical.
 - A performance optimization must not replace bounded work with broad hydration or broad main-actor recomputation.
@@ -269,6 +271,19 @@ Workout Details may mark the exact portion of a hydrated Apple Health route wher
 
 This decision extends D-010 and D-017 without changing HealthKit read-only behavior or making route coordinates part of the global ranked cache.
 
+### D-019 — SwiftData store evolution is explicit and non-destructive
+
+- Status: Active
+- Established: 2026-07-18
+
+RunSignal's current eight-model SwiftData store is explicit schema V1. The app opens it through a named migration plan, and the compatibility fixture must prove that the prior implicit/unversioned V1 store reopens with its data retained.
+
+- Every future persistent-model change must introduce a new versioned schema and an intentional migration stage before the app uses it.
+- Startup must not delete, reset, or silently replace an unreadable store. Container-open and initial workout-fetch failures preserve the local files and present a retryable unavailable state.
+- A legitimate empty store remains distinct from a read failure.
+- Targeted identifier checks should fetch only the properties required instead of hydrating large evidence blobs.
+- Derived-analysis calculation versions under D-007 remain separate from the SwiftData store schema version.
+
 ## Major Change Timeline
 
 ### 2026-06-05 to 2026-06-11 — Foundation and evidence model
@@ -338,3 +353,10 @@ This decision extends D-010 and D-017 without changing HealthKit read-only behav
 - Confirmed that the January 14 run's apparent 7:29 third split contains a 2:25 explicit pause; subtracting the pause produces Apple Fitness's displayed 5:04 while the boundary itself remains valid.
 - Added lap-first validated normal-split selection, distance quality/reconciliation gates, pause-aware active split timing, ambiguity rejection, interval-aware distance fallback, honest unavailable states, derived-cache invalidation, physical-evidence regression fixtures, and parity/review v3 audit fields.
 - Added an Indoor/Outdoor environment filter to Run History without changing the Most Recent or custom-workout analysis paths.
+
+### 2026-07-18 — Swift runtime and persistence hardening
+
+- Made the existing SwiftData store an explicit schema V1 with a non-destructive migration plan and compatibility coverage for the prior implicit store.
+- Separated store-open and initial-fetch failures from an empty history, preserved local data on failure, and added retryable startup recovery.
+- Replaced screen-owned detached computations with cancellation-propagating `@concurrent` helpers without changing runner-facing presentation.
+- Moved Xcode targets to Swift 6 language mode and replaced wall-clock async-test sleeps with deterministic gates.

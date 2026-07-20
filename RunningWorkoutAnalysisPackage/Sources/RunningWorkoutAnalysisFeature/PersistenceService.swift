@@ -1,16 +1,46 @@
 import Foundation
 import SwiftData
 
+public enum PersistenceReadError: Error, Equatable, LocalizedError, Sendable {
+    case workoutFetchFailed(details: String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .workoutFetchFailed:
+            return "The saved workout cache could not be read. Your Apple Health data has not been changed."
+        }
+    }
+
+    public var diagnosticDetails: String {
+        switch self {
+        case let .workoutFetchFailed(details):
+            return details
+        }
+    }
+}
+
 @MainActor
 public enum PersistenceService {
     public static func fetchWorkouts(context: ModelContext) -> [CanonicalWorkout] {
+        (try? fetchWorkoutsForBootstrap(context: context)) ?? []
+    }
+
+    public static func fetchWorkoutsForBootstrap(context: ModelContext) throws -> [CanonicalWorkout] {
+        try fetchWorkoutsForBootstrap { descriptor in
+            try context.fetch(descriptor)
+        }
+    }
+
+    static func fetchWorkoutsForBootstrap(
+        performingFetch fetch: (FetchDescriptor<PersistedWorkout>) throws -> [PersistedWorkout]
+    ) throws -> [CanonicalWorkout] {
         let descriptor = FetchDescriptor<PersistedWorkout>(
             sortBy: [SortDescriptor(\.startDate, order: .reverse)]
         )
         do {
-            return try context.fetch(descriptor).map(\.canonical)
+            return try fetch(descriptor).map(\.canonical)
         } catch {
-            return []
+            throw PersistenceReadError.workoutFetchFailed(details: String(describing: error))
         }
     }
 
@@ -300,7 +330,9 @@ public enum PersistenceService {
     }
 
     public static func fetchEvidenceIDs(context: ModelContext) -> Set<String> {
-        Set(fetchPersistedEvidence(context: context).map(\.workoutID))
+        var descriptor = FetchDescriptor<PersistedWorkoutEvidence>()
+        descriptor.propertiesToFetch = [\.workoutID]
+        return Set((try? context.fetch(descriptor).map(\.workoutID)) ?? [])
     }
 
     /// Returns only the requested IDs that currently have persisted evidence.

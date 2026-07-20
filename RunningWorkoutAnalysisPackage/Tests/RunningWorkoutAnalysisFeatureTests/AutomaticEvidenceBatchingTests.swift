@@ -1,10 +1,12 @@
 import Foundation
+import Observation
 import SwiftData
 import Testing
 @testable import RunningWorkoutAnalysisFeature
 
 @MainActor
-@Test func automaticEvidenceQueueBatchesCrossHistoryPublicationsUntilQueueCompletion() async throws {
+@Test(.timeLimit(.minutes(1)))
+func automaticEvidenceQueueBatchesCrossHistoryPublicationsUntilQueueCompletion() async throws {
     let context = try batchingTestModelContext()
     let suiteName = "AutomaticEvidenceBatchingTests.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suiteName))
@@ -41,7 +43,7 @@ import Testing
 
     #expect(store.snapshot.dataQuality.seriesCoverage == 0)
     #expect(store.evidenceQueueSummary.pendingCount == 2)
-    #expect(!store.personalBestEffortSummary.allTime.contains { $0.bucket == .fourHundredMeters })
+    #expect(store.personalBestEffortSummary.allTime.contains(where: { $0.bucket == .fourHundredMeters }) == false)
     #expect(store.automaticEvidenceAggregatePublicationCount == 0)
 
     store.startAutomaticEvidenceEnrichment(now: now)
@@ -58,12 +60,12 @@ import Testing
 
     #expect(store.snapshot.dataQuality.seriesCoverage == 0)
     #expect(store.evidenceQueueSummary.pendingCount == 2)
-    #expect(!store.personalBestEffortSummary.allTime.contains { $0.bucket == .fourHundredMeters })
+    #expect(store.personalBestEffortSummary.allTime.contains(where: { $0.bucket == .fourHundredMeters }) == false)
     #expect(store.automaticEvidenceAggregatePublicationCount == 0)
 
     await service.releaseSecondEnrichment()
-    for _ in 0..<200 where store.evidenceQueueSummary.pendingCount != 0 {
-        try await Task.sleep(for: .milliseconds(10))
+    await waitUntilBatchingObservation {
+        store.automaticEvidenceAggregatePublicationCount == 1
     }
 
     #expect(store.derivedAnalysesByWorkoutID.count == 2)
@@ -71,6 +73,24 @@ import Testing
     #expect(store.evidenceQueueSummary.pendingCount == 0)
     #expect(store.personalBestEffortSummary.allTime.contains { $0.bucket == .fourHundredMeters })
     #expect(store.automaticEvidenceAggregatePublicationCount == 1)
+}
+
+@MainActor
+private func waitUntilBatchingObservation(
+    _ condition: @escaping @MainActor @Sendable () -> Bool
+) async {
+    guard condition() == false else { return }
+
+    await withCheckedContinuation { continuation in
+        withObservationTracking {
+            _ = condition()
+        } onChange: {
+            Task { @MainActor in
+                await waitUntilBatchingObservation(condition)
+                continuation.resume()
+            }
+        }
+    }
 }
 
 private actor BatchingHealthKitServiceState {
@@ -173,16 +193,7 @@ private final class BatchingHealthKitService: HealthKitServicing, @unchecked Sen
 
 @MainActor
 private func batchingTestModelContext() throws -> ModelContext {
-    let schema = Schema([
-        PersistedWorkout.self,
-        PersistedWorkoutEvidence.self,
-        PersistedEvidenceEnrichmentState.self,
-        PersistedEvidenceRefreshJob.self,
-        PersistedEvidenceRefreshJobItem.self,
-        PersistedHealthKitImportJob.self,
-        PersistedDerivedWorkoutAnalysis.self,
-        PersistedTrainingPeriodSummary.self
-    ])
+    let schema = Schema(versionedSchema: RunSignalPersistenceSchemaV1.self)
     let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
     let container = try ModelContainer(for: schema, configurations: [configuration])
     return ModelContext(container)

@@ -1,5 +1,6 @@
 import Foundation
 @preconcurrency import HealthKit
+import Observation
 import SwiftData
 import Testing
 @testable import RunningWorkoutAnalysisFeature
@@ -1493,7 +1494,8 @@ private func intervalForGoalMeasuredText(
 }
 
 @MainActor
-@Test func foregroundHealthKitSyncDoesNotShowBlockingLoadingState() async throws {
+@Test(.timeLimit(.minutes(1)))
+func foregroundHealthKitSyncDoesNotShowBlockingLoadingState() async throws {
     let syncDefaults = isolatedDefaults()
     defer { syncDefaults.reset() }
     HealthKitSyncStateStore.saveAnchor(HKQueryAnchor(fromValue: 1), defaults: syncDefaults.defaults)
@@ -1506,7 +1508,8 @@ private func intervalForGoalMeasuredText(
             durationSeconds: 1_500
         )
     ], context: context)
-    let syncService = StubHealthKitWorkoutSyncService(delayNanoseconds: 100_000_000)
+    let syncGate = TestAsyncGate()
+    let syncService = StubHealthKitWorkoutSyncService(syncGate: syncGate)
     let store = RunningAnalysisStore(
         healthKitService: StubHealthKitService(),
         syncService: syncService,
@@ -1517,14 +1520,16 @@ private func intervalForGoalMeasuredText(
     async let foregroundSync: Void = store.syncHealthKitChangesOnForeground(
         now: Date(timeIntervalSince1970: 10_000)
     )
-    try await Task.sleep(for: .milliseconds(20))
+    await syncGate.waitUntilEntered()
 
-    #expect(!store.isLoading)
+    #expect(store.isLoading == false)
+    await syncGate.release()
     await foregroundSync
 }
 
 @MainActor
-@Test func foregroundHealthKitSyncIsSingleFlight() async throws {
+@Test(.timeLimit(.minutes(1)))
+func foregroundHealthKitSyncIsSingleFlight() async throws {
     let syncDefaults = isolatedDefaults()
     defer { syncDefaults.reset() }
     HealthKitSyncStateStore.saveAnchor(HKQueryAnchor(fromValue: 1), defaults: syncDefaults.defaults)
@@ -1537,7 +1542,8 @@ private func intervalForGoalMeasuredText(
             durationSeconds: 1_500
         )
     ], context: context)
-    let syncService = StubHealthKitWorkoutSyncService(delayNanoseconds: 100_000_000)
+    let syncGate = TestAsyncGate()
+    let syncService = StubHealthKitWorkoutSyncService(syncGate: syncGate)
     let store = RunningAnalysisStore(
         healthKitService: StubHealthKitService(),
         syncService: syncService,
@@ -1547,10 +1553,12 @@ private func intervalForGoalMeasuredText(
     await store.bootstrap(modelContext: context)
 
     async let first: Void = store.syncHealthKitChangesOnForeground(now: Date(timeIntervalSince1970: 10_000))
-    async let second: Void = store.syncHealthKitChangesOnForeground(now: Date(timeIntervalSince1970: 10_001))
-    _ = await (first, second)
+    await syncGate.waitUntilEntered()
+    await store.syncHealthKitChangesOnForeground(now: Date(timeIntervalSince1970: 10_001))
 
     #expect(syncService.syncCallCount == 1)
+    await syncGate.release()
+    await first
 }
 
 @MainActor
@@ -1806,7 +1814,8 @@ private func intervalForGoalMeasuredText(
 }
 
 @MainActor
-@Test func singleManualRunTypeUpdateLeavesUnrelatedPeriodCachesUntouched() async throws {
+@Test(.timeLimit(.minutes(1)))
+func singleManualRunTypeUpdateLeavesUnrelatedPeriodCachesUntouched() async throws {
     let context = try inMemoryModelContext()
     let calendar = fixedCalendar()
     let olderStart = calendar.date(from: DateComponents(year: 2026, month: 1, day: 5, hour: 7))!
@@ -1845,12 +1854,12 @@ private func intervalForGoalMeasuredText(
     #expect(currentSummary.categoryTotals.first { $0.category == .interval }?.runCount == 1)
     #expect(store.pendingManualWorkoutIDs.contains(current.id))
 
-    for _ in 0..<80 where store.pendingManualWorkoutIDs.contains(current.id) {
-        try await Task.sleep(for: .milliseconds(25))
+    await waitUntilObserved {
+        store.pendingManualWorkoutIDs.contains(current.id) == false
     }
     let persisted = try #require(PersistenceService.fetchWorkouts(context: context).first { $0.id == current.id })
     #expect(persisted.manualRunType == .interval)
-    #expect(!store.pendingManualWorkoutIDs.contains(current.id))
+    #expect(store.pendingManualWorkoutIDs.contains(current.id) == false)
 }
 
 @MainActor
@@ -8355,16 +8364,7 @@ private func fixedCalendar() -> Calendar {
 
 @MainActor
 private func inMemoryModelContext() throws -> ModelContext {
-    let schema = Schema([
-        PersistedWorkout.self,
-        PersistedWorkoutEvidence.self,
-        PersistedEvidenceEnrichmentState.self,
-        PersistedEvidenceRefreshJob.self,
-        PersistedEvidenceRefreshJobItem.self,
-        PersistedHealthKitImportJob.self,
-        PersistedDerivedWorkoutAnalysis.self,
-        PersistedTrainingPeriodSummary.self
-    ])
+    let schema = Schema(versionedSchema: RunSignalPersistenceSchemaV1.self)
     let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
     let container = try ModelContainer(for: schema, configurations: [configuration])
     return ModelContext(container)
@@ -8802,27 +8802,27 @@ private final class StubHealthKitWorkoutSyncService: HealthKitWorkoutSyncServici
     private(set) var syncCallCount = 0
     private(set) var observerStartCount = 0
     var observerResult = HealthKitWorkoutSyncResult(authorizationState: .authorized, message: "Observer started.")
-    private let delayNanoseconds: UInt64
+    private let syncGate: TestAsyncGate?
 
     init(
         results: [HealthKitWorkoutSyncResult] = [],
         batchResults: [[HealthKitWorkoutSyncResult]] = [],
-        delayNanoseconds: UInt64 = 0
+        syncGate: TestAsyncGate? = nil
     ) {
         self.results = results
         self.batchResults = batchResults
-        self.delayNanoseconds = delayNanoseconds
+        self.syncGate = syncGate
     }
 
     func syncRunningWorkouts(from anchor: HKQueryAnchor?) async -> HealthKitWorkoutSyncResult {
         syncCallCount += 1
-        await delayIfNeeded()
+        await waitAtGateIfNeeded()
         return nextResult()
     }
 
     func syncRunningWorkoutBatches(from anchor: HKQueryAnchor?) async -> [HealthKitWorkoutSyncResult] {
         syncCallCount += 1
-        await delayIfNeeded()
+        await waitAtGateIfNeeded()
         if !batchResults.isEmpty {
             return batchResults.removeFirst()
         }
@@ -8836,10 +8836,8 @@ private final class StubHealthKitWorkoutSyncService: HealthKitWorkoutSyncServici
         return observerResult
     }
 
-    private func delayIfNeeded() async {
-        if delayNanoseconds > 0 {
-            try? await Task.sleep(nanoseconds: delayNanoseconds)
-        }
+    private func waitAtGateIfNeeded() async {
+        await syncGate?.enterAndWait()
     }
 
     private func nextResult() -> HealthKitWorkoutSyncResult {
@@ -8850,6 +8848,59 @@ private final class StubHealthKitWorkoutSyncService: HealthKitWorkoutSyncServici
             )
         }
         return results.removeFirst()
+    }
+}
+
+private actor TestAsyncGate {
+    private var didEnter = false
+    private var isReleased = false
+    private var entryWaiters: [CheckedContinuation<Void, Never>] = []
+    private var releaseWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func enterAndWait() async {
+        didEnter = true
+        for waiter in entryWaiters {
+            waiter.resume()
+        }
+        entryWaiters.removeAll()
+
+        guard isReleased == false else { return }
+        await withCheckedContinuation { continuation in
+            releaseWaiters.append(continuation)
+        }
+    }
+
+    func waitUntilEntered() async {
+        guard didEnter == false else { return }
+        await withCheckedContinuation { continuation in
+            entryWaiters.append(continuation)
+        }
+    }
+
+    func release() {
+        isReleased = true
+        for waiter in releaseWaiters {
+            waiter.resume()
+        }
+        releaseWaiters.removeAll()
+    }
+}
+
+@MainActor
+private func waitUntilObserved(
+    _ condition: @escaping @MainActor @Sendable () -> Bool
+) async {
+    guard condition() == false else { return }
+
+    await withCheckedContinuation { continuation in
+        withObservationTracking {
+            _ = condition()
+        } onChange: {
+            Task { @MainActor in
+                await waitUntilObserved(condition)
+                continuation.resume()
+            }
+        }
     }
 }
 

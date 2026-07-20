@@ -49,7 +49,8 @@ import Testing
 }
 
 @MainActor
-@Test func foregroundAndObserverStyleSyncCallsShareOneInFlightSync() async {
+@Test(.timeLimit(.minutes(1)))
+func foregroundAndObserverStyleSyncCallsShareOneInFlightSync() async {
     let sync = CoalescingSyncStub()
     let store = RunningAnalysisStore(
         healthKitService: IngestionHealthKitStub(),
@@ -58,6 +59,8 @@ import Testing
 
     async let foreground: Void = store.syncHealthKitChanges(includePostSyncMaintenance: true)
     async let observer: Void = store.syncHealthKitChanges(includePostSyncMaintenance: false)
+    await sync.waitUntilSyncStarts()
+    await sync.releaseSync()
     _ = await (foreground, observer)
 
     #expect(sync.callCount == 1)
@@ -102,6 +105,7 @@ private final class IngestionHealthKitStub: HealthKitServicing, @unchecked Senda
 
 private final class CoalescingSyncStub: HealthKitWorkoutSyncServicing, @unchecked Sendable {
     private let lock = NSLock()
+    private let gate = CoalescingSyncGate()
     private var calls = 0
 
     var callCount: Int { lock.withLock { calls } }
@@ -112,7 +116,50 @@ private final class CoalescingSyncStub: HealthKitWorkoutSyncServicing, @unchecke
 
     func syncRunningWorkoutBatches(from anchor: HKQueryAnchor?) async -> [HealthKitWorkoutSyncResult] {
         lock.withLock { calls += 1 }
-        try? await Task.sleep(for: .milliseconds(50))
+        await gate.enterAndWait()
         return [HealthKitWorkoutSyncResult(authorizationState: .partial, message: "No changes.")]
+    }
+
+    func waitUntilSyncStarts() async {
+        await gate.waitUntilEntered()
+    }
+
+    func releaseSync() async {
+        await gate.release()
+    }
+}
+
+private actor CoalescingSyncGate {
+    private var didEnter = false
+    private var isReleased = false
+    private var entryWaiters: [CheckedContinuation<Void, Never>] = []
+    private var releaseWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func enterAndWait() async {
+        didEnter = true
+        for waiter in entryWaiters {
+            waiter.resume()
+        }
+        entryWaiters.removeAll()
+
+        guard isReleased == false else { return }
+        await withCheckedContinuation { continuation in
+            releaseWaiters.append(continuation)
+        }
+    }
+
+    func waitUntilEntered() async {
+        guard didEnter == false else { return }
+        await withCheckedContinuation { continuation in
+            entryWaiters.append(continuation)
+        }
+    }
+
+    func release() {
+        isReleased = true
+        for waiter in releaseWaiters {
+            waiter.resume()
+        }
+        releaseWaiters.removeAll()
     }
 }
