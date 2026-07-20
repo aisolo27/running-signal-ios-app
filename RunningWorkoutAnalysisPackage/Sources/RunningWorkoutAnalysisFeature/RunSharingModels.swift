@@ -24,34 +24,22 @@ enum RunShareTemplate: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-enum RunShareCanvas: String, CaseIterable, Identifiable, Sendable {
+enum RunShareCanvas: Equatable, Sendable {
     case story
-    case post
     case fullList
 
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .story: "Story"
-        case .post: "Post"
-        case .fullList: "Full List"
-        }
-    }
-
-    static func options(for template: RunShareTemplate) -> [RunShareCanvas] {
+    static func defaultCanvas(for template: RunShareTemplate) -> RunShareCanvas {
         switch template {
-        case .splits:
-            return [.story, .post, .fullList]
         case .summary, .workoutReps:
-            return [.story, .post]
+            return .story
+        case .splits:
+            return .fullList
         }
     }
 
     var pointSize: CGSize {
         switch self {
         case .story: CGSize(width: 360, height: 640)
-        case .post: CGSize(width: 360, height: 450)
         case .fullList: CGSize(
             width: RunShareLayout.fullListWidthPoints,
             height: RunShareLayout.fullListMaximumHeightPoints
@@ -65,13 +53,10 @@ enum RunShareCanvas: String, CaseIterable, Identifiable, Sendable {
 
     func rowCapacity(for template: RunShareTemplate) -> Int {
         switch (self, template) {
-        case (.story, .splits): 11
-        case (.post, .splits): 7
         case (.fullList, .splits): RunShareLayout.fullListRowCapacity
-        case (.story, .workoutReps): 9
-        case (.post, .workoutReps): 6
+        case (.story, .workoutReps): 7
         case (.fullList, .summary), (.fullList, .workoutReps): 1
-        case (.story, .summary), (.post, .summary): 1
+        case (.story, .summary), (.story, .splits): 1
         }
     }
 }
@@ -81,8 +66,8 @@ enum RunShareLayout {
     static let fullListExportWidthPixels: CGFloat = 1_080
     static let fullListMaximumHeightPixels: CGFloat = 12_000
     static let fullListMaximumRowsPerImage = 200
-    static let fullListRowHeightPoints: CGFloat = 20
-    static let fullListFixedHeightPoints: CGFloat = 280
+    static let fullListRowHeightPoints: CGFloat = 38
+    static let fullListFixedHeightPoints: CGFloat = 112
 
     static let fullListWidthPoints = fullListExportWidthPixels / exportScale
     static let fullListMaximumHeightPoints = fullListMaximumHeightPixels / exportScale
@@ -101,45 +86,6 @@ enum RunShareLayout {
             fullListMaximumHeightPoints,
             fullListFixedHeightPoints + CGFloat(boundedRows) * fullListRowHeightPoints
         )
-    }
-}
-
-enum RunShareAppearance: String, CaseIterable, Identifiable, Sendable {
-    case darkCard
-    case transparentOverlay
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .darkCard: "Dark Card"
-        case .transparentOverlay: "Overlay"
-        }
-    }
-
-    static func options(
-        for template: RunShareTemplate,
-        canvas: RunShareCanvas
-    ) -> [RunShareAppearance] {
-        canvas == .fullList
-            ? [.darkCard]
-            : [.darkCard, .transparentOverlay]
-    }
-}
-
-enum RunShareRouteStyle: String, CaseIterable, Identifiable, Sendable {
-    case routeShape
-    case map
-    case none
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .routeShape: "Route Shape"
-        case .map: "Map"
-        case .none: "No Route"
-        }
     }
 }
 
@@ -207,9 +153,6 @@ struct RunShareSplitRow: Identifiable, Equatable, Sendable {
     var label: String
     var distance: String?
     var pace: String
-    var heartRate: String?
-    var normalizedPace: Double
-    var normalizedAveragePace: Double
 }
 
 enum RunShareWorkStatus: String, Equatable, Sendable {
@@ -248,29 +191,15 @@ struct RunShareWorkRow: Identifiable, Equatable, Sendable {
     var label: String
     var goal: String
     var pace: String
-    var heartRate: String?
     var status: RunShareWorkStatus
     var statusText: String
-    var normalizedPace: Double
-    var targetStart: Double?
-    var targetEnd: Double?
 }
 
 struct RunShareModel: Equatable, Sendable {
-    var workoutID: String
-    var title: String
-    var date: String
-    var runType: String
-    var environment: String?
     var accent: RunShareAccent
     var distance: String
-    var secondaryDistance: String?
     var duration: String
     var pace: String
-    var secondaryPace: String?
-    var averageHeartRate: String?
-    var weather: String?
-    var city: String?
     var routePoints: [RunShareRoutePoint]
     var splitUnitTitle: String
     var splitRows: [RunShareSplitRow]
@@ -339,13 +268,11 @@ enum RunShareModelBuilder {
     static func make(
         workout: CanonicalWorkout,
         presentation: WorkoutDetailPresentation,
-        policy: RunDisplayPolicy,
-        temperaturePreference: TemperatureUnitPreference = .system
+        policy: RunDisplayPolicy
     ) -> RunShareModel {
         let splitEstimates = presentation.segments.splits(for: policy.primaryUnit)
         let splitRows = makeSplitRows(
             estimates: splitEstimates,
-            workout: workout,
             policy: policy
         )
         let workContent = makeWorkContent(
@@ -353,26 +280,11 @@ enum RunShareModelBuilder {
             result: presentation.supportedIntervals,
             policy: policy
         )
-        let weather = weatherText(
-            workout.evidence?.weather,
-            preference: temperaturePreference
-        )
-
         return RunShareModel(
-            workoutID: workout.id,
-            title: RunWorkout(workout: workout).runnerFacingTitle,
-            date: RunFormatters.workoutFullDate.string(from: workout.startDate),
-            runType: workout.effectiveRunType.visibleCategory.label,
-            environment: workout.environment == .unknown ? nil : workout.environment.label,
             accent: shareAccent(for: workout.effectiveRunType),
             distance: RunFormatters.distance(workout.distanceMeters, policy: policy),
-            secondaryDistance: RunFormatters.secondaryDistance(workout.distanceMeters, policy: policy),
             duration: RunFormatters.duration(workout.durationSeconds),
             pace: RunFormatters.pace(workout.paceSecondsPerKm, policy: policy),
-            secondaryPace: RunFormatters.secondaryPace(workout.paceSecondsPerKm, policy: policy),
-            averageHeartRate: workout.averageHeartRate.map { RunFormatters.number($0, suffix: " bpm") },
-            weather: weather,
-            city: workout.evidence?.cityName,
             routePoints: normalizedRoute(workout.evidence?.route ?? []),
             splitUnitTitle: policy.primaryUnit.normalSplitTitle,
             splitRows: splitRows,
@@ -385,13 +297,9 @@ enum RunShareModelBuilder {
 
     private static func makeSplitRows(
         estimates: [DerivedSplitEstimate],
-        workout: CanonicalWorkout,
         policy: RunDisplayPolicy
     ) -> [RunShareSplitRow] {
         guard !estimates.isEmpty else { return [] }
-        let paces = estimates.map(\.paceSecondsPerKmEstimate)
-        let scale = PaceScale(paces: paces + [workout.paceSecondsPerKm].compactMap { $0 })
-        let averagePosition = workout.paceSecondsPerKm.map(scale.position) ?? 0.5
 
         return estimates.enumerated().map { index, split in
             RunShareSplitRow(
@@ -400,34 +308,9 @@ enum RunShareModelBuilder {
                 distance: split.label == "Final"
                     ? RunFormatters.compactDistance(split.distanceMeters, policy: policy)
                     : nil,
-                pace: RunFormatters.pace(split.paceSecondsPerKmEstimate, policy: policy),
-                heartRate: splitHeartRate(
-                    split,
-                    preceding: Array(estimates.prefix(index)),
-                    workout: workout
-                ),
-                normalizedPace: scale.position(split.paceSecondsPerKmEstimate),
-                normalizedAveragePace: averagePosition
+                pace: RunFormatters.pace(split.paceSecondsPerKmEstimate, policy: policy)
             )
         }
-    }
-
-    private static func splitHeartRate(
-        _ split: DerivedSplitEstimate,
-        preceding: [DerivedSplitEstimate],
-        workout: CanonicalWorkout
-    ) -> String? {
-        guard let points = workout.evidence?.series[.heartRate]?.points, !points.isEmpty else { return nil }
-        let fallbackStart = preceding.map(\.durationSecondsEstimate).reduce(0, +)
-        let startOffset = split.elapsedStartOffsetSeconds ?? fallbackStart
-        let endOffset = split.elapsedEndOffsetSeconds ?? (startOffset + split.durationSecondsEstimate)
-        let start = workout.startDate.addingTimeInterval(startOffset)
-        let end = workout.startDate.addingTimeInterval(endOffset)
-        let values = points
-            .filter { $0.date >= start && $0.date < end && $0.value.isFinite && $0.value > 0 }
-            .map(\.value)
-        guard !values.isEmpty else { return nil }
-        return "\(Int((values.reduce(0, +) / Double(values.count)).rounded())) bpm"
     }
 
     private static func makeWorkContent(
@@ -445,14 +328,6 @@ enum RunShareModelBuilder {
                 WorkTargetEvaluator.evaluate(interval: interval).map { ($0.rowIndex, $0) }
             }
         )
-        let measuredPaces = workRows.compactMap(\.paceSecondsPerKm)
-        let targetPaces = evaluationsByIndex.values.flatMap { evaluation -> [Double] in
-            if let range = evaluation.targetRange {
-                return [range.fastestSecondsPerKilometer, range.slowestSecondsPerKilometer]
-            }
-            return [evaluation.exactTargetSecondsPerKilometer].compactMap { $0 }
-        }
-        let scale = PaceScale(paces: measuredPaces + targetPaces)
         let rows = workRows.enumerated().map { ordinal, row in
             let evaluation = evaluationsByIndex[row.index]
             return RunShareWorkRow(
@@ -460,14 +335,8 @@ enum RunShareModelBuilder {
                 label: "W\(ordinal + 1)",
                 goal: row.plannedDistancePrescription?.displayText ?? row.plannedGoalDisplayText,
                 pace: RunFormatters.pace(row.paceSecondsPerKm, policy: policy),
-                heartRate: row.averageHeartRateBpm.map { "\(Int($0.rounded())) bpm" },
                 status: shareStatus(evaluation),
-                statusText: evaluation.map { WorkTargetPresentation.badgeLabel(for: $0, policy: policy) } ?? "Completed",
-                normalizedPace: row.paceSecondsPerKm.map(scale.position) ?? 0,
-                targetStart: evaluation?.targetRange.map { scale.position($0.slowestSecondsPerKilometer) }
-                    ?? evaluation?.exactTargetSecondsPerKilometer.map(scale.position),
-                targetEnd: evaluation?.targetRange.map { scale.position($0.fastestSecondsPerKilometer) }
-                    ?? evaluation?.exactTargetSecondsPerKilometer.map(scale.position)
+                statusText: evaluation.map { WorkTargetPresentation.badgeLabel(for: $0, policy: policy) } ?? "Completed"
             )
         }
         let evaluations = Array(evaluationsByIndex.values).sorted { $0.rowIndex < $1.rowIndex }
@@ -523,20 +392,6 @@ enum RunShareModelBuilder {
         }
     }
 
-    private static func weatherText(
-        _ weather: WorkoutWeather?,
-        preference: TemperatureUnitPreference
-    ) -> String? {
-        guard let weather else { return nil }
-        return [
-            weather.temperatureCelsius.map { RunFormatters.temperature($0, preference: preference) },
-            weather.humidityPercent.map { "\(RunFormatters.humidity($0)) humidity" }
-        ]
-        .compactMap { $0 }
-        .joined(separator: " · ")
-        .nilIfEmpty
-    }
-
     private static func shareAccent(for runType: RunType) -> RunShareAccent {
         switch runType.visibleCategory.runSignalAccent {
         case .green: .green
@@ -583,31 +438,4 @@ enum RunShareModelBuilder {
             )
         }
     }
-}
-
-private struct PaceScale {
-    var minimumSpeed: Double
-    var maximumSpeed: Double
-
-    init(paces: [Double]) {
-        let speeds = paces
-            .filter { $0.isFinite && $0 > 0 }
-            .map { 3_600 / $0 }
-        let minimum = speeds.min() ?? 1
-        let maximum = speeds.max() ?? minimum
-        let padding = max((maximum - minimum) * 0.12, maximum * 0.02)
-        minimumSpeed = max(0, minimum - padding)
-        maximumSpeed = maximum + padding
-    }
-
-    func position(_ paceSecondsPerKm: Double) -> Double {
-        guard paceSecondsPerKm.isFinite, paceSecondsPerKm > 0 else { return 0 }
-        let speed = 3_600 / paceSecondsPerKm
-        guard maximumSpeed > minimumSpeed else { return 0.5 }
-        return min(1, max(0, (speed - minimumSpeed) / (maximumSpeed - minimumSpeed)))
-    }
-}
-
-private extension String {
-    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

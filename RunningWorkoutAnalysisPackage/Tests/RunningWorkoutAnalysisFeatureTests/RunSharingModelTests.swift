@@ -5,7 +5,7 @@ import Testing
 import UIKit
 #endif
 
-@Test func shareSummaryUsesDisplayPolicyAndHidesUnavailableTemplates() throws {
+@Test func shareSummaryUsesPrimaryDisplayPolicyAndHidesUnavailableTemplates() throws {
     let workout = shareWorkout(distance: 11_265.4, duration: 2_970)
     let presentation = WorkoutDetailPresentation.make(workout: workout, analysis: nil)
     let model = RunShareModelBuilder.make(
@@ -15,26 +15,19 @@ import UIKit
     )
 
     #expect(model.distance.contains("mi"))
-    #expect(model.secondaryDistance?.contains("km") == true)
     #expect(model.pace.contains("/mi"))
-    #expect(model.secondaryPace?.contains("/km") == true)
     #expect(model.availableTemplates == [.summary])
     #expect(model.routePoints.count == 3)
     #expect(model.routePoints.allSatisfy { (0...1).contains($0.x) && (0...1).contains($0.y) })
 }
 
-@Test func shareFormatOptionsKeepFullListExclusiveToSplitsAndOpaque() {
-    #expect(RunShareCanvas.options(for: .summary) == [.story, .post])
-    #expect(RunShareCanvas.options(for: .workoutReps) == [.story, .post])
-    #expect(RunShareCanvas.options(for: .splits) == [.story, .post, .fullList])
-    #expect(RunShareAppearance.options(for: .splits, canvas: .fullList) == [.darkCard])
-    #expect(
-        RunShareAppearance.options(for: .splits, canvas: .story)
-            == [.darkCard, .transparentOverlay]
-    )
+@Test func shareTemplatesChooseOneDefaultCanvasWithoutFormatOrStyleOptions() {
+    #expect(RunShareCanvas.defaultCanvas(for: .summary) == .story)
+    #expect(RunShareCanvas.defaultCanvas(for: .workoutReps) == .story)
+    #expect(RunShareCanvas.defaultCanvas(for: .splits) == .fullList)
 }
 
-@Test func shareSplitsFollowThePrimaryUnitAndPaginateEveryRow() throws {
+@Test func shareSplitsFollowThePrimaryUnitAndDefaultToOneFullList() throws {
     let workout = shareWorkout(distance: 20_921.5, duration: 5_200)
     var presentation = WorkoutDetailPresentation.make(workout: workout, analysis: nil)
     presentation.segments.kilometerSplits = [shareSplit(label: "KM 1", meters: 1_000, pace: 275)]
@@ -53,34 +46,17 @@ import UIKit
     #expect(model.splitRows.first?.label == "Mile 1")
     #expect(model.splitRows.first?.pace.contains("/mi") == true)
     #expect(model.availableTemplates == [.summary, .splits])
-    #expect(model.pageCount(template: .splits, canvas: .story) == 2)
-    #expect(model.splitRows(page: 0, canvas: .story).count == 7)
-    #expect(model.splitRows(page: 1, canvas: .story).count == 6)
-    #expect(model.pageCount(template: .splits, canvas: .post) == 2)
-    #expect(model.splitRows(page: 0, canvas: .post).count == 7)
-    #expect(model.splitRows(page: 1, canvas: .post).count == 6)
+    let canvas = RunShareCanvas.defaultCanvas(for: .splits)
+    #expect(model.pageCount(template: .splits, canvas: canvas) == 1)
+    #expect(model.splitRows(page: 0, canvas: canvas).count == 13)
 }
 
-@Test func shareStoryAndPostSplitPagesAreBalancedWithoutChangingRowIdentity() {
-    let model = shareSplitModel(count: 28)
-
-    #expect(model.pageCount(template: .splits, canvas: .story) == 3)
-    #expect((0..<3).map { model.splitRows(page: $0, canvas: .story).count } == [10, 9, 9])
-    #expect(model.pageCount(template: .splits, canvas: .post) == 4)
-    #expect((0..<4).map { model.splitRows(page: $0, canvas: .post).count } == [7, 7, 7, 7])
-
-    let storyIDs = (0..<3).flatMap { model.splitRows(page: $0, canvas: .story).map(\.id) }
-    let postIDs = (0..<4).flatMap { model.splitRows(page: $0, canvas: .post).map(\.id) }
-    #expect(storyIDs == Array(0..<28))
-    #expect(postIDs == Array(0..<28))
-}
-
-@Test func shareFullListFitsOneHundredSixtyOneRowsInOneImage() {
-    let model = shareSplitModel(count: 161)
+@Test func shareFullListFitsItsPixelLimitedCapacityInOneImage() {
+    let model = shareSplitModel(count: RunShareLayout.fullListRowCapacity)
     let size = model.pointSize(template: .splits, canvas: .fullList, page: 0)
 
     #expect(model.pageCount(template: .splits, canvas: .fullList) == 1)
-    #expect(model.splitRows(page: 0, canvas: .fullList).count == 161)
+    #expect(model.splitRows(page: 0, canvas: .fullList).count == RunShareLayout.fullListRowCapacity)
     #expect(size.width * RunShareLayout.exportScale == 1_080)
     #expect(size.height * RunShareLayout.exportScale <= 12_000)
 }
@@ -116,24 +92,45 @@ import UIKit
 
 #if os(iOS)
 @Test @MainActor
-func shareFullListRendererProducesAnOpaqueGuardrailedPNGCanvas() throws {
-    let model = shareSplitModel(count: 161)
+func shareFullListRendererProducesATransparentGuardrailedPNGCanvas() throws {
+    let model = shareSplitModel(count: 13)
     let image = try #require(
         RunShareImageRenderer.render(
             model: model,
             template: .splits,
             canvas: .fullList,
-            appearance: .darkCard,
-            routeStyle: .none,
-            page: 0,
-            mapImage: nil
+            page: 0
         )
     )
     let cgImage = try #require(image.cgImage)
 
     #expect(cgImage.width == Int(RunShareLayout.fullListExportWidthPixels))
     #expect(cgImage.height <= Int(RunShareLayout.fullListMaximumHeightPixels))
-    #expect([.none, .noneSkipFirst, .noneSkipLast].contains(cgImage.alphaInfo))
+    #expect(![.none, .noneSkipFirst, .noneSkipLast].contains(cgImage.alphaInfo))
+}
+
+@Test @MainActor
+func shareSummaryRendererUsesTransparentStoryDimensions() throws {
+    let workout = shareWorkout(distance: 11_265.4, duration: 2_970)
+    let model = RunShareModelBuilder.make(
+        workout: workout,
+        presentation: WorkoutDetailPresentation.make(workout: workout, analysis: nil),
+        policy: .kilometersOnly
+    )
+    let canvas = RunShareCanvas.defaultCanvas(for: .summary)
+    let image = try #require(
+        RunShareImageRenderer.render(
+            model: model,
+            template: .summary,
+            canvas: canvas,
+            page: 0
+        )
+    )
+    let cgImage = try #require(image.cgImage)
+
+    #expect(cgImage.width == 1_080)
+    #expect(cgImage.height == 1_920)
+    #expect(![.none, .noneSkipFirst, .noneSkipLast].contains(cgImage.alphaInfo))
 }
 #endif
 
@@ -186,7 +183,7 @@ func shareFullListRendererProducesAnOpaqueGuardrailedPNGCanvas() throws {
     #expect(normalized.allSatisfy { (0...1).contains($0.x) && (0...1).contains($0.y) })
 }
 
-@Test func shareRouteAspectFitsWithoutStretchingPostCanvas() throws {
+@Test func shareRouteAspectFitsWithoutStretchingItsBounds() throws {
     let points = [
         RunShareRoutePoint(x: 0, y: 0.25),
         RunShareRoutePoint(x: 1, y: 0.75)

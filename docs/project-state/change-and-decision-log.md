@@ -239,8 +239,10 @@ Changing the display preference must not query HealthKit, start import or analys
 
 ### D-017 — Share cards are runner-controlled exports with least-privilege Photos access
 
-- Status: Active
+- Status: Partially superseded by D-020
 - Established: 2026-07-17
+
+The canvas, style, route-choice, and export-content rules below are retained as historical rationale and are superseded by D-020. The local rendering, sequential temporary-file handling, system-share, and least-privilege PhotoKit rules remain active.
 
 RunSignal renders share images locally from the same runner-facing workout presentation used by Workout Details. The supported templates are Summary, Splits, and official Workout Reps; the social-ready canvases are 9:16 Story and 4:5 Post. Splits additionally support an opaque `Full List` canvas whose height follows the available rows. Long results never drop rows.
 
@@ -283,6 +285,20 @@ RunSignal's current eight-model SwiftData store is explicit schema V1. The app o
 - A legitimate empty store remains distinct from a read failure.
 - Targeted identifier checks should fetch only the properties required instead of hydrating large evidence blobs.
 - Derived-analysis calculation versions under D-007 remain separate from the SwiftData store schema version.
+
+### D-020 — Share images use one simple transparent presentation per template
+
+- Status: Active
+- Established: 2026-07-20
+
+`Share Run` exposes only the available Summary, Splits, and official Workout Reps templates. Format, style, and route controls are removed. Each template has one predictable transparent PNG presentation intended to be resized over a runner-selected photo in another app.
+
+- Summary uses one 9:16 Story canvas. It centers only the primary Distance, Pace, and Time in large bold type, followed by the aspect-fit route shape when Apple Health supplied a usable route. It does not export the workout title, date, run type, environment, secondary units, heart rate, weather, city, app name, or Apple Health provenance.
+- Splits uses one transparent dynamic full-list canvas containing every validated split label and pace. It keeps the 1,080-pixel width and 12,000-pixel per-image memory guardrail, preserves row order, and uses balanced continuation images only beyond the effective row capacity.
+- Workout Reps uses transparent 9:16 pages with a concise prescription/result header and readable Work label, goal, pace, and target status rows. It continues to consume only resolver-approved product rows under D-005 and preserves authored WorkoutKit prescription units.
+- All runner-facing distance and pace values follow the primary display unit under D-016. Readability comes from type scale, weight, spacing, and restrained shadows rather than backing cards, charts, or extra metadata.
+
+D-017's local-only rendering, sequential temporary PNG ownership, system activity sheet, PhotoKit `.addOnly` request timing, denial recovery, and cleanup rules remain active.
 
 ## Major Change Timeline
 
