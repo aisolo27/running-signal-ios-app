@@ -38,6 +38,7 @@ public enum SampleData {
             heartRate: Double?,
             cadence: Double? = nil,
             power: Double? = nil,
+            effort: Double? = nil,
             environment: RunEnvironment = .outdoor,
             route: Bool = true,
             notes: String = ""
@@ -61,6 +62,7 @@ public enum SampleData {
                 strideLengthMeters: cadence == nil ? nil : 1.12,
                 verticalOscillationCentimeters: cadence == nil ? nil : 8.6,
                 groundContactMilliseconds: cadence == nil ? nil : 245,
+                workoutEffortScore: effort,
                 routeAvailable: route,
                 seriesAvailable: route,
                 routePointCount: route ? Int(distanceKm * 160) : 0,
@@ -83,7 +85,7 @@ public enum SampleData {
         }
 
         return DuplicateDetector.markDuplicates([
-            workout(id: "sample-001", daysAgo: 1, distanceKm: 7.2, seconds: 2_760, type: .easy, heartRate: 142, cadence: 164, power: 245),
+            workout(id: "sample-001", daysAgo: 1, distanceKm: 7.2, seconds: 2_760, type: .easy, heartRate: 142, cadence: 164, power: 245, effort: 7),
             workout(id: "sample-002", daysAgo: 3, distanceKm: 5.1, seconds: 1_345, type: .threshold, heartRate: 168, cadence: 176, power: 310),
             workout(id: "sample-003", daysAgo: 5, distanceKm: 4.8, seconds: 1_980, type: .recovery, heartRate: 132, cadence: 160, power: 220),
             workout(id: "sample-004", daysAgo: 8, distanceKm: 12.4, seconds: 4_980, type: .longRun, heartRate: 148, cadence: 162, power: 238),

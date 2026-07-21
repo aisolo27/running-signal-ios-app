@@ -437,6 +437,8 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
     public var strideLengthMeters: Double?
     public var verticalOscillationCentimeters: Double?
     public var groundContactMilliseconds: Double?
+    public var workoutEffortScore: Double?
+    public var workoutEffortWasQueried: Bool
     public var routeAvailable: Bool
     public var seriesAvailable: Bool
     public var routePointCount: Int = 0
@@ -484,6 +486,8 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
         strideLengthMeters: Double? = nil,
         verticalOscillationCentimeters: Double? = nil,
         groundContactMilliseconds: Double? = nil,
+        workoutEffortScore: Double? = nil,
+        workoutEffortWasQueried: Bool = false,
         routeAvailable: Bool = false,
         seriesAvailable: Bool = false,
         routePointCount: Int = 0,
@@ -530,6 +534,8 @@ public struct CanonicalWorkout: Identifiable, Equatable, Sendable {
         self.strideLengthMeters = strideLengthMeters
         self.verticalOscillationCentimeters = verticalOscillationCentimeters
         self.groundContactMilliseconds = groundContactMilliseconds
+        self.workoutEffortScore = WorkoutEffortScore.normalized(workoutEffortScore)
+        self.workoutEffortWasQueried = workoutEffortWasQueried
         self.routeAvailable = routeAvailable
         self.seriesAvailable = seriesAvailable
         self.routePointCount = routePointCount
@@ -839,6 +845,24 @@ public final class PersistedWorkout {
             isDuplicate: isDuplicate,
             duplicateOfID: duplicateOfID
         )
+    }
+}
+
+@Model
+public final class PersistedWorkoutEffortScore {
+    @Attribute(.unique) public var workoutID: String
+    public var score: Double
+    public var updatedAt: Date
+
+    public init(workoutID: String, score: Double, updatedAt: Date = Date()) {
+        self.workoutID = workoutID
+        self.score = score
+        self.updatedAt = updatedAt
+    }
+
+    public func update(score: Double, at date: Date = Date()) {
+        self.score = score
+        updatedAt = date
     }
 }
 

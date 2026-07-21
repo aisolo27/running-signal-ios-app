@@ -42,14 +42,18 @@ struct PersistenceHardeningTests {
         }
     }
 
-    @Test("The V1 schema contains every current persisted model exactly once")
+    @Test("The V2 schema adds effort persistence without changing the V1 snapshot")
     func schemaContainsCurrentModels() {
-        let schema = Schema(versionedSchema: RunSignalPersistenceSchemaV1.self)
-        let modelNames = Set(schema.entities.map(\.name))
+        let v1Schema = Schema(versionedSchema: RunSignalPersistenceSchemaV1.self)
+        let v2Schema = Schema(versionedSchema: RunSignalPersistenceSchemaV2.self)
+        let v1ModelNames = Set(v1Schema.entities.map(\.name))
+        let v2ModelNames = Set(v2Schema.entities.map(\.name))
 
         #expect(RunSignalPersistenceSchemaV1.versionIdentifier == Schema.Version(1, 0, 0))
-        #expect(schema.entities.count == 8)
-        #expect(modelNames == Set([
+        #expect(RunSignalPersistenceSchemaV2.versionIdentifier == Schema.Version(2, 0, 0))
+        #expect(v1Schema.entities.count == 8)
+        #expect(v2Schema.entities.count == 9)
+        #expect(v1ModelNames == Set([
             "PersistedWorkout",
             "PersistedWorkoutEvidence",
             "PersistedEvidenceEnrichmentState",
@@ -59,6 +63,7 @@ struct PersistenceHardeningTests {
             "PersistedDerivedWorkoutAnalysis",
             "PersistedTrainingPeriodSummary"
         ]))
+        #expect(v2ModelNames == v1ModelNames.union(["PersistedWorkoutEffortScore"]))
     }
 
     @Test("The versioned in-memory container round-trips workouts")
@@ -84,12 +89,13 @@ struct PersistenceHardeningTests {
 
         try writeLegacyStore(schema: legacySchema, storeURL: storeURL, workout: workout)
 
-        let versionedSchema = Schema(versionedSchema: RunSignalPersistenceSchemaV1.self)
+        let versionedSchema = Schema(versionedSchema: RunSignalPersistenceSchemaV2.self)
         let configuration = ModelConfiguration(schema: versionedSchema, url: storeURL)
         let container = try RunSignalPersistenceContainer.make(configurations: [configuration])
         let loaded = try PersistenceService.fetchWorkoutsForBootstrap(context: ModelContext(container))
 
         #expect(loaded.map(\.id) == [workout.id])
+        #expect(loaded.first?.workoutEffortScore == nil)
     }
 
     @Test("Identifier-only evidence fetch returns every stored ID")
@@ -106,7 +112,7 @@ struct PersistenceHardeningTests {
 
 @MainActor
 private func makeInMemoryContext() throws -> ModelContext {
-    let schema = Schema(versionedSchema: RunSignalPersistenceSchemaV1.self)
+    let schema = Schema(versionedSchema: RunSignalPersistenceSchemaV2.self)
     let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
     let container = try RunSignalPersistenceContainer.make(configurations: [configuration])
     return ModelContext(container)

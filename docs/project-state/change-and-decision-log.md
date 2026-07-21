@@ -278,7 +278,7 @@ This decision extends D-010 and D-017 without changing HealthKit read-only behav
 - Status: Active
 - Established: 2026-07-18
 
-RunSignal's current eight-model SwiftData store is explicit schema V1. The app opens it through a named migration plan, and the compatibility fixture must prove that the prior implicit/unversioned V1 store reopens with its data retained.
+RunSignal's current nine-model SwiftData store is explicit schema V2. V2 adds only the workout-effort sidecar keyed by workout ID. The app opens it through a named lightweight V1-to-V2 migration, and the compatibility fixture must prove that the prior implicit/unversioned V1 store reopens with its workout data retained and no invented effort score.
 
 - Every future persistent-model change must introduce a new versioned schema and an intentional migration stage before the app uses it.
 - Startup must not delete, reset, or silently replace an unreadable store. Container-open and initial workout-fetch failures preserve the local files and present a retryable unavailable state.
@@ -300,6 +300,34 @@ RunSignal's current eight-model SwiftData store is explicit schema V1. The app o
 - All runner-facing distance and pace values follow the primary display unit under D-016. Share typography uses the standard system design at bold or semibold weights rather than the rounded black design. Readability comes from type scale, spacing, and tight restrained shadows rather than backing cards, charts, or extra metadata.
 
 D-017's local-only rendering, sequential temporary PNG ownership, system activity sheet, PhotoKit `.addOnly` request timing, denial recovery, and cleanup rules remain active.
+
+### D-021 — Runs separates the immediate debrief from the full archive
+
+- Status: Implemented on `codex/runs-ui-redesign`; pending promotion
+- Established: 2026-07-21
+
+The Runs tab is the immediate post-run entry point, not the complete archive browser. It keeps the newest workout first, shows a bounded set of recent workouts, and links to a dedicated All Runs screen for the full history.
+
+- The landing screen remains factual. Most Recent and the five following workouts share one compact card pattern with title, written category, date, and individually labeled Distance, Time, Avg pace, and Avg HR values. Most Recent is prioritized by section placement rather than an oversized metric grid. The landing screen does not preview analysis quality, evidence availability, inferred success, or category-generic coaching.
+- All Runs owns visible search plus direct year, written run-type, and Indoor/Outdoor filtering. It groups results by month while retaining the complete lightweight summary history and existing on-demand plan-name hydration boundary.
+- Each All Runs month can collapse independently, preserving the prior fast-scan behavior without restoring the old full archive to the Runs landing screen.
+- Run category remains visible in text everywhere color appears. Easy is green, Long orange, Interval cyan, Threshold purple, Race pink, and Other gray under D-013.
+- Opening a workout applies its category as restrained persistent screen-edge framing and header context. Category color identifies the workout; it does not replace written labels or recolor every result.
+- Indoor workouts omit the Route section because missing GPS is expected for that environment. Outdoor and unknown-environment workouts retain truthful route loading or unavailable states.
+- Metric color has a separate semantic role: time uses yellow, distance and pace cyan, heart rate red, calories pink, power and elevation green, cadence teal, and weather blue. Labels remain visible so color is never the sole carrier of meaning.
+- The visual hierarchy does not change HealthKit truth, run classification behavior, evidence gates, prescribed/measured/timing bases, analytics, or any runner-facing result calculation.
+
+### D-022 — Workout effort is optional user-recorded context
+
+- Status: Implemented on `codex/runs-ui-redesign`; pending promotion
+- Established: 2026-07-21
+
+RunSignal reads only `HKQuantityTypeIdentifierWorkoutEffortScore`, associates it to the exact whole `HKWorkout` through HealthKit's workout-effort relationship query, and accepts only a finite 1–10 value. It does not request `HKQuantityTypeIdentifierEstimatedWorkoutEffortScore`, infer effort from pace or heart rate, or write an effort rating back to Apple Health.
+
+- Missing, older, unrated, or declined data produces no Effort row. Activity-level effort samples do not stand in for the whole-workout rating.
+- Workout Details displays a supplied score as a purple numeric `x/10` tile labeled `Apple Health rating`. It sits at the end of the existing metric grid after measured workout facts; it is not paired with Workout Time, promoted to the Runs landing screen, or given a large editable Apple-style section.
+- Schema V2 persists the optional rating in a separate workout-ID sidecar. A successful relationship query may add, update, or remove a score. A canceled or failed optional query preserves the last valid score and cannot block normal workout history.
+- Existing V1 stores migrate non-destructively. Deleting a workout deletes its effort sidecar, while manual category or note updates preserve it.
 
 ## Major Change Timeline
 

@@ -2184,6 +2184,9 @@ public final class RunningAnalysisStore {
                 merged.importedRunType = existing.importedRunType
                 merged.importedReviewID = existing.importedReviewID
                 merged.notes = existing.notes
+                if !workout.workoutEffortWasQueried {
+                    merged.workoutEffortScore = existing.workoutEffortScore
+                }
                 merged.workoutPlanName = workout.evidence?.workoutPlanAudit?.displayName
                     ?? workout.workoutPlanName
                     ?? existing.workoutPlanName
@@ -2210,6 +2213,9 @@ public final class RunningAnalysisStore {
                 merged.importedRunType = existing.importedRunType
                 merged.importedReviewID = existing.importedReviewID
                 merged.notes = existing.notes
+                if !change.workoutEffortWasQueried {
+                    merged.workoutEffortScore = existing.workoutEffortScore
+                }
                 merged.workoutPlanName = change.evidence?.workoutPlanAudit?.displayName
                     ?? change.workoutPlanName
                     ?? existing.workoutPlanName

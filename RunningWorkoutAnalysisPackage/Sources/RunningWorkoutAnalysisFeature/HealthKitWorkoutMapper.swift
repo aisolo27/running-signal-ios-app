@@ -6,7 +6,9 @@ enum HealthKitWorkoutMapper {
         _ workouts: [HKWorkout],
         store: HKHealthStore,
         detailedEvidenceLimit: Int = 20,
-        probeRoutesWhenEvidenceMissing: Bool = true
+        probeRoutesWhenEvidenceMissing: Bool = true,
+        workoutEffortScores: [String: Double] = [:],
+        workoutEffortQuerySucceeded: Bool = false
     ) async -> [CanonicalWorkout] {
         var normalized: [CanonicalWorkout] = []
         let evidenceService = WorkoutEvidenceService(store: store)
@@ -47,6 +49,8 @@ enum HealthKitWorkoutMapper {
                 strideLengthMeters: quantity(workout, .runningStrideLength, unit: .meter(), option: .discreteAverage) ?? evidence.average(.strideLength),
                 verticalOscillationCentimeters: quantity(workout, .runningVerticalOscillation, unit: HKUnit.meterUnit(with: .centi), option: .discreteAverage) ?? evidence.average(.verticalOscillation),
                 groundContactMilliseconds: quantity(workout, .runningGroundContactTime, unit: HKUnit.secondUnit(with: .milli), option: .discreteAverage) ?? evidence.average(.groundContactTime),
+                workoutEffortScore: workoutEffortScores[workout.uuid.uuidString],
+                workoutEffortWasQueried: workoutEffortQuerySucceeded,
                 routeAvailable: routeAvailable,
                 seriesAvailable: hasSeriesCandidate(workout) || evidence.seriesSampleCount > 0,
                 routePointCount: evidence.route.count,

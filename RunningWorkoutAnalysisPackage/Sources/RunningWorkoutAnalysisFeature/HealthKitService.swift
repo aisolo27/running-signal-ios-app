@@ -125,12 +125,15 @@ public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
 
         do {
             let workouts = try await queryRunningWorkouts(startDate: startDate, endDate: endDate)
+            let effortScores = try await queryWorkoutEffortScoresIfAvailable(for: workouts)
             let healthContext = loadsHealthContext ? await queryHealthContext() : HealthContext()
             let canonical = await HealthKitWorkoutMapper.normalize(
                 workouts,
                 store: store,
                 detailedEvidenceLimit: detailedEvidenceLimit,
-                probeRoutesWhenEvidenceMissing: probeRoutesWhenEvidenceMissing
+                probeRoutesWhenEvidenceMissing: probeRoutesWhenEvidenceMissing,
+                workoutEffortScores: effortScores ?? [:],
+                workoutEffortQuerySucceeded: effortScores != nil
             )
             return HealthKitLoadResult(
                 authorizationState: .partial,
@@ -155,10 +158,13 @@ public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
 
         do {
             let workouts = try await queryRunningWorkouts(ids: ids)
+            let effortScores = try await queryWorkoutEffortScoresIfAvailable(for: workouts)
             let canonical = await HealthKitWorkoutMapper.normalize(
                 workouts,
                 store: store,
-                detailedEvidenceLimit: workouts.count
+                detailedEvidenceLimit: workouts.count,
+                workoutEffortScores: effortScores ?? [:],
+                workoutEffortQuerySucceeded: effortScores != nil
             )
             return HealthKitLoadResult(
                 authorizationState: .partial,
@@ -178,11 +184,14 @@ public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
 
         do {
             let workouts = try await queryRunningWorkouts(ids: ids)
+            let effortScores = try await queryWorkoutEffortScoresIfAvailable(for: workouts)
             var canonical = await HealthKitWorkoutMapper.normalize(
                 workouts,
                 store: store,
                 detailedEvidenceLimit: 0,
-                probeRoutesWhenEvidenceMissing: false
+                probeRoutesWhenEvidenceMissing: false,
+                workoutEffortScores: effortScores ?? [:],
+                workoutEffortQuerySucceeded: effortScores != nil
             )
             let evidenceService = WorkoutEvidenceService(store: store)
             for index in canonical.indices {
@@ -276,6 +285,46 @@ public final class HealthKitService: HealthKitServicing, @unchecked Sendable {
                 continuation.resume(returning: samples as? [HKWorkout] ?? [])
             }
             store.execute(query)
+        }
+    }
+
+    private func queryWorkoutEffortScoresIfAvailable(
+        for workouts: [HKWorkout]
+    ) async throws -> [String: Double]? {
+        guard !workouts.isEmpty else { return [:] }
+        guard #available(iOS 18.0, macOS 15.0, *) else { return nil }
+
+        let workoutIDs = Set(workouts.map(\.uuid))
+        let predicate = HKQuery.predicateForObjects(with: workoutIDs)
+        let descriptor = HKWorkoutEffortRelationshipQueryDescriptor(
+            predicate: predicate,
+            anchor: nil,
+            option: .mostRelevant
+        )
+
+        do {
+            let result = try await descriptor.result(for: store)
+            let userRatingIdentifier = HKQuantityTypeIdentifier.workoutEffortScore.rawValue
+            var scores: [String: Double] = [:]
+
+            for relationship in result.relationships where relationship.activity == nil {
+                let sample = relationship.samples?
+                    .compactMap { $0 as? HKQuantitySample }
+                    .filter { $0.quantityType.identifier == userRatingIdentifier }
+                    .max { $0.endDate < $1.endDate }
+                guard let sample,
+                      let score = WorkoutEffortScore.normalized(
+                        sample.quantity.doubleValue(for: .appleEffortScore())
+                      ) else { continue }
+                scores[relationship.workout.uuid.uuidString] = score
+            }
+            return scores
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            // Effort is optional. A relationship-query failure must not block the
+            // completed workout history or clear a previously cached rating.
+            return nil
         }
     }
 

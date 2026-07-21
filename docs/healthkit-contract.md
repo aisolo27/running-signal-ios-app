@@ -15,7 +15,7 @@ This is the compact implementation reference for RunSignal's Apple Health integr
 ## Main Pipeline
 
 1. `HealthKitService` requests read authorization and queries completed running `HKWorkout` samples.
-2. `HealthKitWorkoutMapper` converts them into `CanonicalWorkout` summaries.
+2. `HealthKitService` also reads the optional user-recorded workout effort relationship for those exact workouts, then `HealthKitWorkoutMapper` converts the results into `CanonicalWorkout` summaries.
 3. `WorkoutEvidenceService` loads bounded workout-scoped quantity samples, routes, events, activities, and optional plan audits.
 4. SwiftData stores lightweight workout summaries and separate detailed-evidence/derived projections.
 5. `CustomWorkoutResolvedIntervalRows` maps expanded planned rows to complete contiguous HealthKit activity rows when the evidence gate passes.
@@ -24,6 +24,8 @@ This is the compact implementation reference for RunSignal's Apple Health integr
 ## Authorization And Queries
 
 - Request read access only. HealthKit does not reveal whether every individual read type was granted; report request completion and observed data availability separately.
+- Request the user-adjusted workout effort score, not Apple's estimated effort score. Accept only a valid 1–10 quantity associated with the whole workout; activity-level ratings, estimates, and RunSignal-derived guesses do not populate the field.
+- A failed optional effort-relationship query must not block completed workout history or clear a previously cached score. A successful query is authoritative for the workouts it covered and may add, update, or remove their optional score.
 - Production first launch starts empty and explains the read-only, on-device use before presenting Apple's authorization sheet. Sample workouts remain test/debug fixtures and are never inserted into a user's run history.
 - Full user-requested history uses an unbounded workout summary query, processed in resumable windows.
 - Detailed evidence remains bounded and explicit because per-workout quantity/route/activity queries are expensive.
@@ -32,7 +34,7 @@ This is the compact implementation reference for RunSignal's Apple Health integr
 - Route query callbacks can be concurrent; collection must be thread-safe.
 - Simulator data is sample-only and cannot prove real permissions or workout availability.
 
-Requested data includes workouts, routes, walking/running distance, heart rate, running speed, running power, step count/cadence, stride length, vertical oscillation, ground contact time, active/basal energy, VO2 Max, and resting heart rate when available.
+Requested data includes workouts, routes, walking/running distance, heart rate, running speed, running power, step count/cadence, stride length, vertical oscillation, ground contact time, active/basal energy, the user-recorded workout effort score, VO2 Max, and resting heart rate when available. Apple's estimated workout effort score is not requested.
 
 ## Incremental And Background Work
 
@@ -80,6 +82,7 @@ Normal splits are a separate derived product and never loosen the custom-workout
 - Shortened/skipped rows use measured distance and pause-adjusted active time.
 - Cadence is displayed as full steps per minute.
 - Elevation gain filters inaccurate route points and isolated altitude spikes.
+- Workout effort is optional supporting context. When Apple Health supplies the runner-adjusted whole-workout score, Workout Details shows its numeric 1–10 value at the end of the metric grid. It is not estimated, promoted to the Runs landing screen, or editable in RunSignal.
 - Best Efforts require credible exact distance-series evidence. Summary-only estimates are never displayed in Best Efforts, restored from its cache, or merged back into its records.
 - While distance-only history verification is incomplete, the UI says `Verified Best Efforts` and reports checked/pending coverage. `All-Time Records` is reserved for complete imported and checked history.
 - Missing data lowers confidence or produces unavailable states; it must not be synthesized into certainty.

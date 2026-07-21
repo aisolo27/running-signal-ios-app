@@ -358,3 +358,53 @@ Docs not updated:
 - `docs/bug-log.md` was not changed because the durable PhotoKit actor-isolation lesson was already represented in the SwiftUI section, and no new recurring project-specific bug category needed promotion.
 - `AGENTS.md` was not changed because existing rules already cover exact-cwd routing, proof-channel separation, iPhone proof boundaries, and branch/push-live behavior.
 - `docs/project-state/current-state.md`, `docs/project-state/next-work.md`, and `docs/project-state/documentation-index.md` still do not exist in this checkout. The active authority remains `docs/project-state/project-status.md`.
+
+## 2026-07-20
+
+Scope: reviewed Codex session logs from July 20, 2026 whose `session_meta.payload.cwd` or `turn_context.cwd` exactly matched `/Users/adrielsolorzano/Documents/Codex Projects/ios app Running Workout Analysis with Xcode & Codex`. Found two exact-cwd sessions and excluded the active daily-learning automation session. Source session reviewed:
+
+- `019f7fd5-5386-78f0-919c-dda3967c0f5c` at `2026-07-20T14:01:54Z`
+
+Completed work:
+
+- Reviewed the supplied iPhone recording against the existing Share Run UI and confirmed the old export model was too dense for Instagram-style resizing: title, date, conditions, location, provenance, footer, multiple formats, style controls, and route options competed with the core run result.
+- Simplified Share Run to exactly three choices: Summary, Splits, and Workout Reps.
+- Removed Format, Style, Route, Dark Card, metadata, branding, Apple Health provenance, map/no-route controls, and Post variants from the runner-facing export flow.
+- Rebuilt the export contract around transparent PNGs: Summary now centers only primary Distance, Pace, Time, and the route shape; Splits exports the full readable split list; Workout Reps keeps concise prescription, Work label, goal, pace, and status.
+- Preserved add-only Photos behavior and temporary-file cleanup while simplifying the model and renderer.
+- Used iPhone Mirroring and Computer Use on physical `AIS17PM` with the real July 19 11.31 km run to inspect Summary, Splits, and Workout Reps previews, refine sparse Workout Reps type scale, remove extra Splits scroll height, and keep `W1` on one line.
+- Compared the saved RunSignal Summary in iPhone Photos against recent Strava screenshots; kept RunSignal's larger value scale because it matched the Distance/Pace/Time/route hierarchy while improving phone-size readability.
+- With explicit approval, saved real-data Workout Reps and Splits exports to Photos and verified `Run-2026-07-19-workoutReps` as a 1080 x 1920 PNG and `Run-2026-07-19-splits` as a 1080 x 1704 PNG, both readable and unclipped.
+- Pushed the scoped change live to GitHub `main` as commit `3b43da2` and deleted the local `codex/simplify-share-images` branch after `main`, `origin/main`, and the remote matched.
+
+Pending work:
+
+- Actual Instagram compositing and resizing remain unverified; Photos displays transparent PNGs against a black viewer background, so Photos inspection does not prove alpha behavior in Instagram.
+- No system share sheet was opened or sent during the final simplified-export verification.
+- Existing standing HealthKit proof gaps remain governed by `project-status.md`: fresh import, background delivery, limited-history authorization, anchored deletions, interruption/resume, Low Power Mode, thermal behavior, battery impact, fresh-workout automatic processing, and real city/weather validation.
+
+Mistakes and fixes:
+
+- The first physical-device attempt found the phone still running the old build, so the current branch had to be installed over the existing data container before real-data verification could prove the new implementation.
+- One coordinate-based iPhone Mirroring tap hit `Save to Photos` while the sheet was still expanding, saving a Summary PNG without explicit intent. The run disclosed it immediately, did not delete anything without approval, and rechecked the Mirroring screen before later taps.
+- The first real-data pass showed the one-rep Workout Reps card was too small and the Splits preview retained empty scroll space after the image. Both were fixed before final verification.
+- The enlarged sparse Workout Reps layout initially allowed `W1` to wrap; the label column was widened for sparse cards and rechecked on the physical phone.
+
+Workflow improvements:
+
+- For share-image work, compare against the real destination behavior early. The user recording plus Strava screenshots showed that reducing density and increasing core metric scale mattered more than preserving old metadata richness.
+- For iPhone Mirroring with coordinate clicks, wait for sheets to settle and re-screenshot before every save/share action; moving sheets can turn a navigation tap into a provider mutation.
+- For export verification, inspect the actual PhotoKit result after saving, including dimensions and full-phone readability, instead of relying only on in-app previews.
+- Keep accidental provider mutations explicit in the record. In this case the accidentally saved Summary PNG stayed in Photos because deletion was not authorized.
+
+Docs updated:
+
+- `docs/project-state/daily-learning-review.md`: updated by this review with the July 20 exact-cwd learning summary and workflow lessons.
+- `docs/project-state/project-status.md`: updated by the source implementation session with the simplified sharing contract, latest physical proof, and remaining verification limits.
+- `docs/project-state/change-and-decision-log.md`: updated by the source implementation session with the durable decision to simplify share images around one transparent export contract.
+
+Docs not updated:
+
+- `docs/bug-log.md` was not changed by this review because the durable PhotoKit save lesson is already represented there, and the coordinate-tap mistake is a workflow caution rather than a recurring project-specific code bug.
+- `AGENTS.md` was not changed because existing rules already cover exact-cwd routing, proof-channel separation, physical-vs-Simulator boundaries, and live-push semantics.
+- `docs/project-state/current-state.md`, `docs/project-state/next-work.md`, and `docs/project-state/documentation-index.md` still do not exist in this checkout. The active authority remains `docs/project-state/project-status.md`.

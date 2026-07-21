@@ -26,8 +26,18 @@ public enum PersistenceService {
     }
 
     public static func fetchWorkoutsForBootstrap(context: ModelContext) throws -> [CanonicalWorkout] {
-        try fetchWorkoutsForBootstrap { descriptor in
+        let workouts = try fetchWorkoutsForBootstrap { descriptor in
             try context.fetch(descriptor)
+        }
+        let effortScores = Dictionary(
+            uniqueKeysWithValues: fetchPersistedWorkoutEffortScores(context: context).compactMap { record in
+                WorkoutEffortScore.normalized(record.score).map { (record.workoutID, $0) }
+            }
+        )
+        return workouts.map { workout in
+            var workout = workout
+            workout.workoutEffortScore = effortScores[workout.id]
+            return workout
         }
     }
 
@@ -142,6 +152,7 @@ public enum PersistenceService {
         } else {
             context.insert(PersistedWorkout(workout: workout))
         }
+        reconcileWorkoutEffort(for: workout, context: context)
 
         let sourceSummary = "\(workout.sourceName) · \(workout.startDate.ISO8601Format())"
         if let evidenceRecord = fetchPersistedEvidence(workoutID: workout.id, context: context) {
@@ -236,6 +247,8 @@ public enum PersistenceService {
                 record = newRecord
             }
 
+            reconcileWorkoutEffort(for: workout, context: context)
+
             let sourceSummary = "\(workout.sourceName) · \(workout.startDate.ISO8601Format())"
             let evidenceRecord = fetchPersistedEvidence(workoutID: workout.id, context: context)
             if let evidence = workout.evidence {
@@ -275,6 +288,7 @@ public enum PersistenceService {
         guard !ids.isEmpty else { return }
         for id in ids {
             fetchPersistedWorkout(id: id, context: context).map(context.delete)
+            fetchPersistedWorkoutEffortScore(workoutID: id, context: context).map(context.delete)
             fetchPersistedEvidence(workoutID: id, context: context).map(context.delete)
             fetchEnrichmentState(workoutID: id, context: context).map(context.delete)
             fetchPersistedDerivedAnalysis(workoutID: id, context: context).map(context.delete)
@@ -788,6 +802,39 @@ public enum PersistenceService {
         )
         descriptor.fetchLimit = 1
         return try? context.fetch(descriptor).first
+    }
+
+    private static func fetchPersistedWorkoutEffortScores(context: ModelContext) -> [PersistedWorkoutEffortScore] {
+        do {
+            return try context.fetch(FetchDescriptor<PersistedWorkoutEffortScore>())
+        } catch {
+            return []
+        }
+    }
+
+    private static func fetchPersistedWorkoutEffortScore(
+        workoutID: String,
+        context: ModelContext
+    ) -> PersistedWorkoutEffortScore? {
+        var descriptor = FetchDescriptor<PersistedWorkoutEffortScore>(
+            predicate: #Predicate { $0.workoutID == workoutID }
+        )
+        descriptor.fetchLimit = 1
+        return try? context.fetch(descriptor).first
+    }
+
+    private static func reconcileWorkoutEffort(for workout: CanonicalWorkout, context: ModelContext) {
+        guard workout.workoutEffortWasQueried else { return }
+        let record = fetchPersistedWorkoutEffortScore(workoutID: workout.id, context: context)
+        if let score = WorkoutEffortScore.normalized(workout.workoutEffortScore) {
+            if let record {
+                record.update(score: score)
+            } else {
+                context.insert(PersistedWorkoutEffortScore(workoutID: workout.id, score: score))
+            }
+        } else {
+            record.map(context.delete)
+        }
     }
 
     private static func fetchPersistedEvidence(context: ModelContext) -> [PersistedWorkoutEvidence] {

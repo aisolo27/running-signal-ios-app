@@ -2014,10 +2014,10 @@ private struct HeartRateZoneDetailView: View {
 
                     if let caveat = analysis.caveat {
                         NoticeCard(
-                            title: "Pause timing note",
+                            title: "About zone times",
                             message: caveat,
-                            systemImage: "pause.circle",
-                            tint: .orange
+                            systemImage: "info.circle",
+                            tint: .cyan
                         )
                     }
 

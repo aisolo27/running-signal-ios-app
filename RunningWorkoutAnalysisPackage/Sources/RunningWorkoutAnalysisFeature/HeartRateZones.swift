@@ -480,7 +480,10 @@ public enum HeartRateZoneAnalyzer {
             workoutEnd: workoutEnd
         )
         guard resolution.isReliableForNormalDetail else {
-            return ([], "Pause evidence was ambiguous, so zone time uses the available heart-rate sample windows without pause subtraction.")
+            return (
+                [],
+                "Zone times use the heart-rate readings Apple Health recorded. Paused time may be included when Apple Health did not provide a clear pause window."
+            )
         }
         return (resolution.intervals, nil)
     }

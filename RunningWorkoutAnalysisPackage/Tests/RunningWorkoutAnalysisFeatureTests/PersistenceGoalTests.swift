@@ -90,7 +90,7 @@ private func persistenceGoalWorkout(
 
 @MainActor
 private func persistenceGoalContext() throws -> ModelContext {
-    let schema = Schema(versionedSchema: RunSignalPersistenceSchemaV1.self)
+    let schema = Schema(versionedSchema: RunSignalPersistenceSchemaV2.self)
     let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
     let container = try RunSignalPersistenceContainer.make(configurations: [configuration])
     return ModelContext(container)

@@ -7,6 +7,14 @@ final class RunningWorkoutAnalysisUITests: XCTestCase {
 
     @MainActor
     func testSettingsTabLoadsHealthKitStatus() throws {
+        let healthAccessMonitor = addUIInterruptionMonitor(withDescription: "Health Access") { sheet in
+            let denyButton = sheet.buttons["Don’t Allow"]
+            guard denyButton.exists else { return false }
+            denyButton.tap()
+            return true
+        }
+        defer { removeUIInterruptionMonitor(healthAccessMonitor) }
+
         let app = XCUIApplication()
         app.launchArguments += ["-RunSignal.HealthKitOnboardingCompleted.v1", "true"]
         app.launch()
@@ -15,6 +23,7 @@ final class RunningWorkoutAnalysisUITests: XCTestCase {
         XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 5))
 
         app.tabBars.buttons["Settings"].tap()
+        app.tap()
         XCTAssertTrue(
             app.descendants(matching: .any)["settings-healthkit-card"]
                 .waitForExistence(timeout: 5)

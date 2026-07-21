@@ -4,11 +4,6 @@ import UniformTypeIdentifiers
 
 struct RunsView: View {
     var store: RunningAnalysisStore
-    @State private var searchText = ""
-    @State private var selectedYear: Int?
-    @State private var selectedCategory: WeeklyRunCategory?
-    @State private var selectedEnvironment: RunEnvironment?
-    @State private var collapsedYears: Set<Int> = []
 
     private var runs: [CanonicalWorkout] {
         V1WorkoutFilters.completedRuns(from: store.workouts)
@@ -18,26 +13,8 @@ struct RunsView: View {
         runs.first
     }
 
-    private var years: [Int] {
-        Array(Set(runs.map { Calendar.current.component(.year, from: $0.startDate) })).sorted(by: >)
-    }
-
-    private var filteredHistory: [CanonicalWorkout] {
-        RunHistoryFiltering.filtered(
-            Array(runs.dropFirst()),
-            selectedYear: selectedYear,
-            selectedCategory: selectedCategory,
-            selectedEnvironment: selectedEnvironment,
-            searchText: searchText
-        )
-    }
-
-    private var historySections: [RunHistoryYearSection] {
-        Dictionary(grouping: filteredHistory) {
-            Calendar.current.component(.year, from: $0.startDate)
-        }
-        .map { RunHistoryYearSection(year: $0.key, workouts: $0.value.sorted { $0.startDate > $1.startDate }) }
-        .sorted { $0.year > $1.year }
+    private var recentRuns: [CanonicalWorkout] {
+        Array(runs.dropFirst().prefix(RunLandingPresentation.recentRunLimit))
     }
 
     var body: some View {
@@ -63,59 +40,8 @@ struct RunsView: View {
                     .task {
                         await store.hydrateCachedWorkoutPlanNameIfAvailable(for: latestRun.id)
                     }
+                    .runCardListRow()
                 }
-            }
-
-            Section("Run History") {
-                HStack(spacing: 10) {
-                    Menu {
-                        Button("All Years") { selectedYear = nil }
-                        Divider()
-                        ForEach(years, id: \.self) { year in
-                            Button(String(year)) { selectedYear = year }
-                        }
-                    } label: {
-                        Label(selectedYear.map(String.init) ?? "All Years", systemImage: "calendar")
-                    }
-                    .buttonStyle(.bordered)
-
-                    Menu {
-                        Button("All Types") { selectedCategory = nil }
-                        Divider()
-                        ForEach(WeeklyRunCategory.allCases) { category in
-                            Button(category.label) { selectedCategory = category }
-                        }
-                    } label: {
-                        Label(selectedCategory?.label ?? "All Types", systemImage: "line.3.horizontal.decrease.circle")
-                    }
-                    .buttonStyle(.bordered)
-                }
-
-                Menu {
-                    Button("All Environments") { selectedEnvironment = nil }
-                    Divider()
-                    Button("Outdoor") { selectedEnvironment = .outdoor }
-                    Button("Indoor") { selectedEnvironment = .indoor }
-                } label: {
-                    Label(selectedEnvironment?.label ?? "All Environments", systemImage: "figure.run")
-                }
-                .buttonStyle(.bordered)
-                .accessibilityIdentifier("runs-environment-filter")
-
-                if selectedYear != nil || selectedCategory != nil || selectedEnvironment != nil {
-                    Button {
-                        selectedYear = nil
-                        selectedCategory = nil
-                        selectedEnvironment = nil
-                    } label: {
-                        Label("Clear Filters", systemImage: "xmark.circle")
-                    }
-                    .buttonStyle(.bordered)
-                }
-
-                Text("\(filteredHistory.count) past \(filteredHistory.count == 1 ? "run" : "runs")")
-                    .font(.caption)
-                    .foregroundStyle(RunSignalTextStyle.secondary)
             }
 
             if runs.isEmpty {
@@ -141,58 +67,40 @@ struct RunsView: View {
                         HealthAccessRecoveryView()
                     }
                 }
-            } else if historySections.isEmpty {
-                Section {
-                    EmptyStateView(title: "No matching past runs", message: "Try another search, year, run type, or environment.")
-                }
             } else {
-                ForEach(historySections) { section in
-                    Section {
-                        if selectedYear != nil || !collapsedYears.contains(section.year) {
-                            ForEach(section.workouts) { workout in
-                                NavigationLink {
-                                    WorkoutDetailView(store: store, workoutID: workout.id)
-                                } label: {
-                                    V1WorkoutRow(workout: workout)
-                                }
-                                .task {
-                                    await store.hydrateCachedWorkoutPlanNameIfAvailable(for: workout.id)
-                                }
-                            }
+                Section {
+                    ForEach(recentRuns) { workout in
+                        NavigationLink {
+                            WorkoutDetailView(store: store, workoutID: workout.id)
+                        } label: {
+                            V1WorkoutRow(workout: workout)
                         }
-                    } header: {
-                        if selectedYear == nil {
-                            Button {
-                                if collapsedYears.contains(section.year) {
-                                    collapsedYears.remove(section.year)
-                                } else {
-                                    collapsedYears.insert(section.year)
-                                }
-                            } label: {
-                                HStack {
-                                    Text(String(section.year))
-                                    Spacer()
-                                    Text("\(section.workouts.count) runs")
-                                        .font(.caption)
-                                        .foregroundStyle(RunSignalTextStyle.secondary)
-                                    Image(systemName: collapsedYears.contains(section.year) ? "chevron.right" : "chevron.down")
-                                }
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .textCase(nil)
-                        } else {
-                            Text(String(section.year))
+                        .task {
+                            await store.hydrateCachedWorkoutPlanNameIfAvailable(for: workout.id)
                         }
+                        .runCardListRow()
                     }
+                } header: {
+                    HStack {
+                        Text("Recent Runs")
+                        Spacer()
+                        NavigationLink {
+                            AllRunsView(store: store)
+                        } label: {
+                            Text("See All")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.cyan)
+                        }
+                        .accessibilityIdentifier("runs-see-all")
+                    }
+                    .textCase(nil)
                 }
             }
         }
         .navigationTitle("Runs")
-        .searchable(
-            text: $searchText,
-            prompt: "Search runs"
-        )
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(.background)
         .safeAreaInset(edge: .bottom) {
             Color.clear.frame(height: 84)
         }
@@ -263,12 +171,6 @@ struct HealthAccessRecoveryView: View {
     }
 }
 
-private struct RunHistoryYearSection: Identifiable {
-    let year: Int
-    let workouts: [CanonicalWorkout]
-    var id: Int { year }
-}
-
 enum RunHistoryFiltering {
     static func filtered(
         _ workouts: [CanonicalWorkout],
@@ -278,7 +180,8 @@ enum RunHistoryFiltering {
         searchText: String,
         calendar: Calendar = .current
     ) -> [CanonicalWorkout] {
-        workouts.filter { workout in
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return workouts.filter { workout in
             if let selectedYear,
                calendar.component(.year, from: workout.startDate) != selectedYear {
                 return false
@@ -291,7 +194,6 @@ enum RunHistoryFiltering {
                workout.environment != selectedEnvironment {
                 return false
             }
-            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             guard !query.isEmpty else { return true }
             let searchableText = [
                 RunWorkout(workout: workout).runnerFacingTitle,
@@ -879,42 +781,76 @@ private struct ManualHeartRateZoneEditorView: View {
 
 struct FeaturedRunRow: View {
     let workout: CanonicalWorkout
-    @Environment(\.runDisplayPolicy) private var runDisplayPolicy
-
-    private var run: RunWorkout {
-        RunWorkout(workout: workout)
-    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(run.runnerFacingTitle)
-                .font(.headline)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Text(RunFormatters.weekdayDateWithYear.string(from: workout.startDate))
-                    .font(.caption)
-                    .foregroundStyle(RunSignalTextStyle.secondary)
-                Spacer()
-                RunTypeTag(runType: workout.effectiveRunType)
+        V1WorkoutRow(workout: workout)
+    }
+}
+
+enum RunLandingPresentation {
+    static let recentRunLimit = 5
+}
+
+struct RunSummaryMetric: Identifiable {
+    let title: String
+    let value: String
+    let accent: RunMetricAccent
+
+    var id: String { title }
+}
+
+enum RunSummaryMetricPresentation {
+    static func items(
+        for workout: CanonicalWorkout,
+        policy: RunDisplayPolicy
+    ) -> [RunSummaryMetric] {
+        [
+            RunSummaryMetric(
+                title: "Distance",
+                value: workout.distanceMeters.map { RunFormatters.distance($0, policy: policy) } ?? "—",
+                accent: .distance
+            ),
+            RunSummaryMetric(
+                title: "Time",
+                value: RunFormatters.duration(workout.durationSeconds),
+                accent: .time
+            ),
+            RunSummaryMetric(
+                title: "Avg pace",
+                value: workout.paceSecondsPerKm.map { RunFormatters.pace($0, policy: policy) } ?? "—",
+                accent: .pace
+            ),
+            RunSummaryMetric(
+                title: "Avg HR",
+                value: workout.averageHeartRate.map { RunFormatters.number($0, suffix: " bpm") } ?? "—",
+                accent: .heartRate
+            )
+        ]
+    }
+}
+
+private struct RunSummaryMetricStrip: View {
+    let items: [RunSummaryMetric]
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 4) {
+            ForEach(items) { item in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.value)
+                        .font(.caption.monospacedDigit().weight(.bold))
+                        .foregroundStyle(item.accent.color)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    Text(item.title)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(RunSignalTextStyle.metricSupporting)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
             }
-            MetricGrid(items: [
-                MetricItem(
-                    title: "Distance",
-                    value: RunFormatters.distance(workout.distanceMeters, policy: runDisplayPolicy),
-                    detail: workout.sourceName,
-                    secondaryValue: RunFormatters.secondaryDistance(workout.distanceMeters, policy: runDisplayPolicy),
-                    accessibilityValue: RunFormatters.accessibilityDistance(
-                        workout.distanceMeters,
-                        policy: runDisplayPolicy,
-                        includeSecondary: true
-                    )
-                ),
-                MetricItem(title: "Time", value: RunFormatters.duration(workout.durationSeconds), detail: "Workout"),
-                MetricItem(title: "Pace", value: RunFormatters.pace(workout.paceSecondsPerKm, policy: runDisplayPolicy), detail: "Average"),
-                MetricItem(title: "Avg HR", value: RunFormatters.number(workout.averageHeartRate, suffix: " bpm"), detail: "HealthKit")
-            ])
         }
-        .padding(.vertical, 6)
     }
 }
 
@@ -926,27 +862,58 @@ struct V1WorkoutRow: View {
         RunWorkout(workout: workout)
     }
 
+    private var tint: Color {
+        workout.effectiveRunType.runSignalAccent.color
+    }
+
+    private var summaryMetrics: [RunSummaryMetric] {
+        RunSummaryMetricPresentation.items(for: workout, policy: runDisplayPolicy)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(run.runnerFacingTitle)
-                .font(.headline)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(alignment: .center) {
-                Text(RunFormatters.weekdayDateWithYear.string(from: workout.startDate))
-                    .font(.caption)
-                    .foregroundStyle(RunSignalTextStyle.secondary)
-                Spacer()
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(tint.opacity(0.16))
+                    Image(systemName: "figure.run")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(tint)
+                }
+                .frame(width: 38, height: 38)
+                .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(run.runnerFacingTitle)
+                        .font(.headline)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(RunFormatters.weekdayDateWithYear.string(from: workout.startDate))
+                        .font(.caption)
+                        .foregroundStyle(RunSignalTextStyle.secondary)
+                }
+
+                Spacer(minLength: 4)
                 RunTypeTag(runType: workout.effectiveRunType)
             }
-            Text("\(RunFormatters.distance(workout.distanceMeters, policy: runDisplayPolicy)) · \(RunFormatters.duration(workout.durationSeconds)) · \(RunFormatters.pace(workout.paceSecondsPerKm, policy: runDisplayPolicy))")
-                .font(.caption)
-                .foregroundStyle(.primary)
-            Text("Avg HR \(RunFormatters.number(workout.averageHeartRate, suffix: " bpm")) · \(workout.sourceName)")
-                .font(.caption2)
-                .foregroundStyle(.primary)
+
+            RunSummaryMetricStrip(items: summaryMetrics)
         }
-        .padding(.vertical, 4)
+        .padding(14)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(tint)
+                .frame(width: 3)
+                .padding(.vertical, 12)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(tint.opacity(0.22), lineWidth: 1)
+        }
+        .contentShape(Rectangle())
     }
 }
 
@@ -1474,63 +1441,73 @@ struct WorkoutDetailView: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 14) {
-                if let workout {
-                    WorkoutDetailHero(workout: workout)
+        let runType = workout?.effectiveRunType ?? .unknown
 
-                    WorkoutCategoryCard(store: store, workout: workout)
+        ZStack {
+            WorkoutCategoryBackdrop(runType: runType)
 
-                    if let progress = store.analysisProgressByWorkoutID[workout.id], progress.stage != .ready {
-                        WorkoutAnalysisProgressCard(progress: progress) {
-                            Task { await store.loadFullAnalysisForWorkout(workoutID: workout.id) }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    if let workout {
+                        WorkoutDetailHero(store: store, workout: workout)
+
+                        if let progress = store.analysisProgressByWorkoutID[workout.id], progress.stage != .ready {
+                            WorkoutAnalysisProgressCard(progress: progress) {
+                                Task { await store.loadFullAnalysisForWorkout(workoutID: workout.id) }
+                            }
                         }
-                    }
 
-                    FitnessWorkoutMetrics(workout: workout)
+                        FitnessWorkoutMetrics(workout: workout)
 
-                    WorkoutEnvironmentCard(workout: workout)
+                        WorkoutEnvironmentCard(workout: workout)
 
-                    RouteAndSeriesPanel(
-                        workout: workout,
-                        achievements: routeAchievements,
-                        lifetimeRankingsVerified: store.bestEffortCoverageSummary.isComplete,
-                        isLoading: store.analyzingWorkoutIDs.contains(workout.id)
-                    )
+                        if WorkoutDetailPresentationPolicy.showsRouteSection(for: workout.environment) {
+                            RouteAndSeriesPanel(
+                                workout: workout,
+                                achievements: routeAchievements,
+                                lifetimeRankingsVerified: store.bestEffortCoverageSummary.isComplete,
+                                isLoading: store.analyzingWorkoutIDs.contains(workout.id)
+                            )
+                        }
 
-                    WorkoutChartsPanel(
-                        store: store,
-                        workout: workout,
-                        isLoading: store.analyzingWorkoutIDs.contains(workout.id)
-                    )
-
-                    if let presentation {
-                        SplitsAndEventsPanel(
+                        WorkoutChartsPanel(
+                            store: store,
                             workout: workout,
-                            segments: presentation.segments,
-                            supportedIntervals: presentation.supportedIntervals,
-                            intervalUnavailableMessage: presentation.intervalUnavailableMessage
+                            isLoading: store.analyzingWorkoutIDs.contains(workout.id)
                         )
-                    }
 
-                    if developerModeEnabled {
-                        NavigationLink {
-                            RawHealthKitWorkoutDebugView(store: store, workout: workout)
-                        } label: {
-                            Label("Developer evidence", systemImage: "wrench.and.screwdriver")
-                                .frame(maxWidth: .infinity)
+                        if let presentation {
+                            SplitsAndEventsPanel(
+                                workout: workout,
+                                segments: presentation.segments,
+                                supportedIntervals: presentation.supportedIntervals,
+                                intervalUnavailableMessage: presentation.intervalUnavailableMessage
+                            )
                         }
-                        .buttonStyle(.bordered)
-                    }
 
-                } else {
-                    EmptyStateView(title: "Workout missing", message: "The selected workout is no longer in local state.")
+                        if developerModeEnabled {
+                            NavigationLink {
+                                RawHealthKitWorkoutDebugView(store: store, workout: workout)
+                            } label: {
+                                Label("Developer evidence", systemImage: "wrench.and.screwdriver")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                        }
+
+                    } else {
+                        EmptyStateView(title: "Workout missing", message: "The selected workout is no longer in local state.")
+                    }
                 }
+                .padding()
+                .padding(.bottom, 220)
             }
-            .padding()
-            .padding(.bottom, 220)
+
+            WorkoutCategoryEdgeFrame(runType: runType)
         }
-        .navigationTitle(workout.map { RunWorkout(workout: $0).runnerFacingTitle } ?? "Workout")
+        .navigationTitle(
+            workout.map { RunFormatters.workoutNavigationDate.string(from: $0.startDate) } ?? "Workout"
+        )
         .runSignalInlineNavigationTitle()
         .safeAreaInset(edge: .bottom) {
             Color.clear.frame(height: 112)
@@ -1652,10 +1629,15 @@ extension View {
 }
 
 private struct WorkoutDetailHero: View {
+    var store: RunningAnalysisStore
     let workout: CanonicalWorkout
 
+    private var tint: Color {
+        workout.effectiveRunType.runSignalAccent.color
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text(RunFormatters.workoutFullDate.string(from: workout.startDate))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(RunSignalTextStyle.secondary)
@@ -1674,11 +1656,19 @@ private struct WorkoutDetailHero: View {
             }
             .font(.caption)
             .foregroundStyle(RunSignalTextStyle.secondary)
+
+            Divider()
+
+            WorkoutCategorySelector(store: store, workout: workout)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(tint.opacity(0.35), lineWidth: 1)
+        }
         .accessibilityIdentifier("workout-detail-hero")
     }
 
@@ -1758,7 +1748,7 @@ private struct WorkoutEnvironmentCard: View {
                     .background(.background)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
-                MetricGrid(items: items)
+                MetricGrid(items: items, presentation: .unified)
             }
         }
     }
@@ -1770,12 +1760,20 @@ private struct WorkoutEnvironmentCard: View {
                 MetricItem(
                     title: "Temperature",
                     value: RunFormatters.temperature(temperature, preference: temperatureUnit),
-                    detail: "Workout weather"
+                    detail: "Workout weather",
+                    accent: .weather
                 )
             )
         }
         if let humidity = workout.evidence?.weather?.humidityPercent {
-            values.append(MetricItem(title: "Humidity", value: RunFormatters.humidity(humidity), detail: "Workout weather"))
+            values.append(
+                MetricItem(
+                    title: "Humidity",
+                    value: RunFormatters.humidity(humidity),
+                    detail: "Workout weather",
+                    accent: .weather
+                )
+            )
         }
         return values
     }
@@ -1792,13 +1790,18 @@ struct FitnessWorkoutMetrics: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader("Workout Details")
-            MetricGrid(items: items)
+            MetricGrid(items: items, presentation: .unified)
         }
     }
 
     private var items: [MetricItem] {
         var values = [
-            MetricItem(title: "Workout time", value: RunFormatters.duration(workout.durationSeconds), detail: elapsedDetail)
+            MetricItem(
+                title: "Workout time",
+                value: RunFormatters.duration(workout.durationSeconds),
+                detail: elapsedDetail,
+                accent: .time
+            )
         ]
         if workout.distanceMeters != nil {
             values.append(
@@ -1811,7 +1814,8 @@ struct FitnessWorkoutMetrics: View {
                         workout.distanceMeters,
                         policy: runDisplayPolicy,
                         includeSecondary: true
-                    )
+                    ),
+                    accent: .distance
                 )
             )
         }
@@ -1826,30 +1830,91 @@ struct FitnessWorkoutMetrics: View {
                         workout.paceSecondsPerKm,
                         policy: runDisplayPolicy,
                         includeSecondary: true
-                    )
+                    ),
+                    accent: .pace
                 )
             )
         }
         if workout.averageHeartRate != nil {
-            values.append(MetricItem(title: "Avg heart rate", value: RunFormatters.number(workout.averageHeartRate, suffix: " bpm"), detail: "Workout average"))
+            values.append(
+                MetricItem(
+                    title: "Avg heart rate",
+                    value: RunFormatters.number(workout.averageHeartRate, suffix: " bpm"),
+                    detail: "Workout average",
+                    accent: .heartRate
+                )
+            )
         }
         if workout.activeEnergyKilocalories != nil {
-            values.append(MetricItem(title: "Active calories", value: RunFormatters.calories(workout.activeEnergyKilocalories), detail: "Apple Health"))
+            values.append(
+                MetricItem(
+                    title: "Active calories",
+                    value: RunFormatters.calories(workout.activeEnergyKilocalories),
+                    detail: "Apple Health",
+                    accent: .calories
+                )
+            )
         }
         if workout.totalEnergyKilocalories != nil {
-            values.append(MetricItem(title: "Total calories", value: totalCaloriesText, detail: totalCaloriesDetail))
+            values.append(
+                MetricItem(
+                    title: "Total calories",
+                    value: totalCaloriesText,
+                    detail: totalCaloriesDetail,
+                    accent: .calories
+                )
+            )
         }
         if workout.maxHeartRate != nil {
-            values.append(MetricItem(title: "Max heart rate", value: RunFormatters.number(workout.maxHeartRate, suffix: " bpm"), detail: "Workout maximum"))
+            values.append(
+                MetricItem(
+                    title: "Max heart rate",
+                    value: RunFormatters.number(workout.maxHeartRate, suffix: " bpm"),
+                    detail: "Workout maximum",
+                    accent: .heartRate
+                )
+            )
         }
         if workout.averagePower != nil {
-            values.append(MetricItem(title: "Avg power", value: RunFormatters.number(workout.averagePower, suffix: " W"), detail: workout.runningPowerSampleCount > 0 ? "Series" : "Summary"))
+            values.append(
+                MetricItem(
+                    title: "Avg power",
+                    value: RunFormatters.number(workout.averagePower, suffix: " W"),
+                    detail: workout.runningPowerSampleCount > 0 ? "Series" : "Summary",
+                    accent: .power
+                )
+            )
         }
         if workout.fullStepCadence != nil {
-            values.append(MetricItem(title: "Avg cadence", value: RunFormatters.number(workout.fullStepCadence, suffix: " spm"), detail: "Full steps/min"))
+            values.append(
+                MetricItem(
+                    title: "Avg cadence",
+                    value: RunFormatters.number(workout.fullStepCadence, suffix: " spm"),
+                    detail: "Full steps/min",
+                    accent: .cadence
+                )
+            )
         }
         if workout.elevationGainMeters != nil {
-            values.append(MetricItem(title: "Elevation gain", value: RunFormatters.number(workout.elevationGainMeters, suffix: " m"), detail: "Route altitude"))
+            values.append(
+                MetricItem(
+                    title: "Elevation gain",
+                    value: RunFormatters.number(workout.elevationGainMeters, suffix: " m"),
+                    detail: "Route altitude",
+                    accent: .elevation
+                )
+            )
+        }
+        if let effort = WorkoutEffortPresentation.make(score: workout.workoutEffortScore) {
+            values.append(
+                MetricItem(
+                    title: "Effort",
+                    value: effort.value,
+                    detail: effort.detail,
+                    accessibilityValue: effort.accessibilityValue,
+                    accent: .effort
+                )
+            )
         }
         return values
     }
@@ -1870,7 +1935,7 @@ struct FitnessWorkoutMetrics: View {
     }
 }
 
-private struct WorkoutCategoryCard: View {
+private struct WorkoutCategorySelector: View {
     var store: RunningAnalysisStore
     let workout: CanonicalWorkout
 
@@ -1899,26 +1964,13 @@ private struct WorkoutCategoryCard: View {
         store.runTypeSuggestion(for: workout.id)
     }
 
+    private var tint: Color {
+        currentRunType.runSignalAccent.color
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Run Type")
-                        .font(.subheadline.bold())
-                    Text(sourceLabel)
-                        .font(.caption2)
-                        .foregroundStyle(RunSignalTextStyle.secondary)
-                }
-
-                Spacer()
-
-                if store.pendingManualWorkoutIDs.contains(workout.id) {
-                    ProgressView()
-                        .controlSize(.small)
-                        .accessibilityLabel("Saving run type")
-                }
-            }
-
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
             Menu {
                 ForEach(RunType.visibleCases) { runType in
                     Button(runType.label) {
@@ -1933,35 +1985,58 @@ private struct WorkoutCategoryCard: View {
                     }
                 }
             } label: {
-                HStack {
-                    Label(currentRunType.label, systemImage: "tag")
-                    Spacer()
+                HStack(spacing: 7) {
+                    Label(currentRunType.label, systemImage: "tag.fill")
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption.bold())
-                        .foregroundStyle(RunSignalTextStyle.secondary)
+                        .font(.caption2.bold())
                 }
-                .frame(maxWidth: .infinity)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(tint)
+                .padding(.horizontal, 11)
+                .frame(minHeight: 36)
+                .background(tint.opacity(0.16))
+                .clipShape(Capsule())
+                .overlay {
+                    Capsule()
+                        .strokeBorder(tint.opacity(0.5), lineWidth: 1)
+                }
             }
-            .buttonStyle(.bordered)
             .accessibilityLabel("Set run type")
+
+                Text(sourceLabel)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(RunSignalTextStyle.secondary)
+
+                Spacer()
+
+                if store.pendingManualWorkoutIDs.contains(workout.id) {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel("Saving run type")
+                }
+            }
 
             if workout.manualRunType == nil,
                workout.importedRunType == nil,
                let suggestion {
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "sparkles")
-                        .foregroundStyle(.blue)
-                    Text(suggestionText(suggestion))
-                        .font(.caption)
+                DisclosureGroup {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .foregroundStyle(tint)
+                        Text(suggestionText(suggestion))
+                            .font(.caption)
+                            .foregroundStyle(RunSignalTextStyle.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.top, 4)
+                } label: {
+                    Text("Why this category")
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(RunSignalTextStyle.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityIdentifier("run-type-suggestion")
             }
         }
-        .padding()
-        .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private func suggestionText(_ suggestion: RunTypeSuggestion) -> String {
@@ -1969,6 +2044,12 @@ private struct WorkoutCategoryCard: View {
             return "Auto-classified as \(suggestion.runType.label): \(suggestion.detail). Change it above if this run had a different purpose."
         }
         return "Suggested \(suggestion.runType.label): \(suggestion.detail)"
+    }
+}
+
+enum WorkoutDetailPresentationPolicy {
+    static func showsRouteSection(for environment: RunEnvironment) -> Bool {
+        environment != .indoor
     }
 }
 
@@ -4137,40 +4218,101 @@ struct ReviewSignalGrid: View {
     }
 }
 
+enum MetricGridPresentation {
+    case tiles
+    case unified
+}
+
+enum RunMetricAccent {
+    case neutral
+    case time
+    case effort
+    case distance
+    case pace
+    case heartRate
+    case calories
+    case power
+    case cadence
+    case elevation
+    case weather
+
+    var color: Color {
+        switch self {
+        case .neutral: .primary
+        case .time: .yellow
+        case .effort: .purple
+        case .distance, .pace: .cyan
+        case .heartRate: .red
+        case .calories: .pink
+        case .power, .elevation: .green
+        case .cadence: .teal
+        case .weather: .blue
+        }
+    }
+}
+
 struct MetricGrid: View {
     let items: [MetricItem]
+    var presentation: MetricGridPresentation = .tiles
+
+    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-            ForEach(items) { item in
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(item.title)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(RunSignalTextStyle.metricSupporting)
-                    Text(item.value)
-                        .font(.headline.monospacedDigit())
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.75)
-                    if let secondaryValue = item.secondaryValue {
-                        Text("(\(secondaryValue))")
-                            .font(.caption2.monospacedDigit().weight(.medium))
-                            .foregroundStyle(RunSignalTextStyle.metricSupporting)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    }
-                    Text(item.detail)
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(RunSignalTextStyle.metricSupporting)
-                        .lineLimit(2)
+        switch presentation {
+        case .tiles:
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(items) { item in
+                    MetricItemCell(item: item)
+                        .background(.thinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
-                .frame(maxWidth: .infinity, minHeight: 82, alignment: .topLeading)
-                .padding()
-                .background(.thinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .runSignalAccessibilityValue(item.accessibilityValue)
+            }
+        case .unified:
+            LazyVGrid(columns: columns, spacing: 1) {
+                ForEach(items) { item in
+                    MetricItemCell(item: item)
+                        .background(Color.primary.opacity(0.035))
+                }
+            }
+            .padding(1)
+            .background(.thinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
             }
         }
+    }
+}
+
+private struct MetricItemCell: View {
+    let item: MetricItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(item.title)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(RunSignalTextStyle.metricSupporting)
+            Text(item.value)
+                .font(.headline.monospacedDigit())
+                .foregroundStyle(item.accent.color)
+                .lineLimit(2)
+                .minimumScaleFactor(0.75)
+            if let secondaryValue = item.secondaryValue {
+                Text("(\(secondaryValue))")
+                    .font(.caption2.monospacedDigit().weight(.medium))
+                    .foregroundStyle(item.accent.color.opacity(0.9))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            Text(item.detail)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(RunSignalTextStyle.metricSupporting)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, minHeight: 82, alignment: .topLeading)
+        .padding()
+        .runSignalAccessibilityValue(item.accessibilityValue)
     }
 }
 
@@ -4181,6 +4323,7 @@ struct MetricItem: Identifiable {
     let detail: String
     var secondaryValue: String? = nil
     var accessibilityValue: String? = nil
+    var accent: RunMetricAccent = .neutral
 }
 
 private extension View {

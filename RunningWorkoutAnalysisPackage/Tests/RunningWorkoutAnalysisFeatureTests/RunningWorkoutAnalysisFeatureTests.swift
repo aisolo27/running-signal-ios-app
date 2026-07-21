@@ -4426,6 +4426,50 @@ private func legacy2019SegmentEvents(start: Date) -> [WorkoutEvidenceEvent] {
     #expect(analysis?.unclassifiedDurationSeconds == 0)
 }
 
+@Test func heartRateZoneAnalysisExplainsUnclearPauseTimingWithoutErrorLanguage() throws {
+    let start = Date(timeIntervalSince1970: 31_000)
+    var workout = testWorkout(id: "zone-pause-note", start: start, distanceMeters: 1_000, durationSeconds: 60)
+    workout.evidence = WorkoutEvidence(
+        workoutID: workout.id,
+        loadedAt: start,
+        series: [
+            .heartRate: WorkoutMetricSeries(
+                metric: .heartRate,
+                unit: "bpm",
+                points: [
+                    WorkoutEvidencePoint(date: start, value: 140),
+                    WorkoutEvidencePoint(date: start.addingTimeInterval(30), value: 145)
+                ]
+            )
+        ],
+        events: [
+            WorkoutEvidenceEvent(
+                startDate: start.addingTimeInterval(20),
+                endDate: start.addingTimeInterval(20),
+                type: "HKWorkoutEventTypePause",
+                kind: .pause
+            )
+        ]
+    )
+    let profile = HeartRateZoneProfile(
+        effectiveDate: .distantPast,
+        createdAt: start,
+        method: .manual,
+        restingHeartRate: nil,
+        maximumHeartRate: nil,
+        zoneLowerBounds: [130, 150, 165, 180],
+        lookbackMonths: nil,
+        sourceDetail: "Manual"
+    )
+
+    let analysis = try #require(HeartRateZoneAnalyzer.analyze(workout: workout, profile: profile))
+    let caveat = try #require(analysis.caveat)
+
+    #expect(caveat.contains("Zone times use the heart-rate readings Apple Health recorded"))
+    #expect(caveat.contains("Paused time may be included"))
+    #expect(!caveat.contains("ambiguous"))
+}
+
 @Test func workoutEvidenceEventTranslatesRawHealthKitEventNamesForDisplay() {
     let start = Date(timeIntervalSince1970: 9_000)
     let rawSegment = WorkoutEvidenceEvent(
@@ -8364,7 +8408,7 @@ private func fixedCalendar() -> Calendar {
 
 @MainActor
 private func inMemoryModelContext() throws -> ModelContext {
-    let schema = Schema(versionedSchema: RunSignalPersistenceSchemaV1.self)
+    let schema = Schema(versionedSchema: RunSignalPersistenceSchemaV2.self)
     let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
     let container = try ModelContainer(for: schema, configurations: [configuration])
     return ModelContext(container)
