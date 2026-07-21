@@ -290,13 +290,14 @@ RunSignal's current eight-model SwiftData store is explicit schema V1. The app o
 
 - Status: Active
 - Established: 2026-07-20
+- Updated: 2026-07-21
 
 `Share Run` exposes only the available Summary, Splits, and official Workout Reps templates. Format, style, and route controls are removed. Each template has one predictable transparent PNG presentation intended to be resized over a runner-selected photo in another app.
 
 - Summary uses one 9:16 Story canvas. It centers only the primary Distance, Pace, and Time in large bold type, followed by the aspect-fit route shape when Apple Health supplied a usable route. It does not export the workout title, date, run type, environment, secondary units, heart rate, weather, city, app name, or Apple Health provenance.
-- Splits uses one transparent dynamic full-list canvas containing every validated split label and pace. It keeps the 1,080-pixel width and 12,000-pixel per-image memory guardrail, preserves row order, and uses balanced continuation images only beyond the effective row capacity.
-- Workout Reps uses transparent 9:16 pages with a concise prescription/result header and readable Work label, goal, pace, and target status rows. It continues to consume only resolver-approved product rows under D-005 and preserves authored WorkoutKit prescription units.
-- All runner-facing distance and pace values follow the primary display unit under D-016. Readability comes from type scale, weight, spacing, and restrained shadows rather than backing cards, charts, or extra metadata.
+- Splits and Workout Reps each use one transparent dynamic full-list canvas containing every ordinary validated row in one image. Both keep the 1,080-pixel width and 12,000-pixel per-image memory guardrail, preserve row order, and use balanced continuation images only beyond their effective row capacity.
+- Workout Reps keeps a single concise header, separates the repeated prescription from its pace target, and retains readable Work label, goal, pace, and target status rows. It continues to consume only resolver-approved product rows under D-005 and preserves authored WorkoutKit prescription units.
+- All runner-facing distance and pace values follow the primary display unit under D-016. Share typography uses the standard system design at bold or semibold weights rather than the rounded black design. Readability comes from type scale, spacing, and tight restrained shadows rather than backing cards, charts, or extra metadata.
 
 D-017's local-only rendering, sequential temporary PNG ownership, system activity sheet, PhotoKit `.addOnly` request timing, denial recovery, and cleanup rules remain active.
 

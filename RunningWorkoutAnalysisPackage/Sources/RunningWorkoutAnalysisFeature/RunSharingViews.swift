@@ -160,7 +160,7 @@ struct RunShareSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .shadow(color: .black.opacity(0.28), radius: 14, y: 8)
                 .accessibilityIdentifier("run-share-preview")
-                .accessibilityLabel("Scrollable full split list preview")
+                .accessibilityLabel("Scrollable full list preview")
             } else {
                 Group {
                     if let previewImage {
@@ -327,7 +327,7 @@ struct RunShareCardView: View {
             VStack(spacing: 0) {
                 ForEach(rows) { row in
                     RunShareSplitRowView(row: row)
-                        .frame(height: RunShareLayout.fullListRowHeightPoints)
+                        .frame(height: RunShareLayout.fullListSplitRowHeightPoints)
                 }
             }
         }
@@ -339,7 +339,7 @@ struct RunShareCardView: View {
     private var splitHeading: some View {
         VStack(spacing: 3) {
             Text(model.splitUnitTitle.uppercased())
-                .font(.system(size: 24, weight: .black, design: .rounded))
+                .font(.system(size: 24, weight: .bold, design: .default))
                 .foregroundStyle(.white)
             if model.pageCount(template: .splits, canvas: canvas) > 1 {
                 Text("PAGE \(page + 1) OF \(model.pageCount(template: .splits, canvas: canvas))")
@@ -347,76 +347,85 @@ struct RunShareCardView: View {
                     .foregroundStyle(.white.opacity(0.78))
             }
         }
-        .shadow(color: .black.opacity(0.95), radius: 2, y: 1)
+        .shadow(color: .black.opacity(0.82), radius: 1.2, y: 0.8)
     }
 
     private var workoutRepsContent: some View {
         let rows = model.workRows(page: page, canvas: canvas)
-        let emphasizesSparseContent = rows.count <= 3
-        return VStack(spacing: 20) {
-            VStack(spacing: 7) {
-                Text(model.workoutPrescription ?? "Workout Reps")
-                    .font(.system(size: emphasizesSparseContent ? 30 : 24, weight: .black, design: .rounded))
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(3)
-                    .minimumScaleFactor(0.75)
-                if let result = model.workoutResultSummary {
-                    Text(result)
-                        .font(.system(size: emphasizesSparseContent ? 17 : 14, weight: .bold))
-                        .foregroundStyle(.white)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(3)
-                        .minimumScaleFactor(0.76)
-                }
-                if let averagePace = model.averageWorkPace {
-                    Text("AVG WORK PACE  \(averagePace)")
-                        .font(
-                            .system(
-                                size: emphasizesSparseContent ? 16 : 13,
-                                weight: .black,
-                                design: .rounded
-                            )
-                            .monospacedDigit()
-                        )
-                        .foregroundStyle(accent)
-                }
-                if model.pageCount(template: .workoutReps, canvas: canvas) > 1 {
-                    Text("PAGE \(page + 1) OF \(model.pageCount(template: .workoutReps, canvas: canvas))")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.78))
-                }
-            }
+        return VStack(spacing: 14) {
+            workoutRepsHeading
+                .frame(height: 90)
 
-            VStack(spacing: 14) {
+            VStack(spacing: 0) {
                 ForEach(rows) { row in
                     RunShareWorkRowView(
                         row: row,
-                        accent: accent,
-                        emphasized: emphasizesSparseContent
+                        accent: accent
                     )
+                    .frame(height: RunShareLayout.fullListWorkoutRowHeightPoints)
                 }
             }
         }
-        .padding(30)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .shadow(color: .black.opacity(0.95), radius: 2, y: 1)
+        .padding(.horizontal, 30)
+        .padding(.vertical, 22)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .shadow(color: .black.opacity(0.82), radius: 1.2, y: 0.8)
+    }
+
+    private var workoutRepsHeading: some View {
+        VStack(spacing: 5) {
+            Text(model.workoutPrescription ?? "Workout Reps")
+                .font(.system(size: 24, weight: .bold, design: .default))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .lineLimit(1)
+                .minimumScaleFactor(0.76)
+
+            if let result = model.workoutResultSummary {
+                Text(result)
+                    .font(.system(size: 13, weight: .semibold, design: .default))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.68)
+            }
+
+            HStack(spacing: 12) {
+                if let averagePace = model.averageWorkPace {
+                    Text("AVG  \(averagePace)")
+                        .foregroundStyle(accent)
+                }
+                if let target = model.workoutTarget {
+                    Text("TARGET  \(target)")
+                        .foregroundStyle(.white.opacity(0.9))
+                }
+            }
+            .font(.system(size: 11, weight: .bold, design: .default).monospacedDigit())
+            .lineLimit(1)
+            .minimumScaleFactor(0.66)
+
+            if model.pageCount(template: .workoutReps, canvas: canvas) > 1 {
+                Text("PAGE \(page + 1) OF \(model.pageCount(template: .workoutReps, canvas: canvas))")
+                    .font(.system(size: 9, weight: .semibold, design: .default))
+                    .foregroundStyle(.white.opacity(0.78))
+            }
+        }
     }
 
     private func shareMetric(_ label: String, _ value: String) -> some View {
         VStack(spacing: 1) {
             Text(label)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .font(.system(size: 13, weight: .semibold, design: .default))
                 .foregroundStyle(.white.opacity(0.9))
             Text(value)
-                .font(.system(size: 40, weight: .black, design: .rounded))
+                .font(.system(size: 40, weight: .bold, design: .default))
                 .monospacedDigit()
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
         }
         .frame(maxWidth: .infinity)
-        .shadow(color: .black.opacity(0.98), radius: 2.4, y: 1.5)
+        .shadow(color: .black.opacity(0.84), radius: 1.35, y: 0.9)
     }
 }
 
@@ -427,7 +436,7 @@ private struct RunShareSplitRowView: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(row.label)
-                    .font(.system(size: 17, weight: .black, design: .rounded))
+                    .font(.system(size: 17, weight: .bold, design: .default))
                     .foregroundStyle(.white)
                 if let distance = row.distance {
                     Text(distance)
@@ -440,19 +449,18 @@ private struct RunShareSplitRowView: View {
             Spacer(minLength: 8)
 
             Text(row.pace)
-                .font(.system(size: 21, weight: .black, design: .rounded).monospacedDigit())
+                .font(.system(size: 21, weight: .bold, design: .default).monospacedDigit())
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
-        .shadow(color: .black.opacity(0.98), radius: 2, y: 1)
+        .shadow(color: .black.opacity(0.84), radius: 1.25, y: 0.8)
     }
 }
 
 private struct RunShareWorkRowView: View {
     let row: RunShareWorkRow
     let accent: Color
-    let emphasized: Bool
 
     private var statusColor: Color {
         switch row.status {
@@ -468,18 +476,18 @@ private struct RunShareWorkRowView: View {
     var body: some View {
         HStack(spacing: 10) {
             Text(row.label)
-                .font(.system(size: emphasized ? 24 : 18, weight: .black, design: .rounded))
+                .font(.system(size: 18, weight: .bold, design: .default))
                 .foregroundStyle(.white)
                 .lineLimit(1)
-                .frame(width: emphasized ? 48 : 34, alignment: .leading)
+                .frame(width: 34, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.goal)
-                    .font(.system(size: emphasized ? 17 : 13, weight: .bold))
+                    .font(.system(size: 13, weight: .semibold, design: .default))
                     .foregroundStyle(.white.opacity(0.9))
                     .lineLimit(1)
                 Label(row.statusText, systemImage: row.status.symbol)
-                    .font(.system(size: emphasized ? 13 : 11, weight: .bold))
+                    .font(.system(size: 11, weight: .semibold, design: .default))
                     .foregroundStyle(statusColor)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
@@ -491,9 +499,9 @@ private struct RunShareWorkRowView: View {
                 Text(row.pace)
                     .font(
                         .system(
-                            size: emphasized ? 26 : 19,
-                            weight: .black,
-                            design: .rounded
+                            size: 20,
+                            weight: .bold,
+                            design: .default
                         )
                         .monospacedDigit()
                     )

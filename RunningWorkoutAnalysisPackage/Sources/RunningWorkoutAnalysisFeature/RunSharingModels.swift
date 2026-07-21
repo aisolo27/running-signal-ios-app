@@ -30,9 +30,9 @@ enum RunShareCanvas: Equatable, Sendable {
 
     static func defaultCanvas(for template: RunShareTemplate) -> RunShareCanvas {
         switch template {
-        case .summary, .workoutReps:
+        case .summary:
             return .story
-        case .splits:
+        case .splits, .workoutReps:
             return .fullList
         }
     }
@@ -53,9 +53,10 @@ enum RunShareCanvas: Equatable, Sendable {
 
     func rowCapacity(for template: RunShareTemplate) -> Int {
         switch (self, template) {
-        case (.fullList, .splits): RunShareLayout.fullListRowCapacity
+        case (.fullList, .splits), (.fullList, .workoutReps):
+            RunShareLayout.fullListRowCapacity(for: template)
         case (.story, .workoutReps): 7
-        case (.fullList, .summary), (.fullList, .workoutReps): 1
+        case (.fullList, .summary): 1
         case (.story, .summary), (.story, .splits): 1
         }
     }
@@ -66,25 +67,55 @@ enum RunShareLayout {
     static let fullListExportWidthPixels: CGFloat = 1_080
     static let fullListMaximumHeightPixels: CGFloat = 12_000
     static let fullListMaximumRowsPerImage = 200
-    static let fullListRowHeightPoints: CGFloat = 38
-    static let fullListFixedHeightPoints: CGFloat = 112
+    static let fullListSplitRowHeightPoints: CGFloat = 38
+    static let fullListSplitFixedHeightPoints: CGFloat = 112
+    static let fullListWorkoutRowHeightPoints: CGFloat = 44
+    static let fullListWorkoutFixedHeightPoints: CGFloat = 148
 
     static let fullListWidthPoints = fullListExportWidthPixels / exportScale
     static let fullListMaximumHeightPoints = fullListMaximumHeightPixels / exportScale
-    static let fullListPixelLimitedRowCapacity = max(
-        1,
-        Int((fullListMaximumHeightPoints - fullListFixedHeightPoints) / fullListRowHeightPoints)
-    )
-    static let fullListRowCapacity = min(
-        fullListMaximumRowsPerImage,
-        fullListPixelLimitedRowCapacity
-    )
 
-    static func fullListHeightPoints(rowCount: Int) -> CGFloat {
-        let boundedRows = min(max(0, rowCount), fullListRowCapacity)
+    static func fullListRowHeightPoints(for template: RunShareTemplate) -> CGFloat {
+        switch template {
+        case .splits: fullListSplitRowHeightPoints
+        case .workoutReps: fullListWorkoutRowHeightPoints
+        case .summary: 0
+        }
+    }
+
+    static func fullListFixedHeightPoints(for template: RunShareTemplate) -> CGFloat {
+        switch template {
+        case .splits: fullListSplitFixedHeightPoints
+        case .workoutReps: fullListWorkoutFixedHeightPoints
+        case .summary: fullListMaximumHeightPoints
+        }
+    }
+
+    static func fullListPixelLimitedRowCapacity(for template: RunShareTemplate) -> Int {
+        let rowHeight = fullListRowHeightPoints(for: template)
+        guard rowHeight > 0 else { return 1 }
+        return max(
+            1,
+            Int(
+                (fullListMaximumHeightPoints - fullListFixedHeightPoints(for: template))
+                    / rowHeight
+            )
+        )
+    }
+
+    static func fullListRowCapacity(for template: RunShareTemplate) -> Int {
+        min(
+            fullListMaximumRowsPerImage,
+            fullListPixelLimitedRowCapacity(for: template)
+        )
+    }
+
+    static func fullListHeightPoints(rowCount: Int, template: RunShareTemplate) -> CGFloat {
+        let boundedRows = min(max(0, rowCount), fullListRowCapacity(for: template))
         return min(
             fullListMaximumHeightPoints,
-            fullListFixedHeightPoints + CGFloat(boundedRows) * fullListRowHeightPoints
+            fullListFixedHeightPoints(for: template)
+                + CGFloat(boundedRows) * fullListRowHeightPoints(for: template)
         )
     }
 }
@@ -204,6 +235,7 @@ struct RunShareModel: Equatable, Sendable {
     var splitUnitTitle: String
     var splitRows: [RunShareSplitRow]
     var workoutPrescription: String?
+    var workoutTarget: String?
     var workoutResultSummary: String?
     var averageWorkPace: String?
     var workRows: [RunShareWorkRow]
@@ -234,11 +266,18 @@ struct RunShareModel: Equatable, Sendable {
     }
 
     func pointSize(template: RunShareTemplate, canvas: RunShareCanvas, page: Int) -> CGSize {
-        guard template == .splits, canvas == .fullList else { return canvas.pointSize }
+        guard canvas == .fullList else { return canvas.pointSize }
+        let rowCount: Int
+        switch template {
+        case .summary: return canvas.pointSize
+        case .splits: rowCount = splitRows(page: page, canvas: canvas).count
+        case .workoutReps: rowCount = workRows(page: page, canvas: canvas).count
+        }
         return CGSize(
             width: RunShareLayout.fullListWidthPoints,
             height: RunShareLayout.fullListHeightPoints(
-                rowCount: splitRows(page: page, canvas: canvas).count
+                rowCount: rowCount,
+                template: template
             )
         )
     }
@@ -289,6 +328,7 @@ enum RunShareModelBuilder {
             splitUnitTitle: policy.primaryUnit.normalSplitTitle,
             splitRows: splitRows,
             workoutPrescription: workContent.prescription,
+            workoutTarget: workContent.target,
             workoutResultSummary: workContent.resultSummary,
             averageWorkPace: workContent.averagePace,
             workRows: workContent.rows
@@ -317,11 +357,17 @@ enum RunShareModelBuilder {
         workout: CanonicalWorkout,
         result: WorkoutIntervalReconstructionResult?,
         policy: RunDisplayPolicy
-    ) -> (prescription: String?, resultSummary: String?, averagePace: String?, rows: [RunShareWorkRow]) {
-        guard let result else { return (nil, nil, nil, []) }
+    ) -> (
+        prescription: String?,
+        target: String?,
+        resultSummary: String?,
+        averagePace: String?,
+        rows: [RunShareWorkRow]
+    ) {
+        guard let result else { return (nil, nil, nil, nil, []) }
         let summary = IntervalAnalysisSummary(workout: workout, result: result)
         let workRows = summary.rows.filter { $0.stepType == .work }
-        guard !workRows.isEmpty else { return (nil, nil, nil, []) }
+        guard !workRows.isEmpty else { return (nil, nil, nil, nil, []) }
         let workIndexes = Set(workRows.map(\.index))
         let evaluationsByIndex = Dictionary(
             uniqueKeysWithValues: result.intervals.filter { workIndexes.contains($0.index) }.compactMap { interval in
@@ -353,31 +399,33 @@ enum RunShareModelBuilder {
             RunFormatters.pace($0, policy: policy)
         }
 
+        let prescription = prescriptionContent(rows: workRows, policy: policy)
         return (
-            prescriptionTitle(rows: workRows, policy: policy),
+            prescription.title,
+            prescription.target,
             resultSummary,
             averagePace,
             rows
         )
     }
 
-    private static func prescriptionTitle(
+    private static func prescriptionContent(
         rows: [IntervalAnalysisRow],
         policy: RunDisplayPolicy
-    ) -> String {
-        guard let first = rows.first else { return "Completed workout" }
+    ) -> (title: String, target: String?) {
+        guard let first = rows.first else { return ("Completed workout", nil) }
         let goalsMatch = rows.allSatisfy {
             $0.plannedGoalType == first.plannedGoalType
                 && abs(($0.plannedGoalValue ?? 0) - (first.plannedGoalValue ?? 0)) < 0.5
                 && $0.plannedDistancePrescription == first.plannedDistancePrescription
         }
         let goal = first.plannedDistancePrescription?.displayText ?? first.plannedGoalDisplayText
-        var title = goalsMatch ? "\(rows.count) × \(goal)" : "\(rows.count) Work reps"
+        let title = goalsMatch ? "\(rows.count) × \(goal)" : "\(rows.count) Work reps"
         if let target = PlannedWorkoutTargetPresentation.runnerText(first.plannedTargetDisplayText, policy: policy),
            rows.allSatisfy({ $0.plannedTargetDisplayText == first.plannedTargetDisplayText }) {
-            title += " · \(target)"
+            return (title, target)
         }
-        return title
+        return (title, nil)
     }
 
     private static func shareStatus(_ evaluation: WorkTargetEvaluation?) -> RunShareWorkStatus {

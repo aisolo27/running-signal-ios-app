@@ -23,7 +23,7 @@ import UIKit
 
 @Test func shareTemplatesChooseOneDefaultCanvasWithoutFormatOrStyleOptions() {
     #expect(RunShareCanvas.defaultCanvas(for: .summary) == .story)
-    #expect(RunShareCanvas.defaultCanvas(for: .workoutReps) == .story)
+    #expect(RunShareCanvas.defaultCanvas(for: .workoutReps) == .fullList)
     #expect(RunShareCanvas.defaultCanvas(for: .splits) == .fullList)
 }
 
@@ -51,23 +51,41 @@ import UIKit
     #expect(model.splitRows(page: 0, canvas: canvas).count == 13)
 }
 
+@Test func shareWorkoutRepsDefaultToOneDynamicFullListImage() {
+    let model = shareWorkoutRepsModel(count: 8)
+    let canvas = RunShareCanvas.defaultCanvas(for: .workoutReps)
+    let size = model.pointSize(template: .workoutReps, canvas: canvas, page: 0)
+
+    #expect(canvas == .fullList)
+    #expect(model.pageCount(template: .workoutReps, canvas: canvas) == 1)
+    #expect(model.workRows(page: 0, canvas: canvas).count == 8)
+    #expect(size.width * RunShareLayout.exportScale == 1_080)
+    #expect(
+        size.height
+            == RunShareLayout.fullListWorkoutFixedHeightPoints
+                + CGFloat(8) * RunShareLayout.fullListWorkoutRowHeightPoints
+    )
+    #expect(size.height * RunShareLayout.exportScale < 1_920)
+}
+
 @Test func shareFullListFitsItsPixelLimitedCapacityInOneImage() {
-    let model = shareSplitModel(count: RunShareLayout.fullListRowCapacity)
+    let capacity = RunShareLayout.fullListRowCapacity(for: .splits)
+    let model = shareSplitModel(count: capacity)
     let size = model.pointSize(template: .splits, canvas: .fullList, page: 0)
 
     #expect(model.pageCount(template: .splits, canvas: .fullList) == 1)
-    #expect(model.splitRows(page: 0, canvas: .fullList).count == RunShareLayout.fullListRowCapacity)
+    #expect(model.splitRows(page: 0, canvas: .fullList).count == capacity)
     #expect(size.width * RunShareLayout.exportScale == 1_080)
     #expect(size.height * RunShareLayout.exportScale <= 12_000)
 }
 
 @Test func shareFullListUsesThePixelLimitedCapacityAndBalancesItsFallback() {
-    let capacity = RunShareLayout.fullListRowCapacity
+    let capacity = RunShareLayout.fullListRowCapacity(for: .splits)
     let atCapacity = shareSplitModel(count: capacity)
     let aboveCapacity = shareSplitModel(count: capacity + 1)
 
     #expect(capacity <= RunShareLayout.fullListMaximumRowsPerImage)
-    #expect(capacity == RunShareLayout.fullListPixelLimitedRowCapacity)
+    #expect(capacity == RunShareLayout.fullListPixelLimitedRowCapacity(for: .splits))
     #expect(atCapacity.pageCount(template: .splits, canvas: .fullList) == 1)
     #expect(
         atCapacity.pointSize(template: .splits, canvas: .fullList, page: 0).height
@@ -106,6 +124,25 @@ func shareFullListRendererProducesATransparentGuardrailedPNGCanvas() throws {
 
     #expect(cgImage.width == Int(RunShareLayout.fullListExportWidthPixels))
     #expect(cgImage.height <= Int(RunShareLayout.fullListMaximumHeightPixels))
+    #expect(![.none, .noneSkipFirst, .noneSkipLast].contains(cgImage.alphaInfo))
+}
+
+@Test @MainActor
+func shareWorkoutRepsRendererProducesOneTransparentDynamicImage() throws {
+    let model = shareWorkoutRepsModel(count: 8)
+    let canvas = RunShareCanvas.defaultCanvas(for: .workoutReps)
+    let image = try #require(
+        RunShareImageRenderer.render(
+            model: model,
+            template: .workoutReps,
+            canvas: canvas,
+            page: 0
+        )
+    )
+    let cgImage = try #require(image.cgImage)
+
+    #expect(cgImage.width == 1_080)
+    #expect(cgImage.height < 1_920)
     #expect(![.none, .noneSkipFirst, .noneSkipLast].contains(cgImage.alphaInfo))
 }
 
@@ -160,7 +197,8 @@ func shareSummaryRendererUsesTransparentStoryDimensions() throws {
     #expect(model.workRows.allSatisfy { $0.goal == "800 m" })
     #expect(model.workRows.map(\.status) == [.onTarget, .slow, .shortened])
     #expect(model.workRows.allSatisfy { $0.pace.contains("/mi") })
-    #expect(model.workoutPrescription?.hasPrefix("3 × 800 m") == true)
+    #expect(model.workoutPrescription == "3 × 800 m")
+    #expect(model.workoutTarget?.contains("/mi") == true)
     #expect(model.workoutResultSummary == "2 of 3 on target · 0 fast · 1 slow · 1 shortened")
 }
 
@@ -246,6 +284,31 @@ private func shareSplitModel(count: Int) -> RunShareModel {
             pace: 270 + Double(index % 45)
         )
     }
+    return RunShareModelBuilder.make(
+        workout: workout,
+        presentation: presentation,
+        policy: .kilometersOnly
+    )
+}
+
+private func shareWorkoutRepsModel(count: Int) -> RunShareModel {
+    let workout = shareWorkout(
+        distance: Double(count) * 800,
+        duration: Double(count) * 220
+    )
+    var presentation = WorkoutDetailPresentation.make(workout: workout, analysis: nil)
+    presentation.supportedIntervals = WorkoutIntervalReconstructionResult(
+        planSource: .workoutKit,
+        windowSource: .healthKitActivityBoundaries,
+        intervals: (1...count).map {
+            shareInterval(
+                index: $0,
+                stepType: .work,
+                measuredDistance: 800,
+                activeDuration: 200 + Double($0 % 3) * 10
+            )
+        }
+    )
     return RunShareModelBuilder.make(
         workout: workout,
         presentation: presentation,
