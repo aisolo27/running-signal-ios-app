@@ -147,6 +147,14 @@ func shareWorkoutRepsRendererProducesOneTransparentDynamicImage() throws {
 }
 
 @Test @MainActor
+func shareWorkoutRepLabelColumnFitsDoubleDigitLabels() {
+    let font = UIFont.systemFont(ofSize: 18, weight: .bold)
+    let labelWidth = ("W12" as NSString).size(withAttributes: [.font: font]).width
+
+    #expect(labelWidth <= RunShareLayout.fullListWorkoutLabelWidthPoints)
+}
+
+@Test @MainActor
 func shareSummaryRendererUsesTransparentStoryDimensions() throws {
     let workout = shareWorkout(distance: 11_265.4, duration: 2_970)
     let model = RunShareModelBuilder.make(

@@ -71,6 +71,7 @@ enum RunShareLayout {
     static let fullListSplitFixedHeightPoints: CGFloat = 112
     static let fullListWorkoutRowHeightPoints: CGFloat = 44
     static let fullListWorkoutFixedHeightPoints: CGFloat = 148
+    static let fullListWorkoutLabelWidthPoints: CGFloat = 44
 
     static let fullListWidthPoints = fullListExportWidthPixels / exportScale
     static let fullListMaximumHeightPoints = fullListMaximumHeightPixels / exportScale

@@ -479,7 +479,11 @@ private struct RunShareWorkRowView: View {
                 .font(.system(size: 18, weight: .bold, design: .default))
                 .foregroundStyle(.white)
                 .lineLimit(1)
-                .frame(width: 34, alignment: .leading)
+                .minimumScaleFactor(0.9)
+                .frame(
+                    width: RunShareLayout.fullListWorkoutLabelWidthPoints,
+                    alignment: .leading
+                )
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.goal)
