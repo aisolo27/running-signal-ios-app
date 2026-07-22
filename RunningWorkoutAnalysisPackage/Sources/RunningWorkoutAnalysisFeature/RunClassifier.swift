@@ -72,6 +72,14 @@ public enum RunClassifier {
             return RunTypeSuggestion(runType: .easy, confidence: .strong, reasons: reasons)
         }
 
+        guard workout.evidence != nil else {
+            return RunTypeSuggestion(
+                runType: .unknown,
+                confidence: .limited,
+                reasons: ["Detailed workout analysis has not finished and no explicit plan purpose is available"]
+            )
+        }
+
         let baseline = classificationBaseline(for: workout, history: history)
         if isLongRelativeToBaseline(workout, baseline: baseline) {
             return RunTypeSuggestion(

@@ -55,3 +55,15 @@ struct WorkoutCategoryEdgeFrame: View {
         .shadow(color: tint.opacity(0.5), radius: 7)
     }
 }
+
+extension View {
+    func runSignalSurface(cornerRadius: CGFloat = 16) -> some View {
+        self
+            .background(.thinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+            }
+    }
+}

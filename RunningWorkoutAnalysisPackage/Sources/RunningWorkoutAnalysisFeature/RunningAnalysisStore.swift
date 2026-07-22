@@ -1558,9 +1558,7 @@ public final class RunningAnalysisStore {
             history: workouts,
             maxHeartRate: healthContext.maxHeartRate
         )
-        if suggestion.runType != .unknown || workout.inferredRunType == .unknown {
-            workout.inferredRunType = suggestion.runType
-        }
+        workout.inferredRunType = suggestion.runType
         analysisProgressByWorkoutID[workoutID] = WorkoutAnalysisProgress(
             stage: .processing,
             message: "Building charts, splits, and workout intervals in the background."
@@ -1969,6 +1967,11 @@ public final class RunningAnalysisStore {
         var hydratedWorkout = workouts[currentIndex]
         hydratedWorkout.evidence = evidence
         hydratedWorkout.workoutPlanName = evidence.workoutPlanAudit?.displayName ?? hydratedWorkout.workoutPlanName
+        hydratedWorkout.inferredRunType = RunClassifier.suggestion(
+            for: hydratedWorkout,
+            history: workouts,
+            maxHeartRate: healthContext.maxHeartRate
+        ).runType
         hydratedWorkout.routePointCount = evidence.route.count
         hydratedWorkout.seriesSampleCount = evidence.seriesSampleCount
         hydratedWorkout.routeAvailable = hydratedWorkout.routeAvailable || !evidence.route.isEmpty
@@ -2038,6 +2041,11 @@ public final class RunningAnalysisStore {
         if let planName, !planName.isEmpty {
             workouts[currentIndex].workoutPlanName = planName
         }
+        workouts[currentIndex].inferredRunType = RunClassifier.suggestion(
+            for: workouts[currentIndex],
+            history: workouts,
+            maxHeartRate: healthContext.maxHeartRate
+        ).runType
         PersistenceService.updateWorkoutPlanClassification(
             workoutID: workoutID,
             name: workouts[currentIndex].workoutPlanName,
@@ -2508,9 +2516,7 @@ public final class RunningAnalysisStore {
                 history: history,
                 maxHeartRate: healthContext.maxHeartRate
             )
-            if suggestion.runType != .unknown || classified.inferredRunType == .unknown {
-                classified.inferredRunType = suggestion.runType
-            }
+            classified.inferredRunType = suggestion.runType
             return classified
         }
     }

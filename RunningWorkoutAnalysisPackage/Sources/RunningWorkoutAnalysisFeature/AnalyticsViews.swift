@@ -772,7 +772,7 @@ private struct PeriodSignalView: View {
                 MetricItem(title: "Runs", value: "\(summary.runCount)", detail: "Completed"),
                 MetricItem(title: "Avg pace", value: RunFormatters.pace(summary.averagePaceSecondsPerKm, policy: runDisplayPolicy), detail: "Distance/time"),
                 MetricItem(title: "Detailed Data", value: evidenceStatus, detail: evidenceDetail)
-            ])
+            ], presentation: .unified)
 
             if summary.period != .allTime {
                 PeriodComparisonPanel(summary: summary)
@@ -1176,8 +1176,7 @@ private struct PeriodDistanceChart: View {
             .accessibilityLabel("\(chartTitle) chart. Tap or drag to inspect a period.")
         }
         .padding()
-        .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .runSignalSurface()
     }
 
     private var chartTitle: String {
@@ -1343,34 +1342,40 @@ private struct WeeklyCategoryTotalsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionHeader("Purpose Mix")
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 8)], spacing: 8) {
+            VStack(spacing: 1) {
                 ForEach(visibleTotals) { total in
-                    VStack(alignment: .leading, spacing: 5) {
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(total.category.runSignalAccent.color)
-                                .frame(width: 8, height: 8)
-                                .accessibilityHidden(true)
+                    HStack(spacing: 10) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(total.category.runSignalAccent.color)
+                            .frame(width: 4, height: 34)
+                            .accessibilityHidden(true)
+
+                        VStack(alignment: .leading, spacing: 3) {
                             Text(total.category.label)
-                                .font(.caption.weight(.semibold))
+                                .font(.subheadline.weight(.semibold))
+                            Text(RunFormatters.distance(total.distanceMeters, policy: runDisplayPolicy))
+                                .font(.caption2)
+                                .foregroundStyle(RunSignalTextStyle.tertiary)
+                        }
+
+                        Spacer()
+
+                        HStack(spacing: 6) {
+                            Text("\(total.runCount)")
+                                .font(.headline.monospacedDigit())
+                                .foregroundStyle(total.category.runSignalAccent.color)
+                            Text(total.runCount == 1 ? "run" : "runs")
+                                .font(.caption)
                                 .foregroundStyle(RunSignalTextStyle.secondary)
                         }
-                        Text("\(total.runCount)")
-                            .font(.title3.monospacedDigit().bold())
-                        Text(RunFormatters.distance(total.distanceMeters, policy: runDisplayPolicy))
-                            .font(.caption2)
-                            .foregroundStyle(RunSignalTextStyle.tertiary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-                    .background(.background)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(total.category.runSignalAccent.color.opacity(0.45), lineWidth: 1)
-                    }
+                    .padding(12)
+                    .background(Color.primary.opacity(0.035))
                 }
             }
+            .padding(1)
+            .runSignalSurface()
         }
     }
 }
@@ -1946,7 +1951,7 @@ private struct WorkoutChartCard: View {
     }
 }
 
-private struct HeartRateZoneDetailView: View {
+struct HeartRateZoneDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     let workout: CanonicalWorkout
@@ -2407,7 +2412,7 @@ private struct IntervalResultsPanel: View {
                     .font(.headline.monospacedDigit())
             }
 
-            MetricGrid(items: metricItems)
+            MetricGrid(items: metricItems, presentation: .unified)
 
             if let measuredDistanceText {
                 Label(measuredDistanceText, systemImage: "waveform.path.ecg")
@@ -2428,8 +2433,7 @@ private struct IntervalResultsPanel: View {
             }
         }
         .padding()
-        .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .runSignalSurface()
         .accessibilityElement(children: .contain)
     }
 
@@ -2688,7 +2692,7 @@ private struct IntervalSelectedRowPanel: View {
                     MetricItem(title: "Elapsed", value: RunFormatters.duration(selectedRow.elapsedDurationSeconds), detail: "Row window"),
                     MetricItem(title: "Pause", value: RunFormatters.duration(pauseOverlap), detail: "Paired overlap"),
                     MetricItem(title: "Active", value: RunFormatters.duration(selectedRow.activeDurationSeconds), detail: "Timer duration")
-                ])
+                ], presentation: .unified)
             }
 
             if let selectedInterval,
@@ -2697,11 +2701,10 @@ private struct IntervalSelectedRowPanel: View {
                 WorkTargetDetailGrid(evaluation: evaluation)
             }
 
-            MetricGrid(items: metricItems)
+            MetricGrid(items: metricItems, presentation: .unified)
         }
         .padding()
-        .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .runSignalSurface()
     }
 
     private var title: String {
@@ -2952,7 +2955,7 @@ struct IntervalDetailView: View {
                     WorkoutRouteMap(route: routeSegment)
                 }
 
-                MetricGrid(items: intervalMetricItems)
+                MetricGrid(items: intervalMetricItems, presentation: .unified)
 
                 if let evaluation = WorkTargetEvaluator.evaluate(interval: interval),
                    evaluation.result != .noTarget || evaluation.exactTargetSecondsPerKilometer != nil {
@@ -3039,7 +3042,7 @@ private struct WorkTargetDetailGrid: View {
             MetricItem(title: "Actual", value: RunFormatters.pace(evaluation.measurement.paceSecondsPerKilometer, policy: runDisplayPolicy), detail: evaluation.measurement.basis.runnerLabel),
             MetricItem(title: resultTitle, value: resultText, detail: deltaText),
             MetricItem(title: "Completion", value: evaluation.completionStatus.runnerLabel, detail: "Separate from pace")
-        ])
+        ], presentation: .unified)
     }
 
     private var targetDetail: String {

@@ -1087,18 +1087,19 @@ private func intervalForGoalMeasuredText(
     let store = RunningAnalysisStore(healthKitService: StubHealthKitService())
     await store.bootstrap(modelContext: context)
     #expect(store.workouts.first?.evidence == nil)
+    #expect(store.workouts.first?.inferredRunType == .unknown)
 
     await store.hydrateCachedWorkoutPlanNameIfAvailable(for: workout.id)
 
     #expect(store.workouts.first?.workoutPlanName == "Track Intervals")
     #expect(store.workouts.first?.evidence == nil)
-    #expect(store.workouts.first?.inferredRunType == .easy)
+    #expect(store.workouts.first?.inferredRunType == .interval)
     #expect(PersistenceService.fetchWorkouts(context: context).first?.workoutPlanName == "Track Intervals")
 
     await store.hydrateCachedEvidenceIfAvailable(for: workout.id)
 
     #expect(store.workouts.first?.evidence != nil)
-    #expect(store.workouts.first?.inferredRunType == .easy)
+    #expect(store.workouts.first?.inferredRunType == .interval)
 }
 
 @MainActor
@@ -1790,13 +1791,14 @@ func foregroundHealthKitSyncIsSingleFlight() async throws {
 @MainActor
 @Test func manualRunTypeUpdateRefreshesTrainingPeriodSummaryCache() async throws {
     let context = try inMemoryModelContext()
-    let workout = testWorkout(
+    var workout = testWorkout(
         id: "manual-category-cache-workout",
         start: Date(timeIntervalSince1970: 8_000),
         distanceMeters: 5_000,
         durationSeconds: 1_500,
         inferredRunType: .easy
     )
+    workout.workoutPlanName = "Easy Run"
     PersistenceService.upsert([workout], context: context)
     let store = RunningAnalysisStore(healthKitService: StubHealthKitService())
 
@@ -8695,12 +8697,13 @@ private struct IsolatedDefaults {
             durationSeconds: 30 * 60
         )
     }
-    let long = testWorkout(
+    var long = testWorkout(
         id: "long-outlier",
         start: now,
         distanceMeters: 11_000,
         durationSeconds: 65 * 60
     )
+    long.evidence = WorkoutEvidence(workoutID: long.id)
 
     #expect(RunClassifier.suggestion(for: interval, history: history, maxHeartRate: nil).runType == .interval)
     let longSuggestion = RunClassifier.suggestion(for: long, history: history, maxHeartRate: nil)
@@ -8721,6 +8724,25 @@ private struct IsolatedDefaults {
     #expect(suggestion.runType == .unknown)
     #expect(suggestion.runType.label == "Other")
     #expect(suggestion.confidence == .limited)
+}
+
+@Test func runTypeSuggestionDoesNotCallSummaryOnlyHeartRateAnEasyRunBeforeAnalysis() {
+    var workout = testWorkout(
+        id: "summary-only-low-heart-rate",
+        start: Date(timeIntervalSince1970: 1_800_000_000),
+        distanceMeters: 7_000,
+        durationSeconds: 45 * 60
+    )
+    workout.averageHeartRate = 130
+
+    let pending = RunClassifier.suggestion(for: workout, history: [], maxHeartRate: 190)
+    #expect(pending.runType == .unknown)
+    #expect(pending.confidence == .limited)
+
+    workout.evidence = WorkoutEvidence(workoutID: workout.id)
+    let analyzed = RunClassifier.suggestion(for: workout, history: [], maxHeartRate: 190)
+    #expect(analyzed.runType == .easy)
+    #expect(analyzed.confidence == .moderate)
 }
 
 @Test func workoutEvidenceDecodesLegacyCacheWithoutWeatherOrCity() throws {

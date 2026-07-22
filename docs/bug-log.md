@@ -29,6 +29,7 @@ Read only the section relevant to the task. Add entries only for recurring proje
 - Associated-workout samples are stronger than source/date fallback; persist provenance.
 - `HKWorkoutRouteQuery` callbacks may be concurrent. Collect route points through thread-safe state.
 - HealthKit distance samples are interval contributions with start/end windows, not cumulative odometer values.
+- Performance Details may visualize reconciled contributions across overlapping sample windows, but selected distance must never silently fall back to the whole-run total. Chart scrubbing must also leave vertical drags to the containing scroll view.
 - Credit each distance contribution across its actual sample start/end window. Using the sample start as the cumulative crossing date can turn a sparse legacy five-minute distance bucket into an impossible two- or three-second kilometer.
 - Older open runs can contain interleaved kilometer and mile `segment` chains. Normal split timing may use only a contiguous chain that spans the distance evidence, matches the expected kilometer-plus-partial row count, and distance-validates every full row; these events still must not become custom-workout interval rows.
 - Normal split boundary time is elapsed, but Apple Fitness can display pause-adjusted active split duration. Select only the pause-event family whose total reconciles to workout elapsed-minus-active time; do not blindly combine explicit and motion pause pairs.

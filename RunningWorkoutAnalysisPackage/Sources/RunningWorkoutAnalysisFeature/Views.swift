@@ -1461,20 +1461,18 @@ struct WorkoutDetailView: View {
 
                         WorkoutEnvironmentCard(workout: workout)
 
-                        if WorkoutDetailPresentationPolicy.showsRouteSection(for: workout.environment) {
-                            RouteAndSeriesPanel(
-                                workout: workout,
-                                achievements: routeAchievements,
-                                lifetimeRankingsVerified: store.bestEffortCoverageSummary.isComplete,
-                                isLoading: store.analyzingWorkoutIDs.contains(workout.id)
-                            )
-                        }
-
-                        WorkoutChartsPanel(
-                            store: store,
+                        WorkoutPerformancePanel(
                             workout: workout,
+                            achievements: routeAchievements,
                             isLoading: store.analyzingWorkoutIDs.contains(workout.id)
                         )
+
+                        if let heartRateZoneProfile = store.heartRateZoneProfile(for: workout.startDate) {
+                            WorkoutHeartRatePanel(
+                                workout: workout,
+                                profile: heartRateZoneProfile
+                            )
+                        }
 
                         if let presentation {
                             SplitsAndEventsPanel(
@@ -1579,6 +1577,7 @@ struct WorkoutDetailView: View {
         let loadedAt = workout?.evidence?.loadedAt.timeIntervalSinceReferenceDate ?? 0
         return "\(workoutID)-\(loadedAt)-\(coverage)-\(records)"
     }
+
 }
 
 private struct WorkoutSharePresentationModifier: ViewModifier {
@@ -2318,8 +2317,7 @@ struct WorkoutPlanOverviewCard: View {
                 }
             }
             .padding(10)
-            .background(.background)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .runSignalSurface()
         }
     }
 
@@ -2747,7 +2745,7 @@ private struct NormalSplitDetailsSheet: View {
                             .foregroundStyle(RunSignalTextStyle.secondary)
                     }
 
-                    MetricGrid(items: detailItems)
+                    MetricGrid(items: detailItems, presentation: .unified)
                 }
                 .padding()
             }
@@ -2850,11 +2848,10 @@ private struct WorkoutIntervalSummaryRow: View {
                         .foregroundStyle(.blue)
                 }
             }
-            MetricGrid(items: intervalItems)
+            MetricGrid(items: intervalItems, presentation: .unified)
         }
         .padding()
-        .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .runSignalSurface()
     }
 
     private var label: String {

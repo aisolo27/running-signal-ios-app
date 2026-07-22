@@ -1,6 +1,6 @@
 # RunSignal Change And Decision Log
 
-Last updated: 2026-07-16
+Last updated: 2026-07-21
 
 This is the durable historical record for why RunSignal works the way it does. Use it before changing an established architecture, performance boundary, data contract, or runner-facing behavior.
 
@@ -328,6 +328,23 @@ RunSignal reads only `HKQuantityTypeIdentifierWorkoutEffortScore`, associates it
 - Workout Details displays a supplied score as a purple numeric `x/10` tile labeled `Apple Health rating`. It sits at the end of the existing metric grid after measured workout facts; it is not paired with Workout Time, promoted to the Runs landing screen, or given a large editable Apple-style section.
 - Schema V2 persists the optional rating in a separate workout-ID sidecar. A successful relationship query may add, update, or remove a score. A canceled or failed optional query preserves the last valid score and cannot block normal workout history.
 - Existing V1 stores migrate non-destructively. Deleting a workout deletes its effort sidecar, while manual category or note updates preserve it.
+
+### D-023 — Whole-run performance detail uses one truthful synchronized timeline
+
+- Status: Implemented on `codex/runs-ui-redesign`; pending physical real-data verification and promotion
+- Established: 2026-07-21
+
+Whole-run Pace, Heart Rate, and Cadence are no longer separate tabs. Workout Detail exposes one `Performance Details` entry whose drill-in synchronizes selected elapsed time, cumulative distance, route position, and every retained HealthKit metric on one shared bucket index.
+
+- The full route remains visible with small written Start and Finish labels. Scrubbing adds a distinct current-position marker and completed-route highlight; existing exact-ranked route achievements remain available on the same map.
+- Elevation, Heart Rate, Pace, Power, Cadence, Vertical Oscillation, Ground Contact Time, and Stride Length appear only when the workout contains retained evidence for that metric. A missing selected bucket displays `No Data`; adjacent points never fill or imply a missing sample.
+- Pace uses a robust display domain so an isolated very slow or stopped sample remains selectable without flattening the ordinary run. The retained value is not deleted, replaced, or used to rewrite canonical workout pace.
+- Cadence is no longer a standalone whole-run chart. Cadence samples below 120 are normalized to full-step cadence, step-count windows are converted to steps per minute, and the timeline withholds cadence when fewer than six samples or less than 25 percent of aligned buckets are covered.
+- Heart Rate remains independently discoverable on Workout Detail with average heart rate, a compact trace, and a direct Heart Rate Zones action. Zone calculation and effective-dated profiles remain unchanged.
+- The timeline adapts to at most 90 five-second-aligned-or-larger buckets. It consumes only evidence already attached to the opened workout and does not expand D-001's automatic evidence-hydration boundary.
+- Whole-run cumulative-distance selection may credit individually retained HealthKit distance contributions across their own overlapping time windows only when their deduplicated total reconciles to the workout summary. This visualization rule does not relax the stricter non-overlap requirement for split or boundary publication. Unreconciled selected distance stays unavailable and never falls back to the whole-run total.
+- A tap or horizontal drag scrubs a chart. Vertical chart drags remain page-scroll gestures so Performance Details cannot trap the runner between chart cards.
+- A shared material surface, larger continuous corner radius, semantic metric color, and unified grids now bridge Workout Detail, plan/interval result cards, and the selected-period Analytics purpose mix without changing prescribed/measured/timing bases.
 
 ## Major Change Timeline
 
